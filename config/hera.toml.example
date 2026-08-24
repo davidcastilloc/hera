@@ -1,0 +1,43 @@
+# Hera — Archivo de configuración de ejemplo
+# Copia este archivo a config/hera.toml y ajusta según tu entorno
+
+data_dir = "."
+quarantine_dir = "quarantine"
+library_dir = "library"
+exports_dir = "exports"
+logs_dir = "logs"
+db_path = "hera.db"
+
+organize_template = "{Artist}/{Year} - {Release}/{TrackNo} - {Title} [{Version}].{ext}"
+collision_policy = "review" # review | suffix | skip
+identity_confidence_threshold = 0.85
+dedup_duration_tolerance_ms = 3000
+
+[providers]
+local_folders = ["./music_inbox", "./my_tracks"]
+slskd_url = "http://localhost:5030"
+slskd_api_key_env = "HERA_SLSKD_API_KEY"
+prowlarr_enabled = false
+qbittorrent_enabled = false
+
+[analysis]
+ffmpeg_path = "ffmpeg"
+ffprobe_path = "ffprobe"
+fpcalc_path = "fpcalc"
+acoustid_api_key_env = "HERA_ACOUSTID_API_KEY"
+acoustid_enabled = false
+supported_formats = ["flac", "alac", "mp3", "aac", "ogg", "opus", "wav", "aiff"]
+
+[policy]
+require_approval = true
+allowed_bases = [
+    "owned_original",
+    "purchased_copy",
+    "open_license",
+    "public_domain",
+    "creator_permission",
+    "authorized_pool",
+    "other_documented_basis"
+]
+max_concurrent_downloads = 3
+max_file_size_mb = 500

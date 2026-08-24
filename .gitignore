@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Testing and Type Checking
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local databases and runtime data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Local config and secrets
+config/hera.toml
+.env
+*.local.toml
+
+# Operational directories (keep directory structure, ignore user files)
+quarantine/*
+!quarantine/.gitkeep
+library/*
+!library/.gitkeep
+exports/*
+!exports/.gitkeep
+logs/*
+!logs/.gitkeep
+
+# OS generated
+.DS_Store
+Thumbs.db
