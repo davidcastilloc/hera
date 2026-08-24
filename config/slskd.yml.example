@@ -1,0 +1,17 @@
+# slskd configuration template for Hera
+soulseek:
+  username: "hera_dj_2026"
+  password: "HeraDjGlobal2026!"
+  listen_port: 50300
+  description: "Hera Local AI Music Agent (https://github.com/davidcastilloc/hera)"
+
+web:
+  port: 5030
+  authentication:
+    disabled: false
+    api_keys:
+      - "hera_slskd_key_2026"
+
+directories:
+  downloads: "quarantine"
+  incomplete: "quarantine/incomplete"
