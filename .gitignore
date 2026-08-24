@@ -26,6 +26,9 @@ venv/
 ENV/
 env/
 
+# External standalone binaries (downloaded via hera setup)
+bin/
+
 # Testing and Type Checking
 .pytest_cache/
 .coverage
@@ -53,6 +56,7 @@ exports/*
 !exports/.gitkeep
 logs/*
 !logs/.gitkeep
+music_inbox/
 
 # OS generated
 .DS_Store
