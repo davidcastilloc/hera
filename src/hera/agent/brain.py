@@ -76,7 +76,7 @@ async def run_hera_interactive_chat():
 
     print("\nHabla con Hera naturalmente en español o inglés:")
     print("  * 'búscame temas de Sensation White como For An Angel y Universal Nation'")
-    print("  * 'arma un set de 60 min con los temas a 128 bpm'")
+    print("  * 'arma un set con los temas de French Touch'")
     print("  * 'sincroniza todos mis sets a Google Drive'")
     print("  * '¿qué canciones tengo listas en mi biblioteca?'")
     print("(Escribe 'salir' para terminar)\n")
@@ -116,8 +116,14 @@ async def _handle_nlp(user_input: str):
     """Interpreta y ejecuta cualquier petición en lenguaje natural sin requerir comandos fijos."""
     q_low = user_input.lower()
 
-    # 1. Búsqueda y Adquisición P2P
-    if any(k in q_low for k in ["busca", "buscar", "descarga", "descargar", "encuentra", "consigue", "search", "download", "get"]):
+    # 1. Sincronización en la Nube (Evaluado primero para capturar 'sube a drive', 'sync drive', etc.)
+    if any(k in q_low for k in ["drive", "google", "sync", "sincroniza", "sincronizar", "sube", "subir", "nube", "cloud"]):
+        print("[*] Sincronizando sets con Google Drive vía rclone...")
+        res = await sync_sets_to_cloud()
+        print(res + "\n")
+
+    # 2. Búsqueda y Adquisición P2P
+    elif any(k in q_low for k in ["busca", "buscar", "descarga", "descargar", "encuentra", "consigue", "search", "download", "get"]):
         raw_terms = user_input
         for prefix in [
             "búscame los mejores temas de", "buscame los mejores temas de",
@@ -131,17 +137,16 @@ async def _handle_nlp(user_input: str):
                 raw_terms = user_input[q_low.find(prefix) + len(prefix):].strip()
                 break
 
-        # Limpiar conectores
         terms = [t.strip() for t in raw_terms.replace(" como ", ",").replace(" y ", ",").replace(" and ", ",").split(",") if t.strip()]
         if not terms:
             terms = [raw_terms]
 
         print(f"[*] Buscando y adquiriendo en Soulseek P2P: {', '.join(terms)}...")
-        res = search_and_acquire_tracks(terms)
+        res = await search_and_acquire_tracks(terms)
         print(res + "\n")
 
-    # 2. Creación y organización de Sets
-    elif any(k in q_low for k in ["arma", "armar", "crea", "crear", "haz", "hacer", "organiza", "organizar", "set", "crate"]):
+    # 3. Creación y organización de Sets
+    elif any(k in q_low for k in ["arma", "armar", "crea", "crear", "haz", "hacer", "organiza", "organizar", "compila", "compilar", "nuevo set", "crear set"]):
         set_name = "DJ Live Set"
         if "sensation" in q_low:
             set_name = "Sensation White Live Crate"
@@ -151,14 +156,7 @@ async def _handle_nlp(user_input: str):
             set_name = "Eurodance & Trance"
 
         print(f"[*] Analizando biblioteca, afinidad armónica Camelot y compilando '{set_name}'...")
-        # Tomar tracks disponibles
-        res = create_or_update_dj_set(set_name, ["Modjo", "Stardust", "Daft Punk", "Tiesto", "Armand", "Spiller"])
-        print(res + "\n")
-
-    # 3. Sincronización en la Nube
-    elif any(k in q_low for k in ["drive", "google", "sync", "sincroniza", "sincronizar", "sube", "subir", "nube", "cloud"]):
-        print("[*] Sincronizando sets con Google Drive vía rclone...")
-        res = sync_sets_to_cloud()
+        res = await create_or_update_dj_set(set_name, ["Modjo", "Stardust", "Daft Punk", "Tiesto", "Armand", "Spiller"])
         print(res + "\n")
 
     # 4. Estado de biblioteca y sets

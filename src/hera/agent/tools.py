@@ -14,7 +14,7 @@ from hera.domain.config import HeraConfig
 from hera.adapters.storage.rclone import RcloneStorageAdapter
 
 
-def search_and_acquire_tracks(queries: list[str]) -> str:
+async def search_and_acquire_tracks(queries: list[str]) -> str:
     """
     Search the Soulseek P2P network for music tracks by natural artist/title query,
     download the highest quality studio master (FLAC/320kbps MP3) from active peers,
@@ -24,9 +24,6 @@ def search_and_acquire_tracks(queries: list[str]) -> str:
         queries: A list of search query strings (e.g. ['Daft Punk One More Time', 'Modjo Lady']).
     """
     url = "http://localhost:5030/api/v0"
-    validator = FFmpegValidator()
-    analyzer = AudioFeatureAnalyzer()
-    
     base_dir = Path(".").resolve()
     quarantine = base_dir / "quarantine"
     library = base_dir / "library"
@@ -42,7 +39,7 @@ def search_and_acquire_tracks(queries: list[str]) -> str:
                 results.append(f"[-] '{q}': Could not initiate Soulseek search.")
                 continue
             s_id = r.json()["id"]
-            time.sleep(3.5)
+            await asyncio.sleep(3.5)
 
             res_resp = httpx.get(f"{url}/searches/{s_id}/responses", timeout=5.0)
             if res_resp.status_code != 200:
@@ -53,7 +50,6 @@ def search_and_acquire_tracks(queries: list[str]) -> str:
             chosen_peer = None
             chosen_file = None
 
-            # Prioritize FLAC or high bitrate MP3 from peers with free slots
             for u in peers:
                 if u.get("locked", False):
                     continue
@@ -98,7 +94,7 @@ def search_and_acquire_tracks(queries: list[str]) -> str:
     return "\n".join(results)
 
 
-def create_or_update_dj_set(set_name: str, tracks: list[str]) -> str:
+async def create_or_update_dj_set(set_name: str, tracks: list[str]) -> str:
     """
     Builds a clean, human-friendly DJ crate folder in 'sets/<set_name>/'.
     Sequences the requested tracks, performs harmonic DSP analysis (BPM, Camelot Key),
@@ -128,67 +124,63 @@ def create_or_update_dj_set(set_name: str, tracks: list[str]) -> str:
         "=" * 70,
     ]
 
-    async def process_tracks():
-        idx = 1
-        for match_word in tracks:
-            matched_f = None
-            for f in all_files:
-                if match_word.lower() in f.name.lower() or match_word.lower() in f.parent.name.lower():
-                    matched_f = f
-                    break
+    idx = 1
+    for match_word in tracks:
+        matched_f = None
+        for f in all_files:
+            if match_word.lower() in f.name.lower() or match_word.lower() in f.parent.name.lower():
+                matched_f = f
+                break
 
-            if matched_f:
-                val = await validator.validate_media(matched_f)
-                if val.is_valid:
-                    feat = await analyzer.analyze(matched_f)
-                    artist = matched_f.parent.parent.name if matched_f.parent.parent != library else "DJ Track"
-                    title = matched_f.stem.replace("01 - ", "").split(" [")[0]
+        if matched_f:
+            val = await validator.validate_media(matched_f)
+            if val.is_valid:
+                feat = await analyzer.analyze(matched_f)
+                artist = matched_f.parent.parent.name if matched_f.parent.parent != library else "DJ Track"
+                title = matched_f.stem.replace("01 - ", "").split(" [")[0]
 
-                    clean_name = f"{idx:02d}. {artist} - {title} [{feat.bpm} BPM - {feat.camelot}]{matched_f.suffix.lower()}"
-                    dest = set_folder / clean_name
-                    shutil.copy2(matched_f, dest)
+                clean_name = f"{idx:02d}. {artist} - {title} [{feat.bpm} BPM - {feat.camelot}]{matched_f.suffix.lower()}"
+                dest = set_folder / clean_name
+                shutil.copy2(matched_f, dest)
 
-                    # Tag headers
-                    try:
-                        if dest.suffix.lower() == ".flac":
-                            fl = FLAC(str(dest))
-                            fl["TITLE"] = title
-                            fl["ARTIST"] = artist
-                            fl["ALBUM"] = set_name
-                            fl["BPM"] = str(feat.bpm)
-                            fl["INITIALKEY"] = feat.camelot
-                            fl["KEY"] = f"{feat.camelot} ({feat.musical_key})"
-                            fl["TRACKNUMBER"] = f"{idx:02d}"
-                            fl.save()
-                        elif dest.suffix.lower() == ".mp3":
-                            try:
-                                id3 = ID3(str(dest))
-                            except Exception:
-                                id3 = ID3()
-                            id3.add(TIT2(encoding=3, text=title))
-                            id3.add(TPE1(encoding=3, text=artist))
-                            id3.add(TALB(encoding=3, text=set_name))
-                            id3.add(TBPM(encoding=3, text=str(feat.bpm).split(".")[0]))
-                            id3.add(TKEY(encoding=3, text=feat.camelot))
-                            id3.add(TRCK(encoding=3, text=f"{idx:02d}"))
-                            id3.save(str(dest))
-                    except Exception:
-                        pass
+                try:
+                    if dest.suffix.lower() == ".flac":
+                        fl = FLAC(str(dest))
+                        fl["TITLE"] = title
+                        fl["ARTIST"] = artist
+                        fl["ALBUM"] = set_name
+                        fl["BPM"] = str(feat.bpm)
+                        fl["INITIALKEY"] = feat.camelot
+                        fl["KEY"] = f"{feat.camelot} ({feat.musical_key})"
+                        fl["TRACKNUMBER"] = f"{idx:02d}"
+                        fl.save()
+                    elif dest.suffix.lower() == ".mp3":
+                        try:
+                            id3 = ID3(str(dest))
+                        except Exception:
+                            id3 = ID3()
+                        id3.add(TIT2(encoding=3, text=title))
+                        id3.add(TPE1(encoding=3, text=artist))
+                        id3.add(TALB(encoding=3, text=set_name))
+                        id3.add(TBPM(encoding=3, text=str(feat.bpm).split(".")[0]))
+                        id3.add(TKEY(encoding=3, text=feat.camelot))
+                        id3.add(TRCK(encoding=3, text=f"{idx:02d}"))
+                        id3.save(str(dest))
+                except Exception:
+                    pass
 
-                    cue_sheet.append(f"{idx:02d}. {artist} - {title} | {feat.bpm} BPM | Camelot: {feat.camelot} ({feat.musical_key})")
-                    added.append(clean_name)
-                    idx += 1
+                cue_sheet.append(f"{idx:02d}. {artist} - {title} | {feat.bpm} BPM | Camelot: {feat.camelot} ({feat.musical_key})")
+                added.append(clean_name)
+                idx += 1
 
-        # Write _00_SET_GUIDE.txt
-        guide_path = set_folder / "_00_SET_GUIDE.txt"
-        with open(guide_path, "w", encoding="utf-8") as f:
-            f.write("\n".join(cue_sheet) + "\n")
+    guide_path = set_folder / "_00_SET_GUIDE.txt"
+    with open(guide_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(cue_sheet) + "\n")
 
-    asyncio.run(process_tracks())
     return f"Created set '{set_name}' with {len(added)} real tracks in {set_folder}:\n" + "\n".join([f"  * {t}" for t in added])
 
 
-def sync_sets_to_cloud(folder_name: str = "Hera_Music/sets", dry_run: bool = False) -> str:
+async def sync_sets_to_cloud(folder_name: str = "Hera_Music/sets", dry_run: bool = False) -> str:
     """
     Synchronizes all curated DJ sets with Google Drive (or other configured cloud storage) via rclone.
 
@@ -205,10 +197,7 @@ def sync_sets_to_cloud(folder_name: str = "Hera_Music/sets", dry_run: bool = Fal
     remote_dest = f"gdrive:{folder_name}"
     local_sets = Path(config.data_dir) / "sets"
 
-    async def run_sync():
-        return await rclone.copy(local_sets, remote_dest, dry_run=dry_run)
-
-    res = asyncio.run(run_sync())
+    res = await rclone.copy(local_sets, remote_dest, dry_run=dry_run)
     if res.success:
         return f"Successfully synchronized local sets to Google Drive at '{remote_dest}'!"
     else:
@@ -245,7 +234,7 @@ def get_library_status() -> str:
             if s.is_dir():
                 tracks = list(s.glob("*.*"))
                 tracks = [t for t in tracks if t.name != "_00_SET_GUIDE.txt"]
-                summary.append(f"📂 {s.name} ({len(tracks)} tracks)")
+                summary.append(f"[SET] {s.name} ({len(tracks)} tracks)")
 
     return "\n".join(summary)
 
