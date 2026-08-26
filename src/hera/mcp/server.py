@@ -1,5 +1,5 @@
 from pathlib import Path
-from mcp.server.mcpserver import MCPServer
+from mcp.server.fastmcp import FastMCP
 from hera.domain.config import HeraConfig
 from hera.domain.database import Database
 from hera.mcp.handlers.search import handle_search_music
@@ -12,16 +12,17 @@ from hera.mcp.handlers.organize import handle_organize_track
 from hera.mcp.handlers.crate import handle_build_dj_crate
 
 
-def create_mcp_server(config_path: Path | str | None = None) -> MCPServer:
-    """Instancia y configura el servidor MCPServer de Hera."""
+def create_mcp_server(config_path: Path | str | None = None) -> FastMCP:
+    """Instancia y configura el servidor FastMCP de Hera."""
     cfg_p = Path(config_path or "config/hera.toml")
     config = HeraConfig.load(cfg_p).resolve_paths(cfg_p.parent.parent if cfg_p.exists() else Path("."))
     db = Database(config.db_path)
 
-    mcp = MCPServer(
+    mcp = FastMCP(
         name="hera",
         instructions="Capa inteligente para búsqueda, adquisición autorizada, validación y organización de música para DJs.",
     )
+
 
     @mcp.tool()
     async def search_music(

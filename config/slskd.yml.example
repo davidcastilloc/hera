@@ -15,3 +15,16 @@ web:
 directories:
   downloads: "quarantine"
   incomplete: "quarantine/incomplete"
+
+shares:
+  directories:
+    - alias: "Hera Curated Library"
+      path: "library"
+    - alias: "Hera DJ Sets"
+      path: "sets"
+
+global:
+  upload:
+    slots: 5
+    speed_limit: 2048
+

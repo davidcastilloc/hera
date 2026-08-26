@@ -41,3 +41,24 @@ allowed_bases = [
 ]
 max_concurrent_downloads = 3
 max_file_size_mb = 500
+
+[storage]
+rclone_path = "bin/rclone.exe"
+default_remote = "gdrive"
+remote_folder = "Hera_Music/sets"
+auto_sync = false
+
+[sharing]
+enabled = true
+share_library = true
+share_sets = true
+max_upload_speed_kbps = 2048
+max_upload_slots = 5
+share_description = "Hera Curated Library — AI-organized, lossless verified"
+
+[agent]
+backend = "auto"
+show_cost_snapbar = true
+max_session_cost_usd = 0.50
+
+

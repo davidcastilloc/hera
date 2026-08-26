@@ -271,3 +271,38 @@ def recommend_harmonic_transitions(current_camelot_key: str, current_bpm: float)
         )
     except Exception as e:
         return f"Error calculating harmonic recommendations: {e}"
+
+
+async def get_community_status() -> str:
+    """
+    Returns the user's P2P community collaboration and sharing metrics (Good P2P Citizen).
+    Reports how many curated tracks are shared, total gigabytes, and upload transfers served to other DJs.
+    """
+    from hera.domain.community import CommunityStats
+    from hera.domain.config import HeraConfig
+
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    stats = CommunityStats(base_url=cfg.providers.slskd_url or "http://localhost:5030")
+    res = await stats.get_sharing_summary(cfg.library_dir, Path(cfg.data_dir) / "sets")
+    return res["community_message"]
+
+
+def get_session_cost_and_tokens() -> str:
+    """
+    Returns the real-time token consumption, per-turn statistics, and accumulated estimated costs (in USD)
+    for the current interactive session to prevent unexpected or accidental API expenses.
+    """
+    from hera.agent.brain import ACTIVE_COST_TRACKER
+    if ACTIVE_COST_TRACKER:
+        summary = ACTIVE_COST_TRACKER.get_summary()
+        return (
+            f"📊 REPORTE DE CONSUMO Y COSTO DE LA SESIÓN:\n"
+            f"  * Modelo: {summary['backend'].upper()} ({summary['model']})\n"
+            f"  * Turnos de conversación: {summary['turns']}\n"
+            f"  * Tokens totales consumidos: {summary['total_tokens']:,} (Prompt: {summary['prompt_tokens']:,} / Salida: {summary['completion_tokens']:,})\n"
+            f"  * Costo acumulado estimado: {summary['cost_formatted']}\n"
+            f"  * Tipo de motor: {'Local / Offline (Sin costo)' if summary['is_local'] else 'API Cloud'}"
+        )
+    return "Aún no hay métricas de consumo registradas en esta sesión."
+
+

@@ -1,4 +1,4 @@
-"""Interfaz de línea de comandos CLI de Hera con soporte multiplataforma y sync en la nube."""
+"""Interfaz de línea de comandos CLI de Hera con soporte multiplataforma, sync en la nube y zero-touch P2P."""
 
 import asyncio
 from pathlib import Path
@@ -11,8 +11,24 @@ import httpx
 import zipfile
 import io
 
+# Asegurar codificación UTF-8 en consolas Windows
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 from hera.domain.config import HeraConfig
 from hera.domain.database import Database
+from hera.domain.community import CommunityStats
+from hera.infra.lifecycle import SlskdLifecycle
+from hera.infra.slskd_config import generate_slskd_config, update_shared_directories
 from hera.jobs.runner import JobRunner
 from hera.mcp.server import create_mcp_server
 from hera.adapters.storage.rclone import RcloneStorageAdapter
@@ -106,7 +122,7 @@ def ensure_binaries(base_dir: Path):
 
 @click.group()
 def main():
-    """Hera — Super-agente inteligente y multiplataforma para música y DJs."""
+    """Hera — Super-agente inteligente, zero-touch y multiplataforma para DJs y música."""
     pass
 
 
@@ -137,12 +153,22 @@ def setup(config: str, no_binaries: bool):
 
     cfg = HeraConfig.load(cfg_path).resolve_paths(base_dir)
 
+    # 1. Configurar slskd.yml con Auto-Sharing
+    slskd_yml = base_dir / "bin" / "slskd.yml"
+    if not slskd_yml.exists():
+        generate_slskd_config(cfg, target_path=slskd_yml)
+        click.echo(f"[OK] Configuración Soulseek creada con Auto-Sharing: {slskd_yml}")
+    else:
+        update_shared_directories(slskd_yml)
+        click.echo("[OK] Configuración Soulseek verificada con Auto-Sharing de biblioteca.")
+
     for d_name, d_path in [
         ("Cuarentena", Path(cfg.quarantine_dir)),
         ("Biblioteca", Path(cfg.library_dir)),
         ("Exportaciones", Path(cfg.exports_dir)),
         ("Logs", Path(cfg.logs_dir)),
         ("Sets", base_dir / "sets"),
+        ("Music Inbox", base_dir / "music_inbox"),
     ]:
         d_path.mkdir(parents=True, exist_ok=True)
         click.echo(f"[OK] Directorio de {d_name}: {d_path}")
@@ -151,7 +177,65 @@ def setup(config: str, no_binaries: bool):
     asyncio.run(db.init_schema())
     click.echo(f"[OK] Base de datos SQLite inicializada: {cfg.db_path}")
 
-    click.echo("\n[SUCCESS] Configuracion e inicializacion completada al 100%. Ejecuta 'hera doctor' para verificar.")
+    click.echo("\n[SUCCESS] Configuración e inicialización completada al 100%.")
+    click.echo("💡 Puedes iniciar el agente conversacional directamente con: 'hera chat'")
+
+
+@main.command()
+@click.option("--config", "-c", default="config/hera.toml", help="Ruta al archivo de configuración")
+def status(config: str):
+    """Muestra el estado consolidado de salud, backend IA y estadísticas de comunidad P2P."""
+    cfg_path = Path(config)
+    cfg = HeraConfig.load(cfg_path).resolve_paths(Path("."))
+
+    click.echo("=" * 80)
+    click.echo(" 🎧 HERA AI SYSTEM & COMMUNITY DASHBOARD")
+    click.echo("=" * 80)
+
+    # 1. Sistema
+    py_ver = sys.version_info
+    click.echo(f"🖥️  OS: {platform.system()} {platform.release()} ({platform.machine()}) | Python {py_ver.major}.{py_ver.minor}.{py_ver.micro}")
+
+    # 2. Base de datos
+    db_p = Path(cfg.db_path)
+    db_ok = "🟢 Conectada" if db_p.exists() else "🔴 No encontrada"
+    click.echo(f"🗄️  Base de Datos: {db_p.name} ({db_ok})")
+
+    # 3. Soulseek & Comunidad
+    stats = CommunityStats(cfg.providers.slskd_url or "http://localhost:5030")
+    summary = asyncio.run(stats.get_sharing_summary(cfg.library_dir, Path(cfg.data_dir) / "sets"))
+
+    slskd_state = "🟢 EN LÍNEA (5030)" if summary["is_live"] else "🟡 LOCAL (inactivo)"
+    click.echo(f"🌐 Soulseek P2P: {slskd_state}")
+    click.echo(f"📦 Biblioteca Compartida: {summary['tracks_shared']} tracks curados ({summary['total_size_gb']:.2f} GB)")
+    if summary["uploads_count"] > 0:
+        click.echo(f"🤝 Colaboración: {summary['uploads_count']} transferencias ({summary['uploads_gb']:.2f} GB) a {summary['unique_peers_served']} DJs")
+
+    # 4. Cloud
+    rclone = RcloneStorageAdapter(cfg.storage.rclone_path, cfg.storage.config_path)
+    if rclone.is_available():
+        remotes = rclone.list_remotes()
+        cloud_str = f"🟢 Disponible ({', '.join(remotes) if remotes else 'sin remotes'})"
+    else:
+        cloud_str = "🟡 No instalado"
+    click.echo(f"☁️  Cloud Sync (rclone): {cloud_str}")
+
+    click.echo("=" * 80)
+
+
+
+@main.command()
+@click.option("--config", "-c", default="config/hera.toml", help="Ruta al archivo de configuración")
+def community(config: str):
+    """Muestra el impacto y contribución de tu nodo a la red comunitaria Soulseek."""
+    cfg = HeraConfig.load(config).resolve_paths(Path("."))
+    stats = CommunityStats(cfg.providers.slskd_url or "http://localhost:5030")
+    summary = asyncio.run(stats.get_sharing_summary(cfg.library_dir, Path(cfg.data_dir) / "sets"))
+    click.echo("=" * 80)
+    click.echo(" 🌍 HERA — IMPACTO COMUNITARIO (BUEN CIUDADANO P2P)")
+    click.echo("=" * 80)
+    click.echo(summary["community_message"])
+    click.echo("=" * 80)
 
 
 @main.command()
@@ -380,28 +464,89 @@ def sync_pull(remote: str | None, folder: str | None, dry_run: bool, config: str
     asyncio.run(run_pull())
 
 
-@main.command()
-def slskd():
-    """Inicia el demonio local de Soulseek (slskd)."""
-    slskd_exe = Path("bin/slskd.exe" if platform.system() == "Windows" else "bin/slskd")
-    if not slskd_exe.exists():
-        click.echo("[!] Binario slskd no encontrado. Ejecuta 'hera setup' para descargarlo automáticamente.")
-        return
 
-    click.echo("[*] Iniciando slskd (Soulseek Daemon) en http://localhost:5030 ...")
-    subprocess.run([str(slskd_exe.resolve())], cwd=str(slskd_exe.parent))
+@main.group()
+def slskd():
+    """Gestión y control del demonio P2P Soulseek (slskd)."""
+    pass
+
+
+@slskd.command(name="start")
+def slskd_start():
+    """Inicia el demonio slskd en segundo plano."""
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    lifecycle = SlskdLifecycle(cfg)
+    if lifecycle.is_running_sync():
+        click.echo("[OK] slskd ya está en ejecución en http://localhost:5030")
+        return
+    click.echo("[*] Iniciando slskd en segundo plano...")
+    ok = lifecycle.ensure_running_sync()
+    if ok:
+        click.echo("[OK] slskd iniciado con éxito en http://localhost:5030")
+    else:
+        click.echo("[FAIL] No se pudo iniciar slskd automáticamente.")
+
+
+@slskd.command(name="stop")
+def slskd_stop():
+    """Detiene las instancias activas de slskd."""
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    lifecycle = SlskdLifecycle(cfg)
+    lifecycle.stop()
+    click.echo("[OK] Solicitud de parada enviada a slskd.")
+
+
+@slskd.command(name="status")
+def slskd_status():
+    """Verifica si slskd está respondiendo en el puerto configurado."""
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    lifecycle = SlskdLifecycle(cfg)
+    if lifecycle.is_running_sync():
+        click.echo("🟢 slskd está ACTIVO y respondiendo en http://localhost:5030")
+    else:
+        click.echo("🟡 slskd está DETENIDO.")
 
 
 @main.command()
 @click.option("--config", "-c", default="config/hera.toml", help="Ruta al archivo de configuración")
+def desktop(config: str):
+    """Inicia el icono de System Tray de Hera en la barra de tareas (100% visual y human-friendly)."""
+    from hera.desktop.tray import run_tray_app
+    run_tray_app(config)
+
+
+@main.command()
+@click.option("--config", "-c", default="config/hera.toml", help="Path to config file")
 def serve(config: str):
-    """Inicia el servidor MCP por stdio y el worker local de jobs."""
+    """Start the MCP stdio server (for AI agent integration). Auto-starts slskd if available."""
+    import logging
+    import warnings
+
+    # MCP stdio requires clean stdout/stderr — suppress all logging noise
+    logging.disable(logging.CRITICAL)
+    warnings.filterwarnings("ignore")
+
+    # Resolve project root from the config file location
     cfg_path = Path(config)
-    cfg = HeraConfig.load(cfg_path).resolve_paths(cfg_path.parent.parent if cfg_path.exists() else Path("."))
+    if not cfg_path.is_absolute():
+        # When invoked via `uv run --project <path>`, CWD is the project root
+        cfg_path = Path.cwd() / config
+    project_root = cfg_path.parent.parent if cfg_path.exists() else Path.cwd()
+
+    cfg = HeraConfig.load(cfg_path).resolve_paths(project_root)
     db = Database(cfg.db_path)
 
     async def run_server_and_worker():
         await db.init_schema()
+
+        # Try to start slskd, but don't fail if unavailable
+        slskd_started = False
+        try:
+            lifecycle = SlskdLifecycle(cfg)
+            slskd_started = await lifecycle.ensure_running(base_dir=project_root)
+        except Exception:
+            pass
+
         runner = JobRunner(db, cfg)
         await runner.start()
 
@@ -410,6 +555,11 @@ def serve(config: str):
             await server.run_stdio_async()
         finally:
             await runner.stop()
+            if slskd_started:
+                try:
+                    lifecycle.stop()
+                except Exception:
+                    pass
             await db.close()
 
     asyncio.run(run_server_and_worker())
@@ -420,10 +570,14 @@ def serve(config: str):
 @main.command()
 @click.argument("queries", nargs=-1, required=True)
 def search(queries):
-    """Search & download tracks from Soulseek P2P (no LLM needed).
+    """Search & download tracks from Soulseek P2P (auto-starts backend if needed).
 
     Example: hera search "Daft Punk One More Time" "Modjo Lady"
     """
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    lifecycle = SlskdLifecycle(cfg)
+    lifecycle.ensure_running_sync()
+
     from hera.agent.tools import search_and_acquire_tracks
     async def run():
         result = await search_and_acquire_tracks(list(queries))
@@ -473,10 +627,20 @@ def camelot(key, bpm):
               help="LLM backend to use (default: auto-detect)")
 @click.option("--model", "-m", default=None, help="Model name (provider-specific)")
 @click.option("--base-url", default=None, help="Custom endpoint URL (for 'custom' backend)")
-def chat(backend, model, base_url):
+@click.option("--config", "-c", default="config/hera.toml", help="Ruta al archivo de configuración")
+def chat(backend, model, base_url, config):
     """Start the interactive conversational agent powered by the Antigravity SDK."""
+    cfg = HeraConfig.load(config).resolve_paths(Path("."))
+    lifecycle = SlskdLifecycle(cfg)
+    slskd_live = lifecycle.ensure_running_sync()
+    if slskd_live:
+        click.echo("🟢 Soulseek P2P conectado y auto-compartiendo biblioteca en segundo plano.")
+
     from hera.agent.brain import run_hera_interactive_chat
-    asyncio.run(run_hera_interactive_chat(backend=backend, model=model, base_url=base_url))
+    try:
+        asyncio.run(run_hera_interactive_chat(backend=backend, model=model, base_url=base_url, config_path=config))
+    finally:
+        pass
 
 
 @main.command()
@@ -487,11 +651,64 @@ def chat(backend, model, base_url):
               help="LLM backend to use (default: auto-detect)")
 @click.option("--model", "-m", default=None, help="Model name (provider-specific)")
 @click.option("--base-url", default=None, help="Custom endpoint URL (for 'custom' backend)")
-def agent(backend, model, base_url):
+@click.option("--config", "-c", default="config/hera.toml", help="Ruta al archivo de configuración")
+def agent(backend, model, base_url, config):
     """Alias for 'hera chat' — Start the autonomous Hera agent."""
+    cfg = HeraConfig.load(config).resolve_paths(Path("."))
+    lifecycle = SlskdLifecycle(cfg)
+    slskd_live = lifecycle.ensure_running_sync()
+    if slskd_live:
+        click.echo("🟢 Soulseek P2P conectado y auto-compartiendo biblioteca en segundo plano.")
+
     from hera.agent.brain import run_hera_interactive_chat
-    asyncio.run(run_hera_interactive_chat(backend=backend, model=model, base_url=base_url))
+    try:
+        asyncio.run(run_hera_interactive_chat(backend=backend, model=model, base_url=base_url, config_path=config))
+    finally:
+        pass
+
+
+@main.command()
+@click.option("--port", "-p", default=8501, help="Puerto para el servidor web de la UI (default: 8501)")
+@click.option("--no-browser", is_flag=True, help="No abrir automáticamente el navegador")
+def ui(port, no_browser):
+    """Inicia la interfaz gráfica moderna para DJs en el navegador web."""
+    import subprocess
+    import sys
+
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    lifecycle = SlskdLifecycle(cfg)
+    slskd_live = lifecycle.ensure_running_sync()
+    if slskd_live:
+        click.echo("🟢 Soulseek P2P conectado y auto-compartiendo biblioteca en segundo plano.")
+
+    click.echo(f"🎧 Iniciando Hera DJ Studio Web UI en http://localhost:{port}...")
+
+    app_path = Path(__file__).parent / "ui" / "app.py"
+    cmd = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(app_path),
+        f"--server.port={port}",
+        "--browser.gatherUsageStats=false",
+        "--theme.base=dark",
+        "--theme.primaryColor=#00f2fe",
+        "--theme.backgroundColor=#0b0e14",
+        "--theme.secondaryBackgroundColor=#141b2d",
+        "--theme.textColor=#e0e6ed",
+    ]
+    if no_browser:
+        cmd.append("--server.headless=true")
+
+    try:
+        subprocess.run(cmd)
+    except KeyboardInterrupt:
+        click.echo("\n[*] Hera UI cerrada.")
 
 
 if __name__ == "__main__":
     main()
+
+
+

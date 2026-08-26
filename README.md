@@ -1,18 +1,25 @@
 <div align="center">
 
+<img src="assets/hera_banner.jpg" alt="HERA Banner" width="100%" />
+
 # 🎧 HERA
 ### *The Autonomous, Local-First AI Super-Agent for DJs & Music Curators*
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+**«Todo es posible si lo imaginas: De la intención musical al booth del DJ en segundos»**
+
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Platform: Linux | macOS | Windows](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg)](https://github.com/davidcastilloc/hera)
-[![Protocol: MCP](https://img.shields.io/badge/protocol-MCP%20stdio-orange.svg)](https://modelcontextprotocol.io/)
+[![Protocol: MCP](https://img.shields.io/badge/protocol-MCP%20stdio-FF6B6B.svg)](https://modelcontextprotocol.io/)
 [![Cloud: rclone Powered](https://img.shields.io/badge/cloud-Google%20Drive%20%7C%20S3%20%7C%20R2-brightgreen.svg)](https://rclone.org/)
+[![AI: 12 Backends](https://img.shields.io/badge/AI%20Backends-12%20Engines-blueviolet.svg)](AGENTS.md)
+[![Philosophy: Local--First](https://img.shields.io/badge/philosophy-Local--First-orange.svg)](../../MANIFESTO.md)
 
 <p align="center">
   <b>Hera</b> is an intelligent, cross-platform audio curation and asset orchestrator designed for real human DJs.<br/>
   It discovers studio-grade audio across authorized networks, executes deep acoustic & harmonic analysis (BPM, Camelot Wheel, LUFS), embeds native metadata tags, organizes physical DJ crates, and syncs seamlessly with Google Drive and cloud storage.
 </p>
+
+[✨ Read Manifesto](../../MANIFESTO.md) • [🤖 Agent Guide (AGENTS.md)](AGENTS.md) • [🚀 Quickstart](#-quickstart--installation) • [🎛️ CLI Reference](#️-cli-reference) • [📋 Roadmap](#-wishlist--roadmap-board-dj--human-centric)
 
 ---
 

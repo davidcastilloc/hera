@@ -51,6 +51,19 @@ class PolicyConfig(BaseModel):
     max_file_size_mb: int = 500
 
 
+class SharingConfig(BaseModel):
+    """Configuración de compartición P2P — Buen Ciudadano Soulseek."""
+    enabled: bool = Field(default=True, description="Habilitar compartición P2P de música curada")
+    share_library: bool = Field(default=True, description="Compartir directorio de biblioteca curada")
+    share_sets: bool = Field(default=True, description="Compartir directorio de sets/crates")
+    max_upload_speed_kbps: int = Field(default=2048, description="Límite de velocidad de subida en kbps (2 MB/s)")
+    max_upload_slots: int = Field(default=5, description="Número máximo de slots simultáneos de subida")
+    share_description: str = Field(
+        default="Hera Curated Library — AI-organized, lossless verified",
+        description="Descripción pública en Soulseek"
+    )
+
+
 class AgentConfig(BaseModel):
     """LLM backend configuration for the Hera AI Agent."""
     backend: str = Field(default="auto", description=(
@@ -62,6 +75,9 @@ class AgentConfig(BaseModel):
     base_url: str | None = Field(default=None, description="Custom endpoint base URL")
     vertex_project: str | None = Field(default=None, description="GCP project for Vertex AI")
     vertex_location: str = Field(default="us-central1", description="GCP region for Vertex AI")
+    show_cost_snapbar: bool = Field(default=True, description="Mostrar barra de costos/tokens en cada turno")
+    max_session_cost_usd: float | None = Field(default=None, description="Límite de costo en USD para alertas de presupuesto")
+
 
 
 class HeraConfig(BaseModel):
@@ -81,6 +97,7 @@ class HeraConfig(BaseModel):
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     policy: PolicyConfig = Field(default_factory=PolicyConfig)
+    sharing: SharingConfig = Field(default_factory=SharingConfig)
     agent: AgentConfig = Field(default_factory=AgentConfig)
 
     def resolve_paths(self, base_path: Path | None = None) -> "HeraConfig":
@@ -101,6 +118,8 @@ class HeraConfig(BaseModel):
             analysis=self.analysis,
             storage=self.storage,
             policy=self.policy,
+            sharing=self.sharing,
+            agent=self.agent,
         )
 
     @classmethod
