@@ -25,9 +25,9 @@ from hera.agent.tools import (
     recommend_harmonic_transitions,
 )
 
-# Default Vertex AI config (works with ADC out of the box)
-DEFAULT_VERTEX_PROJECT = "suite-aerya"
-DEFAULT_VERTEX_LOCATION = "us-central1"
+# Default Vertex AI config (auto-discovered from ADC or env vars)
+DEFAULT_VERTEX_PROJECT = os.environ.get("VERTEX_PROJECT")
+DEFAULT_VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "us-central1")
 DEFAULT_MODEL = "gemini-2.5-flash"
 
 HERA_TOOLS = [
