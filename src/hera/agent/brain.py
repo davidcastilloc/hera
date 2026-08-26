@@ -4,6 +4,11 @@ This module delegates ALL natural language understanding and tool selection
 to the LLM via the Antigravity SDK Agent. No hardcoded keyword matching.
 The model reasons about the user's intent and autonomously decides which
 tools to call, exactly like a real AI agent.
+
+Auth strategy (in priority order):
+  1. Vertex AI with Application Default Credentials (ADC) — zero config
+  2. GEMINI_API_KEY env var — manual setup
+  3. Interactive prompt for API key — last resort
 """
 
 import asyncio
@@ -20,46 +25,91 @@ from hera.agent.tools import (
     recommend_harmonic_transitions,
 )
 
+# Default Vertex AI config (works with ADC out of the box)
+DEFAULT_VERTEX_PROJECT = "suite-aerya"
+DEFAULT_VERTEX_LOCATION = "us-central1"
+DEFAULT_MODEL = "gemini-2.5-flash"
+
+HERA_TOOLS = [
+    search_and_acquire_tracks,
+    create_or_update_dj_set,
+    sync_sets_to_cloud,
+    get_library_status,
+    recommend_harmonic_transitions,
+]
+
 
 class HeraBrain:
     """Real AI Agent orchestrator — the LLM decides everything."""
 
-    def __init__(self, api_key: str | None = None, model: str = "gemini-2.5-flash"):
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str = DEFAULT_MODEL,
+        vertex_project: str | None = None,
+        vertex_location: str = DEFAULT_VERTEX_LOCATION,
+    ):
         self.api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         self.model = model
+        self.vertex_project = vertex_project
+        self.vertex_location = vertex_location
         self.agent = None
         self._initialized = False
+        self._auth_method = None
 
     async def initialize(self) -> bool:
-        """Spawn the Antigravity Agent with Hera's DJ tools registered."""
+        """Spawn the Antigravity Agent — tries Vertex AI ADC first, then API key."""
+        from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig
+
+        # Strategy 1: Vertex AI with ADC (auto-discovers Google Cloud credentials)
         if not self.api_key:
-            return False
+            project = self.vertex_project
+            if not project:
+                try:
+                    import google.auth
+                    _, project = google.auth.default()
+                except Exception:
+                    project = None
+            if not project:
+                project = DEFAULT_VERTEX_PROJECT
 
-        try:
-            from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig
+            try:
+                config = LocalAgentConfig(
+                    system_instructions=HERA_SYSTEM_INSTRUCTIONS,
+                    capabilities=CapabilitiesConfig(),
+                    tools=HERA_TOOLS,
+                    vertex=True,
+                    project=project,
+                    location=self.vertex_location,
+                    model=self.model,
+                )
+                self.agent = Agent(config)
+                await self.agent.__aenter__()
+                self._initialized = True
+                self._auth_method = f"Vertex AI (project: {project})"
+                return True
+            except Exception as e:
+                print(f"[!] Vertex AI failed: {e}")
 
-            config = LocalAgentConfig(
-                system_instructions=HERA_SYSTEM_INSTRUCTIONS,
-                capabilities=CapabilitiesConfig(
-                    enabled_tools=["*"],
-                ),
-                tools=[
-                    search_and_acquire_tracks,
-                    create_or_update_dj_set,
-                    sync_sets_to_cloud,
-                    get_library_status,
-                    recommend_harmonic_transitions,
-                ],
-                api_key=self.api_key,
-                model=self.model,
-            )
-            self.agent = Agent(config)
-            await self.agent.__aenter__()
-            self._initialized = True
-            return True
-        except Exception as e:
-            print(f"[!] Error initializing Antigravity Agent: {e}")
-            return False
+        # Strategy 2: Direct Gemini API key
+        if self.api_key:
+            try:
+                config = LocalAgentConfig(
+                    system_instructions=HERA_SYSTEM_INSTRUCTIONS,
+                    capabilities=CapabilitiesConfig(),
+                    tools=HERA_TOOLS,
+                    api_key=self.api_key,
+                    model=self.model,
+                )
+                self.agent = Agent(config)
+                await self.agent.__aenter__()
+                self._initialized = True
+                self._auth_method = "Gemini API Key"
+                return True
+            except Exception as e:
+                print(f"[!] API Key auth failed: {e}")
+
+        return False
 
     async def chat(self, user_input: str) -> str:
         """Send a message to the agent and stream the response."""
@@ -84,54 +134,42 @@ class HeraBrain:
 
 
 async def run_hera_interactive_chat():
-    """Interactive conversational console for DJs — 100% LLM-driven, zero hardcoded logic."""
+    """Interactive conversational console for DJs — 100% LLM-driven."""
 
-    # Resolve API key: env var first, then prompt user
-    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+    print()
+    print("=" * 80)
+    print(" HERA AI AGENT - Consola Conversacional para DJs")
+    print("=" * 80)
+    print("[*] Initializing agent...")
 
-    if not api_key:
-        print("=" * 80)
-        print(" HERA AI AGENT - Setup")
-        print("=" * 80)
+    brain = HeraBrain()
+    initialized = await brain.initialize()
+
+    if not initialized:
+        # Last resort: ask for API key interactively
         print()
-        print("Hera needs a Gemini API key to reason autonomously with the LLM.")
-        print("Get one for FREE in 30 seconds at: https://aistudio.google.com/apikey")
-        print()
-        print("Once you have it, you can either:")
-        print("  1. Set it as env var:  set GEMINI_API_KEY=your_key_here")
-        print("  2. Paste it below (it won't be stored anywhere):")
+        print("[!] Could not auto-detect credentials.")
+        print("    Get a free Gemini API key at: https://aistudio.google.com/apikey")
         print()
         try:
             entered = input("GEMINI_API_KEY: ").strip()
         except (EOFError, KeyboardInterrupt):
             return
         if not entered:
-            print("\n[!] No API key provided. Hera requires a Gemini API key to function as a real agent.")
-            print("    Run: set GEMINI_API_KEY=your_key_here")
-            print("    Then: uv run hera chat")
+            print("[!] No API key provided. Cannot start agent.")
             return
-        api_key = entered
-        os.environ["GEMINI_API_KEY"] = api_key
 
-    # Initialize the real Antigravity Agent
-    brain = HeraBrain(api_key=api_key)
-    initialized = await brain.initialize()
+        brain = HeraBrain(api_key=entered)
+        initialized = await brain.initialize()
+        if not initialized:
+            print("[!] Authentication failed. Check your API key.")
+            return
 
-    if not initialized:
-        print("\n[!] Could not initialize the Antigravity Agent.")
-        print("    Check your API key and internet connection.")
-        return
-
+    print(f"[+] Backend: Google Antigravity SDK ({brain._auth_method})")
+    print(f"[+] Model: {brain.model}")
+    print(f"[+] Tools: {len(HERA_TOOLS)} registered (LLM selects autonomously)")
     print()
-    print("=" * 80)
-    print(" HERA AI AGENT - Consola Conversacional para DJs")
-    print("=" * 80)
-    print("[+] Backend: Google Antigravity SDK (LLM Reasoning + Tool Calling)")
-    print("[+] Model:", brain.model)
-    print("[+] Tools: search_and_acquire_tracks, create_or_update_dj_set,")
-    print("           sync_sets_to_cloud, get_library_status, recommend_harmonic_transitions")
-    print()
-    print("Habla con Hera naturalmente. El LLM decide que herramientas ejecutar.")
+    print("Habla con Hera naturalmente en espanol o ingles.")
     print("(Escribe 'salir' para terminar)")
     print()
 
@@ -145,7 +183,7 @@ async def run_hera_interactive_chat():
             if not user_input:
                 continue
             if user_input.lower() in ["salir", "exit", "quit", "q"]:
-                print("\n[*] Cerrando sesion. Que tengas una gran sesion en cabina!")
+                print("\n[*] Cerrando sesion. Buena sesion en cabina!")
                 break
 
             print("\nHera:\n", flush=True)
