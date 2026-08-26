@@ -51,6 +51,19 @@ class PolicyConfig(BaseModel):
     max_file_size_mb: int = 500
 
 
+class AgentConfig(BaseModel):
+    """LLM backend configuration for the Hera AI Agent."""
+    backend: str = Field(default="auto", description=(
+        "LLM backend: 'auto', 'gemini', 'vertex', 'openai', 'anthropic', "
+        "'ollama', 'lmstudio', 'jan', 'llamacpp', 'vllm', 'localai', 'mlx', 'custom'"
+    ))
+    model: str | None = Field(default=None, description="Model name (provider-specific)")
+    api_key: str | None = Field(default=None, description="API key (overrides env var)")
+    base_url: str | None = Field(default=None, description="Custom endpoint base URL")
+    vertex_project: str | None = Field(default=None, description="GCP project for Vertex AI")
+    vertex_location: str = Field(default="us-central1", description="GCP region for Vertex AI")
+
+
 class HeraConfig(BaseModel):
     data_dir: str = Field(default=".", description="Directorio raíz de Hera")
     quarantine_dir: str = Field(default="quarantine")
@@ -68,6 +81,7 @@ class HeraConfig(BaseModel):
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
     storage: StorageConfig = Field(default_factory=StorageConfig)
     policy: PolicyConfig = Field(default_factory=PolicyConfig)
+    agent: AgentConfig = Field(default_factory=AgentConfig)
 
     def resolve_paths(self, base_path: Path | None = None) -> "HeraConfig":
         """Resuelve rutas relativas respecto a data_dir o base_path."""

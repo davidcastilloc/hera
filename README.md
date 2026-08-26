@@ -136,7 +136,49 @@ uv run hera sync config            # Advanced interactive assistant (S3, Cloudfl
 
 # AI Agent Server
 uv run hera serve                  # Start Model Context Protocol (MCP) stdio server
+
+# AI Conversational Agent (Multi-Backend)
+uv run hera chat                   # Auto-detect best available backend
+uv run hera chat -b ollama         # Use local Ollama
+uv run hera chat -b vertex         # Use Google Vertex AI
+uv run hera chat -b openai -m gpt-4o  # Use OpenAI GPT-4o
+uv run hera chat -b lmstudio       # Use LM Studio desktop
+uv run hera chat -b jan            # Use Jan desktop app
+uv run hera chat -b llamacpp       # Use llama.cpp server
+uv run hera chat -b anthropic      # Use Anthropic Claude
 ```
+
+---
+
+## 🧠 Supported AI Backends
+
+Hera's AI agent supports **12 backends** — 4 cloud providers and 8 local engines. All connect through the [Google Antigravity SDK](https://github.com/google-antigravity/antigravity-sdk-python) with full tool calling support.
+
+### Cloud Providers
+
+| Backend | Flag | Env Var | Default Model |
+|---------|------|---------|--------------|
+| Google Gemini API | `--backend gemini` | `GEMINI_API_KEY` | `gemini-2.5-flash` |
+| Google Vertex AI | `--backend vertex` | `VERTEX_PROJECT` | `gemini-2.5-flash` |
+| OpenAI | `--backend openai` | `OPENAI_API_KEY` | `gpt-4o` |
+| Anthropic Claude | `--backend anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` |
+
+### Local Engines (100% Free & Private)
+
+| Backend | Flag | Default Port | Install |
+|---------|------|-------------|---------|
+| [Ollama](https://ollama.com) | `--backend ollama` | `11434` | `curl -fsSL https://ollama.com/install.sh \| sh` |
+| [LM Studio](https://lmstudio.ai) | `--backend lmstudio` | `1234` | Desktop app download |
+| [Jan](https://jan.ai) | `--backend jan` | `1337` | Desktop app download |
+| [llama.cpp](https://github.com/ggerganov/llama.cpp) | `--backend llamacpp` | `8080` | Build from source |
+| [vLLM](https://github.com/vllm-project/vllm) | `--backend vllm` | `8000` | `pip install vllm` |
+| [LocalAI](https://localai.io) | `--backend localai` | `8080` | Docker / binary |
+| [MLX](https://github.com/ml-explore/mlx) | `--backend mlx` | `8080` | `pip install mlx-lm` (Apple Silicon) |
+| Custom | `--backend custom` | — | Any OpenAI-compatible endpoint |
+
+### Auto-Detection
+
+When no `--backend` flag is provided, Hera automatically detects the best available backend by checking environment variables and probing local ports. No configuration needed — just start your preferred engine and run `hera chat`.
 
 ---
 

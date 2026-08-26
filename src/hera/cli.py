@@ -416,17 +416,31 @@ def serve(config: str):
 
 
 @main.command()
-def chat():
-    """Inicia la sesión conversacional interactiva con el agente Hera (impulsado por Antigravity SDK)."""
+@click.option("--backend", "-b", default=None,
+              type=click.Choice(["auto", "gemini", "vertex", "openai", "anthropic",
+                                 "ollama", "lmstudio", "jan", "llamacpp", "vllm",
+                                 "localai", "mlx", "custom"], case_sensitive=False),
+              help="LLM backend to use (default: auto-detect)")
+@click.option("--model", "-m", default=None, help="Model name (provider-specific)")
+@click.option("--base-url", default=None, help="Custom endpoint URL (for 'custom' backend)")
+def chat(backend, model, base_url):
+    """Start the interactive conversational agent powered by the Antigravity SDK."""
     from hera.agent.brain import run_hera_interactive_chat
-    asyncio.run(run_hera_interactive_chat())
+    asyncio.run(run_hera_interactive_chat(backend=backend, model=model, base_url=base_url))
 
 
 @main.command()
-def agent():
-    """Alias para 'hera chat' — Inicia el agente autónomo Hera."""
+@click.option("--backend", "-b", default=None,
+              type=click.Choice(["auto", "gemini", "vertex", "openai", "anthropic",
+                                 "ollama", "lmstudio", "jan", "llamacpp", "vllm",
+                                 "localai", "mlx", "custom"], case_sensitive=False),
+              help="LLM backend to use (default: auto-detect)")
+@click.option("--model", "-m", default=None, help="Model name (provider-specific)")
+@click.option("--base-url", default=None, help="Custom endpoint URL (for 'custom' backend)")
+def agent(backend, model, base_url):
+    """Alias for 'hera chat' — Start the autonomous Hera agent."""
     from hera.agent.brain import run_hera_interactive_chat
-    asyncio.run(run_hera_interactive_chat())
+    asyncio.run(run_hera_interactive_chat(backend=backend, model=model, base_url=base_url))
 
 
 if __name__ == "__main__":

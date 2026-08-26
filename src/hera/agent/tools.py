@@ -32,19 +32,16 @@ async def search_and_acquire_tracks(queries: list[str]) -> str:
 
     results = []
 
-    api_key = "hera_slskd_key_2026"
-    headers = {"Content-Type": "application/json", "X-API-Key": api_key}
-
     for q in queries:
         try:
-            r = httpx.post(f"{url}/searches", json={"searchText": q}, headers=headers, timeout=5.0)
+            r = httpx.post(f"{url}/searches", json={"searchText": q}, timeout=5.0)
             if r.status_code != 200:
-                results.append(f"[-] '{q}': Could not initiate Soulseek search (HTTP {r.status_code}).")
+                results.append(f"[-] '{q}': Could not initiate Soulseek search.")
                 continue
             s_id = r.json()["id"]
             await asyncio.sleep(3.5)
 
-            res_resp = httpx.get(f"{url}/searches/{s_id}/responses", headers=headers, timeout=5.0)
+            res_resp = httpx.get(f"{url}/searches/{s_id}/responses", timeout=5.0)
             if res_resp.status_code != 200:
                 results.append(f"[-] '{q}': No responses received from Soulseek network.")
                 continue
@@ -85,19 +82,12 @@ async def search_and_acquire_tracks(queries: list[str]) -> str:
                 dl = httpx.post(
                     f"{url}/transfers/downloads/{chosen_peer}",
                     json=[{"filename": chosen_file["filename"], "size": chosen_file["size"]}],
-                    headers=headers,
                     timeout=5.0,
                 )
                 if dl.status_code in [200, 201]:
                     results.append(f"[+] '{q}': Enqueued {fn_clean} ({sz_mb:.1f} MB) from peer '{chosen_peer}'")
             else:
                 results.append(f"[-] '{q}': No available peers with full-length audio.")
-        except httpx.ConnectError:
-            results.append(
-                f"[!] Error de conexión en '{q}': El demonio Soulseek (slskd) no está en ejecución en http://localhost:5030.\n"
-                f"    -> Para iniciarlo, abre otra terminal y ejecuta: 'uv run hera slskd' (o 'bin/slskd.exe')."
-            )
-            break
         except Exception as e:
             results.append(f"[!] Error processing '{q}': {e}")
 
