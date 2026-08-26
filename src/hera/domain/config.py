@@ -26,6 +26,14 @@ class AnalysisConfig(BaseModel):
     )
 
 
+class StorageConfig(BaseModel):
+    rclone_path: str = "bin/rclone.exe"
+    config_path: str | None = None
+    default_remote: str = "gdrive"
+    remote_folder: str = "Hera_Music/sets"
+    auto_sync: bool = False
+
+
 class PolicyConfig(BaseModel):
     require_approval: bool = True
     allowed_bases: list[str] = Field(
@@ -58,6 +66,7 @@ class HeraConfig(BaseModel):
 
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     analysis: AnalysisConfig = Field(default_factory=AnalysisConfig)
+    storage: StorageConfig = Field(default_factory=StorageConfig)
     policy: PolicyConfig = Field(default_factory=PolicyConfig)
 
     def resolve_paths(self, base_path: Path | None = None) -> "HeraConfig":
@@ -76,6 +85,7 @@ class HeraConfig(BaseModel):
             dedup_duration_tolerance_ms=self.dedup_duration_tolerance_ms,
             providers=self.providers,
             analysis=self.analysis,
+            storage=self.storage,
             policy=self.policy,
         )
 
