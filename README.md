@@ -53,6 +53,53 @@
 
 ---
 
+## 🔌 3 Ways to Use Hera
+
+Hera is designed to work at every level — from a simple CLI tool to a full autonomous agent. **No LLM is required for modes 1 and 2.**
+
+### Mode 1: CLI Toolkit (No LLM — For Humans)
+Use Hera's tools directly from the terminal. Zero configuration, zero API keys.
+```bash
+hera library                                  # Show all tracks and sets
+hera search "Daft Punk One More Time"         # Search & download from Soulseek
+hera set "My Set" "Modjo" "Daft Punk"         # Build a DJ set from library
+hera camelot 8A 128.0                         # Harmonic mixing recommendations
+hera sync push                                # Upload sets to Google Drive
+```
+
+### Mode 2: MCP Skill (No LLM — For Any AI Agent)
+Hera becomes a **skill/plugin** for any AI coding agent that supports MCP. The host agent (Antigravity, Claude, Cursor, OpenCode) provides the LLM brain — Hera provides the DJ tools.
+
+```bash
+# Start the MCP server
+uv run hera serve
+```
+
+Connect from any MCP-compatible agent by adding to your MCP config:
+```json
+{
+  "mcpServers": {
+    "hera": {
+      "command": "uv",
+      "args": ["run", "--project", "/path/to/hera", "hera", "serve"],
+      "transport": "stdio"
+    }
+  }
+}
+```
+
+**Exposed MCP Tools:** `search_music`, `get_track_candidates`, `download_track`, `download_status`, `identify_track`, `analyze_track`, `organize_track`, `build_dj_crate`
+
+### Mode 3: Autonomous Agent (Own LLM — Standalone)
+Hera runs its own LLM via the [Antigravity SDK](https://github.com/google-antigravity/antigravity-sdk-python), with 12 supported backends. The LLM reasons about your natural language input and decides which tools to call.
+```bash
+hera chat                         # Auto-detect backend
+hera chat -b ollama               # Use local Ollama
+hera chat -b vertex               # Use Google Vertex AI
+```
+
+---
+
 ## 🏗️ System Architecture
 
 ```text
@@ -68,6 +115,7 @@
  │   └── Sensation White Megamixes (2002-2006)/
  ├── src/hera/
  │   ├── adapters/           # Cloud storage (rclone), P2P (slskd)
+ │   ├── agent/              # AI Agent (brain, backends, tools, prompts)
  │   ├── contracts/          # Pydantic schemas (Track, Crate, Job)
  │   ├── domain/             # Business logic (Config, Database, Export)
  │   ├── jobs/               # Asynchronous resilient job queue
@@ -134,8 +182,14 @@ uv run hera sync push              # Upload & sync local sets/ to Google Drive (
 uv run hera sync pull              # Download sets from cloud to local machine
 uv run hera sync config            # Advanced interactive assistant (S3, Cloudflare R2, Dropbox)
 
-# AI Agent Server
+# AI Agent Server (MCP — for external agents)
 uv run hera serve                  # Start Model Context Protocol (MCP) stdio server
+
+# Standalone DJ Tools (No LLM Required)
+uv run hera library                # Show inventory of all tracks and sets
+uv run hera search "Artist Title"  # Search & download from Soulseek P2P
+uv run hera set "Name" "track1"    # Build a DJ set from library tracks
+uv run hera camelot 8A 128.0       # Harmonic mixing recommendations (Camelot Wheel)
 
 # AI Conversational Agent (Multi-Backend)
 uv run hera chat                   # Auto-detect best available backend

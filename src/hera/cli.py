@@ -415,6 +415,56 @@ def serve(config: str):
     asyncio.run(run_server_and_worker())
 
 
+# ─── Standalone Tool Commands (No LLM Required) ─────────────────────────────
+
+@main.command()
+@click.argument("queries", nargs=-1, required=True)
+def search(queries):
+    """Search & download tracks from Soulseek P2P (no LLM needed).
+
+    Example: hera search "Daft Punk One More Time" "Modjo Lady"
+    """
+    from hera.agent.tools import search_and_acquire_tracks
+    async def run():
+        result = await search_and_acquire_tracks(list(queries))
+        click.echo(result)
+    asyncio.run(run())
+
+
+@main.command()
+def library():
+    """Show inventory of all tracks and DJ sets on disk (no LLM needed)."""
+    from hera.agent.tools import get_library_status
+    click.echo(get_library_status())
+
+
+@main.command(name="set")
+@click.argument("set_name")
+@click.argument("tracks", nargs=-1, required=True)
+def create_set(set_name, tracks):
+    """Build a DJ set from library tracks (no LLM needed).
+
+    Example: hera set "My Set" "Modjo" "Daft Punk" "Bob Sinclar"
+    """
+    from hera.agent.tools import create_or_update_dj_set
+    async def run():
+        result = await create_or_update_dj_set(set_name, list(tracks))
+        click.echo(result)
+    asyncio.run(run())
+
+
+@main.command()
+@click.argument("key")
+@click.argument("bpm", type=float)
+def camelot(key, bpm):
+    """Get harmonic mixing recommendations from the Camelot Wheel (no LLM needed).
+
+    Example: hera camelot 8A 128.0
+    """
+    from hera.agent.tools import recommend_harmonic_transitions
+    click.echo(recommend_harmonic_transitions(key, bpm))
+
+
 @main.command()
 @click.option("--backend", "-b", default=None,
               type=click.Choice(["auto", "gemini", "vertex", "openai", "anthropic",
