@@ -1,52 +1,23 @@
-# Base de conocimiento de Hera
+# 📚 Hera Knowledge Base & Documentation Index
 
-Este directorio reúne la documentación canónica disponible antes de comenzar
-la implementación del producto.
+This directory contains the canonical documentation, specifications, and architecture decisions for **Hera**.
 
-## Documentos canónicos
+---
 
-| Documento | Audiencia | Contenido |
+## 📑 Canonical Documents
+
+| Document | Target Audience | Summary |
 |---|---|---|
-| `Hera_Especificacion_Tecnica_PRD_v0.1.docx` | Producto, backend, P2P, MCP, DevOps y seguridad | Visión, arquitectura, providers, pipeline, datos, despliegue, roadmap, riesgos y aceptación del MVP |
-| `Hera_Guia_para_Agentes_AI.md` | Agentes de IA y desarrolladores de Skills/MCP | Reglas operativas, tools, secuencias, estados, errores, seguridad, ejemplos y evals |
+| [`../README.md`](../README.md) | All Users & Developers | Project overview, core features, architecture, Quickstart, CLI reference, and **Wishlist Board**. |
+| [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributors & Maintainers | Development setup, architecture layers, coding standards, testing, and PR workflow. |
+| [`Hera_Especificacion_Tecnica_PRD_v0.1.docx`](Hera_Especificacion_Tecnica_PRD_v0.1.docx) | Product, Backend, DevOps | Full technical PRD: vision, providers, pipeline, data schema, roadmap, and MVP acceptance criteria. |
+| [`Hera_Guia_para_Agentes_AI.md`](Hera_Guia_para_Agentes_AI.md) | AI Agents & MCP Developers | Operational rules, tool contracts, execution sequences, state machines, and guardrails. |
 
-## Jerarquía de autoridad
+---
 
-Cuando exista una discrepancia:
+## 🏛️ Architectural Guardrails
 
-1. Las políticas legales y de seguridad más restrictivas tienen prioridad.
-2. Los contratos JSON Schema implementados tendrán prioridad sobre ejemplos
-   narrativos cuando empiece el desarrollo.
-3. El PRD define intención y alcance del producto.
-4. La guía de agentes define el comportamiento del Brain, sin sustituir las
-   validaciones de Hera Connect.
-5. Las decisiones futuras deben registrarse como ADR y enlazarse desde este
-   índice.
-
-## Restricción arquitectónica vigente
-
-Hera es una herramienta local, no un SaaS. El baseline aprobado para el MVP es
-Python + Pydantic + SQLite + sistema de archivos + MCP por `stdio`. Docker,
-HTTP local, modelos mediante Ollama/llama.cpp y providers de red son opcionales.
-No forman parte del núcleo obligatorio PostgreSQL, Redis, Kafka, Kubernetes,
-microservicios, multi-tenancy, billing, telemetría cloud ni APIs de IA de pago.
-
-## Convenciones para nuevos documentos
-
-- Usar nombres descriptivos y versión cuando el contenido sea contractual.
-- Indicar estado: propuesta, aceptado, obsoleto o reemplazado.
-- Registrar fecha, responsable y documentos relacionados.
-- No guardar secretos, tokens, credenciales ni información de peers.
-- Añadir aquí todo documento considerado fuente de verdad.
-- Mantener ejemplos de P2P limitados a material autorizado.
-
-## Próximos documentos recomendados
-
-- Arquitectura C4 y límites de confianza.
-- JSON Schemas de las tools MCP.
-- Modelo de amenazas y política de autorización.
-- ADR de base de datos, cola de jobs y embeddings.
-- Especificación de providers y contract tests.
-- Runbook de despliegue Docker y recuperación.
-- Dataset de fixtures propios o con licencia para pruebas.
-- Conversaciones doradas y evaluaciones de agentes.
+1. **Local-First Single-User Architecture:** Hera runs locally with Python 3.11+, Pydantic v2, SQLite, file storage, and MCP over `stdio`. 
+2. **Cross-Platform Portability:** Runs identically on Linux (x86_64, ARM64), macOS, and Windows.
+3. **No Heavy Cloud Infrastructure Required:** PostgreSQL, Redis, Kafka, Kubernetes, multi-tenancy, and mandatory paid cloud AI APIs are not required for core operations.
+4. **Cloud Agility via `rclone`:** External cloud storage synchronization (Google Drive, Cloudflare R2, AWS S3, Dropbox) is decoupled and orchestrated via `rclone`.
