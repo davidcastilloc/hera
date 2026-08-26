@@ -415,5 +415,19 @@ def serve(config: str):
     asyncio.run(run_server_and_worker())
 
 
+@main.command()
+def chat():
+    """Inicia la sesión conversacional interactiva con el agente Hera (impulsado por Antigravity SDK)."""
+    from hera.agent.brain import run_hera_interactive_chat
+    asyncio.run(run_hera_interactive_chat())
+
+
+@main.command()
+def agent():
+    """Alias para 'hera chat' — Inicia el agente autónomo Hera."""
+    from hera.agent.brain import run_hera_interactive_chat
+    asyncio.run(run_hera_interactive_chat())
+
+
 if __name__ == "__main__":
     main()
