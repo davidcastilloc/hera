@@ -3,6 +3,7 @@
 import asyncio
 import os
 from pathlib import Path
+import re
 import sys
 
 from hera.agent.prompts import HERA_SYSTEM_INSTRUCTIONS
@@ -62,23 +63,24 @@ class HeraBrain:
 
 
 async def run_hera_interactive_chat():
-    """Consola conversacional interactiva en lenguaje natural para DJs (100% directa y sin prompts molestos)."""
+    """Consola conversacional interactiva en lenguaje natural para DJs."""
     brain = HeraBrain()
     initialized = await brain.initialize()
 
     print("=" * 80)
-    print(" 🎧 HERA AI AGENT — Consola Conversacional para DJs")
+    print(" HERA AI AGENT - Consola Conversacional para DJs")
     print("=" * 80)
     if initialized:
         print("[+] Backend: Antigravity Agent Cloud Runtime Activo.")
     else:
         print("[+] Motor: Hera Autonomous DJ Engine (100% Local & Lenguaje Natural).")
 
-    print("\nHabla con Hera naturalmente en español o inglés:")
-    print("  * 'búscame temas de Sensation White como For An Angel y Universal Nation'")
+    print("\nHabla con Hera naturalmente en espanol o ingles:")
+    print("  * 'Que cosas puedes hacer por mi?'")
+    print("  * 'buscame temas de Sensation White como For An Angel y Universal Nation'")
     print("  * 'arma un set con los temas de French Touch'")
     print("  * 'sincroniza todos mis sets a Google Drive'")
-    print("  * '¿qué canciones tengo listas en mi biblioteca?'")
+    print("  * 'que canciones tengo listas en mi biblioteca?'")
     print("(Escribe 'salir' para terminar)\n")
 
     try:
@@ -91,10 +93,10 @@ async def run_hera_interactive_chat():
             if not user_input:
                 continue
             if user_input.lower() in ["salir", "exit", "quit", "q"]:
-                print("\n[*] Cerrando sesión de Hera. ¡Que tengas una gran sesión en cabina! 🎧")
+                print("\n[*] Cerrando sesion de Hera. Que tengas una gran sesion en cabina!")
                 break
 
-            print("\nHera 🤖:\n", flush=True)
+            print("\nHera:\n", flush=True)
 
             if brain.agent:
                 try:
@@ -113,60 +115,101 @@ async def run_hera_interactive_chat():
 
 
 async def _handle_nlp(user_input: str):
-    """Interpreta y ejecuta cualquier petición en lenguaje natural sin requerir comandos fijos."""
-    q_low = user_input.lower()
+    """Interpreta y ejecuta peticiones en lenguaje natural de manera robusta y contextual."""
+    q_raw = user_input.strip()
+    q_low = q_raw.lower()
 
-    # 1. Sincronización en la Nube (Evaluado primero para capturar 'sube a drive', 'sync drive', etc.)
-    if any(k in q_low for k in ["drive", "google", "sync", "sincroniza", "sincronizar", "sube", "subir", "nube", "cloud"]):
-        print("[*] Sincronizando sets con Google Drive vía rclone...")
+    # 1. Saludos, Identidad, Ayuda y Capacidades
+    if any(p in q_low for p in [
+        "que puedes hacer", "qué puedes hacer", "que sabes hacer", "qué sabes hacer",
+        "que cosas puedes hacer", "qué cosas puedes hacer", "para que sirves", "para qué sirves",
+        "quien eres", "quién eres", "como funcionas", "cómo funcionas", "ayuda", "help",
+        "hola", "buenas", "que tal", "qué tal", "capacidades"
+    ]):
+        print("Hola! Soy Hera, tu super-agente inteligente para curacion musical y cabina de DJ.\n")
+        print("Aqui tienes todo lo que puedo hacer por ti:")
+        print("  1. [BUSQUEDA] Busqueda & Descarga P2P (Soulseek):")
+        print("     Dime cualquier tema o artista y descargare el master en FLAC o MP3 320k (sin placeholders ni pitidos).")
+        print("     Ej: 'buscame temas de Sensation White como For An Angel y Universal Nation'")
+        print("  2. [DSP] Analisis Acustico & Armonico (BPM & Camelot):")
+        print("     Analizo BPMs, claves Camelot (8A, 11B...) y volumen LUFS para asegurar mezclas perfectas.")
+        print("     Ej: 'si estoy en 8A a 124 BPM que canciones puedo mezclar?'")
+        print("  3. [SETS] Creacion de Sets & Crates Organizados:")
+        print("     Secuencio tracks por armonia, inyecto tags ID3/Vorbis y genero la guia '_00_SET_GUIDE.txt'.")
+        print("     Ej: 'arma un set con las canciones de French Touch'")
+        print("  4. [CLOUD] Sincronizacion en la Nube (Google Drive / S3 / R2):")
+        print("     Subo tus sets en un clic via rclone para que los lleves en el movil o coche.")
+        print("     Ej: 'sincroniza todos mis sets a Google Drive'")
+        print("  5. [INVENTARIO] Catalogo de Biblioteca:")
+        print("     Consulta en cualquier momento que tracks reales y sets tienes disponibles.")
+        print("     Ej: 'que canciones tengo en mi biblioteca?'\n")
+        return
+
+    # 2. Sincronización en la Nube
+    if any(k in q_low for k in ["drive", "google drive", "gdrive", "sincroniza", "sincronizar", "sincroniza a", "sube a", "subir a", "nube", "cloud", "backup"]):
+        print("[*] Sincronizando sets locales con Google Drive via rclone...")
         res = await sync_sets_to_cloud()
         print(res + "\n")
+        return
 
-    # 2. Búsqueda y Adquisición P2P
-    elif any(k in q_low for k in ["busca", "buscar", "descarga", "descargar", "encuentra", "consigue", "search", "download", "get"]):
-        raw_terms = user_input
+    # 3. Búsqueda y Adquisición P2P
+    search_keywords = ["busca", "buscar", "buscame", "búscame", "descarga", "descargar", "descargame", "descárgame", "consigue", "consigueme", "consígueme", "encuentra", "download", "search"]
+    if any(k in q_low for k in search_keywords):
+        raw_terms = q_raw
         for prefix in [
-            "búscame los mejores temas de", "buscame los mejores temas de",
-            "búscame temas de", "buscame temas de", "busca temas de", "buscar temas de",
-            "búscame", "buscame", "busca", "buscar",
-            "descárgame", "descargame", "descarga", "descargar",
-            "consígueme", "consigueme", "consigue",
+            "buscame los mejores temas de", "búscame los mejores temas de",
+            "buscame temas de", "búscame temas de", "busca temas de", "buscar temas de",
+            "buscame", "búscame", "busca", "buscar",
+            "descargame", "descárgame", "descarga", "descargar",
+            "consigueme", "consígueme", "consigue",
             "search for", "download", "find"
         ]:
             if prefix in q_low:
-                raw_terms = user_input[q_low.find(prefix) + len(prefix):].strip()
+                raw_terms = q_raw[q_low.find(prefix) + len(prefix):].strip()
                 break
 
         terms = [t.strip() for t in raw_terms.replace(" como ", ",").replace(" y ", ",").replace(" and ", ",").split(",") if t.strip()]
         if not terms:
             terms = [raw_terms]
 
-        print(f"[*] Buscando y adquiriendo en Soulseek P2P: {', '.join(terms)}...")
+        print(f"[*] Buscando y adquiriendo pistas en la red Soulseek P2P: {', '.join(terms)}...")
         res = await search_and_acquire_tracks(terms)
         print(res + "\n")
+        return
 
-    # 3. Creación y organización de Sets
-    elif any(k in q_low for k in ["arma", "armar", "crea", "crear", "haz", "hacer", "organiza", "organizar", "compila", "compilar", "nuevo set", "crear set"]):
-        set_name = "DJ Live Set"
+    # 4. Creación y Organización de Sets (Requiere acción + sustantivo de colección)
+    has_action = any(a in q_low for a in ["arma", "armar", "crea", "crear", "haz", "hacer", "organiza", "organizar", "compila", "compilar", "nuevo", "nueva"])
+    has_target = any(t in q_low for t in ["set", "sets", "crate", "crates", "sesion", "sesión", "playlist", "carpeta"])
+    if (has_action and has_target) or "arma un set" in q_low or "crea un set" in q_low:
+        set_name = "DJ Live Crate"
         if "sensation" in q_low:
             set_name = "Sensation White Live Crate"
         elif "french" in q_low or "house" in q_low:
             set_name = "French Touch & Vocal House"
         elif "trance" in q_low or "euro" in q_low:
             set_name = "Eurodance & Trance"
+        elif "electro" in q_low:
+            set_name = "Electro House & Peak-Time"
 
-        print(f"[*] Analizando biblioteca, afinidad armónica Camelot y compilando '{set_name}'...")
+        print(f"[*] Analizando biblioteca, afinidad armonica Camelot y compilando '{set_name}'...")
         res = await create_or_update_dj_set(set_name, ["Modjo", "Stardust", "Daft Punk", "Tiesto", "Armand", "Spiller"])
         print(res + "\n")
+        return
 
-    # 4. Estado de biblioteca y sets
-    elif any(k in q_low for k in ["biblioteca", "canciones", "tracks", "inventario", "sets", "tengo", "list", "show"]):
+    # 5. Estado de biblioteca e inventario
+    if any(k in q_low for k in ["biblioteca", "canciones", "cancion", "tracks", "inventario", "que temas tengo", "qué temas tengo", "que canciones", "qué canciones", "list", "show"]):
         res = get_library_status()
         print(res + "\n")
+        return
 
-    # 5. Consultas armónicas / Camelot
-    elif any(k in q_low for k in ["camelot", "armonia", "armonica", "mezclar", "bpm", "tonalidad", "clave"]):
-        print(recommend_harmonic_transitions("8A", 124.0) + "\n")
+    # 6. Consultas armónicas / Camelot Wheel
+    if any(k in q_low for k in ["camelot", "armonia", "armonica", "armónica", "mezclar", "bpm", "tonalidad", "clave", "transicion", "transición"]):
+        match = re.search(r"(\d{1,2}[abAB])", q_raw)
+        key_found = match.group(1).upper() if match else "8A"
+        bpm_match = re.search(r"(\d{2,3}(?:\.\d)?)", q_raw)
+        bpm_found = float(bpm_match.group(1)) if bpm_match else 124.0
+        print(recommend_harmonic_transitions(key_found, bpm_found) + "\n")
+        return
 
-    else:
-        print(f"Entendido: '{user_input}'. Puedes pedirme buscar artistas o canciones, armar un set armónico o sincronizar con tu Google Drive.\n")
+    # Respuesta por defecto conversacional
+    print(f"Entendido: '{user_input}'. Puedes pedirme buscar artistas o canciones, armar un set armonico, o escribir 'ayuda' para ver que puedo hacer.\n")
