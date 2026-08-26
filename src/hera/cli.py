@@ -70,7 +70,6 @@ def ensure_binaries(base_dir: Path):
                                     target.write(source.read())
                     click.echo(f"[OK] fpcalc instalado en: {fpcalc_path}")
             elif is_linux:
-                # En Linux suele ser paquete nativo libchromaprint-tools o binario
                 pass
         except Exception as e:
             click.echo(f"[WARN] No se pudo descargar fpcalc automaticamente: {e}")
@@ -133,14 +132,11 @@ def setup(config: str, no_binaries: bool):
     else:
         click.echo(f"[OK] Configuracion existente detectada: {cfg_path}")
 
-    # Descargar binarios auxiliares (slskd, fpcalc, rclone) si es necesario
     if not no_binaries:
         ensure_binaries(base_dir)
 
-    # Cargar y resolver rutas
     cfg = HeraConfig.load(cfg_path).resolve_paths(base_dir)
 
-    # Crear directorios operativos
     for d_name, d_path in [
         ("Cuarentena", Path(cfg.quarantine_dir)),
         ("Biblioteca", Path(cfg.library_dir)),
@@ -151,7 +147,6 @@ def setup(config: str, no_binaries: bool):
         d_path.mkdir(parents=True, exist_ok=True)
         click.echo(f"[OK] Directorio de {d_name}: {d_path}")
 
-    # Inicializar base de datos
     db = Database(cfg.db_path)
     asyncio.run(db.init_schema())
     click.echo(f"[OK] Base de datos SQLite inicializada: {cfg.db_path}")
@@ -166,7 +161,6 @@ def doctor(config: str):
     click.echo("[*] Ejecutando diagnostico de salud de Hera...\n")
     all_ok = True
 
-    # 1. Versión de Python y OS
     py_ver = sys.version_info
     click.echo(f"[OK] Sistema Operativo: {platform.system()} {platform.release()} ({platform.machine()})")
     if py_ver >= (3, 11):
@@ -175,7 +169,6 @@ def doctor(config: str):
         click.echo(f"[FAIL] Python: {py_ver.major}.{py_ver.minor} (se requiere >= 3.11)")
         all_ok = False
 
-    # 2. Configuración
     cfg_path = Path(config)
     if cfg_path.exists():
         click.echo(f"[OK] Archivo de configuracion: {cfg_path}")
@@ -184,7 +177,6 @@ def doctor(config: str):
         click.echo(f"[FAIL] Archivo de configuracion no encontrado: {cfg_path} (ejecuta 'hera setup')")
         return
 
-    # 3. Base de datos
     db_p = Path(cfg.db_path)
     if db_p.exists():
         click.echo(f"[OK] Base de datos hera.db accesible: {db_p}")
@@ -192,7 +184,6 @@ def doctor(config: str):
         click.echo(f"[FAIL] Base de datos no encontrada: {db_p} (ejecuta 'hera setup')")
         all_ok = False
 
-    # 4. Binarios multimedia
     for tool_name, tool_path in [
         ("ffmpeg", cfg.analysis.ffmpeg_path),
         ("ffprobe", cfg.analysis.ffprobe_path),
@@ -204,14 +195,12 @@ def doctor(config: str):
         else:
             click.echo(f"[WARN] Binario {tool_name}: no encontrado ({tool_path})")
 
-    # 5. slskd (Soulseek Daemon)
     slskd_exe = Path("bin/slskd.exe" if platform.system() == "Windows" else "bin/slskd")
     if slskd_exe.exists():
         click.echo(f"[OK] Demonio Soulseek (slskd): instalado en ({slskd_exe.resolve()})")
     else:
         click.echo("[WARN] Demonio Soulseek (slskd): no encontrado en bin/ (ejecuta 'hera setup')")
 
-    # 6. rclone (Cloud Storage Sync)
     rclone = RcloneStorageAdapter(cfg.storage.rclone_path, cfg.storage.config_path)
     if rclone.is_available():
         ver = rclone.get_version()
@@ -220,11 +209,10 @@ def doctor(config: str):
         if remotes:
             click.echo(f"     * Remotes en la nube configurados: {', '.join(remotes)}")
         else:
-            click.echo("     * Remotes en la nube: Ninguno configurado todavia (ejecuta 'hera sync config')")
+            click.echo("     * Remotes en la nube: Ninguno configurado todavia (ejecuta 'hera sync login')")
     else:
         click.echo("[WARN] Motor rclone no encontrado en bin/ (ejecuta 'hera setup')")
 
-    # 7. Librerías de análisis
     try:
         import librosa
         click.echo(f"[OK] Motor acustico librosa: instalado ({librosa.__version__})")
@@ -254,10 +242,11 @@ def sync():
     pass
 
 
-@sync.command(name="config")
+@sync.command(name="login")
+@click.option("--name", "-n", default="gdrive", help="Nombre del remote a crear (por defecto 'gdrive')")
 @click.option("--config", "-c", default="config/hera.toml", help="Ruta al archivo de configuración")
-def sync_config(config: str):
-    """Inicia el asistente interactivo de configuración de nube de rclone."""
+def sync_login(name: str, config: str):
+    """Autenticación directa de 1-clic con Google Drive vía navegador web (OAuth2)."""
     cfg = HeraConfig.load(config)
     rclone = RcloneStorageAdapter(cfg.storage.rclone_path, cfg.storage.config_path)
     if not rclone.is_available():
@@ -265,14 +254,37 @@ def sync_config(config: str):
         return
 
     click.echo("=" * 80)
-    click.echo(" ASISTENTE DE CONFIGURACION DE NUBE (rclone)")
+    click.echo(f" CONECTANDO GOOGLE DRIVE ('{name}') VIA OAUTH DIRECTO")
     click.echo("=" * 80)
-    click.echo("Para conectar Google Drive:")
-    click.echo("  1. Elige 'n' (New remote)")
-    click.echo("  2. Nombre: 'gdrive' (o el que prefieras)")
-    click.echo("  3. Tipo de almacenamiento: escribe 'drive'")
-    click.echo("  4. Sigue los pasos en pantalla (abrirá el navegador para autenticarte)\n")
+    click.echo("[*] Abriendo tu navegador web automáticamente...")
+    click.echo("[*] Solo inicia sesión con tu cuenta de Google y haz clic en 'Permitir' / 'Allow'.\n")
 
+    cmd = [rclone.rclone_path, "config", "create", name, "drive", "scope", "drive"]
+    if cfg.storage.config_path:
+        cmd.extend(["--config", cfg.storage.config_path])
+
+    res = subprocess.run(cmd)
+    if res.returncode == 0:
+        click.echo("\n" + "=" * 80)
+        click.echo(f"[SUCCESS] ¡Google Drive ('{name}:') conectado exitosamente con Hera!")
+        click.echo("Ya puedes sincronizar tus canciones ejecutando:")
+        click.echo(f"  uv run hera sync push")
+        click.echo("=" * 80)
+    else:
+        click.echo(f"\n[FAIL] No se pudo completar la autenticacion (código de salida {res.returncode}).")
+
+
+@sync.command(name="config")
+@click.option("--config", "-c", default="config/hera.toml", help="Ruta al archivo de configuración")
+def sync_config(config: str):
+    """Inicia el asistente interactivo manual para configurar nubes avanzadas (S3, R2, Dropbox, etc.)."""
+    cfg = HeraConfig.load(config)
+    rclone = RcloneStorageAdapter(cfg.storage.rclone_path, cfg.storage.config_path)
+    if not rclone.is_available():
+        click.echo("[!] rclone no está instalado. Ejecuta 'hera setup' para descargarlo automáticamente.")
+        return
+
+    click.echo("[*] Iniciando asistente interactivo de rclone (para Google Drive directo, usa 'hera sync login')...")
     cmd = [rclone.rclone_path, "config"]
     if cfg.storage.config_path:
         cmd.extend(["--config", cfg.storage.config_path])
@@ -299,7 +311,7 @@ def sync_status(config: str):
     if remotes:
         click.echo(f"\n[+] Remotes disponibles: {', '.join(remotes)}")
     else:
-        click.echo("\n[!] No hay ningún remote configurado. Ejecuta 'hera sync config' para conectar Google Drive.")
+        click.echo("\n[!] No hay ningún remote configurado. Ejecuta 'hera sync login' para conectar Google Drive.")
 
 
 @sync.command(name="push")
