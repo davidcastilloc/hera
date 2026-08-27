@@ -216,7 +216,7 @@ mkdir -p "${HOME}/.local/share/slskd" "${HOME}/.config/slskd"
 cp -f "${SLSKD_CFG}" "${HOME}/.config/slskd/slskd.yml" 2>/dev/null || true
 
 # --- 9. Scripts de Gestión y Actualización del Super-Nodo ---
-echo -e "\n${CYAN}${BOLD}==> [6/6] Creando comandos de administracion, auto-arranque y actualizaciones...${NC}"
+echo -e "\n${CYAN}${BOLD}==> [6/6] Creando comandos de administracion, auto-arranque y desinstalacion...${NC}"
 
 # Script hera-start
 cat << 'EOF' > "${HERA_DIR}/bin/hera-start"
@@ -351,12 +351,52 @@ fi
 EOF
 chmod +x "${HERA_DIR}/bin/hera-update"
 
+# Script hera-uninstall
+cat << 'EOF' > "${HERA_DIR}/bin/hera-uninstall"
+#!/usr/bin/env bash
+# ==============================================================================
+#  🎧 HERA — Auto-Desinstalador Limpio
+# ==============================================================================
+set -euo pipefail
+
+BOLD='\033[1m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+echo -e "\n${RED}${BOLD}==> [HERA UNINSTALL] Deteniendo y eliminando Hera de este sistema...${NC}"
+
+if command -v systemctl &>/dev/null; then
+  sudo systemctl stop hera 2>/dev/null || systemctl stop hera 2>/dev/null || true
+  sudo systemctl disable hera.service 2>/dev/null || systemctl disable hera.service 2>/dev/null || true
+  sudo rm -f /etc/systemd/system/hera.service 2>/dev/null || true
+  sudo systemctl daemon-reload 2>/dev/null || true
+fi
+
+pkill -9 -f "slskd" 2>/dev/null || true
+
+rm -f "${HOME}/.local/bin/hera-start" 2>/dev/null || true
+rm -f "${HOME}/.local/bin/hera-stop" 2>/dev/null || true
+rm -f "${HOME}/.local/bin/hera-status" 2>/dev/null || true
+rm -f "${HOME}/.local/bin/hera-update" 2>/dev/null || true
+rm -f "${HOME}/.local/bin/hera-uninstall" 2>/dev/null || true
+
+rm -rf "${HOME}/.config/slskd" 2>/dev/null || true
+rm -rf "${HOME}/.local/share/slskd" 2>/dev/null || true
+rm -rf "${HOME}/hera" 2>/dev/null || true
+
+echo -e "\n${GREEN}${BOLD}🎉 ¡Hera ha sido completamente desinstalado de tu sistema!${NC}\n"
+EOF
+chmod +x "${HERA_DIR}/bin/hera-uninstall"
+
 # Enlazar al PATH del usuario si existe ~/.local/bin
 mkdir -p "${HOME}/.local/bin"
 ln -sf "${HERA_DIR}/bin/hera-start" "${HOME}/.local/bin/hera-start" 2>/dev/null || true
 ln -sf "${HERA_DIR}/bin/hera-stop" "${HOME}/.local/bin/hera-stop" 2>/dev/null || true
 ln -sf "${HERA_DIR}/bin/hera-status" "${HOME}/.local/bin/hera-status" 2>/dev/null || true
 ln -sf "${HERA_DIR}/bin/hera-update" "${HOME}/.local/bin/hera-update" 2>/dev/null || true
+ln -sf "${HERA_DIR}/bin/hera-uninstall" "${HOME}/.local/bin/hera-uninstall" 2>/dev/null || true
 
 # --- 10. Configuración de Auto-Arranque Permanente (SystemD) ---
 echo -e "\n${CYAN}${BOLD}==> Configurando servicio de auto-arranque permanente (systemd)...${NC}"
@@ -418,10 +458,11 @@ if [ "${SYSTEMD_CONFIGURED}" = true ]; then
   echo -e "⚡ Auto-Arranque:    ${BOLD}HABILITADO (systemd: hera.service)${NC}"
 fi
 echo -e "\n${CYAN}Comandos rapidos:${NC}"
-echo -e "  • Iniciar nodo:    ${BOLD}hera-start${NC}   (o sudo systemctl start hera)"
-echo -e "  • Ver estado:      ${BOLD}hera-status${NC}  (o sudo systemctl status hera)"
-echo -e "  • Detener nodo:    ${BOLD}hera-stop${NC}    (o sudo systemctl stop hera)"
-echo -e "  • Actualizar nodo: ${BOLD}hera-update${NC}  (o hera update)"
+echo -e "  • Iniciar nodo:    ${BOLD}hera-start${NC}      (o sudo systemctl start hera)"
+echo -e "  • Ver estado:      ${BOLD}hera-status${NC}     (o sudo systemctl status hera)"
+echo -e "  • Detener nodo:    ${BOLD}hera-stop${NC}       (o sudo systemctl stop hera)"
+echo -e "  • Actualizar nodo: ${BOLD}hera-update${NC}     (o hera update)"
+echo -e "  • Desinstalar:     ${BOLD}hera-uninstall${NC}"
 echo -e "  • Logs en vivo:    ${BOLD}journalctl -u hera -f${NC} (o cat ${HERA_DIR}/logs/slskd.log)"
 echo -e "  • CLI de Hera:     ${BOLD}${HERA_DIR}/.venv/bin/hera --help${NC}"
 echo -e "${GREEN}================================================================${NC}\n"
