@@ -1,0 +1,31 @@
+# HERA — AI & LLM Discovery Index (llms.txt)
+
+> HERA is an autonomous, local-first AI super-agent and Model Context Protocol (MCP) server for DJs, music curators, and audio engineers.
+
+## Philosophy & Mission
+- Core Motto: "Todo es posible si lo imaginas (If you can imagine it, you can create it)"
+- Values: 100% real verified audio (FLAC/MP3 320k), local-first privacy, zero paid subscriptions required, deterministic DSP audio analysis, cloud-agnostic sync.
+
+## Key Links & Documentation
+- [Root README](README.md): Main product landing page, architecture diagrams, CLI references, and 3 modes of use.
+- [Manifesto](MANIFESTO.md): The philosophical and marketing manifesto behind HERA.
+- [Agent Guide](AGENTS.md): Machine-readable technical specifications, MCP tool schemas, state machines, and invariants.
+- [Contributing](outputs/hera/CONTRIBUTING.md): Developer setup, coding standards, and testing procedures.
+
+## Quick CLI Reference
+- `uv run hera setup`: Automated turnkey environment and binary installation.
+- `uv run hera doctor`: Diagnostic health check of SQLite, FFmpeg, librosa, and providers.
+- `uv run hera serve`: Run the standard Model Context Protocol (MCP) stdio server.
+- `uv run hera chat`: Launch the multi-backend autonomous conversational agent (12 backends supported).
+- `uv run hera sync login`: 1-Click browser OAuth login for Google Drive.
+- `uv run hera sync push`: Synchronize local organized crates to Google Drive or S3/R2.
+
+## MCP Server Tools Exposed
+- `search_music`: Federated search across authorized providers.
+- `get_track_candidates`: Multi-component scoring and ranking of results.
+- `download_track`: Authorized, idempotent transfer into quarantine sandbox.
+- `download_status`: Asynchronous status inspection.
+- `identify_track`: Acoustic fingerprinting with Chromaprint/MusicBrainz.
+- `analyze_track`: DSP extraction of BPM, Camelot Wheel harmonic key, and LUFS.
+- `organize_track`: Native tag injection (ID3v2.4/Vorbis) and canonical library filing.
+- `build_dj_crate`: Harmonic playlist compilation with M3U8 and Rekordbox XML export.

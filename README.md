@@ -111,6 +111,8 @@ With `hera sync push`, all 8 sets, audio masters, and cue sheets sync directly t
 
 Hera is designed to work at every level — from a simple CLI tool to a full autonomous agent. **No LLM is required for modes 1 and 2.**
 
+> 💡 **Guías en español:** Consulta la [Guía Completa de Modos de Uso (Web UI, Terminal, Agente y VPS)](docs/MODOS_DE_USO.md) y la [Guía de HERA en VPS Remoto + Curadora AI](docs/VPS_REMOTE_GUIDE.md).
+
 ### Mode 1: CLI Toolkit (No LLM — For Humans)
 Use Hera's tools directly from the terminal. Zero configuration, zero API keys.
 ```bash
@@ -183,21 +185,32 @@ hera chat -b vertex               # Use Google Vertex AI
 
 ## 🚀 Quickstart & Installation
 
-Hera requires **Python 3.11+** and uses [`uv`](https://github.com/astral-sh/uv) for blazing-fast dependency resolution.
+Hera requires **Python 3.11+** and can be installed in 1 click or manually via [`uv`](https://github.com/astral-sh/uv).
 
-### 1. Clone Repository
+### Option A: Automated 1-Click Installer (Linux / VPS / WSL / macOS)
+Installs system dependencies (`ffmpeg`, `fpcalc`), `slskd`, `uv`, virtual environment, and systemd service in 30 seconds:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidcastilloc/hera/main/install.sh | bash
+```
+
+---
+
+### Option B: Manual Setup with `uv` (Windows / macOS / Linux)
+
+#### 1. Clone Repository
 ```bash
 git clone https://github.com/davidcastilloc/hera.git
 cd hera
 ```
 
-### 2. Turnkey Setup
+#### 2. Turnkey Setup
 Run the automated setup command. It will detect your operating system (**Linux**, **macOS**, or **Windows**), download the necessary standalone binaries (`slskd`, `fpcalc`, `rclone`), and initialize the SQLite database:
 ```bash
 uv run hera setup
 ```
 
-### 3. Verify System Health
+#### 3. Verify System Health
 ```bash
 uv run hera doctor
 ```
