@@ -620,6 +620,32 @@ def ui(port, no_browser):
         click.echo("\n[*] Hera UI cerrada.")
 
 
+@main.command()
+def update():
+    """Actualiza Hera a la última versión desde GitHub de forma KISS y segura."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    base_dir = Path(__file__).resolve().parents[2]
+    script_path = base_dir / "bin" / "hera-update"
+    if script_path.exists():
+        try:
+            subprocess.run(["bash", str(script_path)])
+            return
+        except Exception:
+            pass
+
+    click.echo("🔄 Buscando actualizaciones en GitHub...")
+    try:
+        subprocess.run(["git", "pull", "--rebase", "origin", "main"], cwd=base_dir, check=True)
+        click.echo("📦 Actualizando dependencias de Python...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "-e", "."], cwd=base_dir, check=True)
+        click.echo("✅ Hera actualizado exitosamente.")
+    except Exception as e:
+        click.echo(f"⚠️ Error durante la actualización: {e}")
+
+
 if __name__ == "__main__":
     main()
 

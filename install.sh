@@ -143,10 +143,10 @@ fi
 echo -e "\n${CYAN}${BOLD}==> [5/6] Configurando entorno y paquetes de Hera...${NC}"
 cd "${HERA_DIR}"
 
-if [ ! -f "pyproject.toml" ]; then
+if [ ! -d ".git" ]; then
   echo -e "${GREEN}[*]${NC} Clonando repositorio Hera desde GitHub..."
   git clone https://github.com/davidcastilloc/hera.git /tmp/hera_repo
-  cp -r /tmp/hera_repo/* "${HERA_DIR}/" || true
+  cp -r /tmp/hera_repo/. "${HERA_DIR}/" || true
   rm -rf /tmp/hera_repo
 fi
 
@@ -215,8 +215,8 @@ EOF
 mkdir -p "${HOME}/.local/share/slskd" "${HOME}/.config/slskd"
 cp -f "${SLSKD_CFG}" "${HOME}/.config/slskd/slskd.yml" 2>/dev/null || true
 
-# --- 9. Scripts de Gestión del Super-Nodo ---
-echo -e "\n${CYAN}${BOLD}==> [6/6] Creando comandos de administracion y servicio de sistema...${NC}"
+# --- 9. Scripts de Gestión y Actualización del Super-Nodo ---
+echo -e "\n${CYAN}${BOLD}==> [6/6] Creando comandos de administracion, auto-arranque y actualizaciones...${NC}"
 
 # Script hera-start
 cat << 'EOF' > "${HERA_DIR}/bin/hera-start"
@@ -286,11 +286,77 @@ fi
 EOF
 chmod +x "${HERA_DIR}/bin/hera-status"
 
+# Script hera-update (Sistema de Actualización KISS)
+cat << 'EOF' > "${HERA_DIR}/bin/hera-update"
+#!/usr/bin/env bash
+# ==============================================================================
+#  🎧 HERA — Auto-Actualizador KISS (Keep It Simple, Stupid)
+# ==============================================================================
+set -euo pipefail
+
+BOLD='\033[1m'
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+NC='\033[0m'
+
+HERA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${HERA_DIR}"
+
+echo -e "\n${CYAN}${BOLD}==> [HERA UPDATE] Buscando actualizaciones en GitHub...${NC}"
+
+if [ ! -d ".git" ]; then
+  echo -e "${RED}[!] No se detecto un repositorio git en ${HERA_DIR}.${NC}"
+  echo -e "${YELLOW}[*] Reparando vinculacion con GitHub...${NC}"
+  git clone https://github.com/davidcastilloc/hera.git /tmp/hera_fix
+  cp -r /tmp/hera_fix/.git "${HERA_DIR}/"
+  rm -rf /tmp/hera_fix
+fi
+
+OLD_REV="$(git rev-parse --short HEAD 2>/dev/null || echo 'actual')"
+
+echo -e "${GREEN}[*]${NC} Sincronizando con origin/main..."
+git fetch origin main --quiet
+LOCAL_REV="$(git rev-parse HEAD)"
+REMOTE_REV="$(git rev-parse origin/main)"
+
+if [ "${LOCAL_REV}" = "${REMOTE_REV}" ]; then
+  echo -e "${GREEN}[OK]${NC} HERA ya se encuentra en la ultima version disponible (${BOLD}${OLD_REV}${NC})."
+else
+  echo -e "${GREEN}[*]${NC} Descargando e integrando nuevos cambios..."
+  git pull --rebase origin main --quiet
+  NEW_REV="$(git rev-parse --short HEAD)"
+  echo -e "${GREEN}[OK]${NC} Codigo actualizado: ${BOLD}${OLD_REV} -> ${NEW_REV}${NC}"
+
+  # Actualizar paquetes de Python si uv está disponible
+  export PATH="${HOME}/.local/bin:${HERA_DIR}/.venv/bin:${PATH}"
+  if command -v uv &>/dev/null && [ -d "${HERA_DIR}/.venv" ]; then
+    echo -e "${GREEN}[*]${NC} Actualizando dependencias de Python..."
+    uv pip install -e ".[analysis]" --quiet 2>/dev/null || uv pip install -e "." --quiet
+  fi
+
+  # Reiniciar servicio para aplicar cambios en caliente
+  echo -e "${GREEN}[*]${NC} Reiniciando servicios de Hera..."
+  if command -v systemctl &>/dev/null && systemctl is-active --quiet hera 2>/dev/null; then
+    sudo systemctl restart hera 2>/dev/null || systemctl restart hera 2>/dev/null || true
+    echo -e "${GREEN}[OK]${NC} Servicio SystemD reiniciado exitosamente."
+  elif pgrep -f "slskd" >/dev/null; then
+    "${HERA_DIR}/bin/hera-stop"
+    "${HERA_DIR}/bin/hera-start"
+  fi
+
+  echo -e "\n${GREEN}${BOLD}🎉 ¡HERA actualizado exitosamente a la version ${NEW_REV}!${NC}\n"
+fi
+EOF
+chmod +x "${HERA_DIR}/bin/hera-update"
+
 # Enlazar al PATH del usuario si existe ~/.local/bin
 mkdir -p "${HOME}/.local/bin"
 ln -sf "${HERA_DIR}/bin/hera-start" "${HOME}/.local/bin/hera-start" 2>/dev/null || true
 ln -sf "${HERA_DIR}/bin/hera-stop" "${HOME}/.local/bin/hera-stop" 2>/dev/null || true
 ln -sf "${HERA_DIR}/bin/hera-status" "${HOME}/.local/bin/hera-status" 2>/dev/null || true
+ln -sf "${HERA_DIR}/bin/hera-update" "${HOME}/.local/bin/hera-update" 2>/dev/null || true
 
 # --- 10. Configuración de Auto-Arranque Permanente (SystemD) ---
 echo -e "\n${CYAN}${BOLD}==> Configurando servicio de auto-arranque permanente (systemd)...${NC}"
@@ -352,9 +418,10 @@ if [ "${SYSTEMD_CONFIGURED}" = true ]; then
   echo -e "⚡ Auto-Arranque:    ${BOLD}HABILITADO (systemd: hera.service)${NC}"
 fi
 echo -e "\n${CYAN}Comandos rapidos:${NC}"
-echo -e "  • Iniciar nodo:    ${BOLD}hera-start${NC}  (o sudo systemctl start hera)"
-echo -e "  • Ver estado:      ${BOLD}hera-status${NC} (o sudo systemctl status hera)"
-echo -e "  • Detener nodo:    ${BOLD}hera-stop${NC}   (o sudo systemctl stop hera)"
+echo -e "  • Iniciar nodo:    ${BOLD}hera-start${NC}   (o sudo systemctl start hera)"
+echo -e "  • Ver estado:      ${BOLD}hera-status${NC}  (o sudo systemctl status hera)"
+echo -e "  • Detener nodo:    ${BOLD}hera-stop${NC}    (o sudo systemctl stop hera)"
+echo -e "  • Actualizar nodo: ${BOLD}hera-update${NC}  (o hera update)"
 echo -e "  • Logs en vivo:    ${BOLD}journalctl -u hera -f${NC} (o cat ${HERA_DIR}/logs/slskd.log)"
 echo -e "  • CLI de Hera:     ${BOLD}${HERA_DIR}/.venv/bin/hera --help${NC}"
 echo -e "${GREEN}================================================================${NC}\n"
