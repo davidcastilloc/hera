@@ -63,3 +63,9 @@ sets/*
 # OS generated
 .DS_Store
 Thumbs.db
+
+# Workspace & Scratch (work folders for testing, sessions and experiments)
+workspace/
+scratch/
+work/
+*.tmp
