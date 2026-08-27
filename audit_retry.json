@@ -1,0 +1,163 @@
+{
+  "directory": "quarantine",
+  "total_scanned": 20,
+  "items": [
+    {
+      "file": "Energy 52 - Cafe del mar 98 (Extended version).mp3",
+      "valid": true,
+      "duration_mins": 8.22,
+      "size_mb": 18.82,
+      "peak_ratio": 0.0044,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "Mylo, Claptone - Drop The Pressure (Extended Version).mp3",
+      "valid": true,
+      "duration_mins": 7.3,
+      "size_mb": 16.72,
+      "peak_ratio": 0.0013,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "08. DJ Tiesto - Lethal Industry.flac",
+      "valid": true,
+      "duration_mins": 6.77,
+      "size_mb": 44.52,
+      "peak_ratio": 0.0017,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "01 - One More Time.mp3",
+      "valid": true,
+      "duration_mins": 5.37,
+      "size_mb": 12.38,
+      "peak_ratio": 0.0003,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "0040 - Armin van Buuren feat. Jan Vayne - Serenity (Original Mix).mp3",
+      "valid": true,
+      "duration_mins": 8.62,
+      "size_mb": 19.82,
+      "peak_ratio": 0.0034,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "Ron Carroll, Superfunk, Faul & Wad - Lucky Star (Faul & Wad vs. Superfunk feat. Ron Carroll feat. Superfunk Extended Mix) [Ultra].mp3",
+      "valid": true,
+      "duration_mins": 3.66,
+      "size_mb": 8.48,
+      "peak_ratio": 0.0021,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "1-02 The Sound Of Violence (feat. Steve Edwards).mp3",
+      "valid": true,
+      "duration_mins": 7.22,
+      "size_mb": 16.99,
+      "peak_ratio": 0.0007,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "06. Room 5 feat. Oliver Cheatham - Make luv.mp3",
+      "valid": true,
+      "duration_mins": 3.47,
+      "size_mb": 7.95,
+      "peak_ratio": 0.0006,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "301. bob sinclar feat. gary nesta pine - love generation (preacher vocal mix).flac",
+      "valid": true,
+      "duration_mins": 6.09,
+      "size_mb": 41.25,
+      "peak_ratio": 0.0034,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "1733 - Tonja Dantzler - In And Out Of My Life (Armand Van Helden Mix).flac",
+      "valid": true,
+      "duration_mins": 6.28,
+      "size_mb": 48.23,
+      "peak_ratio": 0.0005,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "1989 - Spiller - Groovejet (If This Ain't Love) [feat. Sophie Ellis-Bextor] (Extended Vocal Mix).flac",
+      "valid": true,
+      "duration_mins": 7.43,
+      "size_mb": 54.94,
+      "peak_ratio": 0.0017,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "01 - Call on Me - Radio Mix.flac",
+      "valid": true,
+      "duration_mins": 2.86,
+      "size_mb": 19.72,
+      "peak_ratio": 0.0018,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "01. Fedde Le Grand - Put Your Hands Up For Detroit (Radio Edit).mp3",
+      "valid": true,
+      "duration_mins": 2.45,
+      "size_mb": 5.69,
+      "peak_ratio": 0.0004,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "1-01 Satisfaction.flac",
+      "valid": true,
+      "duration_mins": 4.76,
+      "size_mb": 31.96,
+      "peak_ratio": 0.0008,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "01 - Music Sounds Better With You.flac",
+      "valid": true,
+      "duration_mins": 6.72,
+      "size_mb": 49.25,
+      "peak_ratio": 0.0005,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "RANK 1 - Airwave (Original Version).mp3",
+      "valid": true,
+      "duration_mins": 8.35,
+      "size_mb": 19.12,
+      "peak_ratio": 0.0006,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "0027 - Axwell - Feel The Vibe - Radio Edit.mp3",
+      "valid": true,
+      "duration_mins": 2.92,
+      "size_mb": 6.82,
+      "peak_ratio": 0.0002,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "0804 - Michael Gray - The Weekend - Radio Edit.mp3",
+      "valid": true,
+      "duration_mins": 3.2,
+      "size_mb": 7.38,
+      "peak_ratio": 0.0012,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "0863 - Roger Sanchez - Another Chance.mp3",
+      "valid": true,
+      "duration_mins": 7.55,
+      "size_mb": 17.61,
+      "peak_ratio": 0.0004,
+      "status": "AUTHENTIC_MASTER"
+    },
+    {
+      "file": "03. Cygnus X - Superstring (Rank 1 Remix).flac",
+      "valid": false,
+      "reason": "Error opening 'quarantine\\\\incomplete\\\\invisible1234\\\\Technics DJ Set\\\\2001 VA - Technics DJ Set Volume 2 (2-CD)\\\\CD-1\\\\03. Cygnus X - Superstring (Rank 1 Remix).flac': Format not recognised."
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "status": "completed",
+  "queries": [
+    "System F Out Of The Blue",
+    "Cygnus X Superstring Rank 1",
+    "Delerium Silence Tiesto",
+    "Push Universal Nation",
+    "Marco V Simulated"
+  ],
+  "log": [
+    "[-] 'System F Out Of The Blue': No available peers with full-length audio.",
+    "[-] 'Cygnus X Superstring Rank 1': No available peers with full-length audio.",
+    "[+] 'Delerium Silence Tiesto': Enqueued delerium_ft._sarah_mclachlan_-_silence_(tiesto's_in_search_of_sunrise_mix).mp3 (26.6 MB) from peer 'power10010'",
+    "[-] 'Push Universal Nation': No available peers with full-length audio.",
+    "[-] 'Marco V Simulated': No available peers with full-length audio."
+  ]
+}

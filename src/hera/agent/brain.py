@@ -7,6 +7,7 @@ Supports 12 backends (4 cloud + 8 local) via the BackendRegistry.
 import asyncio
 import os
 import sys
+from typing import Any
 from pathlib import Path
 
 # Cargar variables de entorno desde .env si existe
@@ -41,8 +42,20 @@ from hera.agent.tools import (
 )
 from hera.domain.config import AgentConfig, HeraConfig
 from hera.domain.cost import CostTracker
+import contextvars
 
-# Referencia global activa para tools del agente
+# Variable de contexto aislada para tracking de costos concurrente y seguro
+_active_cost_tracker_ctx: contextvars.ContextVar[CostTracker | None] = contextvars.ContextVar(
+    "active_cost_tracker", default=None
+)
+
+def get_active_cost_tracker() -> CostTracker | None:
+    return _active_cost_tracker_ctx.get()
+
+def set_active_cost_tracker(tracker: CostTracker | None) -> None:
+    _active_cost_tracker_ctx.set(tracker)
+
+# Compatibilidad con accesos directos
 ACTIVE_COST_TRACKER: CostTracker | None = None
 
 HERA_TOOLS = [
@@ -116,18 +129,26 @@ class HeraBrain:
             is_local=is_local,
             max_session_cost_usd=self.config.max_session_cost_usd,
         )
+        set_active_cost_tracker(self.cost_tracker)
         global ACTIVE_COST_TRACKER
         ACTIVE_COST_TRACKER = self.cost_tracker
 
         try:
+            if self.agent:
+                try:
+                    await self.close()
+                except Exception:
+                    pass
+
             from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig
 
             backend_type = resolved["type"]
+            caps = CapabilitiesConfig(enabled_tools=[])
 
             if backend_type == "gemini":
                 sdk_config = LocalAgentConfig(
                     system_instructions=HERA_SYSTEM_INSTRUCTIONS,
-                    capabilities=CapabilitiesConfig(),
+                    capabilities=caps,
                     tools=HERA_TOOLS,
                     api_key=resolved["api_key"],
                     model=resolved["model"],
@@ -136,7 +157,7 @@ class HeraBrain:
             elif backend_type == "vertex":
                 sdk_config = LocalAgentConfig(
                     system_instructions=HERA_SYSTEM_INSTRUCTIONS,
-                    capabilities=CapabilitiesConfig(),
+                    capabilities=caps,
                     tools=HERA_TOOLS,
                     vertex=True,
                     project=resolved["project"],
@@ -145,18 +166,17 @@ class HeraBrain:
                 )
 
             elif backend_type == "openai_compatible":
-                from google.antigravity.models import ModelTarget, OpenAICompatibleEndpoint
-                sdk_config = LocalAgentConfig(
+                from google.antigravity import LocalOpenAIAgentConfig
+                env_dict = {}
+                if resolved.get("api_key"):
+                    env_dict["OPENAI_API_KEY"] = resolved["api_key"]
+                sdk_config = LocalOpenAIAgentConfig(
                     system_instructions=HERA_SYSTEM_INSTRUCTIONS,
-                    capabilities=CapabilitiesConfig(),
+                    capabilities=caps,
                     tools=HERA_TOOLS,
-                    model=ModelTarget(
-                        model=resolved["model"],
-                        endpoint=OpenAICompatibleEndpoint(
-                            base_url=resolved["base_url"],
-                            api_key=resolved["api_key"],
-                        ),
-                    ),
+                    model=resolved["model"],
+                    base_url=resolved["base_url"],
+                    env=env_dict if env_dict else None,
                 )
             else:
                 return False
@@ -353,7 +373,7 @@ async def run_hera_interactive_chat(
         if brain.cost_tracker:
             summary = brain.cost_tracker.get_summary()
             print("\n" + "=" * 80)
-            print(f" 📊 RESUMEN FINAL DE SESIÓN:")
+            print(" 📊 RESUMEN FINAL DE SESIÓN:")
             print(f"    * Turnos: {summary['turns']}")
             print(f"    * Tokens consumidos: {summary['total_tokens']:,}")
             print(f"    * Gasto total estimado: {summary['cost_formatted']}")

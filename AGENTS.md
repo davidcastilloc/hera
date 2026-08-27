@@ -14,7 +14,7 @@ This directory contains the canonical Python implementation of **HERA**:
 - `src/hera/mcp/`: MCP protocol server and tool handlers.
 - `src/hera/domain/`: SQLite database, configuration, and crate export logic.
 - `src/hera/adapters/`: Cloud sync (`rclone`) and P2P daemon (`slskd`) bridges.
-- `analyzers/`: DSP feature extractors (`librosa`, `ffmpeg`, `chromaprint`).
+- `analyzers/`: DSP feature extractors (`librosa`, `ffmpeg`, `chromaprint`, `transients.py`, `style_embeddings.py`, `synergy_engine.py`).
 
 ---
 
@@ -42,7 +42,7 @@ uv run hera serve
 
 - **Quarantine First:** Never write directly to `library/` without validation.
 - **Explain Rankings:** Present score breakdown to users before recommending downloads.
-- **Camelot Key Flow:** Use harmonic mix transitions (+1, -1, or relative major/minor) when arranging crates.
+- **Unified Holistic Synergy:** Always use the 4-layer synergy engine (Camelot harmonic flow, gradual BPM tempo curves, transient punch matching, and Discogs-EffNet style embeddings) when arranging crates.
 - **Local Isolation:** Do not send audio files or library contents to external paid APIs.
 
 See the root [`AGENTS.md`](../../AGENTS.md) and [`MANIFESTO.md`](../../MANIFESTO.md) for full architectural guidelines.

@@ -19,35 +19,21 @@ async def handle_search_music(
 ) -> dict:
     search_id = f"srch_{uuid.uuid4().hex[:6]}"
     search_filters = SearchFilters(**filters) if filters else None
-    requested_providers = providers or ["local"]
+    requested_providers = providers  # Si es None, ProviderRegistry usará todos los activos
 
-    completed = []
-    failed = []
-    all_candidates: list[Candidate] = []
+    # Orquestación federada mediante ProviderRegistry
+    from providers import ProviderRegistry
+    registry = ProviderRegistry.from_config(config)
 
-    # 1. Provider Local
-    if "local" in requested_providers:
-        try:
-            local_p = LocalProvider(config.providers.local_folders)
-            cands = await local_p.search(query, search_filters)
-            for c in cands:
-                c.search_id = search_id
-            all_candidates.extend(cands)
-            completed.append("local")
-        except Exception:
-            failed.append("local")
+    all_candidates, completed, failed = await registry.search_all(
+        query=query,
+        filters=search_filters,
+        requested_providers=requested_providers,
+        timeout_seconds=12.0,
+    )
 
-    # 2. Provider slskd
-    if "slskd" in requested_providers:
-        try:
-            slskd_p = SlskdProvider(config.providers.slskd_url)
-            cands = await slskd_p.search(query, search_filters)
-            for c in cands:
-                c.search_id = search_id
-            all_candidates.extend(cands)
-            completed.append("slskd")
-        except Exception:
-            failed.append("slskd")
+    for c in all_candidates:
+        c.search_id = search_id
 
     # Persistir candidatos encontrados
     conn = await db.connect()

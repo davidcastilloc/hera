@@ -67,14 +67,16 @@ class JobRunner:
                 await job_repo.update_state(
                     job.id,
                     JobState.FAILED,
+                    attempts=attempts,
                     error_code="MAX_RETRIES_EXCEEDED",
                     error_message=f"{str(e)}\n{traceback.format_exc()}",
                 )
             else:
-                # Reencolar para reintento
+                # Reencolar para reintento con attempts incrementado
                 await job_repo.update_state(
                     job.id,
                     JobState.QUEUED,
+                    attempts=attempts,
                     error_code="RETRYING",
                     error_message=str(e),
                 )

@@ -32,15 +32,17 @@ async def handle_download_job(job: Job, db: Database, config: HeraConfig) -> dic
     target_filename = f"{candidate.candidate_id}.{ext}"
     target_path = quarantine_dir / target_filename
 
-    # Transferencia según provider
-    if candidate.provider == "local":
-        provider = LocalProvider(config.providers.local_folders)
+    # Transferencia federada según provider
+    from providers import ProviderRegistry
+    registry = ProviderRegistry.from_config(config)
+    provider = registry.get(candidate.provider)
+    if provider:
         await provider.start_transfer(candidate, str(target_path))
     else:
-        # Provider remoto (e.g. slskd): simular o invocar
-        from providers.slskd.client import SlskdProvider
-        slskd = SlskdProvider(config.providers.slskd_url)
-        await slskd.start_transfer(candidate, str(target_path))
+        # Fallback local o genérico
+        from providers.local.scanner import LocalProvider
+        p = LocalProvider(config.providers.local_folders)
+        await p.start_transfer(candidate, str(target_path))
 
     # Crear registro TRACK en estado quarantined
     track = Track(

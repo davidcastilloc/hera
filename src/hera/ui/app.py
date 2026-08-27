@@ -13,7 +13,7 @@ try:
 except Exception:
     pass
 
-from hera.agent.backends import BACKENDS
+from hera.agent.backends import BACKENDS, BackendRegistry
 from hera.agent.brain import HeraBrain
 from hera.domain.community import CommunityStats
 from hera.domain.config import AgentConfig, HeraConfig
@@ -25,6 +25,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 
 # ─── Estilos CSS — Dark Mode & Acentos Neón para DJs ────────────────────────
 st.markdown(
@@ -138,17 +139,31 @@ def get_hera_config() -> HeraConfig:
     return HeraConfig().resolve_paths(Path("."))
 
 
+def get_session_loop() -> asyncio.AbstractEventLoop:
+    """Retrieve or create an active event loop for the current session."""
+    loop = st.session_state.get("_hera_loop")
+    if loop is None or loop.is_closed():
+        loop = asyncio.new_event_loop()
+        st.session_state._hera_loop = loop
+    try:
+        asyncio.set_event_loop(loop)
+    except Exception:
+        pass
+    return loop
+
+
+def run_async(coro):
+    """Execute an async coroutine synchronously on the persistent session loop."""
+    loop = get_session_loop()
+    return loop.run_until_complete(coro)
+
+
 def get_community_info():
     """Consulta rápida y no bloqueante de las métricas de Soulseek."""
     cfg = get_hera_config()
     stats = CommunityStats(base_url=cfg.providers.slskd_url or "http://localhost:5030")
     try:
-        loop = asyncio.new_event_loop()
-        res = loop.run_until_complete(
-            stats.get_sharing_summary(cfg.library_dir, Path(cfg.data_dir) / "sets")
-        )
-        loop.close()
-        return res
+        return run_async(stats.get_sharing_summary(cfg.library_dir, Path(cfg.data_dir) / "sets"))
     except Exception:
         return {
             "is_live": False,
@@ -179,50 +194,112 @@ if "messages" not in st.session_state:
 if "brain" not in st.session_state:
     cfg = get_hera_config()
     brain = HeraBrain(cfg.agent)
-    # Inicializar el agente en background
-    loop = asyncio.new_event_loop()
-    loop.run_until_complete(brain.initialize())
-    loop.close()
+    run_async(brain.initialize())
     st.session_state.brain = brain
 
 
 # ─── SIDEBAR: Panel de Control del DJ ───────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🎧 Hera Control Hub")
-    
+
     # 1. Selector de Backend de IA
-    backend_options = ["auto", "vertex", "gemini", "ollama", "openai", "anthropic", "lmstudio"]
+    backend_options = ["auto", "vertex", "gemini", "lmstudio", "ollama", "openai", "anthropic"]
     current_backend = st.session_state.brain.config.backend
     idx = backend_options.index(current_backend) if current_backend in backend_options else 0
-    
+
     selected_backend = st.selectbox(
         "🧠 Motor de Inteligencia:",
         options=backend_options,
         index=idx,
-        help="Selecciona el proveedor de IA. 'ollama' y 'lmstudio' son 100% locales y gratuitos.",
+        help="Selecciona el proveedor de IA. 'lmstudio' y 'ollama' son 100% locales y gratuitos.",
     )
-    
-    if selected_backend != current_backend:
-        st.session_state.brain.config.backend = selected_backend
-        loop = asyncio.new_event_loop()
-        loop.run_until_complete(st.session_state.brain.initialize())
-        loop.close()
-        st.rerun()
+
+    # 1.1 Configuración Dinámica de LM Studio
+    if selected_backend == "lmstudio":
+        default_lm_url = st.session_state.brain.config.base_url or "http://localhost:1234/v1"
+        lm_url = st.text_input(
+            "🔗 Endpoint LM Studio:",
+            value=default_lm_url,
+            help="Ejemplo: http://localhost:1234/v1 o la IP de tu servidor LM Studio",
+        )
+
+        lm_models = BackendRegistry.get_available_models("lmstudio", lm_url)
+        if lm_models:
+            current_model = st.session_state.brain.config.model
+            model_idx = lm_models.index(current_model) if current_model in lm_models else 0
+
+            selected_model = st.selectbox(
+                "📦 Modelo Cargado en LM Studio:",
+                options=lm_models,
+                index=model_idx,
+                help="Modelos detectados en tiempo real desde el servidor de LM Studio.",
+            )
+
+            if (
+                selected_backend != current_backend
+                or lm_url != st.session_state.brain.config.base_url
+                or selected_model != st.session_state.brain.config.model
+            ):
+                st.session_state.brain.config.backend = "lmstudio"
+                st.session_state.brain.config.base_url = lm_url
+                st.session_state.brain.config.model = selected_model
+                run_async(st.session_state.brain.initialize())
+                st.rerun()
+        else:
+            st.warning(f"⚠️ No se detectaron modelos en {lm_url}. Inicia el servidor en LM Studio.")
+
+    # 1.2 Configuración Dinámica de Ollama
+    elif selected_backend == "ollama":
+        default_ollama_url = st.session_state.brain.config.base_url or "http://localhost:11434/v1"
+        ollama_url = st.text_input("🔗 Endpoint Ollama:", value=default_ollama_url)
+        ollama_models = BackendRegistry.get_available_models("ollama", ollama_url)
+
+        if ollama_models:
+            current_model = st.session_state.brain.config.model
+            model_idx = ollama_models.index(current_model) if current_model in ollama_models else 0
+            selected_model = st.selectbox("📦 Modelo Ollama:", options=ollama_models, index=model_idx)
+
+            if (
+                selected_backend != current_backend
+                or ollama_url != st.session_state.brain.config.base_url
+                or selected_model != st.session_state.brain.config.model
+            ):
+                st.session_state.brain.config.backend = "ollama"
+                st.session_state.brain.config.base_url = ollama_url
+                st.session_state.brain.config.model = selected_model
+                run_async(st.session_state.brain.initialize())
+                st.rerun()
+        else:
+            st.warning("⚠️ No se detectaron modelos en Ollama. Inicia 'ollama serve'.")
+
+    # 1.3 Otros motores (Cloud / Auto)
+    else:
+        if selected_backend != current_backend:
+            st.session_state.brain.config.backend = selected_backend
+            st.session_state.brain.config.base_url = None
+            st.session_state.brain.config.model = None
+            run_async(st.session_state.brain.initialize())
+            st.rerun()
+
+    if getattr(st.session_state.brain, "_display", None):
+        st.caption(f"🟢 **{st.session_state.brain._display}**")
+
+
 
     # 2. Métricas de Red Soulseek P2P
     comm_stats = get_community_info()
     is_live = comm_stats.get("is_live", False)
-    
+
     st.markdown("---")
     st.markdown("#### 🌐 Soulseek P2P (Buen Ciudadano)")
-    
+
     status_html = (
         '<span class="status-badge-online">🟢 EN LÍNEA / COMPARTIENDO</span>'
         if is_live
         else '<span class="status-badge-offline">🟡 LOCAL (slskd en pausa)</span>'
     )
     st.markdown(status_html, unsafe_allow_html=True)
-    
+
     st.markdown(
         f"""
         <div class="metric-card" style="margin-top: 10px;">
@@ -233,11 +310,11 @@ with st.sidebar:
         """,
         unsafe_allow_html=True,
     )
-    
+
     # 3. Snapbar de Costos & Tokens
     st.markdown("---")
     st.markdown("#### 📊 Consumo de Tokens")
-    
+
     tracker = getattr(st.session_state.brain, "cost_tracker", None)
     if tracker:
         summary = tracker.get_summary()
@@ -263,7 +340,7 @@ with st.sidebar:
     # 4. Acciones Rápidas para el DJ
     st.markdown("---")
     st.markdown("#### ⚡ Acciones Rápidas")
-    
+
     quick_prompt = None
     if st.button("🎛️ Transiciones Camelot (8A @ 124 BPM)"):
         quick_prompt = "Recomiéndame transiciones armónicas compatibles para un track en 8A a 124 BPM"
@@ -273,7 +350,7 @@ with st.sidebar:
         quick_prompt = "¿Cómo va mi colaboración y estadísticas en la red Soulseek?"
     if st.button("💰 Consultar Consumo de Tokens"):
         quick_prompt = "¿Cuánto llevamos gastado en tokens en esta sesión?"
-        
+
     st.markdown("---")
     if st.button("🗑️ Limpiar Historial"):
         st.session_state.messages = [st.session_state.messages[0]]
@@ -323,15 +400,13 @@ if user_prompt:
 
         with st.spinner("Hera está pensando y ejecutando tools..."):
             try:
-                loop = asyncio.new_event_loop()
-                ans = loop.run_until_complete(
+                ans = run_async(
                     st.session_state.brain.chat(
                         user_prompt,
                         on_token=on_stream_token,
                         print_to_stdout=False,
                     )
                 )
-                loop.close()
                 response_placeholder.markdown(ans)
                 st.session_state.messages.append({"role": "assistant", "content": ans})
                 st.rerun()

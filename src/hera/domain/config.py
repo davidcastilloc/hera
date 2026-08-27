@@ -11,8 +11,33 @@ class ProvidersConfig(BaseModel):
     local_folders: list[str] = Field(default_factory=list, description="Carpetas locales a escanear")
     slskd_url: str | None = Field(default=None, description="URL base de slskd (e.g. http://localhost:5030)")
     slskd_api_key_env: str = Field(default="HERA_SLSKD_API_KEY", description="Nombre de variable de entorno con API Key de slskd")
+    
+    # Prowlarr + qBittorrent (BitTorrent / Trackers)
     prowlarr_enabled: bool = False
+    prowlarr_url: str = "http://localhost:9696"
+    prowlarr_api_key: str | None = None
     qbittorrent_enabled: bool = False
+    qbittorrent_url: str = "http://localhost:8080"
+    qbittorrent_user: str = "admin"
+    qbittorrent_pass: str | None = None
+
+    # yt-dlp (YouTube / SoundCloud / etc.)
+    ytdlp_enabled: bool = True
+    ytdlp_max_results: int = 10
+    ytdlp_preferred_quality: str = "320"
+
+    # Lidarr (Automated Album & MusicBrainz)
+    lidarr_enabled: bool = False
+    lidarr_url: str = "http://localhost:8686"
+    lidarr_api_key: str | None = None
+
+    # Bandcamp (Purchased masters)
+    bandcamp_enabled: bool = False
+    bandcamp_cookie_browser: str = "chrome"
+
+    # Internet Archive (Public domain / Live sets)
+    archive_enabled: bool = True
+    archive_collections: list[str] = Field(default_factory=lambda: ["audio", "etree"])
 
 
 class AnalysisConfig(BaseModel):

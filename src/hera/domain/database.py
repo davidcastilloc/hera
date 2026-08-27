@@ -161,8 +161,14 @@ class Database:
 
     async def init_schema(self) -> None:
         conn = await self.connect()
-        await conn.executescript(DDL_SCHEMA)
-        await conn.commit()
+        try:
+            from hera.infrastructure.db.migrations.runner import MigrationRunner
+            runner = MigrationRunner()
+            await runner.run_migrations(conn)
+        except Exception:
+            # Fallback seguro al DDL_SCHEMA estático
+            await conn.executescript(DDL_SCHEMA)
+            await conn.commit()
 
     async def close(self) -> None:
         if self._conn is not None:

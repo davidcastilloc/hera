@@ -65,13 +65,14 @@ class FFmpegValidator:
             stdout, stderr = await proc.communicate()
 
             if proc.returncode != 0:
-                # Si ffprobe falla o no está instalado, proveer fallback básico
+                # Zero-Trust: Si ffprobe falla, el archivo no puede considerarse válido
+                stderr_msg = stderr.decode("utf-8", errors="replace").strip()
                 return ValidationResult(
-                    is_valid=True,
+                    is_valid=False,
                     sha256=sha256,
                     file_size_bytes=size,
                     codec=path.suffix.lstrip(".").lower(),
-                    errors=[f"ffprobe devolvió error code {proc.returncode}"],
+                    errors=[f"ffprobe devolvió error code {proc.returncode}: {stderr_msg or 'Stream inválido'}"],
                 )
 
             data = json.loads(stdout.decode("utf-8", errors="replace"))
@@ -109,11 +110,11 @@ class FFmpegValidator:
             )
 
         except FileNotFoundError:
-            # ffprobe no está en PATH: fallback seguro
+            # ffprobe no está en PATH: Zero-Trust rechaza promover sin validación verificable
             return ValidationResult(
-                is_valid=True,
+                is_valid=False,
                 sha256=sha256,
                 file_size_bytes=size,
                 codec=path.suffix.lstrip(".").lower(),
-                errors=["ffprobe no encontrado en PATH; validación básica de archivo aplicada."],
+                errors=["ffprobe no encontrado en PATH; no se puede verificar la integridad del contenedor."],
             )

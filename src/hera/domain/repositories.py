@@ -289,6 +289,7 @@ class JobRepository:
         job_id: str,
         state: JobState,
         progress: float | None = None,
+        attempts: int | None = None,
         result_json: dict | None = None,
         error_code: str | None = None,
         error_message: str | None = None,
@@ -300,6 +301,9 @@ class JobRepository:
         if progress is not None:
             updates.append("progress = ?")
             params.append(progress)
+        if attempts is not None:
+            updates.append("attempts = ?")
+            params.append(attempts)
         if result_json is not None:
             updates.append("result_json = ?")
             params.append(json.dumps(result_json))

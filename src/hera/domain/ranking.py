@@ -26,17 +26,33 @@ class RankingEngine:
         # 2. Calidad técnica (0.0 - 1.0)
         fmt = (candidate.format or "").upper()
         is_lossless = fmt in {"FLAC", "ALAC", "WAV", "AIFF"}
-        tech = 0.95 if is_lossless else (0.80 if (candidate.bitrate_kbps or 0) >= 320 else 0.60)
+        tech = 1.00 if is_lossless else (0.75 if (candidate.bitrate_kbps or 0) >= 320 else 0.50)
         if is_lossless:
-            reasons.append(f"Formato lossless ({fmt})")
+            reasons.append(f"Master Lossless Original ({fmt}) - Máxima Fidelidad Acústica")
         elif (candidate.bitrate_kbps or 0) >= 320:
             reasons.append(f"MP3 de alta tasa de bits ({candidate.bitrate_kbps} kbps)")
 
-        # 3. Fuente (0.0 - 1.0)
-        source = 0.95 if candidate.provider == "local" else 0.75
+        # 3. Fuente (0.0 - 1.0) - Soulseek y P2P prioritarios por catálogo FLAC nativo
+        source_weights = {
+            "slskd": 0.95,     # Soulseek P2P prioritario para coleccionismo FLAC
+            "prowlarr": 0.90,  # BitTorrent / Trackers Lossless
+            "lidarr": 0.85,
+            "archive": 0.70,
+            "ytdlp": 0.50,     # yt-dlp solo como fallback cuando no hay FLAC P2P
+        }
+        source = source_weights.get(candidate.provider.lower(), 0.60)
 
         # 4. Disponibilidad (0.0 - 1.0)
-        avail = 1.0 if candidate.provider == "local" else 0.80
+        avail_weights = {
+            "local": 1.0,
+            "archive": 0.95,
+            "ytdlp": 0.90,
+            "bandcamp": 0.85,
+            "lidarr": 0.80,
+            "prowlarr": 0.80,
+            "slskd": 0.75,
+        }
+        avail = avail_weights.get(candidate.provider.lower(), 0.80)
 
         # 5. Preferencias (0.0 - 1.0)
         pref = 0.70

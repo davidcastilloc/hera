@@ -54,8 +54,16 @@ packages = ["src/hera", "providers", "analyzers"]
 
 [tool.ruff]
 target-version = "py311"
-line-length = 100
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501", "F401", "E402", "W293", "F841"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning:google.genai.*",
+    "ignore:.*_UnionGenericAlias.*:DeprecationWarning",
+]

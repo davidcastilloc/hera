@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+# Hook pre-commit de Hera: Formato, Linter y Tests antes de hacer commit
+echo "[*] Ejecutando verificaciones pre-commit de HERA..."
+
+# 1. Ruff linter y format check
+if command -v uv >/dev/null 2>&1; then
+    echo "[+] Verificando formato y linter con Ruff..."
+    uv run ruff check . || {
+        echo "[!] Error en Ruff linter. Corrige los problemas antes de commitear."
+        exit 1
+    }
+
+    echo "[+] Ejecutando suite de tests pytest..."
+    uv run --no-sync pytest || {
+        echo "[!] Fallaron los tests unitarios. El commit fue cancelado para proteger la rama."
+        exit 1
+    }
+else
+    echo "[!] 'uv' no encontrado en PATH. Omitiendo tests automáticos."
+fi
+
+echo "[OK] Todas las verificaciones pre-commit pasaron exitosamente."
+exit 0

@@ -108,7 +108,7 @@ def test_qa_lifecycle_integration():
 def test_qa_cost_tracker_and_snapbar():
     """QA 10: Test token tracking, pricing calculations, and Snapbar formatting."""
     tracker = CostTracker(backend_name="vertex", model_name="gemini-2.5-flash", max_session_cost_usd=0.01)
-    
+
     # Turn 1: 5000 prompt tokens, 100 completion tokens
     res = tracker.record_turn(5000, 100)
     assert tracker.total_tokens == 5100

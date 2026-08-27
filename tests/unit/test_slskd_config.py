@@ -26,8 +26,8 @@ def test_generate_slskd_config_with_shares(tmp_path):
     assert len(data["shares"]["directories"]) == 2
     assert data["shares"]["directories"][0]["path"] == "../library"
     assert data["shares"]["directories"][1]["path"] == "../sets"
-    assert data["global"]["upload"]["slots"] == 8
-    assert data["global"]["upload"]["speed_limit"] == 4096
+    assert data["transfers"]["global"]["upload"]["slots"] == 8
+    assert data["transfers"]["global"]["upload"]["speed_limit"] == 4096
 
 
 def test_update_shared_directories(tmp_path):

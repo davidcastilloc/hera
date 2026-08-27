@@ -1,3 +1,4 @@
+import asyncio
 """Cliente y proveedor para la API REST de slskd (Soulseek)."""
 
 from pathlib import Path
@@ -55,15 +56,18 @@ class SlskdProvider:
                 if not slskd_search_id:
                     return []
 
-                # Obtener respuestas (tras breve espera o polling)
-                resp_data = await client.get(
-                    f"{self.base_url}/api/v0/searches/{slskd_search_id}/responses",
-                    headers=self._headers(),
-                )
-                if resp_data.status_code != 200:
-                    return []
-
-                results = resp_data.json()
+                # Esperar activamente respuestas de los peers P2P (polling hasta 6s)
+                results = []
+                for _ in range(6):
+                    await asyncio.sleep(1.0)
+                    resp_data = await client.get(
+                        f"{self.base_url}/api/v0/searches/{slskd_search_id}/responses",
+                        headers=self._headers(),
+                    )
+                    if resp_data.status_code == 200:
+                        results = resp_data.json()
+                        if results:
+                            break
                 for user_resp in results:
                     username = user_resp.get("username", "peer")
                     for file_info in user_resp.get("files", []):

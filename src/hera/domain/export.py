@@ -53,7 +53,8 @@ class CrateExporter:
             if not path_str:
                 continue
             file_p = Path(path_str).resolve()
-            loc_url = f"file://localhost/{quote(str(file_p).replace('\\', '/'))}"
+            cleaned_path = str(file_p).replace("\\", "/")
+            loc_url = f"file://localhost/{quote(cleaned_path)}"
 
             track_attrs = {
                 "TrackID": str(i),

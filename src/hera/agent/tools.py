@@ -23,6 +23,12 @@ async def search_and_acquire_tracks(queries: list[str]) -> str:
     Args:
         queries: A list of search query strings (e.g. ['Daft Punk One More Time', 'Modjo Lady']).
     """
+    from hera.infra.lifecycle import SlskdLifecycle
+    lifecycle = SlskdLifecycle()
+    if not await lifecycle.is_running_async(base_url="http://localhost:5030", timeout=1.0):
+        lifecycle.ensure_running_sync()
+        await asyncio.sleep(2.0)
+
     url = "http://localhost:5030/api/v0"
     base_dir = Path(".").resolve()
     quarantine = base_dir / "quarantine"
@@ -32,64 +38,65 @@ async def search_and_acquire_tracks(queries: list[str]) -> str:
 
     results = []
 
-    for q in queries:
-        try:
-            r = httpx.post(f"{url}/searches", json={"searchText": q}, timeout=5.0)
-            if r.status_code != 200:
-                results.append(f"[-] '{q}': Could not initiate Soulseek search.")
-                continue
-            s_id = r.json()["id"]
-            await asyncio.sleep(3.5)
-
-            res_resp = httpx.get(f"{url}/searches/{s_id}/responses", timeout=5.0)
-            if res_resp.status_code != 200:
-                results.append(f"[-] '{q}': No responses received from Soulseek network.")
-                continue
-
-            peers = res_resp.json()
-            chosen_peer = None
-            chosen_file = None
-
-            for u in peers:
-                if u.get("locked", False):
+    async with httpx.AsyncClient(timeout=15.0) as client:
+        for q in queries:
+            try:
+                r = await client.post(f"{url}/searches", json={"searchText": q})
+                if r.status_code not in [200, 201]:
+                    results.append(f"[-] '{q}': Could not initiate Soulseek search.")
                     continue
-                for f in u.get("files", []):
-                    fn = f.get("filename", "").lower()
-                    if fn.endswith(".flac") or (fn.endswith(".mp3") and f.get("bitRate", 0) >= 256):
-                        if not chosen_peer or u.get("hasFreeUploadSlot", False):
-                            chosen_peer = u.get("username")
-                            chosen_file = f
-                            if u.get("hasFreeUploadSlot", False):
-                                break
-                if chosen_peer and u.get("hasFreeUploadSlot", False):
-                    break
+                s_id = r.json()["id"]
+                await asyncio.sleep(7.5)
 
-            if not chosen_file:
+                res_resp = await client.get(f"{url}/searches/{s_id}/responses")
+                if res_resp.status_code != 200:
+                    results.append(f"[-] '{q}': No responses received from Soulseek network.")
+                    continue
+
+                peers = res_resp.json()
+                chosen_peer = None
+                chosen_file = None
+
                 for u in peers:
                     if u.get("locked", False):
                         continue
                     for f in u.get("files", []):
-                        if f.get("filename", "").lower().endswith(".mp3"):
-                            chosen_peer = u.get("username")
-                            chosen_file = f
-                            break
-                    if chosen_file:
+                        fn = f.get("filename", "").lower()
+                        if fn.endswith(".flac") or (fn.endswith(".mp3") and f.get("bitRate", 0) >= 256):
+                            if not chosen_peer or u.get("hasFreeUploadSlot", False):
+                                chosen_peer = u.get("username")
+                                chosen_file = f
+                                if u.get("hasFreeUploadSlot", False):
+                                    break
+                    if chosen_peer and u.get("hasFreeUploadSlot", False):
                         break
 
-            if chosen_peer and chosen_file:
-                fn_clean = chosen_file["filename"].replace("\\", "/").split("/")[-1]
-                sz_mb = chosen_file["size"] / (1024 * 1024)
-                dl = httpx.post(
-                    f"{url}/transfers/downloads/{chosen_peer}",
-                    json=[{"filename": chosen_file["filename"], "size": chosen_file["size"]}],
-                    timeout=5.0,
-                )
-                if dl.status_code in [200, 201]:
-                    results.append(f"[+] '{q}': Enqueued {fn_clean} ({sz_mb:.1f} MB) from peer '{chosen_peer}'")
-            else:
-                results.append(f"[-] '{q}': No available peers with full-length audio.")
-        except Exception as e:
-            results.append(f"[!] Error processing '{q}': {e}")
+                if not chosen_file:
+                    for u in peers:
+                        if u.get("locked", False):
+                            continue
+                        for f in u.get("files", []):
+                            if f.get("filename", "").lower().endswith(".mp3"):
+                                chosen_peer = u.get("username")
+                                chosen_file = f
+                                break
+                        if chosen_file:
+                            break
+
+                if chosen_peer and chosen_file:
+                    fn_clean = chosen_file["filename"].replace("\\", "/").split("/")[-1]
+                    sz_mb = chosen_file["size"] / (1024 * 1024)
+                    dl = await client.post(
+                        f"{url}/transfers/downloads/{chosen_peer}",
+                        json=[{"filename": chosen_file["filename"], "size": chosen_file["size"]}],
+                        timeout=5.0,
+                    )
+                    if dl.status_code in [200, 201]:
+                        results.append(f"[+] '{q}': Enqueued {fn_clean} ({sz_mb:.1f} MB) from peer '{chosen_peer}'")
+                else:
+                    results.append(f"[-] '{q}': No available peers with full-length audio.")
+            except Exception as e:
+                results.append(f"[!] Error processing '{q}': {e}")
 
     return "\n".join(results)
 
@@ -113,8 +120,7 @@ async def create_or_update_dj_set(set_name: str, tracks: list[str]) -> str:
     validator = FFmpegValidator()
     analyzer = AudioFeatureAnalyzer()
 
-    all_files = list(library.rglob("*.*")) + list(quarantine.rglob("*.*"))
-    all_files = [f for f in all_files if f.is_file() and f.suffix.lower() in [".flac", ".mp3"] and f.stat().st_size > 1.5 * 1024 * 1024]
+    all_files = [f for f in library.rglob("*.*") if f.is_file() and f.suffix.lower() in [".flac", ".mp3"] and f.stat().st_size > 1.5 * 1024 * 1024]
     all_files.sort(key=lambda f: f.stat().st_size, reverse=True)
 
     added = []
@@ -127,8 +133,11 @@ async def create_or_update_dj_set(set_name: str, tracks: list[str]) -> str:
     idx = 1
     for match_word in tracks:
         matched_f = None
+        m_lower = match_word.lower()
         for f in all_files:
-            if match_word.lower() in f.name.lower() or match_word.lower() in f.parent.name.lower():
+            full_str = f"{f.parent.parent.name} {f.parent.name} {f.name}".lower()
+            # Si el término exacto está en la ruta completa, o si todos los tokens del término están
+            if m_lower in full_str or all(tok in full_str for tok in m_lower.replace("-", " ").split()):
                 matched_f = f
                 break
 
@@ -136,12 +145,20 @@ async def create_or_update_dj_set(set_name: str, tracks: list[str]) -> str:
             val = await validator.validate_media(matched_f)
             if val.is_valid:
                 feat = await analyzer.analyze(matched_f)
-                artist = matched_f.parent.parent.name if matched_f.parent.parent != library else "DJ Track"
+                artist = matched_f.parent.parent.name if matched_f.parent.parent.parent == library or matched_f.parent.parent != library else "DJ Track"
+                if artist == "library" or artist == "DJ Track":
+                    artist = matched_f.parent.name
                 title = matched_f.stem.replace("01 - ", "").split(" [")[0]
 
-                clean_name = f"{idx:02d}. {artist} - {title} [{feat.bpm} BPM - {feat.camelot}]{matched_f.suffix.lower()}"
+                raw_name = f"{idx:02d}. {artist} - {title} [{feat.bpm} BPM - {feat.camelot}]{matched_f.suffix.lower()}"
+                clean_name = "".join(c for c in raw_name if c not in '<>:"/\\|?*')
                 dest = set_folder / clean_name
-                shutil.copy2(matched_f, dest)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    shutil.copy2(str(matched_f.resolve()), str(dest.resolve()))
+                except Exception as cp_err:
+                    print(f"Error copying {matched_f} -> {dest}: {cp_err}")
+                    continue
 
                 try:
                     if dest.suffix.lower() == ".flac":
@@ -204,17 +221,22 @@ async def sync_sets_to_cloud(folder_name: str = "Hera_Music/sets", dry_run: bool
         return f"Sync failed: {res.error}"
 
 
-def get_library_status() -> str:
+def get_library_status(filter_format: str = "all") -> str:
     """
     Returns an inventory of all verified, real audio tracks available in the local library
     and all organized DJ sets on disk.
+
+    Args:
+        filter_format: Optional filter for audio format ('all', 'flac', 'mp3'). Defaults to 'all'.
     """
     base_dir = Path(".").resolve()
     library = base_dir / "library"
     sets_dir = base_dir / "sets"
 
     lib_files = [f for f in library.rglob("*.*") if f.is_file() and f.name != ".gitkeep" and f.stat().st_size > 1.5 * 1024 * 1024]
-    
+    if filter_format.lower() in ["flac", "mp3"]:
+        lib_files = [f for f in lib_files if f.suffix.lower().endswith(filter_format.lower())]
+
     summary = [
         "=" * 60,
         f"LIBRARY INVENTORY: {len(lib_files)} Real Audio Masters",
@@ -273,10 +295,13 @@ def recommend_harmonic_transitions(current_camelot_key: str, current_bpm: float)
         return f"Error calculating harmonic recommendations: {e}"
 
 
-async def get_community_status() -> str:
+async def get_community_status(verbose: bool = True) -> str:
     """
     Returns the user's P2P community collaboration and sharing metrics (Good P2P Citizen).
     Reports how many curated tracks are shared, total gigabytes, and upload transfers served to other DJs.
+
+    Args:
+        verbose: Whether to include full detailed community sharing statistics. Defaults to True.
     """
     from hera.domain.community import CommunityStats
     from hera.domain.config import HeraConfig
@@ -287,14 +312,18 @@ async def get_community_status() -> str:
     return res["community_message"]
 
 
-def get_session_cost_and_tokens() -> str:
+def get_session_cost_and_tokens(detailed: bool = True) -> str:
     """
     Returns the real-time token consumption, per-turn statistics, and accumulated estimated costs (in USD)
     for the current interactive session to prevent unexpected or accidental API expenses.
+
+    Args:
+        detailed: Whether to return full breakdown of prompt, completion, and cost tokens. Defaults to True.
     """
-    from hera.agent.brain import ACTIVE_COST_TRACKER
-    if ACTIVE_COST_TRACKER:
-        summary = ACTIVE_COST_TRACKER.get_summary()
+    from hera.agent.brain import get_active_cost_tracker, ACTIVE_COST_TRACKER
+    tracker = get_active_cost_tracker() or ACTIVE_COST_TRACKER
+    if tracker:
+        summary = tracker.get_summary()
         return (
             f"📊 REPORTE DE CONSUMO Y COSTO DE LA SESIÓN:\n"
             f"  * Modelo: {summary['backend'].upper()} ({summary['model']})\n"

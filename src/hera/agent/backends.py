@@ -78,6 +78,7 @@ BACKENDS: dict[str, BackendDef] = {
         is_local=True,
         default_port=1234,
     ),
+
     "jan": BackendDef(
         name="jan",
         display_name="Jan",
@@ -135,8 +136,8 @@ BACKENDS: dict[str, BackendDef] = {
 
 # Ordered list for auto-detection (local engines by port)
 LOCAL_PROBE_ORDER = [
-    ("ollama", "http://localhost:11434"),
     ("lmstudio", "http://localhost:1234"),
+    ("ollama", "http://localhost:11434"),
     ("jan", "http://localhost:1337"),
     ("vllm", "http://localhost:8000"),
     ("llamacpp", "http://localhost:8080"),  # shares port with localai/mlx
@@ -154,7 +155,7 @@ class BackendRegistry:
         return list(BACKENDS.values())
 
     @staticmethod
-    def probe_endpoint(url: str, timeout: float = 2.0) -> bool:
+    def probe_endpoint(url: str, timeout: float = 1.5) -> bool:
         """Check if a local endpoint is responding."""
         try:
             r = httpx.get(f"{url}/v1/models", timeout=timeout)
@@ -166,6 +167,46 @@ class BackendRegistry:
                 return r.status_code == 200
             except Exception:
                 return False
+
+    @staticmethod
+    def get_available_models(backend_name: str, base_url: str | None = None) -> list[str]:
+        """Fetch available model IDs dynamically from a local or custom endpoint."""
+        url = base_url
+        if not url:
+            bdef = BACKENDS.get(backend_name)
+            if bdef and bdef.default_base_url:
+                url = bdef.default_base_url
+            else:
+                return []
+
+        clean_url = url.rstrip("/")
+        if not clean_url.endswith("/v1") and not clean_url.endswith("/api"):
+            clean_url += "/v1"
+
+        try:
+            r = httpx.get(f"{clean_url}/models", timeout=2.0)
+            if r.status_code == 200:
+                data = r.json().get("data", [])
+                models = [
+                    m["id"] for m in data
+                    if "embed" not in m.get("id", "").lower()
+                ]
+                if models:
+                    return models
+        except Exception:
+            pass
+
+        # Fallback for Ollama /api/tags
+        try:
+            r = httpx.get(f"{clean_url.replace('/v1', '')}/api/tags", timeout=2.0)
+            if r.status_code == 200:
+                models = [m["name"] for m in r.json().get("models", [])]
+                if models:
+                    return models
+        except Exception:
+            pass
+
+        return []
 
     @staticmethod
     def auto_detect() -> str | None:
@@ -220,16 +261,23 @@ class BackendRegistry:
 
         bdef = BACKENDS[backend]
 
-        # Resolve model
-        model = config.model or bdef.default_model
+        # Resolve base URL: config overrides default
+        base_url = config.base_url or bdef.default_base_url
+
+        # Resolve model (auto-discover first loaded model if 'default')
+        model = config.model
+        if not model or model == "default":
+            if backend in ["lmstudio", "ollama", "jan", "vllm", "llamacpp"]:
+                avail = BackendRegistry.get_available_models(backend, base_url)
+                if avail:
+                    model = avail[0]
+            if not model or model == "default":
+                model = bdef.default_model
 
         # Resolve API key
         api_key = config.api_key
         if not api_key and bdef.api_key_env:
             api_key = os.environ.get(bdef.api_key_env)
-
-        # Resolve base URL
-        base_url = config.base_url or bdef.default_base_url
 
         # ── Build SDK config kwargs ──
 
@@ -274,3 +322,4 @@ class BackendRegistry:
             "model": model,
             "display": f"{bdef.display_name} ({model} @ {base_url})",
         }
+

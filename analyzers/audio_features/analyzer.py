@@ -39,9 +39,11 @@ class AudioFeatureAnalyzer:
         self.analysis_version = analysis_version
 
     async def analyze(self, file_path: Path | str, profile: str = "dj-standard") -> FeatureAnalysisResult:
-        """Analiza un archivo de audio y extrae métricas para DJs."""
-        path = Path(file_path)
+        """Analiza un archivo de audio y extrae métricas para DJs (ejecutado off-thread sin bloquear event loop)."""
+        import asyncio
+        return await asyncio.to_thread(self._analyze_sync, Path(file_path), profile)
 
+    def _analyze_sync(self, path: Path, profile: str = "dj-standard") -> FeatureAnalysisResult:
         try:
             import librosa
             import numpy as np

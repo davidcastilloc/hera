@@ -47,12 +47,15 @@ class TrackOrganizer:
 
     async def organize_track(
         self,
-        track_id: str,
+        track_id: str | Track,
         template: str = "{Artist}/{Year} - {Release}/{TrackNo} - {Title} [{Version}].{ext}",
         collision_policy: str = "review",
     ) -> OrganizeResult:
         """Promueve un track desde cuarentena hacia la biblioteca organizada."""
-        track = await self.track_repo.get_by_id(track_id)
+        if isinstance(track_id, Track):
+            track = track_id
+        else:
+            track = await self.track_repo.get_by_id(track_id)
         if not track:
             raise HeraException(HeraErrorCode.INVALID_MEDIA, f"Track {track_id} no encontrado")
 
@@ -107,7 +110,7 @@ class TrackOrganizer:
         await self.track_repo.save(track)
 
         return OrganizeResult(
-            track_id=track_id,
+            track_id=track.id,
             status="organized",
             source_path=str(src),
             destination_path=str(dst),

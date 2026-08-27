@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+# Hook pre-push de Hera: Asegurar suite 100% verde antes de subir a GitHub/remoto
+echo "[*] Ejecutando verificaciones pre-push de HERA..."
+
+if command -v uv >/dev/null 2>&1; then
+    echo "[+] Ejecutando suite completa de tests..."
+    uv run --no-sync pytest -v || {
+        echo "[!] Fallaron los tests. Push abortado."
+        exit 1
+    }
+fi
+
+echo "[OK] Todo listo para el push."
+exit 0

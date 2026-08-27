@@ -53,7 +53,7 @@ def generate_slskd_config(
         "soulseek": {
             "username": username,
             "password": password,
-            "listen_port": 50300,
+            "listen_port": 2234,
             "description": description,
         },
         "web": {
@@ -70,10 +70,12 @@ def generate_slskd_config(
         "shares": {
             "directories": shares_dirs,
         },
-        "global": {
-            "upload": {
-                "slots": upload_slots,
-                "speed_limit": upload_speed,
+        "transfers": {
+            "global": {
+                "upload": {
+                    "slots": upload_slots,
+                    "speed_limit": upload_speed,
+                },
             },
         },
     }
