@@ -18,7 +18,7 @@ NC='\033[0m'
 clear 2>/dev/null || true
 
 cat << "EOF"
-  ██████╗  ██████╗  ██████╗  █████╗
+  ██████╗  ██████╗  ██████╗  █████╗ 
   ██╔══██╗██╔═══██╗██╔══██╗██╔══██╗
   ██████╔╝██║   ██║██████╔╝███████║
   ██╔══██╗██║   ██║██╔══██╗██╔══██║
@@ -150,8 +150,10 @@ if [ ! -f "pyproject.toml" ]; then
   rm -rf /tmp/hera_repo
 fi
 
-# Crear entorno virtual con uv
-uv venv .venv --python 3.11 2>/dev/null || uv venv .venv
+# Crear entorno virtual con uv si no existe
+if [ ! -d ".venv" ]; then
+  uv venv .venv --python 3.11 2>/dev/null || uv venv .venv
+fi
 export VIRTUAL_ENV="${HERA_DIR}/.venv"
 export PATH="${HERA_DIR}/.venv/bin:${PATH}"
 
@@ -214,7 +216,7 @@ mkdir -p "${HOME}/.local/share/slskd" "${HOME}/.config/slskd"
 cp -f "${SLSKD_CFG}" "${HOME}/.config/slskd/slskd.yml" 2>/dev/null || true
 
 # --- 9. Scripts de Gestión del Super-Nodo ---
-echo -e "\n${CYAN}${BOLD}==> [6/6] Creando comandos de administracion...${NC}"
+echo -e "\n${CYAN}${BOLD}==> [6/6] Creando comandos de administracion y servicio de sistema...${NC}"
 
 # Script hera-start
 cat << 'EOF' > "${HERA_DIR}/bin/hera-start"
@@ -222,6 +224,16 @@ cat << 'EOF' > "${HERA_DIR}/bin/hera-start"
 HERA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${HERA_DIR}"
 export PATH="${HERA_DIR}/.venv/bin:${HERA_DIR}/bin:${PATH}"
+
+if command -v systemctl &>/dev/null && systemctl list-unit-files hera.service &>/dev/null; then
+  echo "[+] Iniciando servicio HERA via systemd..."
+  sudo systemctl start hera 2>/dev/null || systemctl start hera 2>/dev/null || true
+  sleep 2
+  if systemctl is-active --quiet hera 2>/dev/null; then
+    echo "[OK] HERA activo via systemd (Web UI: http://localhost:5030 | Puerto P2P: 2234)"
+    exit 0
+  fi
+fi
 
 if pgrep -f "slskd" >/dev/null; then
   echo "[-] slskd ya se encuentra en ejecucion."
@@ -238,7 +250,11 @@ chmod +x "${HERA_DIR}/bin/hera-start"
 cat << 'EOF' > "${HERA_DIR}/bin/hera-stop"
 #!/usr/bin/env bash
 echo "[-] Deteniendo servicios de Hera..."
-pkill -f "slskd" 2>/dev/null && echo "[OK] slskd detenido." || echo "[-] slskd no estaba en ejecucion."
+if command -v systemctl &>/dev/null && systemctl list-unit-files hera.service &>/dev/null; then
+  sudo systemctl stop hera 2>/dev/null || systemctl stop hera 2>/dev/null || true
+fi
+pkill -f "slskd" 2>/dev/null || true
+echo "[OK] slskd detenido."
 EOF
 chmod +x "${HERA_DIR}/bin/hera-stop"
 
@@ -247,12 +263,25 @@ cat << 'EOF' > "${HERA_DIR}/bin/hera-status"
 #!/usr/bin/env bash
 HERA_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "=== ESTADO DEL NODO HERA ==="
-if pgrep -f "slskd" >/dev/null; then
+IS_RUNNING=false
+
+if command -v systemctl &>/dev/null && systemctl is-active --quiet hera 2>/dev/null; then
+  IS_RUNNING=true
+  echo -e "\033[0;32m[ACTIVO - SYSTEMD]\033[0m Servicio hera.service corriendo (auto-arranque habilitado)"
+elif pgrep -f "slskd" >/dev/null; then
+  IS_RUNNING=true
   PID=$(pgrep -f "slskd" | head -n1)
-  echo -e "\033[0;32m[ACTIVO]\033[0m slskd corriendo con PID ${PID}"
-  curl -s http://localhost:5030/api/v0/application 2>/dev/null | grep -q "version" && echo "[OK] API Web operativa en http://localhost:5030" || true
+  echo -e "\033[0;32m[ACTIVO - PROCESO]\033[0m slskd corriendo con PID ${PID}"
+fi
+
+if [ "${IS_RUNNING}" = true ]; then
+  if curl -s -m 3 http://localhost:5030/api/v0/application 2>/dev/null | grep -q "version"; then
+    echo -e "\033[0;32m[OK]\033[0m API Web & P2P operativa en http://localhost:5030"
+  else
+    echo -e "\033[1;33m[INFO]\033[0m Proceso activo, inicializando API Web..."
+  fi
 else
-  echo -e "\033[0;31m[DETENIDO]\033[0m slskd no esta corriendo. Usa '${HERA_DIR}/bin/hera-start' para iniciarlo."
+  echo -e "\033[0;31m[DETENIDO]\033[0m HERA no esta corriendo. Usa 'hera-start' para iniciarlo."
 fi
 EOF
 chmod +x "${HERA_DIR}/bin/hera-status"
@@ -263,8 +292,52 @@ ln -sf "${HERA_DIR}/bin/hera-start" "${HOME}/.local/bin/hera-start" 2>/dev/null 
 ln -sf "${HERA_DIR}/bin/hera-stop" "${HOME}/.local/bin/hera-stop" 2>/dev/null || true
 ln -sf "${HERA_DIR}/bin/hera-status" "${HOME}/.local/bin/hera-status" 2>/dev/null || true
 
-# --- Iniciar inmediatamente el servicio ---
-"${HERA_DIR}/bin/hera-start"
+# --- 10. Configuración de Auto-Arranque Permanente (SystemD) ---
+echo -e "\n${CYAN}${BOLD}==> Configurando servicio de auto-arranque permanente (systemd)...${NC}"
+CURRENT_USER="$(id -un 2>/dev/null || whoami 2>/dev/null || echo "${USER}")"
+SYSTEMD_CONFIGURED=false
+
+if command -v systemctl &>/dev/null && [ -d "/etc/systemd/system" ]; then
+  SERVICE_FILE="/etc/systemd/system/hera.service"
+  echo -e "${GREEN}[*]${NC} Creando servicio de sistema ${SERVICE_FILE} para usuario ${BOLD}${CURRENT_USER}${NC}..."
+  
+  TEMP_SERVICE="$(mktemp /tmp/hera_service_XXXXXX)"
+  cat << EOF > "${TEMP_SERVICE}"
+[Unit]
+Description=HERA AI Music Curator & DJ Super-Node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${CURRENT_USER}
+WorkingDirectory=${HERA_DIR}
+ExecStart=${HERA_DIR}/bin/slskd --app-dir ${HERA_DIR}/bin
+Restart=always
+RestartSec=5s
+LimitNOFILE=65536
+Environment="PATH=${HERA_DIR}/.venv/bin:${HERA_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  if sudo cp "${TEMP_SERVICE}" "${SERVICE_FILE}" 2>/dev/null || cp "${TEMP_SERVICE}" "${SERVICE_FILE}" 2>/dev/null; then
+    rm -f "${TEMP_SERVICE}"
+    sudo systemctl daemon-reload 2>/dev/null || systemctl daemon-reload 2>/dev/null || true
+    sudo systemctl enable hera.service 2>/dev/null || systemctl enable hera.service 2>/dev/null || true
+    sudo systemctl restart hera.service 2>/dev/null || systemctl restart hera.service 2>/dev/null || true
+    SYSTEMD_CONFIGURED=true
+    echo -e "${GREEN}[OK]${NC} Servicio hera.service habilitado e iniciado (arranca solo al prender la máquina)."
+  else
+    rm -f "${TEMP_SERVICE}"
+  fi
+fi
+
+if [ "${SYSTEMD_CONFIGURED}" != true ]; then
+  echo -e "${GREEN}[*]${NC} Iniciando nodo en segundo plano con hera-start..."
+  "${HERA_DIR}/bin/hera-start"
+fi
 
 IP_LOCAL="$(hostname -I 2>/dev/null | awk '{print $1}' || echo "127.0.0.1")"
 
@@ -275,9 +348,13 @@ echo -e "📍 Directorio:       ${BOLD}${HERA_DIR}${NC}"
 echo -e "🌐 Panel Web:        ${BOLD}http://${IP_LOCAL}:5030${NC} (o http://localhost:5030)"
 echo -e "🎧 Puerto Soulseek:  ${BOLD}0.0.0.0:2234${NC} (100% abierto para la comunidad)"
 echo -e "💬 Salas Auto-Join:  ${BOLD}11 salas de musica electronica y DJing${NC}"
+if [ "${SYSTEMD_CONFIGURED}" = true ]; then
+  echo -e "⚡ Auto-Arranque:    ${BOLD}HABILITADO (systemd: hera.service)${NC}"
+fi
 echo -e "\n${CYAN}Comandos rapidos:${NC}"
-echo -e "  • Iniciar nodo:    ${BOLD}hera-start${NC} (o ${HERA_DIR}/bin/hera-start)"
-echo -e "  • Ver estado:      ${BOLD}hera-status${NC}"
-echo -e "  • Detener nodo:    ${BOLD}hera-stop${NC}"
+echo -e "  • Iniciar nodo:    ${BOLD}hera-start${NC}  (o sudo systemctl start hera)"
+echo -e "  • Ver estado:      ${BOLD}hera-status${NC} (o sudo systemctl status hera)"
+echo -e "  • Detener nodo:    ${BOLD}hera-stop${NC}   (o sudo systemctl stop hera)"
+echo -e "  • Logs en vivo:    ${BOLD}journalctl -u hera -f${NC} (o cat ${HERA_DIR}/logs/slskd.log)"
 echo -e "  • CLI de Hera:     ${BOLD}${HERA_DIR}/.venv/bin/hera --help${NC}"
 echo -e "${GREEN}================================================================${NC}\n"
