@@ -17,6 +17,7 @@ from hera.agent.backends import BACKENDS, BackendRegistry
 from hera.agent.brain import HeraBrain
 from hera.domain.community import CommunityStats
 from hera.domain.config import AgentConfig, HeraConfig
+from hera.ui.dj_player import render_dj_studio_tab
 
 # ─── Configuración de la página ──────────────────────────────────────────────
 st.set_page_config(
@@ -158,12 +159,19 @@ def run_async(coro):
     return loop.run_until_complete(coro)
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def get_community_info():
     """Consulta rápida y no bloqueante de las métricas de Soulseek."""
     cfg = get_hera_config()
     stats = CommunityStats(base_url=cfg.providers.slskd_url or "http://localhost:5030")
     try:
-        return run_async(stats.get_sharing_summary(cfg.library_dir, Path(cfg.data_dir) / "sets"))
+        return run_async(
+            stats.get_sharing_summary(
+                cfg.library_dir,
+                Path(cfg.data_dir) / "sets",
+                extra_dirs=cfg.providers.local_folders,
+            )
+        )
     except Exception:
         return {
             "is_live": False,
@@ -194,7 +202,7 @@ if "messages" not in st.session_state:
 if "brain" not in st.session_state:
     cfg = get_hera_config()
     brain = HeraBrain(cfg.agent)
-    run_async(brain.initialize())
+    brain._display = f"Motor configurado: {cfg.agent.backend}"
     st.session_state.brain = brain
 
 
@@ -357,60 +365,68 @@ with st.sidebar:
         st.rerun()
 
 
-# ─── ÁREA PRINCIPAL: Header & Chat Interactivo ──────────────────────────────
+# ─── ÁREA PRINCIPAL: Header, Consola Dual-Deck & Chat Interactivo ───────────
 st.markdown(
     """
     <div class="hera-header">
         <div>
-            <h1 class="hera-title">🎧 HERA AI AGENT</h1>
-            <p class="hera-subtitle">Consola de Curaduría Musical, Mezcla Armónica y P2P para DJs</p>
+            <h1 class="hera-title">🎧 HERA DJ STUDIO & AI AGENT</h1>
+            <p class="hera-subtitle">Consola Dual-Deck en Vivo, Mezcla Armónica Camelot, Curaduría IA y P2P para DJs</p>
         </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
-# Renderizar historial de mensajes
-for msg in st.session_state.messages:
-    role = msg["role"]
-    avatar = "🎧" if role == "assistant" else "👤"
-    with st.chat_message(role, avatar=avatar):
-        st.markdown(msg["content"])
+tab_studio, tab_chat = st.tabs([
+    "🎛️ DJ Studio & Reproductor Dual-Deck (Biblioteca en Vivo)",
+    "🤖 Agente IA (Hera Chat & Soulseek P2P)",
+])
 
-# Capturar input del usuario (desde chat_input o desde Quick Actions)
-user_prompt = st.chat_input("Pregúntale a Hera algo sobre música, playlists o transiciones...")
-if quick_prompt:
-    user_prompt = quick_prompt
+with tab_studio:
+    render_dj_studio_tab(get_hera_config())
 
-if user_prompt:
-    # 1. Agregar mensaje del usuario
-    st.session_state.messages.append({"role": "user", "content": user_prompt})
-    with st.chat_message("user", avatar="👤"):
-        st.markdown(user_prompt)
+with tab_chat:
+    # Renderizar historial de mensajes
+    for msg in st.session_state.messages:
+        role = msg["role"]
+        avatar = "🎧" if role == "assistant" else "👤"
+        with st.chat_message(role, avatar=avatar):
+            st.markdown(msg["content"])
 
-    # 2. Generar respuesta con HeraBrain
-    with st.chat_message("assistant", avatar="🎧"):
-        response_placeholder = st.empty()
-        full_response_chunks = []
+    # Capturar input del usuario (desde chat_input o desde Quick Actions)
+    user_prompt = st.chat_input("Pregúntale a Hera algo sobre música, playlists o transiciones...")
+    if quick_prompt:
+        user_prompt = quick_prompt
 
-        def on_stream_token(token: str):
-            full_response_chunks.append(token)
-            response_placeholder.markdown("".join(full_response_chunks) + " ▌")
+    if user_prompt:
+        # 1. Agregar mensaje del usuario
+        st.session_state.messages.append({"role": "user", "content": user_prompt})
+        with st.chat_message("user", avatar="👤"):
+            st.markdown(user_prompt)
 
+        # 2. Generar respuesta con HeraBrain
+        with st.chat_message("assistant", avatar="🎧"):
+            response_placeholder = st.empty()
+            full_response_chunks = []
 
-        with st.spinner("Hera está pensando y ejecutando tools..."):
-            try:
-                ans = run_async(
-                    st.session_state.brain.chat(
-                        user_prompt,
-                        on_token=on_stream_token,
-                        print_to_stdout=False,
+            def on_stream_token(token: str):
+                full_response_chunks.append(token)
+                response_placeholder.markdown("".join(full_response_chunks) + " ▌")
+
+            with st.spinner("Hera está pensando y ejecutando tools..."):
+                try:
+                    ans = run_async(
+                        st.session_state.brain.chat(
+                            user_prompt,
+                            on_token=on_stream_token,
+                            print_to_stdout=False,
+                        )
                     )
-                )
-                response_placeholder.markdown(ans)
-                st.session_state.messages.append({"role": "assistant", "content": ans})
-                st.rerun()
-            except Exception as e:
-                err = f"⚠️ Error comunicando con el agente: {e}"
-                response_placeholder.markdown(err)
-                st.session_state.messages.append({"role": "assistant", "content": err})
+                    response_placeholder.markdown(ans)
+                    st.session_state.messages.append({"role": "assistant", "content": ans})
+                    st.rerun()
+                except Exception as e:
+                    err = f"⚠️ Error comunicando con el agente: {e}"
+                    response_placeholder.markdown(err)
+                    st.session_state.messages.append({"role": "assistant", "content": err})

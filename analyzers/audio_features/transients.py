@@ -46,6 +46,9 @@ class TransientAnalyzer:
                 onset_envelope_summary=[0.5] * 16,
             )
 
+        if len(y) > sr * 30:
+            y = y[: sr * 30]
+
         import librosa
         from scipy import signal
 

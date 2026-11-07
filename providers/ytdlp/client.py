@@ -10,12 +10,20 @@ from hera.contracts.search import SearchFilters
 class YtdlpProvider:
     name = "ytdlp"
 
-    def __init__(self, max_results: int = 10, preferred_quality: str = "320"):
+    def __init__(
+        self,
+        max_results: int = 10,
+        preferred_quality: str = "320",
+        cookie_browser: str | None = None,
+        prefer_video_hd: bool = False,
+    ):
         self.max_results = max_results
         self.preferred_quality = preferred_quality
+        self.cookie_browser = cookie_browser
+        self.prefer_video_hd = prefer_video_hd
 
     async def capabilities(self) -> list[str]:
-        return ["search", "download"]
+        return ["search", "download", "video_hd"]
 
     async def health(self) -> dict:
         try:
@@ -114,6 +122,11 @@ class YtdlpProvider:
                     risk=round(risk, 2),
                 )
 
+                want_video = self.prefer_video_hd or (
+                    filters and filters.format and any(fmt.lower().lstrip(".") in {"mp4", "webm", "mkv", "mov"} for fmt in filters.format)
+                )
+                out_fmt = "MP4" if want_video else "MP3"
+
                 cand = Candidate(
                     search_id=search_id,
                     provider=self.name,
@@ -122,13 +135,13 @@ class YtdlpProvider:
                     title=clean_title,
                     version=version,
                     duration_ms=duration_ms,
-                    format="MP3",
+                    format=out_fmt,
                     bitrate_kbps=int(self.preferred_quality) if self.preferred_quality.isdigit() else 320,
                     score=round(score, 1),
                     score_components=score_comps,
                     score_reasons=[
                         f"yt-dlp Stream Web ({uploader})",
-                        f"Audio recodificado a MP3 {self.preferred_quality}k",
+                        "Videoclip HD (.mp4)" if want_video else f"Audio recodificado a MP3 {self.preferred_quality}k",
                     ],
                     availability="streaming_download",
                     authorization_state=AuthorizationState.USER_CONFIRMATION_REQUIRED,
@@ -143,38 +156,53 @@ class YtdlpProvider:
     async def resolve(self, native_ref: str) -> dict:
         return {"native_ref": native_ref, "resolved": True}
 
-    def _sync_download(self, url: str, target_path: Path) -> None:
+    def _sync_download(self, url: str, target_path: Path, as_video: bool = False) -> None:
         import yt_dlp
         target_path.parent.mkdir(parents=True, exist_ok=True)
         base_out = str(target_path.with_suffix(""))
 
-        ydl_opts = {
-            "format": "bestaudio/best",
-            "outtmpl": base_out + ".%(ext)s",
-            "postprocessors": [
-                {
-                    "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": self.preferred_quality,
-                }
-            ],
-            "quiet": True,
-            "no_warnings": True,
-        }
+        if as_video or target_path.suffix.lower() in {".mp4", ".webm", ".mkv", ".mov"}:
+            ydl_opts = {
+                "format": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080][ext=mp4]/best",
+                "merge_output_format": "mp4",
+                "outtmpl": base_out + ".%(ext)s",
+                "quiet": True,
+                "no_warnings": True,
+            }
+            expected_ext = ".mp4"
+        else:
+            ydl_opts = {
+                "format": "bestaudio/best",
+                "outtmpl": base_out + ".%(ext)s",
+                "postprocessors": [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": self.preferred_quality,
+                    }
+                ],
+                "quiet": True,
+                "no_warnings": True,
+            }
+            expected_ext = ".mp3"
+
+        if self.cookie_browser:
+            ydl_opts["cookiesfrombrowser"] = (self.cookie_browser,)
+
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        # Asegurar que el archivo de salida final coincida con target_path
-        expected_mp3 = Path(base_out + ".mp3")
-        if expected_mp3.exists() and expected_mp3 != target_path:
+        expected_file = Path(base_out + expected_ext)
+        if expected_file.exists() and expected_file != target_path:
             if target_path.exists():
                 target_path.unlink()
-            expected_mp3.rename(target_path)
+            expected_file.rename(target_path)
 
     async def start_transfer(self, candidate: Candidate, target_path: str) -> str:
         dst = Path(target_path)
+        as_video = (candidate.format or "").upper() in {"MP4", "WEBM", "MKV", "MOV"} or self.prefer_video_hd
         loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self._sync_download, candidate.native_ref, dst)
+        await loop.run_in_executor(None, self._sync_download, candidate.native_ref, dst, as_video)
         return f"ytdlp_xfer_{uuid.uuid4().hex[:8]}"
 
     async def transfer_status(self, transfer_id: str) -> dict:

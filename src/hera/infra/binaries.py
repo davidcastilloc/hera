@@ -107,3 +107,5 @@ def ensure_binaries(base_dir: Path) -> None:
         except Exception as e:
             click.echo(f"[WARN] No se pudo descargar rclone automaticamente: {e}")
 
+
+

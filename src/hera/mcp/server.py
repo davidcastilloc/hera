@@ -7,22 +7,27 @@ from hera.mcp.handlers.candidates import handle_get_track_candidates
 from hera.mcp.handlers.download import handle_download_track
 from hera.mcp.handlers.status import handle_download_status
 from hera.mcp.handlers.identify import handle_identify_track
-from hera.mcp.handlers.analyze import handle_analyze_track
+from hera.mcp.handlers.analyze import handle_analyze_track, handle_analyze_batch
 from hera.mcp.handlers.organize import handle_organize_track
 from hera.mcp.handlers.crate import handle_build_dj_crate
+from hera.mcp.handlers.audit import handle_audit_repertoire
 
 
 def create_mcp_server(config_path: Path | str | None = None) -> FastMCP:
     """Instancia y configura el servidor FastMCP de Hera."""
     cfg_p = Path(config_path or "config/hera.toml")
-    config = HeraConfig.load(cfg_p).resolve_paths(cfg_p.parent.parent if cfg_p.exists() else Path("."))
+    if cfg_p.exists():
+        cfg_p = cfg_p.resolve()
+        base_dir = cfg_p.parent.parent
+    else:
+        base_dir = Path(".").resolve()
+    config = HeraConfig.load(cfg_p).resolve_paths(base_dir)
     db = Database(config.db_path)
 
     mcp = FastMCP(
         name="hera",
-        instructions="Capa inteligente para búsqueda, adquisición autorizada, validación y organización de música para DJs.",
+        instructions="Capa inteligente para búsqueda, adquisición autorizada, validación, análisis acústico DSP/LUFS y organización de música y Video-DJ para DJs y productores.",
     )
-
 
     @mcp.tool()
     async def search_music(
@@ -30,7 +35,7 @@ def create_mcp_server(config_path: Path | str | None = None) -> FastMCP:
         filters: dict | None = None,
         providers: list[str] | None = None,
     ) -> dict:
-        """Busca temas musicales en providers locales y autorizados (local, slskd)."""
+        """Busca temas musicales y videos HD en providers locales y autorizados (local, slskd, ytdlp). Soporta '*' para listar todo el inventario local."""
         await db.init_schema()
         return await handle_search_music(query, filters, providers, db, config)
 
@@ -68,7 +73,7 @@ def create_mcp_server(config_path: Path | str | None = None) -> FastMCP:
     async def identify_track(
         asset_id: str,
     ) -> dict:
-        """Calcula la huella acústica de un activo en cuarentena y genera hipótesis de identidad con confianza."""
+        """Calcula la huella acústica de un activo (`trk_*`, `cand_*` local o ruta física) y genera hipótesis de identidad."""
         await db.init_schema()
         return await handle_identify_track(asset_id, db, config)
 
@@ -77,9 +82,19 @@ def create_mcp_server(config_path: Path | str | None = None) -> FastMCP:
         track_id: str,
         profile: str = "dj-standard",
     ) -> dict:
-        """Extrae características musicales acústicas del track: BPM, clave musical, Camelot y energía."""
+        """Extrae características acústicas del track (`trk_*`, `cand_*` local o ruta física): BPM exacto con corrección Half/Double-Time por género, Camelot, LUFS Integrados y True Peak (dBTP)."""
         await db.init_schema()
         return await handle_analyze_track(track_id, profile, db)
+
+    @mcp.tool()
+    async def analyze_batch(
+        paths_or_ids: list[str],
+        profile: str = "dj-standard",
+        max_workers: int = 6,
+    ) -> dict:
+        """Analiza en paralelo un lote de tracks, candidatos o rutas físicas (Audio y Video-DJ) sin bloquear MCP."""
+        await db.init_schema()
+        return await handle_analyze_batch(paths_or_ids, profile, max_workers, db)
 
     @mcp.tool()
     async def organize_track(
@@ -98,9 +113,18 @@ def create_mcp_server(config_path: Path | str | None = None) -> FastMCP:
         constraints: dict | None = None,
         export: list[str] | None = None,
     ) -> dict:
-        """Construye un crate/playlist curado para DJ y genera exportaciones en M3U8 y Rekordbox XML."""
+        """Construye un crate/playlist armónico curado con el motor de sinergia holística (Camelot + BPM + Transientes + Estilo) y genera exportaciones en M3U8, Rekordbox XML (con 4 Hot Cues acústicos), Cue Sheet y Ableton Live."""
         await db.init_schema()
         return await handle_build_dj_crate(brief, duration_minutes, constraints, export, db, config)
+
+    @mcp.tool()
+    async def audit_repertoire(
+        check_queries: list[str] | None = None,
+        sync_db: bool = True,
+    ) -> dict:
+        """Ejecuta auditoría maestra del repertorio (Audio, Video-DJ HD, Producciones Propias), zonas de BPM, Camelot, años de inactividad, validación anti-duplicados pre-descarga (`[SKIP - YA EXISTE]` vs `[MISSING]`) y sincronización in-place con `hera.db`."""
+        await db.init_schema()
+        return await handle_audit_repertoire(check_queries, sync_db, db, config)
 
     return mcp
 

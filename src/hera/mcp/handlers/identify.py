@@ -6,13 +6,14 @@ from hera.contracts.errors import HeraErrorCode, HeraException
 from hera.contracts.track import TrackStatus
 from hera.domain.config import HeraConfig
 from hera.domain.database import Database
-from hera.domain.repositories import TrackRepository
+from hera.domain.repositories import CandidateRepository, TrackRepository
 
 
 async def handle_identify_track(asset_id: str, db: Database, config: HeraConfig) -> dict:
     conn = await db.connect()
     track_repo = TrackRepository(conn)
-    track = await track_repo.get_by_id(asset_id)
+    cand_repo = CandidateRepository(conn)
+    track = await track_repo.resolve_or_promote(asset_id, cand_repo=cand_repo)
 
     if not track:
         raise HeraException(HeraErrorCode.INVALID_MEDIA, f"Activo {asset_id} no encontrado")
@@ -28,7 +29,8 @@ async def handle_identify_track(asset_id: str, db: Database, config: HeraConfig)
     res = await fingerprinter.fingerprint_file(file_path)
 
     track.fingerprint = res.fingerprint
-    track.status = TrackStatus.IDENTIFIED
+    if track.status != TrackStatus.ORGANIZED:
+        track.status = TrackStatus.IDENTIFIED
     await track_repo.save(track)
 
     hypotheses = [h.model_dump() for h in res.hypotheses]

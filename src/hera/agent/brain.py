@@ -39,6 +39,9 @@ from hera.agent.tools import (
     recommend_harmonic_transitions,
     get_community_status,
     get_session_cost_and_tokens,
+    audit_repertoire_intelligence,
+    build_strategic_dj_crate,
+    analyze_tracks_dsp_batch,
 )
 from hera.domain.config import AgentConfig, HeraConfig
 from hera.domain.cost import CostTracker
@@ -66,6 +69,9 @@ HERA_TOOLS = [
     recommend_harmonic_transitions,
     get_community_status,
     get_session_cost_and_tokens,
+    audit_repertoire_intelligence,
+    build_strategic_dj_crate,
+    analyze_tracks_dsp_batch,
 ]
 
 
@@ -197,6 +203,8 @@ class HeraBrain:
         print_to_stdout: bool = True,
     ) -> str:
         """Send a message to the agent and stream the response, with automatic fallback and cost snapbar."""
+        if not self.agent:
+            await self.initialize()
         if not self.agent:
             return "[!] Agente no inicializado."
 

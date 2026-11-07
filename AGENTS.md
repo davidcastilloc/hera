@@ -32,9 +32,11 @@ uv run hera serve
 3. `download_track(candidate_id, authorization, idempotency_key)`
 4. `download_status(job_id)`
 5. `identify_track(asset_id)`
-6. `analyze_track(track_id, profile)`
-7. `organize_track(track_id, template, collision_policy)`
-8. `build_dj_crate(brief, duration_minutes, constraints, export)`
+6. `analyze_track(track_id, profile, genre_hint)`
+7. `analyze_batch(track_ids, profile, genre_hint, max_workers)`
+8. `organize_track(track_id, template, collision_policy)`
+9. `build_dj_crate(brief, duration_minutes, constraints, export)`
+10. `audit_repertoire(sync_db, check_queries)`
 
 ---
 

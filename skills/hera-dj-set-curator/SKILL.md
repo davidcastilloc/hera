@@ -17,11 +17,12 @@ This skill allows agents to autonomously transform natural language music briefs
               │
               ▼
    [ hera-dj-set-curator ]
-   ├── 1. Federated P2P Search with Anti-Flood Spacing (slskd)
-   ├── 2. Zero-Trust Quarantine & FFT Spectral Flatness Validation
-   ├── 3. Librosa Acoustic Feature Extraction (BPM, Camelot Key, LUFS)
-   ├── 4. Mutagen Native Tag Injection (ID3v2.4 / FLAC Vorbis)
-   ├── 5. Harmonic Crate Assembly & Transition Cue Sheet Export (>= 60 min)
+   ├── 0. Phase 1 Anti-Duplicate Audit & Repertoire Intelligence (audit_repertoire >= 85% fuzzy match)
+   ├── 1. Federated P2P Search with Anti-Flood Spacing (slskd) & Video-DJ HD (mp4/webm/mkv)
+   ├── 2. Zero-Trust Quarantine & FFT Spectral Flatness Validation (in-place promotion for local tracks)
+   ├── 3. Librosa + ITU-R BS.1770 Acoustic Extraction (Genre-aware BPM, Camelot Key, LUFS, True Peak dBTP)
+   ├── 4. Mutagen Native Tag Injection (ID3v2.4 / FLAC Vorbis) & Smart Filename Parsing
+   ├── 5. Harmonic Crate Assembly: Rekordbox XML (4 acoustic Hot Cues + Beatgrid), M3U8, Cue Sheet & Ableton Live
    ├── 6. 800 Mbps P2P Super-Seed Distribution (Community Good Citizen)
    └── 7. 1-Click Multi-Cloud Backup (Google Drive via rclone)
 ```

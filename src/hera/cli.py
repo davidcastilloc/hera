@@ -28,7 +28,7 @@ from hera.domain.config import HeraConfig
 from hera.domain.database import Database
 from hera.domain.community import CommunityStats
 from hera.infra.lifecycle import SlskdLifecycle
-from hera.infra.slskd_config import generate_slskd_config, update_shared_directories
+from hera.infra.slskd_config import generate_slskd_config, update_shared_directories, ensure_runtime_slskd_config
 from hera.infra.binaries import ensure_binaries
 from hera.jobs.runner import JobRunner
 from hera.mcp.server import create_mcp_server
@@ -68,11 +68,11 @@ def setup(config: str, no_binaries: bool):
 
     # 1. Configurar slskd.yml con Auto-Sharing
     slskd_yml = base_dir / "bin" / "slskd.yml"
-    if not slskd_yml.exists():
-        generate_slskd_config(cfg, target_path=slskd_yml)
+    existed = slskd_yml.exists()
+    ensure_runtime_slskd_config(cfg, base_dir=base_dir, target_path=slskd_yml)
+    if not existed:
         click.echo(f"[OK] Configuración Soulseek creada con Auto-Sharing: {slskd_yml}")
     else:
-        update_shared_directories(slskd_yml)
         click.echo("[OK] Configuración Soulseek verificada con Auto-Sharing de biblioteca.")
 
     for d_name, d_path in [
@@ -116,7 +116,13 @@ def status(config: str):
 
     # 3. Soulseek & Comunidad
     stats = CommunityStats(cfg.providers.slskd_url or "http://localhost:5030")
-    summary = asyncio.run(stats.get_sharing_summary(cfg.library_dir, Path(cfg.data_dir) / "sets"))
+    summary = asyncio.run(
+        stats.get_sharing_summary(
+            cfg.library_dir,
+            Path(cfg.data_dir) / "sets",
+            extra_dirs=cfg.providers.local_folders,
+        )
+    )
 
     slskd_state = "🟢 EN LÍNEA (5030)" if summary["is_live"] else "🟡 LOCAL (inactivo)"
     click.echo(f"🌐 Soulseek P2P: {slskd_state}")
@@ -143,7 +149,13 @@ def community(config: str):
     """Muestra el impacto y contribución de tu nodo a la red comunitaria Soulseek."""
     cfg = HeraConfig.load(config).resolve_paths(Path("."))
     stats = CommunityStats(cfg.providers.slskd_url or "http://localhost:5030")
-    summary = asyncio.run(stats.get_sharing_summary(cfg.library_dir, Path(cfg.data_dir) / "sets"))
+    summary = asyncio.run(
+        stats.get_sharing_summary(
+            cfg.library_dir,
+            Path(cfg.data_dir) / "sets",
+            extra_dirs=cfg.providers.local_folders,
+        )
+    )
     click.echo("=" * 80)
     click.echo(" 🌍 HERA — IMPACTO COMUNITARIO (BUEN CIUDADANO P2P)")
     click.echo("=" * 80)
@@ -405,7 +417,7 @@ def slskd_stop():
     """Detiene las instancias activas de slskd."""
     cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
     lifecycle = SlskdLifecycle(cfg)
-    lifecycle.stop()
+    lifecycle.stop(force_all=True)
     click.echo("[OK] Solicitud de parada enviada a slskd.")
 
 
@@ -503,6 +515,34 @@ def library():
     """Show inventory of all tracks and DJ sets on disk (no LLM needed)."""
     from hera.agent.tools import get_library_status
     click.echo(get_library_status())
+
+
+@main.command()
+@click.option("--config", "-c", default="config/hera.toml", help="Ruta al archivo de configuración")
+@click.option("--no-sync", is_flag=True, help="No sincronizar automáticamente los archivos locales hacia hera.db")
+@click.argument("check_queries", nargs=-1, required=False)
+def audit(config: str, no_sync: bool, check_queries: tuple[str, ...]):
+    """Audita el repertorio (Audio, Video-DJ, Producciones), detecta huecos/inactividad, verifica duplicados y sincroniza hera.db."""
+    import json
+    from hera.mcp.handlers.audit import handle_audit_repertoire
+
+    cfg = HeraConfig.load(config).resolve_paths(Path("."))
+    db = Database(cfg.db_path)
+
+    async def _run():
+        await db.init_schema()
+        try:
+            res = await handle_audit_repertoire(
+                check_queries=list(check_queries) if check_queries else None,
+                sync_db=not no_sync,
+                db=db,
+                config=cfg,
+            )
+            click.echo(json.dumps(res, indent=2, ensure_ascii=False))
+        finally:
+            await db.close()
+
+    asyncio.run(_run())
 
 
 @main.command(name="set")

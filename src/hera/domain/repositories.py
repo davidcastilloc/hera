@@ -106,6 +106,91 @@ class TrackRepository:
             return None
         return self._row_to_track(row)
 
+    async def find_by_path(self, file_path: str) -> Track | None:
+        cursor = await self.conn.execute(
+            "SELECT * FROM tracks WHERE (library_path = ? OR quarantine_path = ?) AND deleted_at IS NULL LIMIT 1",
+            (file_path, file_path),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        return self._row_to_track(row)
+
+    async def resolve_or_promote(
+        self,
+        identifier: str,
+        cand_repo: "CandidateRepository | None" = None,
+    ) -> Track | None:
+        """Resuelve un track por ID (`trk_*`), o promueve in-place un `cand_*` local o ruta física en disco."""
+        from pathlib import Path
+        import uuid
+        from providers.local.scanner import parse_dj_filename
+
+        track = await self.get_by_id(identifier)
+        if track:
+            return track
+
+        local_path: Path | None = None
+        cand_obj: Candidate | None = None
+
+        if cand_repo is None and identifier.startswith("cand_"):
+            cand_repo = CandidateRepository(self.conn)
+
+        if cand_repo is not None:
+            cand_obj = await cand_repo.get_by_id(identifier)
+            if cand_obj and cand_obj.native_ref:
+                p = Path(cand_obj.native_ref)
+                if p.exists() and p.is_file():
+                    local_path = p.resolve()
+
+        if local_path is None:
+            try:
+                p = Path(identifier)
+                if p.exists() and p.is_file():
+                    local_path = p.resolve()
+            except Exception:
+                local_path = None
+
+        if local_path is None:
+            return None
+
+        resolved_str = str(local_path)
+        existing = await self.find_by_path(resolved_str)
+        if existing:
+            return existing
+
+        artist, title, version, bpm_found, camelot_found = parse_dj_filename(local_path.name)
+        if cand_obj:
+            if cand_obj.artist and cand_obj.artist != "Unknown Artist" and not cand_obj.artist.isdigit():
+                artist = cand_obj.artist
+            if cand_obj.title:
+                title = cand_obj.title
+            if cand_obj.version and not version:
+                version = cand_obj.version
+
+        ext = local_path.suffix.lower().lstrip(".")
+        try:
+            fsize = local_path.stat().st_size
+        except OSError:
+            fsize = None
+
+        new_track = Track(
+            id=f"trk_{uuid.uuid4().hex[:10]}",
+            status=TrackStatus.ORGANIZED,
+            canonical_title=title,
+            canonical_artist=artist,
+            version=version,
+            codec=ext.upper() if ext else None,
+            bitrate_kbps=cand_obj.bitrate_kbps if cand_obj else (1411 if ext in {"flac", "wav", "alac", "aiff"} else 320),
+            file_size_bytes=fsize,
+            library_path=resolved_str,
+            bpm=bpm_found,
+            camelot=camelot_found,
+            license_basis="owned_original",
+            provenance_json={"source": "local_in_place_promotion", "promoted_from": identifier},
+        )
+        return await self.save(new_track)
+
     async def list_all(self, status: TrackStatus | None = None, limit: int = 100) -> list[Track]:
         if status:
             cursor = await self.conn.execute(

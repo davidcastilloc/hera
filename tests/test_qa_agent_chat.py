@@ -21,8 +21,8 @@ from hera.infra.lifecycle import SlskdLifecycle
 
 
 def test_qa_tool_registration():
-    """QA 1: Verify all 7 tools are registered in HERA_TOOLS."""
-    assert len(HERA_TOOLS) == 7
+    """QA 1: Verify all 10 tools are registered in HERA_TOOLS."""
+    assert len(HERA_TOOLS) == 10
     tool_names = [t.__name__ for t in HERA_TOOLS]
     assert "search_and_acquire_tracks" in tool_names
     assert "create_or_update_dj_set" in tool_names
@@ -31,6 +31,9 @@ def test_qa_tool_registration():
     assert "recommend_harmonic_transitions" in tool_names
     assert "get_community_status" in tool_names
     assert "get_session_cost_and_tokens" in tool_names
+    assert "audit_repertoire_intelligence" in tool_names
+    assert "build_strategic_dj_crate" in tool_names
+    assert "analyze_tracks_dsp_batch" in tool_names
 
 
 def test_qa_recommend_harmonic_transitions():

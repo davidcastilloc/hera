@@ -69,6 +69,8 @@ class ProviderRegistry:
                     YtdlpProvider(
                         max_results=getattr(config.providers, "ytdlp_max_results", 10),
                         preferred_quality=getattr(config.providers, "ytdlp_preferred_quality", "320"),
+                        cookie_browser=getattr(config.providers, "ytdlp_cookie_browser", None),
+                        prefer_video_hd=getattr(config.providers, "ytdlp_prefer_video_hd", False),
                     ),
                 )
             except Exception:
@@ -95,7 +97,10 @@ class ProviderRegistry:
                 from providers.local.scanner import LocalProvider
                 registry.register(
                     "local",
-                    LocalProvider(folders=config.providers.local_folders)
+                    LocalProvider(
+                        folders=config.providers.local_folders,
+                        supported_formats=config.analysis.supported_formats,
+                    ),
                 )
             except Exception as e:
                 pass

@@ -9,17 +9,21 @@ Convertir intención musical en búsquedas federadas, candidatos comparables, an
 
 # Reglas obligatorias para el agente
 
-- Confirmar la base de autorización antes de `download_track`.
+- **Fase 1 Anti-Duplicados:** Antes de iniciar cualquier descarga (`download_track`), validar contra el repertorio local con `audit_repertoire(check_queries=[...])` (fuzzy matching `>= 85%`) para omitir pistas existentes (`[SKIP - YA EXISTE]`).
+- **Promoción Local In-Place:** Para pistas locales (`provider="local"`, `cand_*` o rutas en disco), invocar directamente `analyze_track`, `analyze_batch` o `identify_track` sin pasar por `download_track` (se promueven *in-place* a `trk_*` sin duplicar en `quarantine/`).
+- Confirmar la base de autorización antes de `download_track` en fuentes externas.
 - Solicitar aprobación humana antes de adquirir, borrar, sobrescribir o compartir.
 - Nunca presentar Soulseek o BitTorrent como anónimos o inherentemente privados.
-- Usar `get_track_candidates` antes de seleccionar una fuente.
+- Usar `get_track_candidates` antes de seleccionar una fuente externa.
 - Explicar el score y pedir revisión si la identidad es ambigua (`review_required: true`).
-- No saltarse la secuencia de cuarentena, validación o deduplicación.
 - Nunca inventar IDs de tools (`candidate_id`, `job_id`, `track_id`).
 
-# Flujo canónico
+# Flujos canónicos
 
-`search_music` → `get_track_candidates` → aprobación → `download_track` → `download_status` → `identify_track` → `analyze_track` → `organize_track` → `build_dj_crate`
+- **Auditoría e Inteligencia de Repertorio (Audio + Video-DJ HD + Producciones Propias):**
+  `audit_repertoire(sync_db=True, check_queries=[...])` → `analyze_batch(track_ids=[...], genre_hint=...)` → `build_dj_crate(..., export=["rekordbox_xml", "ableton", "cue_sheet", "m3u8"])`
+- **Adquisición Externa Autorizada:**
+  `audit_repertoire(check_queries=[...])` → `search_music` → `get_track_candidates` → aprobación → `download_track` → `download_status` → `identify_track` → `analyze_track` → `organize_track` → `build_dj_crate`
 
 # Referencias
 

@@ -10,6 +10,8 @@ class ExportFormat(str, Enum):
     M3U8 = "m3u8"
     REKORDBOX_XML = "rekordbox_xml"
     JSON_MANIFEST = "json_manifest"
+    ABLETON = "ableton"
+    CUE_SHEET = "cue_sheet"
 
 
 class CrateConstraints(BaseModel):
@@ -17,6 +19,10 @@ class CrateConstraints(BaseModel):
     camelot_max_step: int | None = None
     exclude_versions: list[str] = Field(default_factory=list)
     required_tracks: list[str] = Field(default_factory=list)
+    genre: str | None = None
+    media_type: str = "all"  # all | audio | video | hybrid
+    include_own_productions: bool = False
+    target_camelot: str | None = None
 
 
 class CrateTrack(BaseModel):

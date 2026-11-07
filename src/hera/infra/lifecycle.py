@@ -9,6 +9,7 @@ import httpx
 import structlog
 
 from hera.domain.config import HeraConfig
+from hera.infra.slskd_config import ensure_runtime_slskd_config
 
 logger = structlog.get_logger(__name__)
 
@@ -65,12 +66,16 @@ class SlskdLifecycle:
         if not binary:
             return False
 
-        root = base_dir or Path(self.config.data_dir).resolve()
+        root = (base_dir or Path(self.config.data_dir)).resolve()
         logs_dir = Path(self.config.logs_dir)
         if not logs_dir.is_absolute():
             logs_dir = root / logs_dir
         logs_dir.mkdir(parents=True, exist_ok=True)
         log_path = logs_dir / "slskd.log"
+
+        cfg_file = ensure_runtime_slskd_config(self.config, base_dir=root, target_path=binary.parent / "slskd.yml")
+        app_dir = (binary.parent / "data").resolve()
+        app_dir.mkdir(parents=True, exist_ok=True)
 
         self._log_file = open(log_path, "a", encoding="utf-8")
 
@@ -80,7 +85,14 @@ class SlskdLifecycle:
 
         try:
             self._process = subprocess.Popen(
-                [str(binary)],
+                [
+                    str(binary),
+                    "--config",
+                    str(cfg_file),
+                    "--app-dir",
+                    str(app_dir),
+                    "--no-logo",
+                ],
                 cwd=str(binary.parent),
                 stdout=self._log_file,
                 stderr=subprocess.STDOUT,
@@ -97,7 +109,7 @@ class SlskdLifecycle:
     async def ensure_running(
         self,
         base_dir: Path | None = None,
-        timeout_sec: float = 8.0,
+        timeout_sec: float = 15.0,
     ) -> bool:
         """Garantiza que slskd esté en ejecución, iniciándolo automáticamente si es necesario."""
         url = self.config.providers.slskd_url or "http://localhost:5030"
@@ -123,7 +135,7 @@ class SlskdLifecycle:
     def ensure_running_sync(
         self,
         base_dir: Path | None = None,
-        timeout_sec: float = 8.0,
+        timeout_sec: float = 15.0,
     ) -> bool:
         """Versión sincrónica de ensure_running."""
         url = self.config.providers.slskd_url or "http://localhost:5030"
@@ -143,8 +155,8 @@ class SlskdLifecycle:
 
         return False
 
-    def stop(self) -> None:
-        """Detiene el proceso hijo si fue iniciado por esta instancia."""
+    def stop(self, force_all: bool = False) -> None:
+        """Detiene el proceso hijo o, si force_all=True, cualquier instancia activa de slskd."""
         if self._process:
             try:
                 self._process.terminate()
@@ -156,6 +168,24 @@ class SlskdLifecycle:
                     pass
             finally:
                 self._process = None
+        elif force_all:
+            try:
+                if platform.system().lower() == "windows":
+                    subprocess.run(
+                        ["taskkill", "/F", "/IM", "slskd.exe"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
+                else:
+                    subprocess.run(
+                        ["pkill", "-f", "slskd"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        check=False,
+                    )
+            except Exception:
+                pass
 
         if self._log_file:
             try:

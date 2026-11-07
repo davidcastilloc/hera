@@ -19,11 +19,31 @@ async def search_and_acquire_tracks(queries: list[str]) -> str:
     Search the Soulseek P2P network for music tracks by natural artist/title query,
     download the highest quality studio master (FLAC/320kbps MP3) from active peers,
     validate acoustic integrity, run DSP analysis (BPM, Camelot Key, LUFS), and save to library.
+    Automatically executes Phase 1 Anti-Duplicate validation against local folders first.
     
     Args:
         queries: A list of search query strings (e.g. ['Daft Punk One More Time', 'Modjo Lady']).
     """
+    from hera.domain.dedup import DeduplicationEngine
     from hera.infra.lifecycle import SlskdLifecycle
+
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    results = []
+
+    # Fase 1: Auditoría Anti-Duplicados contra almacenamiento local
+    if cfg.providers.local_folders:
+        audit_res = DeduplicationEngine.audit_queries_against_folders(
+            queries=queries,
+            local_folders=cfg.providers.local_folders,
+            fuzzy_threshold=cfg.identity_confidence_threshold,
+        )
+        for ex in audit_res["existing"]:
+            loc = ex.get("video_path") or ex.get("audio_path")
+            results.append(f"[SKIP - YA EXISTE] '{ex['query']}': Ya disponible localmente en '{loc}' (confianza {ex['confidence']:.2f})")
+        queries = audit_res["missing"]
+        if not queries:
+            return "\n".join(results)
+
     lifecycle = SlskdLifecycle()
     if not await lifecycle.is_running_async(base_url="http://localhost:5030", timeout=1.0):
         lifecycle.ensure_running_sync()
@@ -35,8 +55,6 @@ async def search_and_acquire_tracks(queries: list[str]) -> str:
     library = base_dir / "library"
     quarantine.mkdir(parents=True, exist_ok=True)
     library.mkdir(parents=True, exist_ok=True)
-
-    results = []
 
     async with httpx.AsyncClient(timeout=15.0) as client:
         for q in queries:
@@ -308,8 +326,110 @@ async def get_community_status(verbose: bool = True) -> str:
 
     cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
     stats = CommunityStats(base_url=cfg.providers.slskd_url or "http://localhost:5030")
-    res = await stats.get_sharing_summary(cfg.library_dir, Path(cfg.data_dir) / "sets")
+    res = await stats.get_sharing_summary(
+        cfg.library_dir,
+        Path(cfg.data_dir) / "sets",
+        extra_dirs=cfg.providers.local_folders,
+    )
     return res["community_message"]
+
+
+async def audit_repertoire_intelligence(
+    sync_db: bool = False,
+    check_queries: list[str] | None = None,
+) -> str:
+    """
+    Executes a full Repertoire Intelligence & Phase 1 Anti-Duplicate Audit across the DJ's local folders
+    (Audio DJ, Video-DJ HD, and Own Productions). Reports total tracks, BPM zones, dominant Camelot keys,
+    genre breakdown, chronological inactivity gaps (2000-2026), bitrate quality suspects, and fuzzy deduplication.
+
+    Args:
+        sync_db: If True, synchronizes all local audio/video tracks into hera.db in-place.
+        check_queries: Optional list of 'Artist - Title' queries to validate against the local repertoire (Phase 1 Anti-Duplicates).
+    """
+    import json
+    from hera.mcp.handlers.audit import handle_audit_repertoire
+
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    report = await handle_audit_repertoire(
+        sync_db=sync_db,
+        check_queries=check_queries,
+        config=cfg,
+    )
+    return json.dumps(report, indent=2, ensure_ascii=False)
+
+
+async def build_strategic_dj_crate(
+    brief: str,
+    duration_minutes: int = 60,
+    genre: str = "",
+    media_type: str = "all",
+    include_own_productions: bool = True,
+    export_ableton: bool = False,
+) -> str:
+    """
+    Builds a harmonically sequenced DJ crate using the 4-layer Unified Synergy Engine (Camelot + BPM + Transients + Style),
+    supporting Audio and Video-DJ HD tracks, interleaving the DJ's own productions, and exporting natively to
+    Rekordbox XML (with 4 acoustic Hot Cues), Ableton Live ([BPM]_[Camelot]_[Artist] - [Title].ext + JSON index),
+    M3U8, and _00_SET_GUIDE.txt.
+
+    Args:
+        brief: Name or musical concept of the DJ crate (e.g. 'Afro House Peak Time', 'Reggaeton Video Set').
+        duration_minutes: Target duration of the crate in minutes (default 60).
+        genre: Optional genre or folder filter (e.g. 'Afro_House', 'Reggaeton', 'Salsa', 'Guaracha').
+        media_type: 'all', 'audio', or 'video' (for Video-DJ MP4/WebM/MKV sets).
+        include_own_productions: Whether to interleave tracks from 02_MI_MUSICA_PRODUCCIONES_PROPIAS.
+        export_ableton: Export Ableton Live curated files ([BPM]_[Camelot]_[Artist] - [Title].ext) and JSON index.
+    """
+    import json
+    from hera.mcp.handlers.crate import handle_build_dj_crate
+
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    exports = ["m3u8", "rekordbox_xml", "cue_sheet"]
+    if export_ableton:
+        exports.append("ableton")
+
+    constraints: dict = {
+        "media_type": media_type,
+        "include_own_productions": include_own_productions,
+    }
+    if genre:
+        constraints["genre"] = genre
+
+    res = await handle_build_dj_crate(
+        brief=brief,
+        duration_minutes=duration_minutes,
+        constraints=constraints,
+        export=exports,
+        config=cfg,
+    )
+    return json.dumps(res, indent=2, ensure_ascii=False)
+
+
+async def analyze_tracks_dsp_batch(
+    track_paths_or_ids: list[str],
+    genre_hint: str = "",
+) -> str:
+    """
+    Runs parallel multi-worker DSP acoustic analysis on a batch of track IDs (trk_*, cand_*) or local file paths.
+    Promotes local candidates/paths in-place without copying to quarantine, calculates BPM with Genre-Aware
+    Half/Double-Time correction, extracts Camelot Key, Integrated Loudness (LUFS), and True Peak (dBTP).
+
+    Args:
+        track_paths_or_ids: List of track_ids, candidate_ids, or local file paths to analyze.
+        genre_hint: Optional genre context (e.g. 'reggaeton', 'afro house', 'salsa') for BPM octave disambiguation.
+    """
+    import json
+    from hera.mcp.handlers.analyze import handle_analyze_batch
+
+    cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    res = await handle_analyze_batch(
+        track_ids=track_paths_or_ids,
+        genre_hint=genre_hint or None,
+        max_workers=4,
+        config=cfg,
+    )
+    return json.dumps(res, indent=2, ensure_ascii=False)
 
 
 def get_session_cost_and_tokens(detailed: bool = True) -> str:

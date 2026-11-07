@@ -1,12 +1,21 @@
-"""Generación de exportaciones DJ: M3U8, Rekordbox XML y Manifiesto JSON."""
+"""Generación de exportaciones DJ: M3U8, Rekordbox XML (con Hot Cues acústicos reales), Ableton Live y Manifiesto JSON."""
 
 from pathlib import Path
 import json
+import os
+import shutil
 import xml.etree.ElementTree as ET
 from urllib.parse import quote
 from hera.contracts.crate import Crate
 from hera.contracts.track import Track
 from hera.domain.repositories import TrackRepository
+
+CAMELOT_TO_MUSICAL: dict[str, str] = {
+    "8B": "C", "3B": "Db", "10B": "D", "5B": "Eb", "12B": "E", "7B": "F",
+    "2B": "F#", "9B": "G", "4B": "Ab", "11B": "A", "6B": "Bb", "1B": "B",
+    "5A": "Cm", "12A": "C#m", "7A": "Dm", "2A": "D#m", "9A": "Em", "4A": "Fm",
+    "11A": "F#m", "6A": "Gm", "1A": "G#m", "8A": "Am", "3A": "Bbm", "10A": "Bm",
+}
 
 
 class CrateExporter:
@@ -15,9 +24,27 @@ class CrateExporter:
         self.exports_dir = Path(exports_dir).resolve()
         self.exports_dir.mkdir(parents=True, exist_ok=True)
 
+    @staticmethod
+    def _sanitize_name(name: str) -> str:
+        return "".join(c if c.isalnum() or c in "._- " else "_" for c in name).strip()
+
+    @staticmethod
+    def _resolve_structural_cues(t: Track, bpm: float, dur_sec: float) -> list[dict]:
+        """Obtiene los 4 Hot Cues acústicos reales de la telemetría DSP del track o construye el perfil cuantizado."""
+        from analyzers.audio_features.structure import StructuralCueAnalyzer
+
+        if isinstance(t.provenance_json, dict):
+            telem = t.provenance_json.get("hera_dsp_telemetry") or {}
+            struct = telem.get("structure") if isinstance(telem, dict) else None
+            if isinstance(struct, dict) and isinstance(struct.get("hot_cues"), list) and len(struct["hot_cues"]) >= 4:
+                return struct["hot_cues"][:4]
+
+        prof = StructuralCueAnalyzer.build_fallback_profile(bpm=bpm, duration_sec=dur_sec)
+        return [c.model_dump() for c in prof.hot_cues]
+
     async def export_m3u8(self, crate: Crate, tracks: list[Track]) -> Path:
         """Genera una playlist M3U8 UTF-8 con rutas verificadas."""
-        clean_name = "".join(c if c.isalnum() or c in "._- " else "_" for c in crate.name).strip()
+        clean_name = self._sanitize_name(crate.name)
         out_path = self.exports_dir / f"{clean_name}.m3u8"
 
         lines = ["#EXTM3U\n"]
@@ -38,14 +65,13 @@ class CrateExporter:
         return out_path
 
     async def export_rekordbox_xml(self, crate: Crate, tracks: list[Track]) -> Path:
-        """Genera un archivo Rekordbox XML compatible con Pioneer DJ."""
-        clean_name = "".join(c if c.isalnum() or c in "._- " else "_" for c in crate.name).strip()
+        """Genera un archivo Rekordbox XML compatible con Pioneer DJ inyectando Beatgrid y los 4 Hot Cues estructurales."""
+        clean_name = self._sanitize_name(crate.name)
         out_path = self.exports_dir / f"{clean_name}_rekordbox.xml"
 
         root = ET.Element("DJ_PLAYLISTS", Version="1.0.0")
         ET.SubElement(root, "PRODUCT", Name="Hera", Version="0.1.0", Company="Hera DJ")
 
-        # Collection
         collection = ET.SubElement(root, "COLLECTION", Entries=str(len(tracks)))
 
         for i, t in enumerate(tracks, start=1):
@@ -67,9 +93,43 @@ class CrateExporter:
                 "Location": loc_url,
                 "Comments": f"Energy:{t.energy:.2f}" if t.energy else "Hera Curated",
             }
-            ET.SubElement(collection, "TRACK", track_attrs)
+            trk_el = ET.SubElement(collection, "TRACK", track_attrs)
+            bpm_val = float(t.bpm or 120.0)
+            dur_sec = (t.duration_ms / 1000.0) if t.duration_ms else 210.0
+            cues = self._resolve_structural_cues(t, bpm_val, dur_sec)
+            cue1_pos = float(cues[0]["position_sec"])
+            ET.SubElement(
+                trk_el,
+                "TEMPO",
+                {
+                    "Inizio": f"{cue1_pos:.3f}",
+                    "Bpm": f"{bpm_val:.2f}",
+                    "Metro": "4/4",
+                    "Battito": "1",
+                },
+            )
+            rb_colors = [
+                ("40", "226", "20"),   # Cue 1: Green (Intro Beat)
+                ("0", "210", "255"),   # Cue 2: Cyan (Phrase / Vocal In)
+                ("255", "45", "45"),   # Cue 3: Red (Drop / Climax)
+                ("255", "190", "0"),   # Cue 4: Amber (Mix Out)
+            ]
+            for idx_c, c_data in enumerate(cues[:4]):
+                r_col, g_col, b_col = rb_colors[idx_c]
+                ET.SubElement(
+                    trk_el,
+                    "POSITION_MARK",
+                    {
+                        "Name": str(c_data["name"]),
+                        "Type": "0",
+                        "Start": f"{float(c_data['position_sec']):.3f}",
+                        "Num": str(idx_c),
+                        "Red": r_col,
+                        "Green": g_col,
+                        "Blue": b_col,
+                    },
+                )
 
-        # Playlists
         playlists = ET.SubElement(root, "PLAYLISTS")
         root_node = ET.SubElement(playlists, "NODE", Type="0", Name="ROOT")
         crate_node = ET.SubElement(
@@ -84,9 +144,82 @@ class CrateExporter:
 
         return out_path
 
+    async def export_cue_sheet(self, crate: Crate, tracks: list[Track]) -> Path:
+        """Genera la guía de mezcla (_SET_GUIDE.txt) con notas de transición armónica Camelot y sinergia."""
+        from hera.application.use_cases.build_crate import BuildHarmonicCrateUseCase
+
+        clean_name = self._sanitize_name(crate.name)
+        out_path = self.exports_dir / f"{clean_name}_SET_GUIDE.txt"
+        uc = BuildHarmonicCrateUseCase()
+        content = uc.generate_cue_sheet(crate.name, tracks)
+        out_path.write_text(content + "\n", encoding="utf-8")
+        return out_path
+
+    async def export_ableton_curated(
+        self,
+        crate: Crate,
+        tracks: list[Track],
+        curated_dir: Path | str | None = None,
+    ) -> Path:
+        """Exporta pistas renombradas con el estándar técnico de Ableton Live: `[BPM]_[Camelot]_[Artista] - [Titulo].ext`
+        y genera un índice JSON con LUFS Integrados, BPM, Tonalidad y Hot Cues estructurales."""
+        clean_name = self._sanitize_name(crate.name)
+        out_dir = Path(curated_dir).resolve() if curated_dir else (self.exports_dir / f"{clean_name}_ableton")
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        ableton_entries = []
+        for idx, t in enumerate(tracks, start=1):
+            path_str = t.library_path or t.quarantine_path
+            if not path_str or not Path(path_str).exists():
+                continue
+            src_p = Path(path_str).resolve()
+            bpm_int = int(round(t.bpm or 124.0))
+            cam_str = (t.camelot or "8A").upper()
+            artist_clean = self._sanitize_name(t.canonical_artist or "Unknown")
+            title_clean = self._sanitize_name(t.canonical_title or src_p.stem)
+            ableton_fname = f"{bpm_int}_{cam_str}_{artist_clean} - {title_clean}{src_p.suffix.lower()}"
+            dst_p = out_dir / ableton_fname
+
+            if not dst_p.exists():
+                try:
+                    os.link(src_p, dst_p)
+                except OSError:
+                    shutil.copy2(src_p, dst_p)
+
+            dur_sec = (t.duration_ms / 1000.0) if t.duration_ms else 210.0
+            ableton_entries.append({
+                "position": idx,
+                "track_id": t.id,
+                "ableton_filename": ableton_fname,
+                "ableton_path": str(dst_p),
+                "source_path": str(src_p),
+                "bpm": t.bpm or 124.0,
+                "camelot": cam_str,
+                "musical_key": t.musical_key or CAMELOT_TO_MUSICAL.get(cam_str, "Am"),
+                "loudness_lufs": t.loudness_lufs if t.loudness_lufs is not None else -9.5,
+                "energy": t.energy or 0.80,
+                "hot_cues": self._resolve_structural_cues(t, float(t.bpm or 124.0), dur_sec),
+            })
+
+        index_path = out_dir / "_ABLETON_CURATION_INDEX.json"
+        with open(index_path, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "crate_id": crate.id,
+                    "crate_name": crate.name,
+                    "naming_standard": "[BPM]_[Camelot]_[Artist] - [Title].ext",
+                    "track_count": len(ableton_entries),
+                    "tracks": ableton_entries,
+                },
+                f,
+                indent=2,
+                ensure_ascii=False,
+            )
+        return index_path
+
     async def export_manifest_json(self, crate: Crate, tracks: list[Track]) -> Path:
         """Genera un manifiesto JSON con procedencia y hashes de verificación."""
-        clean_name = "".join(c if c.isalnum() or c in "._- " else "_" for c in crate.name).strip()
+        clean_name = self._sanitize_name(crate.name)
         out_path = self.exports_dir / f"{clean_name}_manifest.json"
 
         manifest_data = {
@@ -104,6 +237,7 @@ class CrateExporter:
                     "bpm": t.bpm,
                     "camelot": t.camelot,
                     "energy": t.energy,
+                    "loudness_lufs": t.loudness_lufs,
                     "sha256": t.audio_hash_sha256,
                     "path": t.library_path or t.quarantine_path,
                 }

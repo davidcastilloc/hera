@@ -27,13 +27,21 @@
 - **Salida:** `asset_id`, `fingerprint`, `hypotheses` (lista con recording_mbid, artist, title, confidence), `review_required` (bool)
 
 ## 6. `analyze_track`
-- **Entrada:** `track_id` (str), `profile` (str default "dj-standard")
-- **Salida:** `bpm`, `bpm_confidence`, `musical_key`, `camelot`, `key_confidence`, `energy`, `danceability`, `loudness_lufs`, `analysis_version`
+- **Entrada:** `track_id` (str: soporta `trk_*`, promoción in-place de `cand_*` o ruta local), `profile` (str default "dj-standard"), `genre_hint` (str opcional para corrección Half/Double-Time)
+- **Salida:** `bpm`, `bpm_confidence`, `musical_key`, `camelot`, `key_confidence`, `energy`, `danceability`, `loudness_lufs`, `true_peak_dbtp`, `analysis_version`
 
-## 7. `organize_track`
+## 7. `analyze_batch`
+- **Entrada:** `track_ids` (list[str]), `profile` (str default "dj-standard"), `genre_hint` (str opcional), `max_workers` (int default 4)
+- **Salida:** `processed` (int), `results` (list[dict]), `errors` (list[dict])
+
+## 8. `organize_track`
 - **Entrada:** `track_id` (str), `template` (str opcional), `collision_policy` (str: review, suffix, skip)
 - **Salida:** `track_id`, `status`, `source_path`, `destination_path`, `collision_detected`
 
-## 8. `build_dj_crate`
-- **Entrada:** `brief` (str), `duration_minutes` (int), `constraints` (dict opcional: bpm, camelot_max_step, exclude_versions), `export` (list[str]: ["m3u8", "rekordbox_xml"])
-- **Salida:** `crate_id`, `name`, `track_count`, `total_duration_ms`, `exports` (map de rutas generadas), `constraints_unmet`
+## 9. `build_dj_crate`
+- **Entrada:** `brief` (str), `duration_minutes` (int), `constraints` (dict opcional: `bpm`, `camelot_max_step`, `exclude_versions`, `genre`, `media_type`, `include_own_productions`, `target_camelot`), `export` (list[str]: `["m3u8", "rekordbox_xml", "ableton", "cue_sheet"]`)
+- **Salida:** `crate_id`, `name`, `track_count`, `total_duration_ms`, `exports` (map de rutas generadas incluyendo `rekordbox_xml` con 4 Hot Cues acústicos, `.m3u8`, lote Ableton `[BPM]_[Camelot]_[Artista] - [Titulo].ext` y `_00_SET_GUIDE.txt`), `sequence_preview`, `constraints_unmet`
+
+## 10. `audit_repertoire`
+- **Entrada:** `sync_db` (bool default True), `check_queries` (list[str] opcional para validación anti-duplicados Fase 1)
+- **Salida:** `total_tracks_scanned`, `audio_count`, `video_count`, `own_productions_count`, `genre_distribution`, `chronology`, `inactivity_gaps_by_genre`, `query_dedup_audit`, `sync_summary`

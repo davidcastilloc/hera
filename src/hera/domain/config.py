@@ -25,6 +25,8 @@ class ProvidersConfig(BaseModel):
     ytdlp_enabled: bool = True
     ytdlp_max_results: int = 10
     ytdlp_preferred_quality: str = "320"
+    ytdlp_cookie_browser: str | None = None
+    ytdlp_prefer_video_hd: bool = False
 
     # Lidarr (Automated Album & MusicBrainz)
     lidarr_enabled: bool = False
@@ -47,7 +49,10 @@ class AnalysisConfig(BaseModel):
     acoustid_api_key_env: str = "HERA_ACOUSTID_API_KEY"
     acoustid_enabled: bool = False
     supported_formats: list[str] = Field(
-        default_factory=lambda: ["flac", "alac", "mp3", "aac", "ogg", "opus", "wav", "aiff"]
+        default_factory=lambda: [
+            "flac", "alac", "mp3", "aac", "ogg", "opus", "wav", "aiff",
+            "m4a", "mp4", "webm", "mkv", "mov",
+        ]
     )
 
 

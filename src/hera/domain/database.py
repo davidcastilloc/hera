@@ -153,7 +153,11 @@ class Database:
     async def connect(self) -> aiosqlite.Connection:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
-            self._conn = await aiosqlite.connect(str(self.db_path))
+            conn_obj = aiosqlite.connect(str(self.db_path))
+            conn_obj.daemon = True
+            if hasattr(conn_obj, "_thread") and conn_obj._thread is not None:
+                conn_obj._thread.daemon = True
+            self._conn = await conn_obj
             self._conn.row_factory = aiosqlite.Row
             await self._conn.execute("PRAGMA foreign_keys = ON;")
             await self._conn.execute("PRAGMA journal_mode = WAL;")
