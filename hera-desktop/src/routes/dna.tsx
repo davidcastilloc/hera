@@ -49,7 +49,6 @@ function ViewDjStyleDna() {
   const [ruleOwnProductions, setRuleOwnProductions] = useState(true);
   const [ruleLossless320, setRuleLossless320] = useState(true);
   const [ruleStrictCamelot, setRuleStrictCamelot] = useState(true);
-  const [rulePrivateLocalVault, setRulePrivateLocalVault] = useState(true);
   const [dnaProfile, setDnaProfile] = useState<HeraStyleDnaResponse | null>(
     null,
   );
@@ -60,8 +59,7 @@ function ViewDjStyleDna() {
     ruleLossless320 && 'Calidad mínima FLAC / 320 kbps verificada por FFT',
     ruleStrictCamelot &&
       'Sinergia armónica Camelot estricta (±1 paso + 4 Hot Cues)',
-    rulePrivateLocalVault &&
-      'Bóveda Privada Local 100% Gratis (mis dubplates inéditos nunca salen sin permiso)',
+    'P2P activo por el bien del enjambre (1:1.5 Créditos Turbo)',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -209,16 +207,14 @@ function ViewDjStyleDna() {
             </label>
 
             <label {...stylex.props(styles.switchRow)}>
-              <input
-                type="checkbox"
-                checked={rulePrivateLocalVault}
-                onChange={(e) => setRulePrivateLocalVault(e.target.checked)}
-              />
+              <input type="checkbox" checked disabled />
               <span>
                 <strong>
-                  🔒 Bóveda Privada Local 100% Gratis (Open Source)
+                  🐝 Por el Bien del Enjambre (P2P Activo Siempre en Plan
+                  Gratis)
                 </strong>{' '}
-                (proteger mis dubplates y edits locales sin paywall)
+                (toda pista verificada nutre el enjambre global y suma{' '}
+                <code>1:1.5</code> Créditos Turbo)
               </span>
             </label>
 

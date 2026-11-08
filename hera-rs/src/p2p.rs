@@ -148,13 +148,12 @@ pub fn resolve_tier_r2_quota_mb(tier: &str) -> f32 {
     }
 }
 
-/// Local DJs (`local_unlimited`) and higher cloud plans (`pro_monthly`, `pro`, `founder_unlimited`) can turn off P2P sharing (`p2p_sharing_enabled = false`).
-/// Free / Beta cloud R2 plans keep P2P sharing ON (`true`) to nourish the community swarm.
+/// Swarm-First Invariant ("Por el bien del enjambre"):
+/// Free, Beta, and Local (`local_unlimited`) DJs get 100% of HERA's local DSP, AI, and exporters for $0.00,
+/// and in exchange ALWAYS keep P2P sharing ON (`p2p_sharing_enabled = true`) to nourish the global swarm.
+/// Only `pro_monthly`, `pro`, or `founder_unlimited` accounts can turn P2P sharing OFF.
 pub fn tier_allows_private_vault(tier: &str) -> bool {
-    matches!(
-        tier,
-        "local_unlimited" | "pro_monthly" | "pro" | "founder_unlimited"
-    )
+    matches!(tier, "pro_monthly" | "pro" | "founder_unlimited")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1840,7 +1839,7 @@ impl P2PMeshState {
             r2_used_mb: 0.0,
             bounty_refunded_mb: 0.0,
             p2p_sharing_enabled: true,
-            can_disable_p2p_sharing: true,
+            can_disable_p2p_sharing: false,
             verified_tracks_shared: admitted.len(),
             quarantined_rejected_tracks: rejected.len(),
             edge_guardian_active: true,

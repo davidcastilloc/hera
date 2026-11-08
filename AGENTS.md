@@ -90,6 +90,7 @@ cargo run --release --manifest-path hera-rs/Cargo.toml -- --mcp
 
 ## 🛡️ Key Invariants for AI Operators
 
+- **Swarm-First Invariant ("Por el bien del enjambre"):** Every product, P2P, and business decision MUST prioritize the strength of the global P2P swarm (*"Mientras más nodos de Hera, más fuerte es el sistema de enjambres"*). 100% of HERA's local DSP engine, 4 Hot Cues, 2-Opt TSP crate curation, DJ exporters, local LLMs, and Cloudflare Workers AI (`10k Neurons/day`) are `$0.00` free; in exchange, all free/local/beta nodes (`beta_mvp`, `free`, `local_unlimited`) ALWAYS keep P2P sharing ON (`p2p_sharing_enabled = true`, `can_disable_p2p_sharing = false`). Only `pro_monthly` / `founder_unlimited` accounts can disable P2P sharing.
 - **Quarantine First:** Never write directly to `library/` without Zero-Trust forensic validation.
 - **Explain Rankings:** Present score breakdown to users before recommending downloads.
 - **Unified Holistic Synergy:** Always use the 4-layer synergy engine (Camelot harmonic flow, gradual BPM tempo curves, transient punch matching, and `u64` style SimHash) when arranging crates.
