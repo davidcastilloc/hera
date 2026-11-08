@@ -273,6 +273,50 @@ pub fn list_mcp_tools() -> Value {
                     },
                     "required": ["node_id"]
                 }
+            },
+            {
+                "name": "swarm_parallel_manifest",
+                "description": "Issue an HTTP/3 QUIC Multi-Node Parallel Striping Manifest that stripes all 4 MB aligned blocks of a Studio Master across distinct low-latency Edge Guardian nodes using Latency-Aware P2C.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "requester_dj": { "type": "string" },
+                        "track_id_or_cas": { "type": "string" },
+                        "file_size_mb": { "type": "number" }
+                    },
+                    "required": ["requester_dj", "track_id_or_cas"]
+                }
+            },
+            {
+                "name": "swarm_crdt_sync",
+                "description": "Synchronize an offline-first Delta-CRDT state (GCounter + LWW-Element-Set) with commutative, associative, and idempotent lattice convergence.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "origin_node_id": { "type": "string" },
+                        "origin_endpoint_pubkey_id": { "type": "string" },
+                        "hlc_timestamp_ms": { "type": "integer" },
+                        "gcounter_node_bytes_served_mb": { "type": "object" },
+                        "gcounter_cas_play_counts": { "type": "object" },
+                        "lww_track_entries": { "type": "object" }
+                    }
+                }
+            },
+            {
+                "name": "swarm_subscribe",
+                "description": "Subscribe an Edge Guardian or DJ node to an MoQ-style harmonic topic (e.g. hera://swarm/8A/120-128) for proactive low-latency track notifications and pre-fetching.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "subscriber_node_id": { "type": "string" },
+                        "subscriber_dj": { "type": "string" },
+                        "camelot_key": { "type": "string" },
+                        "bpm_min": { "type": "number" },
+                        "bpm_max": { "type": "number" },
+                        "subgenre_filter": { "type": "string" }
+                    },
+                    "required": ["subscriber_node_id", "subscriber_dj", "camelot_key"]
+                }
             }
         ]
     })
@@ -637,6 +681,24 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
                 let chal = state.generate_custody_challenge(req)?;
                 Ok(serde_json::to_value(chal).map_err(|e| e.to_string())?)
             }
+        }
+        "swarm_parallel_manifest" => {
+            let req: crate::p2p::SwarmParallelManifestRequest = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `swarm_parallel_manifest` payload: {e}"))?;
+            let resp = state.issue_parallel_swarm_manifest(req)?;
+            Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
+        }
+        "swarm_crdt_sync" => {
+            let req: crate::p2p::SwarmCrdtDelta = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `swarm_crdt_sync` payload: {e}"))?;
+            let resp = state.sync_crdt_delta(req);
+            Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
+        }
+        "swarm_subscribe" => {
+            let req: crate::p2p::SwarmSubscribeRequest = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `swarm_subscribe` payload: {e}"))?;
+            let resp = state.subscribe_semantic_topic(req);
+            Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
         }
         _ => Err(format!("Unknown MCP tool `{name}`")),
     }

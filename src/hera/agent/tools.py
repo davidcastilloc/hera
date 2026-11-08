@@ -56,7 +56,7 @@ async def search_and_acquire_tracks(queries: list[str]) -> str:
     quarantine.mkdir(parents=True, exist_ok=True)
     library.mkdir(parents=True, exist_ok=True)
 
-    async with httpx.AsyncClient(timeout=15.0) as client:
+    async with httpx.AsyncClient(timeout=15.0, trust_env=False) as client:
         for q in queries:
             try:
                 r = await client.post(f"{url}/searches", json={"searchText": q})

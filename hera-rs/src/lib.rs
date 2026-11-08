@@ -1511,6 +1511,219 @@ mod tests {
         )
         .unwrap();
         assert_eq!(j_cm_swarm["output"]["active_healthy_nodes"], 4);
+
+        // 9. Verify Layer 3 Post-P2P Streaming Merkle Proofs (`16 x 256 KiB = 4 MB`) & zero-kilobyte tamper rejection
+        let tree = crate::p2p_exchange::compute_shard_merkle_tree(&blind_key, "sha-test", 0);
+        assert_eq!(tree.leaf_count, 16);
+        assert_eq!(tree.leaf_size_bytes, 262_144);
+        assert_eq!(tree.leaf_hashes_sha256.len(), 16);
+        assert_eq!(tree.merkle_root_sha256.len(), 64);
+
+        for leaf_idx in 0..16 {
+            let proof = crate::p2p_exchange::generate_merkle_inclusion_proof(
+                &blind_key, "sha-test", 0, leaf_idx,
+            )
+            .unwrap();
+            assert_eq!(proof.sibling_hashes_sha256.len(), 4);
+            assert!(crate::p2p_exchange::verify_merkle_inclusion_proof(&proof));
+
+            // Tampering with a single bit/nibble of the leaf hash must immediately fail verification!
+            let mut tampered = proof.clone();
+            tampered.leaf_hash_sha256 =
+                "00000000000000000000000000000000000000000000000000000000deadbeef".to_string();
+            assert!(!crate::p2p_exchange::verify_merkle_inclusion_proof(&tampered));
+        }
+
+        // 10. Verify Layer 2 Post-P2P Iroh-style `endpoint_pubkey_id` + Network Roaming (`Wi-Fi -> 5G`) + CGNAT Relay
+        let expected_pubkey = crate::p2p_exchange::derive_node_endpoint_pubkey_id(
+            "DJLuna",
+            "hera-worker-luna-latam",
+        );
+        assert!(expected_pubkey.starts_with("ed25519_"));
+
+        // DJLuna roams from her Worker URL to a mobile 5G booth endpoint behind CGNAT:
+        let req_roam = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/heartbeat")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "node_id": "hera-worker-luna-latam",
+                    "owner_dj": "DJLuna",
+                    "endpoint_url": "https://5g-booth.luna.mobile",
+                    "endpoint_pubkey_id": expected_pubkey,
+                    "behind_cgnat": true,
+                    "observed_rtt_ms": 18.5,
+                    "megabytes_served_delta": 4.0,
+                    "r2_used_mb": 420.0,
+                    "daily_worker_requests_used": 1250
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_roam = app.call(req_roam).await.unwrap();
+        assert_eq!(resp_roam.status(), StatusCode::OK);
+        let j_roam: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_roam.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_roam["endpoint_pubkey_id"], expected_pubkey);
+        assert_eq!(j_roam["network_generation"], 2);
+        assert_eq!(j_roam["swarm_credit_balance_mb"], 162.0);
+        assert!(j_roam["relay_assisted_url"]
+            .as_str()
+            .unwrap()
+            .starts_with("https://relay.hera.audio/iroh-tunnel/ed25519_"));
+
+        // 11. Verify Layer 1 & 2 Post-P2P Latency-Aware P2C + Multi-Node HTTP/3 QUIC Parallel Striping Manifest
+        let req_pman = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/parallel-manifest")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "requester_dj": "DJFoo",
+                    "track_id_or_cas": "hera-seed-001",
+                    "file_size_mb": 38.0
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_pman = app.call(req_pman).await.unwrap();
+        assert_eq!(resp_pman.status(), StatusCode::OK);
+        let j_pman: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_pman.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_pman["status"], "SWARM_PARALLEL_MANIFEST_ISSUED");
+        assert_eq!(j_pman["transport_protocol"], "HTTP/3-QUIC-MULTIPLEXED");
+        assert_eq!(j_pman["total_blocks"], 10);
+        assert!(j_pman["distinct_edge_guardians_striped"].as_u64().unwrap() >= 2);
+        assert_eq!(j_pman["blocks"].as_array().unwrap().len(), 10);
+        assert_eq!(j_pman["blocks"][9]["aligned_offset_bytes"], 9 * 4_194_304u64);
+
+        // 12. Verify Layer 4 Post-P2P Delta-CRDT (`GCounter` + `LWW-Element-Set`) Commutativity (`merge(A, B) == merge(B, A)`) & Idempotence (`merge(A, A) == A`)
+        let mut delta_a = crate::p2p_exchange::SwarmCrdtDelta {
+            origin_node_id: "offline-booth-a".to_string(),
+            origin_endpoint_pubkey_id: "ed25519_booth_a".to_string(),
+            hlc_timestamp_ms: 1_762_600_100_000,
+            ..Default::default()
+        };
+        delta_a
+            .gcounter_node_bytes_served_mb
+            .insert("offline-booth-a".to_string(), 120.0);
+        delta_a
+            .gcounter_node_bytes_served_mb
+            .insert("offline-hotel-b".to_string(), 40.0);
+
+        let mut delta_b = crate::p2p_exchange::SwarmCrdtDelta {
+            origin_node_id: "offline-hotel-b".to_string(),
+            origin_endpoint_pubkey_id: "ed25519_hotel_b".to_string(),
+            hlc_timestamp_ms: 1_762_600_200_000,
+            ..Default::default()
+        };
+        delta_b
+            .gcounter_node_bytes_served_mb
+            .insert("offline-booth-a".to_string(), 80.0);
+        delta_b
+            .gcounter_node_bytes_served_mb
+            .insert("offline-hotel-b".to_string(), 95.0);
+
+        let merged_ab = crate::p2p_exchange::merge_swarm_crdt_deltas(&delta_a, &delta_b);
+        let merged_ba = crate::p2p_exchange::merge_swarm_crdt_deltas(&delta_b, &delta_a);
+        let merged_aa = crate::p2p_exchange::merge_swarm_crdt_deltas(&delta_a, &delta_a);
+        assert_eq!(
+            crate::p2p_exchange::compute_crdt_state_digest_sha256(&merged_ab),
+            crate::p2p_exchange::compute_crdt_state_digest_sha256(&merged_ba)
+        );
+        assert_eq!(
+            crate::p2p_exchange::compute_crdt_state_digest_sha256(&merged_aa),
+            crate::p2p_exchange::compute_crdt_state_digest_sha256(&delta_a)
+        );
+
+        let req_crdt = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/crdt-sync")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&merged_ab).unwrap()))
+            .unwrap();
+        let resp_crdt = app.call(req_crdt).await.unwrap();
+        assert_eq!(resp_crdt.status(), StatusCode::OK);
+        let j_crdt: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_crdt.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_crdt["status"], "CRDT_DELTA_CONVERGED");
+        assert!(j_crdt["gcounter_total_swarm_served_mb"].as_f64().unwrap() >= 548.3);
+
+        // 13. Verify Layer 5 Post-P2P MoQ-Style Semantic Harmonic Pub/Sub (`hera://swarm/8A/120-128`)
+        let req_sub = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/subscribe")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "subscriber_node_id": "hera-worker-luna-latam",
+                    "subscriber_dj": "DJLuna",
+                    "camelot_key": "8A",
+                    "bpm_min": 120.0,
+                    "bpm_max": 128.0
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_sub = app.call(req_sub).await.unwrap();
+        assert_eq!(resp_sub.status(), StatusCode::CREATED);
+        let j_sub: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_sub.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_sub["status"], "MOQ_SEMANTIC_TOPIC_SUBSCRIBED");
+        assert_eq!(j_sub["subscription"]["topic_uri"], "hera://swarm/8A/120-128");
+        assert!(
+            j_sub["immediate_matching_events"]
+                .as_array()
+                .unwrap()
+                .len()
+                >= 2
+        );
+        assert_eq!(
+            j_sub["immediate_matching_events"][0]["merkle_root_sha256"]
+                .as_str()
+                .unwrap()
+                .len(),
+            64
+        );
+
+        // Verify next heartbeat for DJLuna proactively delivers `semantic_pubsub_events`
+        let req_hb_sub = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/heartbeat")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "node_id": "hera-worker-luna-latam",
+                    "owner_dj": "DJLuna",
+                    "endpoint_url": "https://5g-roaming.djluna.workers.dev",
+                    "r2_used_mb": 250.0,
+                    "daily_worker_requests_used": 600,
+                    "observed_rtt_ms": 18.0
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_hb_sub = app.call(req_hb_sub).await.unwrap();
+        assert_eq!(resp_hb_sub.status(), StatusCode::OK);
+        let j_hb_sub: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_hb_sub.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert!(
+            j_hb_sub["semantic_pubsub_events"]
+                .as_array()
+                .unwrap()
+                .len()
+                >= 2
+        );
     }
 }
-

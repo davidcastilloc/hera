@@ -104,10 +104,28 @@ Todos los nodos `hera-node-rs` exponen los siguientes endpoints del enjambre en 
 | `GET` | `/api/v1/swarm/custody-probe/:blob_id` | Lee directamente los 64 bytes solicitados desde el bucket R2 del nodo y devuelve su firma SHA-256/FNV-1a. |
 | `POST` | `/api/v1/swarm/custody-audit` | Verifica la respuesta del desafío de 64 bytes y mantiene o revoca el privilegio `Edge Guardian`. |
 | `GET` | `/api/v1/swarm/quarantine` | Lista los `node_id` aislados en cuarentena por fallos de integridad o intentos de *Bait-and-Switch*. |
+| `POST` | `/api/v1/swarm/parallel-manifest` | Emite un manifiesto `HTTP/3-QUIC-MULTIPLEXED` multi-nodo (`Swarm Striping`) usando `Latency-Aware P2C` para descargar los bloques de `4 MB` en paralelo desde múltiples `Edge Guardians`. |
+| `POST` | `/api/v1/swarm/crdt-sync` | Sincroniza estado *Offline-First* mediante `Delta-CRDT` (`GCounter` + `LWW-Element-Set`) con convergencia conmutativa, asociativa e idempotente (`merge(A, B) == merge(B, A)`). |
+| `POST` | `/api/v1/swarm/subscribe` | Suscribe un nodo a un tópico semántico armónico estilo `MoQ` (`hera://swarm/<camelot>/<bpm_min>-<bpm_max>`) y empuja eventos proactivos en cada heartbeat. |
 
 ---
 
-## 🚀 4. Cómo Desplegar tu Propio Nodo `Edge Guardian` en Cloudflare Workers (`$0.00/mes`)
+## ⚡ 4. Evolución Post-P2P de 5 Capas (Iroh / BitTorrent v2 BEP 52 / HTTP/3 QUIC / Delta-CRDT / MoQ)
+
+1. **Capa 3 — Streaming Merkle Proofs (`16 x 256 KiB = 4 MB` estilo BitTorrent v2 BEP 52 / Iroh):**
+   - Cada shard alineado de `4 MB` construye un árbol de Merkle binario SHA-256 de 16 hojas (`256 KiB` por hoja) con pruebas de inclusión compactas de 4 hermanos (`X-Hera-Merkle-Root` y `X-Hera-Merkle-Proof`), permitiendo verificar la autenticidad en el primer kilobyte y abortar al instante cualquier byte corrupto.
+2. **Capa 2 — Identidad Criptográfica (`endpoint_pubkey_id`) + Roaming `Wi-Fi -> 5G` + CGNAT Relay:**
+   - Los nodos se anclan a un `endpoint_pubkey_id` (`ed25519_<hex>`) persistente. Si un DJ cambia de IP/red en cabina (`Wi-Fi -> 5G`), `network_generation` se incrementa sin perder estatus `Edge Guardian` ni créditos (`1 : 1.5`), activando `relay_assisted_url` (`https://relay.hera.audio/iroh-tunnel/<pubkey>`) tras CGNAT.
+3. **Capa 1 y 2 — `Latency-Aware P2C` + `Swarm Striping` Multi-Nodo (`POST /api/v1/swarm/parallel-manifest`):**
+   - Pondera la carga diaria de peticiones junto con la latencia `ewma_rtt_ms` (`compute_node_p2c_composite_cost`) y distribuye los 10 bloques de `4 MB` de un FLAC de `38 MB` entre múltiples Workers saludables simultáneamente.
+4. **Capa 4 — Sincronización `Delta-CRDT` Libre de Conflictos (`POST /api/v1/swarm/crdt-sync`):**
+   - Combina un `GCounter` monotónico para megabytes servidos y conteo de reproducciones con un `LWW-Element-Set` gobernado por *Hybrid Logical Clock* (`hlc_timestamp_ms`) para metadatos y Hot Cues.
+5. **Capa 5 — Pub/Sub Semántico Armónico estilo `MoQ` (`POST /api/v1/swarm/subscribe`):**
+   - Permite suscribirse a `hera://swarm/<camelot>/<bpm_min>-<bpm_max>` (incluyendo quintas adyacentes y relativos en la rueda de Camelot) y recibir eventos con `style_simhash_u64` y `merkle_root_sha256` en el mismo ciclo de heartbeat.
+
+---
+
+## 🚀 5. Cómo Desplegar tu Propio Nodo `Edge Guardian` en Cloudflare Workers (`$0.00/mes`)
 
 ```bash
 # 1. Entra al motor Rust de Hera
@@ -126,3 +144,4 @@ Una vez desplegado, verifica que tu nodo responde al estado del enjambre:
 ```bash
 curl -s https://tu-hera-node.workers.dev/api/v1/swarm/strength | jq .
 ```
+

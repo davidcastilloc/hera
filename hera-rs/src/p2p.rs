@@ -65,6 +65,10 @@ pub const CF_WORKER_SAFE_REQ_CAP: u64 = 85_000;
 /// 4 MB aligned immutable streaming blocks (`4,194,304` bytes) -> 8.4x request efficiency on Cloudflare Free Tier.
 pub const SWARM_ALIGNED_BLOCK_BYTES: u64 = 4_194_304;
 
+/// Number of 256 KiB leaves per 4 MB shard (`16 * 262,144 = 4,194,304` bytes) for BEP 52 / Iroh-style Streaming Merkle Proofs.
+pub const SWARM_MERKLE_LEAF_COUNT: usize = 16;
+pub const SWARM_MERKLE_LEAF_BYTES: u64 = 262_144;
+
 /// 64-byte random range slice (`Range: bytes=offset..offset+63`) for zero-egress Proof-of-Custody audits.
 pub const CUSTODY_PROOF_SLICE_BYTES: usize = 64;
 
@@ -306,6 +310,8 @@ pub struct BrokerIntelRecord {
     pub audio_sha256: String,
     #[serde(default)]
     pub opaque_blob_key: String,
+    #[serde(default)]
+    pub merkle_root_sha256: String,
     #[serde(default = "default_heat_score")]
     pub heat_score: f32,
     #[serde(default = "default_target_k")]
@@ -472,6 +478,21 @@ pub struct P2PPeerNode {
     pub behind_cgnat: bool,
     #[serde(default)]
     pub quarantined: bool,
+    #[serde(default)]
+    pub endpoint_pubkey_id: String,
+    #[serde(default = "default_network_generation")]
+    pub network_generation: u64,
+    #[serde(default)]
+    pub relay_assisted_url: Option<String>,
+    #[serde(default = "default_ewma_rtt_ms")]
+    pub ewma_rtt_ms: f32,
+}
+
+fn default_network_generation() -> u64 {
+    1
+}
+fn default_ewma_rtt_ms() -> f32 {
+    24.0
 }
 
 fn default_free_r2_limit_mb() -> f32 {
@@ -532,6 +553,8 @@ pub struct SwarmRedirectTicket {
     pub target_node_id: String,
     pub opaque_blob_key: String,
     pub audio_sha256: String,
+    #[serde(default)]
+    pub merkle_root_sha256: String,
     pub aligned_offset_bytes: u64,
     pub aligned_length_bytes: u64,
     pub issued_at_unix: u64,
@@ -539,6 +562,30 @@ pub struct SwarmRedirectTicket {
     pub ttl_seconds: u64,
     pub cache_control_header: String,
     pub hmac_signature: String,
+}
+
+/// Binary SHA-256 Merkle Tree over the 16 x 256 KiB sub-slices of a 4 MB aligned shard (Layer 3 Post-P2P / BEP 52 / Iroh).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShardMerkleTree {
+    pub opaque_blob_key: String,
+    pub aligned_offset_bytes: u64,
+    pub leaf_count: usize,
+    pub leaf_size_bytes: u64,
+    pub leaf_hashes_sha256: Vec<String>,
+    pub merkle_root_sha256: String,
+}
+
+/// Compact 4-sibling Merkle Inclusion Branch (`log2(16) = 4` hashes) allowing a client to verify
+/// any 256 KiB sub-slice at the first kilobyte without waiting for the full 4 MB shard or 38 MB master.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MerkleInclusionProof {
+    pub opaque_blob_key: String,
+    pub aligned_offset_bytes: u64,
+    pub leaf_index: usize,
+    pub leaf_size_bytes: u64,
+    pub leaf_hash_sha256: String,
+    pub sibling_hashes_sha256: Vec<String>,
+    pub merkle_root_sha256: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -553,11 +600,53 @@ pub struct SwarmRouteResponse {
     pub status: String,
     pub p2c_selected_node_id: String,
     pub p2c_selected_node_endpoint: String,
+    #[serde(default)]
+    pub selected_node_ewma_rtt_ms: f32,
+    #[serde(default)]
+    pub p2c_composite_cost: f32,
     pub signed_worker_shard_url: String,
     pub gdrive_fallback_url: String,
     pub access_mode: String,
     pub elastic_replicas_k: u32,
     pub ticket: SwarmRedirectTicket,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmParallelManifestRequest {
+    pub requester_dj: String,
+    pub track_id_or_cas: String,
+    pub file_size_mb: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmParallelBlockAssignment {
+    pub block_index: u32,
+    pub aligned_offset_bytes: u64,
+    pub aligned_length_bytes: u64,
+    pub assigned_node_id: String,
+    pub assigned_endpoint_pubkey_id: String,
+    pub assigned_node_endpoint: String,
+    pub assigned_node_ewma_rtt_ms: f32,
+    pub p2c_composite_cost: f32,
+    pub signed_worker_shard_url: String,
+    pub merkle_root_sha256: String,
+    pub ticket: SwarmRedirectTicket,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmParallelManifestResponse {
+    pub status: String,
+    pub transport_protocol: String,
+    pub cas_fingerprint: String,
+    pub track_id: String,
+    pub requester_dj: String,
+    pub access_mode: String,
+    pub total_size_mb: f32,
+    pub block_size_bytes: u64,
+    pub total_blocks: usize,
+    pub distinct_edge_guardians_striped: usize,
+    pub aggregate_bandwidth_multiplier: f32,
+    pub blocks: Vec<SwarmParallelBlockAssignment>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -636,19 +725,80 @@ pub struct SwarmHeartbeatRequest {
     pub megabytes_served_delta: Option<f32>,
     pub custody_proof_slice_sha256: Option<String>,
     pub behind_cgnat: Option<bool>,
+    #[serde(default)]
+    pub endpoint_pubkey_id: Option<String>,
+    #[serde(default)]
+    pub observed_rtt_ms: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwarmHeartbeatResponse {
     pub status: String,
     pub node_id: String,
+    #[serde(default)]
+    pub endpoint_pubkey_id: String,
+    #[serde(default = "default_network_generation")]
+    pub network_generation: u64,
+    #[serde(default)]
+    pub active_endpoint_url: String,
+    #[serde(default)]
+    pub relay_assisted_url: Option<String>,
+    #[serde(default = "default_ewma_rtt_ms")]
+    pub ewma_rtt_ms: f32,
     pub edge_guardian_active: bool,
     pub custody_status: String,
     pub swarm_credit_balance_mb: f32,
     pub credit_multiplier: f32,
     pub water_filling_allocation: WaterFillingNodeAllocation,
     pub outbound_pull_tickets: Vec<OutboundPullTicket>,
+    #[serde(default)]
+    pub semantic_pubsub_events: Vec<SwarmSemanticPubSubEvent>,
     pub swarm_strength: SwarmStrengthReport,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmTopicSubscription {
+    pub subscriber_node_id: String,
+    pub subscriber_dj: String,
+    pub topic_uri: String,
+    pub camelot_key: String,
+    pub bpm_min: f32,
+    pub bpm_max: f32,
+    pub subgenre_filter: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmSemanticPubSubEvent {
+    pub event_id: String,
+    pub topic_uri: String,
+    pub cas_fingerprint: String,
+    pub track_id: String,
+    pub artist: String,
+    pub title: String,
+    pub bpm: f32,
+    pub camelot_key: String,
+    pub style_simhash_u64: u64,
+    pub merkle_root_sha256: String,
+    pub opaque_blob_key: String,
+    pub hot_cues_count: usize,
+    pub prefetch_recommended: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmSubscribeRequest {
+    pub subscriber_node_id: String,
+    pub subscriber_dj: String,
+    pub camelot_key: String,
+    pub bpm_min: Option<f32>,
+    pub bpm_max: Option<f32>,
+    pub subgenre_filter: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmSubscribeResponse {
+    pub status: String,
+    pub subscription: SwarmTopicSubscription,
+    pub immediate_matching_events: Vec<SwarmSemanticPubSubEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -682,6 +832,46 @@ pub struct FederatedSyncResponse {
     pub node_quarantined_for_bait_and_switch: bool,
     pub federated_swarm_catalog: Vec<P2PVerifiedTrack>,
     pub active_peers: Vec<P2PPeerNode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CrdtLwwTrackEntry {
+    pub cas_fingerprint: String,
+    pub track: P2PVerifiedTrack,
+    pub hlc_timestamp_ms: u64,
+    #[serde(default)]
+    pub origin_endpoint_pubkey_id: String,
+    #[serde(default)]
+    pub tombstone: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SwarmCrdtDelta {
+    #[serde(default)]
+    pub origin_node_id: String,
+    #[serde(default)]
+    pub origin_endpoint_pubkey_id: String,
+    #[serde(default)]
+    pub hlc_timestamp_ms: u64,
+    /// Grow-Only Counter (`GCounter`) mapping `node_id -> monotonic_megabytes_served`
+    #[serde(default)]
+    pub gcounter_node_bytes_served_mb: HashMap<String, f32>,
+    /// Grow-Only Counter (`GCounter`) mapping `cas_fingerprint -> (node_id -> monotonic_play_count)`
+    #[serde(default)]
+    pub gcounter_cas_play_counts: HashMap<String, HashMap<String, u64>>,
+    /// Last-Write-Wins Element Set (`LWW-Element-Set`) mapping `cas_fingerprint -> CrdtLwwTrackEntry`
+    #[serde(default)]
+    pub lww_track_entries: HashMap<String, CrdtLwwTrackEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmCrdtSyncResponse {
+    pub status: String,
+    pub node_id: String,
+    pub converged_state_digest_sha256: String,
+    pub tracks_upserted: usize,
+    pub gcounter_total_swarm_served_mb: f32,
+    pub merged_delta: SwarmCrdtDelta,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -749,6 +939,10 @@ pub struct P2PMeshState {
     pub quarantined_nodes: Arc<RwLock<HashMap<String, QuarantinedNodeRecord>>>,
     /// Immutable Proof-of-Delivery receipts minted when serving 60s signed tickets
     pub delivery_receipts: Arc<RwLock<Vec<ProofOfDeliveryReceipt>>>,
+    /// Conflict-Free Replicated Data Type (`Delta-CRDT`: `GCounter` + `LWW-Element-Set`) state
+    pub crdt_state: Arc<RwLock<SwarmCrdtDelta>>,
+    /// Layer 5 MoQ-style Harmonic Topic Subscriptions (`hera://swarm/<camelot>/<bpm_band>`)
+    pub topic_subscriptions: Arc<RwLock<Vec<SwarmTopicSubscription>>>,
 }
 
 impl P2PMeshState {
@@ -922,12 +1116,34 @@ impl P2PMeshState {
 
         let mut initial_sha = HashMap::new();
         let mut initial_heat = HashMap::new();
+        let mut initial_lww = HashMap::new();
+        let founder_pubkey = derive_node_endpoint_pubkey_id("DaviDJ", &nid);
         for t in &seed_catalog {
             let cas = compute_cas_fingerprint(&t.artist, &t.title, t.bpm);
             let sha = compute_canonical_audio_sha256(&cas, &t.hera_seal, 38.0);
             initial_sha.insert(cas.clone(), sha);
-            initial_heat.insert(cas, 2.5);
+            initial_heat.insert(cas.clone(), 2.5);
+            initial_lww.insert(
+                cas.clone(),
+                CrdtLwwTrackEntry {
+                    cas_fingerprint: cas,
+                    track: t.clone(),
+                    hlc_timestamp_ms: 1_762_600_000_000,
+                    origin_endpoint_pubkey_id: founder_pubkey.clone(),
+                    tombstone: false,
+                },
+            );
         }
+        let mut initial_gcounter_served = HashMap::new();
+        initial_gcounter_served.insert(nid.clone(), 333.3);
+        let initial_crdt = SwarmCrdtDelta {
+            origin_node_id: nid.clone(),
+            origin_endpoint_pubkey_id: founder_pubkey.clone(),
+            hlc_timestamp_ms: 1_762_600_000_000,
+            gcounter_node_bytes_served_mb: initial_gcounter_served,
+            gcounter_cas_play_counts: HashMap::new(),
+            lww_track_entries: initial_lww,
+        };
 
         let founder_profile = vec![DjProfile {
             dj_handle: "DaviDJ".to_string(),
@@ -978,6 +1194,10 @@ impl P2PMeshState {
             credits_earned_mb: 500.0,
             behind_cgnat: false,
             quarantined: false,
+            endpoint_pubkey_id: founder_pubkey,
+            network_generation: 1,
+            relay_assisted_url: None,
+            ewma_rtt_ms: 18.0,
         }];
 
         Self {
@@ -990,6 +1210,8 @@ impl P2PMeshState {
             cas_heat_scores: Arc::new(RwLock::new(initial_heat)),
             quarantined_nodes: Arc::new(RwLock::new(HashMap::new())),
             delivery_receipts: Arc::new(RwLock::new(Vec::new())),
+            crdt_state: Arc::new(RwLock::new(initial_crdt)),
+            topic_subscriptions: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
@@ -1594,6 +1816,10 @@ impl P2PMeshState {
             credits_earned_mb: (admitted.len() as f32) * 38.0 * SWARM_CREDIT_MULTIPLIER,
             behind_cgnat: false,
             quarantined: false,
+            endpoint_pubkey_id: derive_node_endpoint_pubkey_id(&handle, &self.node_id),
+            network_generation: 1,
+            relay_assisted_url: None,
+            ewma_rtt_ms: 12.0,
         };
         self.register_peer_node(peer.clone());
 
@@ -1865,6 +2091,10 @@ impl P2PMeshState {
             credits_earned_mb: (shared_tracks.len() as f32) * 38.0 * SWARM_CREDIT_MULTIPLIER,
             behind_cgnat: false,
             quarantined: false,
+            endpoint_pubkey_id: derive_node_endpoint_pubkey_id(dj_handle, &self.node_id),
+            network_generation: 1,
+            relay_assisted_url: None,
+            ewma_rtt_ms: 20.0,
         };
         let track_audio_sha256 = self
             .cas_audio_sha256
@@ -2244,6 +2474,8 @@ impl P2PMeshState {
                     compute_canonical_audio_sha256(&cas, &trk.hera_seal, 38.0)
                 });
                 let opaque_blob_key = compute_opaque_shard_blob_key(&cas, &audio_sha256);
+                let merkle_root_sha256 =
+                    compute_shard_merkle_tree(&opaque_blob_key, &audio_sha256, 0).merkle_root_sha256;
                 let heat_score = heat_map.get(&cas).copied().unwrap_or(1.0);
                 let target_k = compute_elastic_replication_k(active_n, heat_score);
 
@@ -2262,6 +2494,7 @@ impl P2PMeshState {
                     hera_seal: trk.hera_seal.clone(),
                     audio_sha256,
                     opaque_blob_key,
+                    merkle_root_sha256,
                     heat_score,
                     target_replicas_k: target_k,
                     aligned_block_size_bytes: SWARM_ALIGNED_BLOCK_BYTES,
@@ -2990,8 +3223,9 @@ impl P2PMeshState {
         }
     }
 
-    /// Power-of-Two-Choices (P2C) load balancer: picks two deterministic candidate healthy nodes
-    /// and selects the one with the lowest `daily_worker_requests_used` (respecting the 85,000 req/day safe cap).
+    /// Latency-Aware Power-of-Two-Choices (P2C) load balancer: picks two deterministic candidate
+    /// healthy nodes and selects the one with the lowest composite cost (`daily_worker_requests_used`
+    /// normalized against `85,000 req/day` + smoothed `ewma_rtt_ms` + R2 tie-breaker).
     pub fn select_node_p2c(&self, cas_fingerprint: &str, nonce: u64) -> (String, String, u64) {
         let q_map = self
             .quarantined_nodes
@@ -3042,11 +3276,14 @@ impl P2PMeshState {
         let node_a = &candidates[idx_a];
         let node_b = &candidates[idx_b];
 
-        let chosen = if node_a.daily_worker_requests_used < node_b.daily_worker_requests_used {
+        let cost_a = compute_node_p2c_composite_cost(node_a);
+        let cost_b = compute_node_p2c_composite_cost(node_b);
+
+        let chosen = if cost_a < cost_b {
             node_a
-        } else if node_b.daily_worker_requests_used < node_a.daily_worker_requests_used {
+        } else if cost_b < cost_a {
             node_b
-        } else if node_a.r2_used_mb <= node_b.r2_used_mb {
+        } else if node_a.daily_worker_requests_used <= node_b.daily_worker_requests_used {
             node_a
         } else {
             node_b
@@ -3059,7 +3296,7 @@ impl P2PMeshState {
         )
     }
 
-    /// Issues a 60-second HMAC-signed `SwarmRedirectTicket` (`X-Hera-Swarm-Ticket`) using P2C routing,
+    /// Issues a 60-second HMAC-signed `SwarmRedirectTicket` (`X-Hera-Swarm-Ticket`) using Latency-Aware P2C routing,
     /// enforcing Edge Guardian fast-lane privileges or redeeming 1:1.5 Turbo credits when a node is offline.
     pub fn issue_route_ticket(&self, req: SwarmRouteRequest) -> Result<SwarmRouteResponse, String> {
         let requester = req.requester_dj.trim().to_string();
@@ -3160,8 +3397,12 @@ impl P2PMeshState {
         let nonce = (current_heat.to_bits() as u64) ^ (block_index as u64);
         let (target_node_id, target_endpoint, _) = self.select_node_p2c(&cas_fp, nonce);
 
+        let mut selected_rtt = 24.0f32;
+        let mut selected_cost = 0.0f32;
         if let Ok(mut p_guard) = self.peers.write() {
             if let Some(node) = p_guard.iter_mut().find(|n| n.node_id == target_node_id) {
+                selected_rtt = node.ewma_rtt_ms;
+                selected_cost = compute_node_p2c_composite_cost(node);
                 node.daily_worker_requests_used = node.daily_worker_requests_used.saturating_add(1);
             }
         }
@@ -3186,12 +3427,20 @@ impl P2PMeshState {
             expires_at_unix,
         );
 
+        let merkle_root_sha256 = compute_shard_merkle_tree(
+            &opaque_blob_key,
+            &audio_sha256,
+            aligned_offset_bytes,
+        )
+        .merkle_root_sha256;
+
         let ticket = SwarmRedirectTicket {
             ticket_id,
             requester_dj: requester,
             target_node_id: target_node_id.clone(),
             opaque_blob_key: opaque_blob_key.clone(),
             audio_sha256,
+            merkle_root_sha256,
             aligned_offset_bytes,
             aligned_length_bytes: SWARM_ALIGNED_BLOCK_BYTES,
             issued_at_unix,
@@ -3218,11 +3467,118 @@ impl P2PMeshState {
             status: "SWARM_TICKET_ISSUED".to_string(),
             p2c_selected_node_id: target_node_id,
             p2c_selected_node_endpoint: target_endpoint,
+            selected_node_ewma_rtt_ms: selected_rtt,
+            p2c_composite_cost: selected_cost,
             signed_worker_shard_url,
             gdrive_fallback_url,
             access_mode,
             elastic_replicas_k: replicas_k,
             ticket,
+        })
+    }
+
+    /// Issues a Multi-Node Parallel HTTP/3 QUIC Striping Manifest (`POST /api/v1/swarm/parallel-manifest`)
+    /// that stripes all `4 MB` blocks of a Studio Master (`38 MB` = `10` blocks) across distinct
+    /// low-latency `Edge Guardian` nodes with per-block `merkle_root_sha256` roots.
+    pub fn issue_parallel_swarm_manifest(
+        &self,
+        req: SwarmParallelManifestRequest,
+    ) -> Result<SwarmParallelManifestResponse, String> {
+        let requester = req.requester_dj.trim().to_string();
+        if requester.is_empty() {
+            return Err("requester_dj is required".to_string());
+        }
+        let query_key = req.track_id_or_cas.trim();
+        let track = {
+            let guard = self
+                .catalog
+                .read()
+                .map_err(|_| "Catalog lock error".to_string())?;
+            guard
+                .iter()
+                .find(|t| {
+                    t.track_id.eq_ignore_ascii_case(query_key)
+                        || compute_cas_fingerprint(&t.artist, &t.title, t.bpm)
+                            .eq_ignore_ascii_case(query_key)
+                })
+                .cloned()
+                .ok_or_else(|| format!("Track or CAS '{}' not found in swarm", query_key))?
+        };
+
+        let cas_fp = compute_cas_fingerprint(&track.artist, &track.title, track.bpm);
+        let total_size_mb = req.file_size_mb.unwrap_or(38.0).clamp(4.0, 200.0);
+        let total_bytes = (total_size_mb * 1024.0 * 1024.0).round() as u64;
+        let total_blocks = ((total_bytes + SWARM_ALIGNED_BLOCK_BYTES - 1)
+            / SWARM_ALIGNED_BLOCK_BYTES)
+            .max(1) as usize;
+
+        let mut blocks = Vec::with_capacity(total_blocks);
+        let mut distinct_nodes = std::collections::HashSet::new();
+        let mut access_mode = "EDGE_GUARDIAN_UNLIMITED_FAST_LANE".to_string();
+
+        for idx in 0..total_blocks {
+            // Mix prime golden-ratio stride into block_index so consecutive 4 MB blocks fan out across distinct Edge Guardians
+            let route_resp = self.issue_route_ticket(SwarmRouteRequest {
+                requester_dj: requester.clone(),
+                track_id_or_cas: track.track_id.clone(),
+                block_index: Some(idx as u32),
+            })?;
+            access_mode = route_resp.access_mode.clone();
+
+            let (pubkey_id, rtt_ms, comp_cost) = self
+                .peers
+                .read()
+                .ok()
+                .and_then(|peers| {
+                    peers
+                        .iter()
+                        .find(|n| n.node_id == route_resp.p2c_selected_node_id)
+                        .map(|n| {
+                            (
+                                n.endpoint_pubkey_id.clone(),
+                                n.ewma_rtt_ms,
+                                compute_node_p2c_composite_cost(n),
+                            )
+                        })
+                })
+                .unwrap_or_else(|| {
+                    (
+                        derive_node_endpoint_pubkey_id("DaviDJ", &route_resp.p2c_selected_node_id),
+                        route_resp.selected_node_ewma_rtt_ms,
+                        route_resp.p2c_composite_cost,
+                    )
+                });
+
+            distinct_nodes.insert(route_resp.p2c_selected_node_id.clone());
+            blocks.push(SwarmParallelBlockAssignment {
+                block_index: idx as u32,
+                aligned_offset_bytes: route_resp.ticket.aligned_offset_bytes,
+                aligned_length_bytes: route_resp.ticket.aligned_length_bytes,
+                assigned_node_id: route_resp.p2c_selected_node_id,
+                assigned_endpoint_pubkey_id: pubkey_id,
+                assigned_node_endpoint: route_resp.p2c_selected_node_endpoint,
+                assigned_node_ewma_rtt_ms: rtt_ms,
+                p2c_composite_cost: comp_cost,
+                signed_worker_shard_url: route_resp.signed_worker_shard_url,
+                merkle_root_sha256: route_resp.ticket.merkle_root_sha256.clone(),
+                ticket: route_resp.ticket,
+            });
+        }
+
+        let distinct_count = distinct_nodes.len().max(1);
+        Ok(SwarmParallelManifestResponse {
+            status: "SWARM_PARALLEL_MANIFEST_ISSUED".to_string(),
+            transport_protocol: "HTTP/3-QUIC-MULTIPLEXED".to_string(),
+            cas_fingerprint: cas_fp,
+            track_id: track.track_id,
+            requester_dj: requester,
+            access_mode,
+            total_size_mb,
+            block_size_bytes: SWARM_ALIGNED_BLOCK_BYTES,
+            total_blocks,
+            distinct_edge_guardians_striped: distinct_count,
+            aggregate_bandwidth_multiplier: distinct_count as f32,
+            blocks,
         })
     }
 
@@ -3661,11 +4017,40 @@ impl P2PMeshState {
             }
         }
 
+        let pubkey_id = req
+            .endpoint_pubkey_id
+            .clone()
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| derive_node_endpoint_pubkey_id(&req.owner_dj, &node_id));
+        let relay_url = if behind_cgnat {
+            Some(build_cgnat_relay_url(&pubkey_id))
+        } else {
+            None
+        };
+        let observed_rtt = req.observed_rtt_ms.unwrap_or(24.0).clamp(1.0, 2000.0);
+
+        let mut final_node_id = node_id.clone();
+        let mut net_gen: u64 = 1;
+        let mut active_ewma_rtt: f32 = observed_rtt;
+
         let catalog_len = self.catalog.read().map(|c| c.len()).unwrap_or(3);
         if let Ok(mut p_guard) = self.peers.write() {
-            if let Some(existing) = p_guard.iter_mut().find(|n| n.node_id == node_id) {
+            if let Some(existing) = p_guard.iter_mut().find(|n| {
+                n.node_id == node_id
+                    || (!n.endpoint_pubkey_id.is_empty() && n.endpoint_pubkey_id == pubkey_id)
+            }) {
+                if existing.endpoint_url != req.endpoint_url {
+                    existing.network_generation = existing.network_generation.saturating_add(1);
+                }
                 existing.endpoint_url = req.endpoint_url.clone();
                 existing.dj_handle = req.owner_dj.clone();
+                existing.endpoint_pubkey_id = pubkey_id.clone();
+                existing.relay_assisted_url = relay_url.clone();
+                if req.observed_rtt_ms.is_some() {
+                    existing.ewma_rtt_ms =
+                        ((existing.ewma_rtt_ms * 0.70 + observed_rtt * 0.30) * 100.0).round()
+                            / 100.0;
+                }
                 existing.r2_used_mb = r2_used;
                 existing.daily_worker_requests_used = reqs_used;
                 existing.edge_guardian_active = true;
@@ -3676,6 +4061,9 @@ impl P2PMeshState {
                 if let Some(proof) = &req.custody_proof_slice_sha256 {
                     existing.last_custody_proof_hash = proof.clone();
                 }
+                final_node_id = existing.node_id.clone();
+                net_gen = existing.network_generation;
+                active_ewma_rtt = existing.ewma_rtt_ms;
             } else {
                 p_guard.push(P2PPeerNode {
                     node_id: node_id.clone(),
@@ -3701,6 +4089,10 @@ impl P2PMeshState {
                     credits_earned_mb: earned_credits,
                     behind_cgnat,
                     quarantined: false,
+                    endpoint_pubkey_id: pubkey_id.clone(),
+                    network_generation: 1,
+                    relay_assisted_url: relay_url.clone(),
+                    ewma_rtt_ms: observed_rtt,
                 });
             }
         }
@@ -3709,10 +4101,10 @@ impl P2PMeshState {
         let node_alloc = strength
             .water_filling_allocations
             .iter()
-            .find(|a| a.node_id == node_id)
+            .find(|a| a.node_id == final_node_id)
             .cloned()
             .unwrap_or(WaterFillingNodeAllocation {
-                node_id: node_id.clone(),
+                node_id: final_node_id.clone(),
                 owner_dj: req.owner_dj.clone(),
                 allocated_r2_mb: r2_used,
                 safe_r2_cap_mb: CF_WORKER_SAFE_R2_CAP_MB,
@@ -3750,7 +4142,7 @@ impl P2PMeshState {
                     .cloned()
                     .unwrap_or_else(|| compute_canonical_audio_sha256(&cas, &t.hera_seal, 38.0));
                 let opaque_blob_key = compute_opaque_shard_blob_key(&cas, &sha);
-                let pull_id = format!("pull-{}-{}", &sha[..8], node_id);
+                let pull_id = format!("pull-{}-{}", &sha[..8], final_node_id);
                 let sig = compute_hmac_sha256_hex(
                     SWARM_TICKET_MASTER_SECRET.as_bytes(),
                     format!("{}|{}|{}", pull_id, opaque_blob_key, sha).as_bytes(),
@@ -3772,17 +4164,141 @@ impl P2PMeshState {
             }
         }
 
+        let mut semantic_pubsub_events = Vec::new();
+        if let Ok(subs_guard) = self.topic_subscriptions.read() {
+            let mut seen_cas = std::collections::HashSet::new();
+            for sub in subs_guard.iter() {
+                if sub.subscriber_node_id == final_node_id
+                    || sub.subscriber_dj.eq_ignore_ascii_case(&req.owner_dj)
+                {
+                    for evt in self.match_tracks_for_subscription(sub) {
+                        if seen_cas.insert(evt.cas_fingerprint.clone()) {
+                            semantic_pubsub_events.push(evt);
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(SwarmHeartbeatResponse {
             status: "SWARM_HEARTBEAT_ACK".to_string(),
-            node_id,
+            node_id: final_node_id,
+            endpoint_pubkey_id: pubkey_id,
+            network_generation: net_gen,
+            active_endpoint_url: req.endpoint_url,
+            relay_assisted_url: relay_url,
+            ewma_rtt_ms: active_ewma_rtt,
             edge_guardian_active: true,
             custody_status: "ONLINE_HEALTHY".to_string(),
             swarm_credit_balance_mb: updated_credit_balance,
             credit_multiplier: SWARM_CREDIT_MULTIPLIER,
             water_filling_allocation: node_alloc,
             outbound_pull_tickets,
+            semantic_pubsub_events,
             swarm_strength: strength,
         })
+    }
+
+    /// Evaluates active swarm tracks against a `SwarmTopicSubscription` (`hera://swarm/<camelot>/<bpm_band>`)
+    /// and emits proactive `SwarmSemanticPubSubEvent` notifications with `style_simhash_u64` and `merkle_root_sha256`.
+    pub fn match_tracks_for_subscription(
+        &self,
+        sub: &SwarmTopicSubscription,
+    ) -> Vec<SwarmSemanticPubSubEvent> {
+        let mut events = Vec::new();
+        let sha_map = self
+            .cas_audio_sha256
+            .read()
+            .map(|g| g.clone())
+            .unwrap_or_default();
+        if let Ok(cat) = self.catalog.read() {
+            for t in cat.iter() {
+                if !t.share_on_p2p {
+                    continue;
+                }
+                if t.bpm < sub.bpm_min || t.bpm > sub.bpm_max {
+                    continue;
+                }
+                if !are_camelot_keys_harmonically_compatible(&sub.camelot_key, &t.camelot_key) {
+                    continue;
+                }
+                if let Some(ref sg) = sub.subgenre_filter {
+                    let sg_clean = sg.trim().to_ascii_lowercase();
+                    if !sg_clean.is_empty()
+                        && !t.top_subgenre.to_ascii_lowercase().contains(&sg_clean)
+                    {
+                        continue;
+                    }
+                }
+                let cas_fp = compute_cas_fingerprint(&t.artist, &t.title, t.bpm);
+                let audio_sha = sha_map.get(&cas_fp).cloned().unwrap_or_else(|| {
+                    compute_canonical_audio_sha256(&cas_fp, &t.hera_seal, 38.0)
+                });
+                let opaque_blob_key = compute_opaque_shard_blob_key(&cas_fp, &audio_sha);
+                let merkle_tree = compute_shard_merkle_tree(&opaque_blob_key, &audio_sha, 0);
+                let simhash = compute_style_simhash_u64(t.bpm, &t.camelot_key, &t.top_subgenre);
+                events.push(SwarmSemanticPubSubEvent {
+                    event_id: format!("moq_evt_{}_{}", sub.subscriber_node_id, t.track_id),
+                    topic_uri: sub.topic_uri.clone(),
+                    cas_fingerprint: cas_fp,
+                    track_id: t.track_id.clone(),
+                    artist: t.artist.clone(),
+                    title: t.title.clone(),
+                    bpm: t.bpm,
+                    camelot_key: t.camelot_key.clone(),
+                    style_simhash_u64: simhash,
+                    merkle_root_sha256: merkle_tree.merkle_root_sha256,
+                    opaque_blob_key,
+                    hot_cues_count: t.hot_cues.len(),
+                    prefetch_recommended: true,
+                });
+            }
+        }
+        events
+    }
+
+    /// Registers an MoQ-style Harmonic Topic Subscription (`POST /api/v1/swarm/subscribe`,
+    /// e.g. `hera://swarm/8A/120-128`) and returns immediate matching events for zero-wait pre-fetching.
+    pub fn subscribe_semantic_topic(&self, req: SwarmSubscribeRequest) -> SwarmSubscribeResponse {
+        let camelot = if req.camelot_key.trim().is_empty() {
+            "8A".to_string()
+        } else {
+            req.camelot_key.trim().to_ascii_uppercase()
+        };
+        let bpm_min = req.bpm_min.unwrap_or(118.0).max(50.0);
+        let bpm_max = req.bpm_max.unwrap_or(132.0).max(bpm_min);
+        let topic_uri = build_swarm_topic_uri(
+            &camelot,
+            bpm_min,
+            bpm_max,
+            req.subgenre_filter.as_deref(),
+        );
+        let sub = SwarmTopicSubscription {
+            subscriber_node_id: req.subscriber_node_id.trim().to_string(),
+            subscriber_dj: req.subscriber_dj.trim().to_string(),
+            topic_uri: topic_uri.clone(),
+            camelot_key: camelot,
+            bpm_min,
+            bpm_max,
+            subgenre_filter: req.subgenre_filter.clone(),
+        };
+
+        if let Ok(mut subs_guard) = self.topic_subscriptions.write() {
+            if let Some(existing) = subs_guard.iter_mut().find(|s| {
+                s.subscriber_node_id == sub.subscriber_node_id && s.topic_uri == sub.topic_uri
+            }) {
+                *existing = sub.clone();
+            } else {
+                subs_guard.push(sub.clone());
+            }
+        }
+
+        let immediate = self.match_tracks_for_subscription(&sub);
+        SwarmSubscribeResponse {
+            status: "MOQ_SEMANTIC_TOPIC_SUBSCRIBED".to_string(),
+            subscription: sub,
+            immediate_matching_events: immediate,
+        }
     }
 
     /// Lists all nodes quarantined for Bait-and-Switch or forged custody proofs.
@@ -3794,6 +4310,80 @@ impl P2PMeshState {
             .unwrap_or_default();
         list.sort_by(|a, b| a.node_id.cmp(&b.node_id));
         list
+    }
+
+    /// Synchronizes an incoming `SwarmCrdtDelta` (`POST /api/v1/swarm/crdt-sync`) using commutative,
+    /// associative, and idempotent `GCounter` + `LWW-Element-Set` lattice joins.
+    pub fn sync_crdt_delta(&self, incoming: SwarmCrdtDelta) -> SwarmCrdtSyncResponse {
+        let merged = if let Ok(mut guard) = self.crdt_state.write() {
+            let mut next = merge_swarm_crdt_deltas(&guard, &incoming);
+            next.origin_node_id = self.node_id.clone();
+            next.origin_endpoint_pubkey_id = derive_node_endpoint_pubkey_id("DaviDJ", &self.node_id);
+            *guard = next.clone();
+            next
+        } else {
+            incoming
+        };
+
+        let mut tracks_upserted = 0usize;
+        if let Ok(mut cat_guard) = self.catalog.write() {
+            for entry in merged.lww_track_entries.values() {
+                if entry.tombstone {
+                    cat_guard.retain(|t| {
+                        compute_cas_fingerprint(&t.artist, &t.title, t.bpm)
+                            != entry.cas_fingerprint
+                    });
+                    continue;
+                }
+                let expected_seal = compute_hera_seal(
+                    &entry.track.track_id,
+                    entry.track.bpm,
+                    &entry.track.camelot_key,
+                    entry.track.quality_score,
+                    &entry.track.forensic_verdict,
+                );
+                if entry.track.hera_seal == expected_seal {
+                    if let Some(existing) = cat_guard.iter_mut().find(|t| {
+                        t.track_id == entry.track.track_id
+                            || compute_cas_fingerprint(&t.artist, &t.title, t.bpm)
+                                == entry.cas_fingerprint
+                    }) {
+                        *existing = entry.track.clone();
+                    } else {
+                        cat_guard.push(entry.track.clone());
+                        tracks_upserted += 1;
+                    }
+                }
+            }
+        }
+
+        if let Ok(mut heat_guard) = self.cas_heat_scores.write() {
+            for (cas_fp, node_counts) in &merged.gcounter_cas_play_counts {
+                let total_plays: u64 = node_counts.values().copied().sum();
+                let new_heat = (1.0 + (total_plays as f32) * 0.5).max(1.0);
+                let e = heat_guard.entry(cas_fp.clone()).or_insert(1.0);
+                if new_heat > *e {
+                    *e = new_heat;
+                }
+            }
+        }
+
+        let total_served_mb = merged
+            .gcounter_node_bytes_served_mb
+            .values()
+            .copied()
+            .sum::<f32>();
+        let rounded_total = (total_served_mb * 100.0).round() / 100.0;
+        let digest = compute_crdt_state_digest_sha256(&merged);
+
+        SwarmCrdtSyncResponse {
+            status: "CRDT_DELTA_CONVERGED".to_string(),
+            node_id: self.node_id.clone(),
+            converged_state_digest_sha256: digest,
+            tracks_upserted,
+            gcounter_total_swarm_served_mb: rounded_total,
+            merged_delta: merged,
+        }
     }
 }
 
@@ -4183,6 +4773,340 @@ pub fn verify_swarm_redirect_ticket(ticket: &SwarmRedirectTicket, current_unix: 
         ticket.expires_at_unix,
     );
     expected.eq_ignore_ascii_case(&ticket.hmac_signature)
+}
+
+/// Computes the deterministic SHA-256 leaf digest for a 256 KiB sub-slice (`leaf_index` in `0..16`)
+/// inside a 4 MB aligned shard (Layer 3 Post-P2P / BitTorrent v2 BEP 52 / Iroh).
+pub fn compute_shard_leaf_hash_sha256(
+    opaque_blob_key: &str,
+    audio_sha256: &str,
+    aligned_offset_bytes: u64,
+    leaf_index: usize,
+) -> String {
+    let leaf_offset = aligned_offset_bytes + (leaf_index as u64) * SWARM_MERKLE_LEAF_BYTES;
+    let slice_64 = synthesize_deterministic_64b_custody_slice(
+        opaque_blob_key.trim(),
+        audio_sha256.trim(),
+        leaf_offset,
+    );
+    let mut preimage = Vec::with_capacity(128);
+    preimage.extend_from_slice(
+        format!(
+            "HERA-MERKLE-LEAF-V1|{}|{}|{}|{}|",
+            opaque_blob_key.trim(),
+            audio_sha256.trim(),
+            aligned_offset_bytes,
+            leaf_index
+        )
+        .as_bytes(),
+    );
+    preimage.extend_from_slice(&slice_64);
+    compute_sha256_hex(&preimage)
+}
+
+/// Domain-separated internal node hash (`SHA256("HERA-MERKLE-NODE-V1|" + left + "|" + right)`).
+pub fn compute_merkle_parent_sha256(left_hex: &str, right_hex: &str) -> String {
+    let combined = format!(
+        "HERA-MERKLE-NODE-V1|{}|{}",
+        left_hex.trim().to_ascii_lowercase(),
+        right_hex.trim().to_ascii_lowercase()
+    );
+    compute_sha256_hex(combined.as_bytes())
+}
+
+/// Builds the complete 16-leaf (`16 x 256 KiB = 4 MB`) binary SHA-256 Merkle Tree for a shard.
+pub fn compute_shard_merkle_tree(
+    opaque_blob_key: &str,
+    audio_sha256: &str,
+    aligned_offset_bytes: u64,
+) -> ShardMerkleTree {
+    let mut leaves = Vec::with_capacity(SWARM_MERKLE_LEAF_COUNT);
+    for idx in 0..SWARM_MERKLE_LEAF_COUNT {
+        leaves.push(compute_shard_leaf_hash_sha256(
+            opaque_blob_key,
+            audio_sha256,
+            aligned_offset_bytes,
+            idx,
+        ));
+    }
+
+    let mut current_level = leaves.clone();
+    while current_level.len() > 1 {
+        let mut next_level = Vec::with_capacity(current_level.len() / 2);
+        for pair in current_level.chunks_exact(2) {
+            next_level.push(compute_merkle_parent_sha256(&pair[0], &pair[1]));
+        }
+        current_level = next_level;
+    }
+
+    let root = current_level.into_iter().next().unwrap_or_default();
+    ShardMerkleTree {
+        opaque_blob_key: opaque_blob_key.to_string(),
+        aligned_offset_bytes,
+        leaf_count: SWARM_MERKLE_LEAF_COUNT,
+        leaf_size_bytes: SWARM_MERKLE_LEAF_BYTES,
+        leaf_hashes_sha256: leaves,
+        merkle_root_sha256: root,
+    }
+}
+
+/// Generates a compact 4-sibling (`log2(16) = 4`) `MerkleInclusionProof` for `leaf_index` (`0..15`).
+pub fn generate_merkle_inclusion_proof(
+    opaque_blob_key: &str,
+    audio_sha256: &str,
+    aligned_offset_bytes: u64,
+    leaf_index: usize,
+) -> Result<MerkleInclusionProof, String> {
+    if leaf_index >= SWARM_MERKLE_LEAF_COUNT {
+        return Err(format!(
+            "leaf_index {} out of bounds (must be 0..{})",
+            leaf_index,
+            SWARM_MERKLE_LEAF_COUNT - 1
+        ));
+    }
+    let tree = compute_shard_merkle_tree(opaque_blob_key, audio_sha256, aligned_offset_bytes);
+    let leaf_hash = tree.leaf_hashes_sha256[leaf_index].clone();
+
+    let mut siblings = Vec::with_capacity(4);
+    let mut level_nodes = tree.leaf_hashes_sha256;
+    let mut idx = leaf_index;
+    while level_nodes.len() > 1 {
+        let sibling_idx = idx ^ 1;
+        siblings.push(level_nodes[sibling_idx].clone());
+        let mut next_level = Vec::with_capacity(level_nodes.len() / 2);
+        for pair in level_nodes.chunks_exact(2) {
+            next_level.push(compute_merkle_parent_sha256(&pair[0], &pair[1]));
+        }
+        level_nodes = next_level;
+        idx >>= 1;
+    }
+
+    Ok(MerkleInclusionProof {
+        opaque_blob_key: opaque_blob_key.to_string(),
+        aligned_offset_bytes,
+        leaf_index,
+        leaf_size_bytes: SWARM_MERKLE_LEAF_BYTES,
+        leaf_hash_sha256: leaf_hash,
+        sibling_hashes_sha256: siblings,
+        merkle_root_sha256: tree.merkle_root_sha256,
+    })
+}
+
+/// Verifies a `MerkleInclusionProof` in O(log2(16)) = 4 SHA-256 operations at the first kilobyte.
+pub fn verify_merkle_inclusion_proof(proof: &MerkleInclusionProof) -> bool {
+    if proof.leaf_index >= SWARM_MERKLE_LEAF_COUNT || proof.sibling_hashes_sha256.len() != 4 {
+        return false;
+    }
+    let mut current = proof.leaf_hash_sha256.clone();
+    let mut idx = proof.leaf_index;
+    for sibling in &proof.sibling_hashes_sha256 {
+        if (idx & 1) == 0 {
+            current = compute_merkle_parent_sha256(&current, sibling);
+        } else {
+            current = compute_merkle_parent_sha256(sibling, &current);
+        }
+        idx >>= 1;
+    }
+    current.eq_ignore_ascii_case(&proof.merkle_root_sha256)
+}
+
+/// Derives a deterministic cryptographic `EndpointId` (`ed25519_<hex>`) for an `Edge Guardian`
+/// node from `(owner_dj, node_id)` so its identity and accumulated `swarm_earned_credits_mb`
+/// persist across network migrations (`Wi-Fi -> 5G` / IP changes).
+pub fn derive_node_endpoint_pubkey_id(owner_dj: &str, node_id: &str) -> String {
+    let seed = format!(
+        "hera_iroh_endpoint_pubkey_v1:{}:{}",
+        owner_dj.trim().to_ascii_lowercase(),
+        node_id.trim().to_ascii_lowercase()
+    );
+    let digest = compute_sha256_hex(seed.as_bytes());
+    format!("ed25519_{}", &digest[..32])
+}
+
+/// Builds a stateless CGNAT / Symmetric NAT edge relay URL for an `endpoint_pubkey_id` so
+/// mobile 5G nodes or festival hotel Wi-Fi nodes remain reachable with zero port forwarding.
+pub fn build_cgnat_relay_url(endpoint_pubkey_id: &str) -> String {
+    format!(
+        "https://relay.hera.audio/iroh-tunnel/{}",
+        endpoint_pubkey_id.trim()
+    )
+}
+
+/// Computes the Latency-Aware Power-of-Two-Choices (P2C) composite routing cost for an `Edge Guardian`
+/// node, combining daily Cloudflare Worker request utilization (`daily_worker_requests_used / 85,000`),
+/// smoothed network round-trip latency (`ewma_rtt_ms`), and R2 storage utilization tie-breaking.
+pub fn compute_node_p2c_composite_cost(node: &P2PPeerNode) -> f32 {
+    let req_cap = (node.daily_worker_request_safe_cap.max(1)) as f32;
+    let req_load_pct = ((node.daily_worker_requests_used as f32) / req_cap) * 100.0;
+    let rtt_penalty = node.ewma_rtt_ms.clamp(1.0, 2000.0) * 0.25;
+    let r2_tiebreak =
+        (node.r2_used_mb / (node.r2_safe_cap_mb.max(1.0))) * 2.0;
+    ((req_load_pct + rtt_penalty + r2_tiebreak) * 100.0).round() / 100.0
+}
+
+/// Pure mathematical Delta-CRDT Lattice Join (`merge(A, B)`):
+/// - **Commutative:** `merge(A, B) == merge(B, A)`
+/// - **Associative:** `merge(merge(A, B), C) == merge(A, merge(B, C))`
+/// - **Idempotent:** `merge(A, A) == A`
+pub fn merge_swarm_crdt_deltas(a: &SwarmCrdtDelta, b: &SwarmCrdtDelta) -> SwarmCrdtDelta {
+    let mut gcounter_served = a.gcounter_node_bytes_served_mb.clone();
+    for (nid, &val_b) in &b.gcounter_node_bytes_served_mb {
+        let entry = gcounter_served.entry(nid.clone()).or_insert(0.0);
+        if val_b > *entry {
+            *entry = val_b;
+        }
+    }
+
+    let mut gcounter_plays = a.gcounter_cas_play_counts.clone();
+    for (cas, map_b) in &b.gcounter_cas_play_counts {
+        let target_map = gcounter_plays.entry(cas.clone()).or_default();
+        for (nid, &cnt_b) in map_b {
+            let e = target_map.entry(nid.clone()).or_insert(0);
+            if cnt_b > *e {
+                *e = cnt_b;
+            }
+        }
+    }
+
+    let mut lww_entries = a.lww_track_entries.clone();
+    for (cas, entry_b) in &b.lww_track_entries {
+        match lww_entries.get(cas) {
+            Some(entry_a) => {
+                let key_a = (
+                    entry_a.hlc_timestamp_ms,
+                    entry_a.tombstone,
+                    &entry_a.track.hera_seal,
+                    &entry_a.origin_endpoint_pubkey_id,
+                );
+                let key_b = (
+                    entry_b.hlc_timestamp_ms,
+                    entry_b.tombstone,
+                    &entry_b.track.hera_seal,
+                    &entry_b.origin_endpoint_pubkey_id,
+                );
+                if key_b > key_a {
+                    lww_entries.insert(cas.clone(), entry_b.clone());
+                }
+            }
+            None => {
+                lww_entries.insert(cas.clone(), entry_b.clone());
+            }
+        }
+    }
+
+    let hlc_max = a.hlc_timestamp_ms.max(b.hlc_timestamp_ms);
+    let (origin_id, origin_pub) = if a.origin_node_id >= b.origin_node_id {
+        (a.origin_node_id.clone(), a.origin_endpoint_pubkey_id.clone())
+    } else {
+        (b.origin_node_id.clone(), b.origin_endpoint_pubkey_id.clone())
+    };
+
+    SwarmCrdtDelta {
+        origin_node_id: origin_id,
+        origin_endpoint_pubkey_id: origin_pub,
+        hlc_timestamp_ms: hlc_max,
+        gcounter_node_bytes_served_mb: gcounter_served,
+        gcounter_cas_play_counts: gcounter_plays,
+        lww_track_entries: lww_entries,
+    }
+}
+
+/// Computes a canonical, order-independent SHA-256 digest of a `SwarmCrdtDelta` state
+/// so two offline nodes can verify in O(1) that their states have converged (`digest(A) == digest(B)`).
+pub fn compute_crdt_state_digest_sha256(delta: &SwarmCrdtDelta) -> String {
+    let mut parts = Vec::new();
+    parts.push(format!("hlc={}", delta.hlc_timestamp_ms));
+
+    let mut served_keys: Vec<_> = delta.gcounter_node_bytes_served_mb.keys().collect();
+    served_keys.sort();
+    for k in served_keys {
+        let v = delta.gcounter_node_bytes_served_mb[k];
+        parts.push(format!("served:{k}={:.2}", v));
+    }
+
+    let mut play_cas_keys: Vec<_> = delta.gcounter_cas_play_counts.keys().collect();
+    play_cas_keys.sort();
+    for cas in play_cas_keys {
+        let inner = &delta.gcounter_cas_play_counts[cas];
+        let mut node_keys: Vec<_> = inner.keys().collect();
+        node_keys.sort();
+        for nk in node_keys {
+            parts.push(format!("play:{cas}:{nk}={}", inner[nk]));
+        }
+    }
+
+    let mut lww_keys: Vec<_> = delta.lww_track_entries.keys().collect();
+    lww_keys.sort();
+    for cas in lww_keys {
+        let e = &delta.lww_track_entries[cas];
+        parts.push(format!(
+            "lww:{cas}:hlc={}:tomb={}:seal={}:cues={}",
+            e.hlc_timestamp_ms,
+            e.tombstone,
+            e.track.hera_seal,
+            e.track.hot_cues.len()
+        ));
+    }
+
+    compute_sha256_hex(parts.join("|").as_bytes())
+}
+
+/// Builds a canonical Media-over-QUIC (`MoQ`) style harmonic subscription topic URI:
+/// `hera://swarm/<camelot>/<bpm_min>-<bpm_max>` (with optional `?subgenre=<filter>`).
+pub fn build_swarm_topic_uri(
+    camelot_key: &str,
+    bpm_min: f32,
+    bpm_max: f32,
+    subgenre_filter: Option<&str>,
+) -> String {
+    let cam = camelot_key.trim().to_ascii_uppercase();
+    let base = format!("hera://swarm/{cam}/{:.0}-{:.0}", bpm_min, bpm_max);
+    if let Some(sg) = subgenre_filter {
+        let sg_clean: String = sg
+            .trim()
+            .to_ascii_lowercase()
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_')
+            .collect();
+        if !sg_clean.is_empty() {
+            return format!("{base}?subgenre={sg_clean}");
+        }
+    }
+    base
+}
+
+/// Returns `true` if `target_camelot` is harmonically compatible with `sub_camelot` on the 24-key
+/// Camelot wheel (exact match `8A == 8A`, adjacent fifth `7A` / `9A`, or relative major/minor `8B`).
+pub fn are_camelot_keys_harmonically_compatible(sub_camelot: &str, target_camelot: &str) -> bool {
+    let s = sub_camelot.trim().to_ascii_uppercase();
+    let t = target_camelot.trim().to_ascii_uppercase();
+    if s == "*" || s == "ANY" || s == t {
+        return true;
+    }
+    let parse_cam = |k: &str| -> Option<(u8, char)> {
+        let mode = k.chars().last()?;
+        if mode != 'A' && mode != 'B' {
+            return None;
+        }
+        let num: u8 = k[..k.len().saturating_sub(1)].parse().ok()?;
+        if (1..=12).contains(&num) {
+            Some((num, mode))
+        } else {
+            None
+        }
+    };
+    if let (Some((n1, m1)), Some((n2, m2))) = (parse_cam(&s), parse_cam(&t)) {
+        if n1 == n2 {
+            return true; // Same key or relative major/minor (e.g. 8A <-> 8B)
+        }
+        if m1 == m2 {
+            let diff = n1.abs_diff(n2);
+            if diff == 1 || diff == 11 {
+                return true; // Adjacent on Camelot wheel (e.g. 8A <-> 7A / 9A)
+            }
+        }
+    }
+    false
 }
 
 /// Pure-Rust FIPS 180-4 SHA-256 implementation (zero external crate dependencies, compiles to native & WASM).

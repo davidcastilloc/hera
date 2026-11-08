@@ -206,6 +206,33 @@ declare namespace hera {
     http_status?: number;
     returned_slice_sha256?: string;
   }): Promise<any>;
+
+  /** Issue an HTTP/3 QUIC Multi-Node Parallel Striping Manifest across distinct low-latency Edge Guardian nodes. */
+  function swarmParallelManifest(params: {
+    requester_dj: string;
+    track_id_or_cas: string;
+    file_size_mb?: number;
+  }): Promise<any>;
+
+  /** Synchronize an offline-first Delta-CRDT state (GCounter + LWW-Element-Set) with guaranteed convergence. */
+  function swarmCrdtSync(params: {
+    origin_node_id?: string;
+    origin_endpoint_pubkey_id?: string;
+    hlc_timestamp_ms?: number;
+    gcounter_node_bytes_served_mb?: Record<string, number>;
+    gcounter_cas_play_counts?: Record<string, Record<string, number>>;
+    lww_track_entries?: Record<string, any>;
+  }): Promise<any>;
+
+  /** Subscribe an Edge Guardian or DJ node to an MoQ-style harmonic topic (e.g. hera://swarm/8A/120-128) for proactive track notifications. */
+  function swarmSubscribe(params: {
+    subscriber_node_id: string;
+    subscriber_dj: string;
+    camelot_key: string;
+    bpm_min?: number;
+    bpm_max?: number;
+    subgenre_filter?: string;
+  }): Promise<any>;
 }
 "#
 }
@@ -769,6 +796,39 @@ fn execute_single_sdk_call(
                 ));
                 serde_json::to_value(chal).map_err(|e| e.to_string())
             }
+        }
+        "hera.swarmParallelManifest" | "swarmParallelManifest" | "swarm_parallel_manifest" => {
+            let req: crate::p2p::SwarmParallelManifestRequest =
+                serde_json::from_value(args.clone())
+                    .map_err(|e| format!("Invalid swarmParallelManifest payload: {e}"))?;
+            let resp = state.issue_parallel_swarm_manifest(req)?;
+            log.push(format!(
+                "hera.swarmParallelManifest('{}') -> striped {} blocks across {} Edge Guardians",
+                resp.cas_fingerprint, resp.total_blocks, resp.distinct_edge_guardians_striped
+            ));
+            serde_json::to_value(resp).map_err(|e| e.to_string())
+        }
+        "hera.swarmCrdtSync" | "swarmCrdtSync" | "swarm_crdt_sync" => {
+            let req: crate::p2p::SwarmCrdtDelta = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid swarmCrdtSync payload: {e}"))?;
+            let resp = state.sync_crdt_delta(req);
+            log.push(format!(
+                "hera.swarmCrdtSync -> digest='{}', total_served={:.1} MB",
+                &resp.converged_state_digest_sha256[..16],
+                resp.gcounter_total_swarm_served_mb
+            ));
+            serde_json::to_value(resp).map_err(|e| e.to_string())
+        }
+        "hera.swarmSubscribe" | "swarmSubscribe" | "swarm_subscribe" => {
+            let req: crate::p2p::SwarmSubscribeRequest = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid swarmSubscribe payload: {e}"))?;
+            let resp = state.subscribe_semantic_topic(req);
+            log.push(format!(
+                "hera.swarmSubscribe('{}') -> {} immediate matching events",
+                resp.subscription.topic_uri,
+                resp.immediate_matching_events.len()
+            ));
+            serde_json::to_value(resp).map_err(|e| e.to_string())
         }
         _ => Err(format!("Unsupported Code Mode SDK method `{call}`")),
     }

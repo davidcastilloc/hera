@@ -15,16 +15,25 @@
 //!   quarantine against Bait-and-Switch attacks.
 
 pub use crate::p2p::{
-    compute_canonical_audio_sha256, compute_elastic_replication_k, compute_hmac_sha256_hex,
-    compute_opaque_shard_blob_key, compute_sha256_bytes, compute_sha256_hex,
-    compute_swarm_ticket_hmac, synthesize_deterministic_64b_custody_slice,
-    verify_swarm_redirect_ticket, CustodyAuditResult, CustodyAuditSubmission, CustodyChallenge,
-    CustodyChallengeRequest, OutboundPullTicket, P2PMeshState, P2PPeerNode,
-    ProofOfDeliveryReceipt, QuarantinedNodeRecord, SwarmHeartbeatRequest, SwarmHeartbeatResponse,
-    SwarmRedirectTicket, SwarmRouteRequest, SwarmRouteResponse, SwarmStrengthReport,
+    are_camelot_keys_harmonically_compatible, build_cgnat_relay_url, build_swarm_topic_uri,
+    compute_canonical_audio_sha256, compute_crdt_state_digest_sha256,
+    compute_elastic_replication_k, compute_hmac_sha256_hex, compute_merkle_parent_sha256,
+    compute_node_p2c_composite_cost, compute_opaque_shard_blob_key, compute_sha256_bytes,
+    compute_sha256_hex, compute_shard_leaf_hash_sha256, compute_shard_merkle_tree,
+    compute_swarm_ticket_hmac, derive_node_endpoint_pubkey_id, generate_merkle_inclusion_proof,
+    merge_swarm_crdt_deltas, synthesize_deterministic_64b_custody_slice,
+    verify_merkle_inclusion_proof, verify_swarm_redirect_ticket, CrdtLwwTrackEntry,
+    CustodyAuditResult, CustodyAuditSubmission, CustodyChallenge, CustodyChallengeRequest,
+    MerkleInclusionProof, OutboundPullTicket, P2PMeshState, P2PPeerNode, ProofOfDeliveryReceipt,
+    QuarantinedNodeRecord, ShardMerkleTree, SwarmCrdtDelta, SwarmCrdtSyncResponse,
+    SwarmHeartbeatRequest, SwarmHeartbeatResponse, SwarmParallelBlockAssignment,
+    SwarmParallelManifestRequest, SwarmParallelManifestResponse, SwarmRedirectTicket,
+    SwarmRouteRequest, SwarmRouteResponse, SwarmSemanticPubSubEvent, SwarmStrengthReport,
+    SwarmSubscribeRequest, SwarmSubscribeResponse, SwarmTopicSubscription,
     WaterFillingNodeAllocation, CF_WORKER_FREE_R2_LIMIT_MB, CF_WORKER_FREE_REQ_LIMIT,
     CF_WORKER_SAFE_R2_CAP_MB, CF_WORKER_SAFE_REQ_CAP, CUSTODY_PROOF_SLICE_BYTES,
-    SWARM_ALIGNED_BLOCK_BYTES, SWARM_CREDIT_MULTIPLIER, SWARM_MOTTO, SWARM_TICKET_TTL_SECS,
+    SWARM_ALIGNED_BLOCK_BYTES, SWARM_CREDIT_MULTIPLIER, SWARM_MERKLE_LEAF_BYTES,
+    SWARM_MERKLE_LEAF_COUNT, SWARM_MOTTO, SWARM_TICKET_TTL_SECS,
 };
 
 /// Canonical alias for the `1:1.5` (`1.5x`) Meritocratic Turbo Credit multiplier.

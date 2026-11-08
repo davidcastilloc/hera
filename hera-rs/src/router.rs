@@ -9,7 +9,8 @@ use crate::p2p::{
     BrokerBatchLookupRequest, BrokerBridgeRequest, BrokerSimilarQuery, CloudReferralOption,
     ConnectDjDriveRequest, CustodyAuditSubmission, CustodyChallengeRequest, FederatedSyncRequest,
     P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
-    SwarmHeartbeatRequest, SwarmRouteRequest, SWARM_ALIGNED_BLOCK_BYTES,
+    SwarmHeartbeatRequest, SwarmParallelManifestRequest, SwarmRedirectTicket, SwarmRouteRequest,
+    SWARM_ALIGNED_BLOCK_BYTES,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
 use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
@@ -124,6 +125,9 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/swarm/strength", get(swarm_strength_handler))
         .route("/api/v1/swarm/heartbeat", post(swarm_heartbeat_handler))
         .route("/api/v1/swarm/route-ticket", post(swarm_route_ticket_handler))
+        .route("/api/v1/swarm/parallel-manifest", post(swarm_parallel_manifest_handler))
+        .route("/api/v1/swarm/crdt-sync", post(swarm_crdt_sync_handler))
+        .route("/api/v1/swarm/subscribe", post(swarm_subscribe_handler))
         .route("/api/v1/swarm/shard/:blob_id", get(swarm_shard_delivery_handler))
         .route("/api/v1/swarm/custody-challenge", post(swarm_custody_challenge_handler))
         .route("/api/v1/swarm/custody-probe/:blob_id", get(swarm_custody_probe_handler))
@@ -351,9 +355,42 @@ async fn swarm_route_ticket_handler(
     }
 }
 
+async fn swarm_parallel_manifest_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<SwarmParallelManifestRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match state.issue_parallel_swarm_manifest(req) {
+        Ok(res) => Ok((
+            StatusCode::OK,
+            Json(serde_json::to_value(res).unwrap_or_default()),
+        )),
+        Err(e) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+async fn swarm_crdt_sync_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<crate::p2p::SwarmCrdtDelta>,
+) -> impl IntoResponse {
+    let res = state.sync_crdt_delta(req);
+    (StatusCode::OK, Json(res))
+}
+
+async fn swarm_subscribe_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<crate::p2p::SwarmSubscribeRequest>,
+) -> impl IntoResponse {
+    let res = state.subscribe_semantic_topic(req);
+    (StatusCode::CREATED, Json(res))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShardDeliveryQuery {
     pub now_unix: Option<u64>,
+    pub leaf_index: Option<usize>,
 }
 
 async fn swarm_shard_delivery_handler(
@@ -369,6 +406,26 @@ async fn swarm_shard_delivery_handler(
     match state.redeem_swarm_shard_delivery(&blob_id, ticket_header, q.now_unix) {
         Ok((bytes, receipt)) => {
             let receipt_json = serde_json::to_string(&receipt).unwrap_or_default();
+            let parsed_ticket: Option<SwarmRedirectTicket> =
+                serde_json::from_str(ticket_header.trim()).ok();
+            let leaf_idx = q.leaf_index.unwrap_or(0).min(15);
+            let (merkle_root, merkle_proof_json) = if let Some(ref t) = parsed_ticket {
+                if let Ok(proof) = crate::p2p::generate_merkle_inclusion_proof(
+                    &t.opaque_blob_key,
+                    &t.audio_sha256,
+                    t.aligned_offset_bytes,
+                    leaf_idx,
+                ) {
+                    (
+                        proof.merkle_root_sha256.clone(),
+                        serde_json::to_string(&proof).unwrap_or_default(),
+                    )
+                } else {
+                    (t.merkle_root_sha256.clone(), String::new())
+                }
+            } else {
+                (String::new(), String::new())
+            };
             Ok((
                 StatusCode::OK,
                 [
@@ -384,6 +441,14 @@ async fn swarm_shard_delivery_handler(
                     (
                         http::header::HeaderName::from_static("x-hera-proof-of-delivery-receipt"),
                         receipt_json,
+                    ),
+                    (
+                        http::header::HeaderName::from_static("x-hera-merkle-root"),
+                        merkle_root,
+                    ),
+                    (
+                        http::header::HeaderName::from_static("x-hera-merkle-proof"),
+                        merkle_proof_json,
                     ),
                 ],
                 bytes,
