@@ -99,12 +99,27 @@ export type ResolveHarmonicBridgeParams = {
   targetCamelot: string;
 };
 
+export type SwarmCatalogItem = {
+  cas_fingerprint: string;
+  artist: string;
+  title: string;
+  bpm: number;
+  camelot: string;
+  subgenre: string;
+  hera_seal: string;
+  opaque_blob_key: string;
+  swarm_replicas_count: number;
+  seeders: Array<string>;
+  p2p_boost_ready: boolean;
+};
+
 export type ResolveHarmonicBridgeResponse = {
   origin_summary: string;
   target_summary: string;
   harmonic_distance_steps: number;
   bridge_steps: Array<HarmonicBridgeStep>;
   preview_mix_window_seconds: number;
+  swarm_catalog?: Array<SwarmCatalogItem>;
 };
 
 export function getFourHotCuesForTrack(track: Track): Array<HotCuePin> {
@@ -363,6 +378,47 @@ export async function resolveHarmonicBridge(
         transition_tip: `Entrega en llave ${step2Camelot} (${midBpm2.toFixed(1)} BPM) directo al Cue 1 (Intro) de '${params.targetTitle}'`,
         p2p_boost_free_promo: false,
         boost_credit_cost_mb: 38.0,
+      },
+    ],
+    swarm_catalog: [
+      {
+        cas_fingerprint: 'cas_barbatuques_baiana_124_8a',
+        artist: 'Barbatuques',
+        title: 'Baiana (DaviDJ Afro-Tribal VIP Edit)',
+        bpm: 124.0,
+        camelot: '8A',
+        subgenre: 'Afro House',
+        hera_seal: 'hera_seal_8a124_baiana',
+        opaque_blob_key: 'shards/f8/a1/f8a19c2e4b0a1d88.shard',
+        swarm_replicas_count: 2,
+        seeders: ['DaviDJ (r2)', 'DJFoo (gdrive)'],
+        p2p_boost_ready: true,
+      },
+      {
+        cas_fingerprint: 'cas_victor_cardenas_baila_conmigo_128_9a',
+        artist: 'Dayvi & Victor Cardenas',
+        title: 'Baila Conmigo (Guaracha Peak Time Mix)',
+        bpm: 128.0,
+        camelot: '9A',
+        subgenre: 'Guaracha / Tribal House',
+        hera_seal: 'hera_seal_9a128_baila',
+        opaque_blob_key: 'shards/4d/72/4d72a8f103e9c112.shard',
+        swarm_replicas_count: 1,
+        seeders: ['DaviDJ (r2)'],
+        p2p_boost_ready: true,
+      },
+      {
+        cas_fingerprint: 'cas_hugel_morenita_126_9a',
+        artist: 'Hugel feat. Cumbiafrica',
+        title: 'Morenita (Extended Club Master)',
+        bpm: 126.0,
+        camelot: '9A',
+        subgenre: 'Latin Tech House',
+        hera_seal: 'hera_seal_9a126_morenita',
+        opaque_blob_key: 'shards/c9/10/c910b4e7d21f8831.shard',
+        swarm_replicas_count: 1,
+        seeders: ['DJFoo (gdrive)'],
+        p2p_boost_ready: false,
       },
     ],
   };

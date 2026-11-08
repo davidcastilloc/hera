@@ -30,6 +30,21 @@ pub struct HarmonicBridgeStep {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SwarmCatalogItem {
+    pub cas_fingerprint: String,
+    pub artist: String,
+    pub title: String,
+    pub bpm: f32,
+    pub camelot: String,
+    pub subgenre: String,
+    pub hera_seal: String,
+    pub opaque_blob_key: String,
+    pub swarm_replicas_count: usize,
+    pub seeders: Vec<String>,
+    pub p2p_boost_ready: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResolveHarmonicBridgeRequest {
     pub origin_title: String,
     pub origin_artist: String,
@@ -48,6 +63,8 @@ pub struct ResolveHarmonicBridgeResponse {
     pub harmonic_distance_steps: u8,
     pub bridge_steps: Vec<HarmonicBridgeStep>,
     pub preview_mix_window_seconds: u8,
+    #[serde(default)]
+    pub swarm_catalog: Vec<SwarmCatalogItem>,
 }
 
 #[tauri::command]
@@ -176,6 +193,35 @@ pub fn resolve_harmonic_bridge(
         },
     ];
 
+    let state = P2PMeshState::new("hera-desktop-local-node");
+    let swarm_catalog = state
+        .build_broker_swarm_index()
+        .into_iter()
+        .map(|rec| {
+            let p2p_boost_ready = rec.available_routes.iter().any(|r| {
+                r.storage_provider == "r2" || r.storage_provider == "r2_cas_zero_copy_link"
+            });
+            let seeders = rec
+                .available_routes
+                .into_iter()
+                .map(|r| format!("{} ({})", r.owner_dj, r.storage_provider))
+                .collect();
+            SwarmCatalogItem {
+                cas_fingerprint: rec.cas_fingerprint,
+                artist: rec.canonical_artist,
+                title: rec.canonical_title,
+                bpm: rec.bpm,
+                camelot: rec.camelot_key,
+                subgenre: rec.top_subgenre,
+                hera_seal: rec.hera_seal,
+                opaque_blob_key: rec.opaque_blob_key,
+                swarm_replicas_count: rec.swarm_replicas_count,
+                seeders,
+                p2p_boost_ready,
+            }
+        })
+        .collect();
+
     Ok(ResolveHarmonicBridgeResponse {
         origin_summary: format!(
             "{} — {} ({:.1} BPM · {})",
@@ -188,6 +234,7 @@ pub fn resolve_harmonic_bridge(
         harmonic_distance_steps: 2,
         bridge_steps,
         preview_mix_window_seconds: 15,
+        swarm_catalog,
     })
 }
 

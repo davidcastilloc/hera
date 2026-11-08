@@ -11,12 +11,15 @@ import {
   type ResolveHarmonicBridgeResponse,
 } from '../lib/bridge-hera';
 import Player from '../lib/player';
+import useLibraryStore from '../lib/store';
 
 export const Route = createFileRoute('/bridge')({
   component: ViewHarmonicBridgeP2P,
 });
 
 function ViewHarmonicBridgeP2P() {
+  const localTracks = useLibraryStore((state) => state.tracks);
+  const [swarmFilter, setSwarmFilter] = useState('');
   const [originTitle, setOriginTitle] = useState('Baiana (Club Mix)');
   const [originArtist, setOriginArtist] = useState('Barbatuques');
   const [originBpm, setOriginBpm] = useState(118.0);
@@ -281,6 +284,128 @@ function ViewHarmonicBridgeP2P() {
         {previewStatus && (
           <div {...stylex.props(styles.statusBanner)}>{previewStatus}</div>
         )}
+
+        {bridgeResult?.swarm_catalog &&
+          bridgeResult.swarm_catalog.length > 0 && (
+            <div {...stylex.props(styles.copilotBox)}>
+              <div {...stylex.props(styles.bridgeHeader)}>
+                <strong>
+                  📡 Radar del Enjambre P2P — ¿Qué Puede Descargar HERA Ahora
+                  Mismo? ({bridgeResult.swarm_catalog.length} Masters
+                  Verificados)
+                </strong>
+                <span {...stylex.props(styles.subtitle)}>
+                  Cruce automático contra tus {localTracks.length} pistas
+                  locales (`[SKIP]` si ya existe en disco)
+                </span>
+              </div>
+              <div {...stylex.props(styles.formRow)}>
+                <input
+                  type="text"
+                  value={swarmFilter}
+                  onChange={(e) => setSwarmFilter(e.target.value)}
+                  placeholder="Filtrar catálogo del enjambre por artista, título, llave Camelot (ej. 8A, 9A) o subgénero..."
+                  {...stylex.props(styles.input)}
+                />
+              </div>
+              <div {...stylex.props(styles.bridgeChain)}>
+                {bridgeResult.swarm_catalog
+                  .filter((item) => {
+                    const q = swarmFilter.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      item.artist.toLowerCase().includes(q) ||
+                      item.title.toLowerCase().includes(q) ||
+                      item.camelot.toLowerCase().includes(q) ||
+                      item.subgenre.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((item) => {
+                    const alreadyLocal = localTracks.some(
+                      (t) =>
+                        t.title
+                          .toLowerCase()
+                          .includes(item.title.toLowerCase()) ||
+                        (t.artists
+                          .join(' ')
+                          .toLowerCase()
+                          .includes(item.artist.toLowerCase()) &&
+                          Math.abs((t.bpm ?? 0) - item.bpm) < 1.0),
+                    );
+                    return (
+                      <div
+                        key={item.cas_fingerprint}
+                        {...stylex.props(styles.endpointCard)}
+                      >
+                        <div {...stylex.props(styles.bridgeHeader)}>
+                          <strong>
+                            {item.artist} — {item.title}
+                          </strong>
+                          <span {...stylex.props(styles.camelotBadge)}>
+                            {item.bpm.toFixed(1)} BPM · {item.camelot} ·{' '}
+                            {item.subgenre}
+                          </span>
+                        </div>
+                        <small {...stylex.props(styles.subtitle)}>
+                          CAS: {item.cas_fingerprint} · Réplicas:{' '}
+                          {item.swarm_replicas_count} ({item.seeders.join(', ')}
+                          ) · Shard: {item.opaque_blob_key}
+                        </small>
+                        <div {...stylex.props(styles.bridgeActions)}>
+                          {alreadyLocal ? (
+                            <span {...stylex.props(styles.badgeOrigin)}>
+                              ✅ Ya en tu biblioteca local [SKIP]
+                            </span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setPreviewStatus(
+                                    `📥 P2P Estándar Gratis ($0.00): Descargando "${item.artist} - ${item.title}" desde peers [${item.seeders.join(', ')}] (Seal ${item.hera_seal}) ➔ library/`,
+                                  )
+                                }
+                                {...stylex.props(styles.secondaryBtn)}
+                              >
+                                📥 Descargar P2P Gratis ($0.00)
+                              </button>
+                              {item.p2p_boost_ready && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const cost = 38;
+                                    if (turboCreditsMb >= cost) {
+                                      setTurboCreditsMb((prev) => prev - cost);
+                                    }
+                                    setPreviewStatus(
+                                      `⚡ P2P Boost Activado (-${cost} MB Créditos Turbo): "${item.artist} - ${item.title}" descargado desde shard opaco ${item.opaque_blob_key} (zk-ctr-sha256-v1) ➔ library/`,
+                                    );
+                                  }}
+                                  {...stylex.props(styles.primaryBtn)}
+                                >
+                                  ⚡ P2P Boost (38 MB Créditos)
+                                </button>
+                              )}
+                            </>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setChatPrompt(
+                                `Incluye "${item.artist} - ${item.title}" (${item.bpm.toFixed(1)} BPM, ${item.camelot}, CAS: ${item.cas_fingerprint}) del enjambre P2P en mi transición y expórtala a VirtualDJ`,
+                              )
+                            }
+                            {...stylex.props(styles.secondaryBtn)}
+                          >
+                            🤖 Pedir al Copiloto
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
 
         <div {...stylex.props(styles.copilotBox)}>
           <div {...stylex.props(styles.bridgeHeader)}>

@@ -239,6 +239,41 @@ pub fn build_openai_tools_catalog() -> Vec<serde_json::Value> {
         .collect()
 }
 
+pub fn summarize_swarm_downloadable_catalog(state: &crate::p2p::P2PMeshState) -> String {
+    let index = state.build_broker_swarm_index();
+    if index.is_empty() {
+        return "[CATÁLOGO DESCARGABLE DEL ENJAMBRE P2P: 0 pistas activas]".to_string();
+    }
+    let mut lines = vec![format!(
+        "[CATÁLOGO EN VIVO DEL ENJAMBRE P2P DISPONIBLE PARA DESCARGA ({} Masters Verificados)]:",
+        index.len()
+    )];
+    for rec in index.iter().take(12) {
+        let boost_ready = rec
+            .available_routes
+            .iter()
+            .any(|r| r.storage_provider == "r2" || r.storage_provider == "r2_cas_zero_copy_link");
+        let seeders: Vec<String> = rec
+            .available_routes
+            .iter()
+            .map(|r| format!("{}({})", r.owner_dj, r.storage_provider))
+            .collect();
+        lines.push(format!(
+            "- {} — {} | {:.1} BPM | {} | {} | Replicas: {} | P2P Boost: {} | Blob: {} | Seeders: {}",
+            rec.canonical_artist,
+            rec.canonical_title,
+            rec.bpm,
+            rec.camelot_key,
+            rec.top_subgenre,
+            rec.swarm_replicas_count,
+            if boost_ready { "SI (zk-ctr-sha256-v1)" } else { "P2P Directo" },
+            rec.opaque_blob_key,
+            seeders.join(", ")
+        ));
+    }
+    lines.join("\n")
+}
+
 pub fn build_agent_harness_system_prompt(
     dj_handle: &str,
     style_dna: Option<&DjStyleDnaProfile>,
@@ -263,6 +298,7 @@ pub fn build_agent_harness_system_prompt(
                 dj_handle
             )
         });
+    let swarm_catalog_section = summarize_swarm_downloadable_catalog(state);
     format!(
         "You are HERA Agentic Copilot (100% Pure-Rust ReAct Harness) assisting DJ `{dj_handle}` on node `{}` ({verified_count} verified Studio Masters online).\n\
          Operational Invariants:\n\
@@ -270,7 +306,8 @@ pub fn build_agent_harness_system_prompt(
          2. 4-Layer Holistic Synergy + Global 2-Opt TSP: sequence crates using Camelot wheel harmony, gradual BPM / 3:4 polyrhythmic bridges, vocal clash avoidance, and 64D style embeddings (`build_dj_crate`).\n\
          3. Multi-Step Pipeline Efficiency: use `hera_code_mode` to chain multi-step filtering + crate building in a single turn when appropriate, and `export_dj_crate` for VirtualDJ, Rekordbox, Traktor, and M3U8 exports.\n\
          4. Always rely on live tool observations over assumptions.\n\n\
-         {dna_section}",
+         {dna_section}\n\n\
+         {swarm_catalog_section}",
         state.node_id
     )
 }
@@ -894,9 +931,28 @@ pub fn evaluate_agent_harness_turn(
         })
         .unwrap_or_else(|| "perfil estándar 124 BPM (8A, VirtualDJ)".to_string());
 
+    let swarm_index = state.build_broker_swarm_index();
+    let swarm_preview: Vec<String> = swarm_index
+        .iter()
+        .take(3)
+        .map(|r| {
+            format!(
+                "{} - {} ({:.1} BPM · {} · {} réplicas)",
+                r.canonical_artist,
+                r.canonical_title,
+                r.bpm,
+                r.camelot_key,
+                r.swarm_replicas_count
+            )
+        })
+        .collect();
     let reply = format!(
-        "¡Listo, {}! Usando tu DJ Brain ({}) preparé la acción para: \"{}\". Los archivos y los 4 Hot Cues quedan listos en tu disco local.",
-        req.dj_handle, dna_ctx, req.message
+        "¡Listo, {}! Usando tu DJ Brain ({}) y el Radar del Enjambre ({} Masters verificados listos para descargar: {}) preparé la acción para: \"{}\". Los archivos y los 4 Hot Cues quedan listos en tu disco local.",
+        req.dj_handle,
+        dna_ctx,
+        swarm_index.len(),
+        swarm_preview.join(" | "),
+        req.message
     );
     let d1_bytes = req.message.len() + reply.len() + 64;
 
