@@ -637,41 +637,6 @@ mod tests {
                 .contains("R2_QUOTA_EXCEEDED")
         );
 
-        // Upgrade DJR2TrialUser to `pro_monthly` (50 GB = 51,200 MB R2 quota)
-        let req_up = Request::builder()
-            .method("POST")
-            .uri("/api/v1/dj/upgrade-tier")
-            .header("content-type", "application/json")
-            .body(Body::from(
-                serde_json::to_vec(&serde_json::json!({
-                    "dj_handle": "DJR2TrialUser",
-                    "tier": "pro_monthly"
-                }))
-                .unwrap(),
-            ))
-            .unwrap();
-        let resp_up = app.call(req_up).await.unwrap();
-        assert_eq!(resp_up.status(), StatusCode::OK);
-        let j_up: serde_json::Value =
-            serde_json::from_slice(&to_bytes(resp_up.into_body(), 1024 * 1024).await.unwrap())
-                .unwrap();
-        assert_eq!(j_up["profile"]["r2_quota_mb"], 51200.0);
-
-        // Verify Cloudflare Beta Economics endpoint (`GET /api/v1/cloud/economics?djs=10&gb_per_dj=5`)
-        let req_econ = Request::builder()
-            .uri("/api/v1/cloud/economics?djs=10&gb_per_dj=5")
-            .body(Body::empty())
-            .unwrap();
-        let resp_econ = app.call(req_econ).await.unwrap();
-        assert_eq!(resp_econ.status(), StatusCode::OK);
-        let j_econ: serde_json::Value =
-            serde_json::from_slice(&to_bytes(resp_econ.into_body(), 1024 * 1024).await.unwrap())
-                .unwrap();
-        assert_eq!(j_econ["cohort_djs_count"], 10);
-        assert_eq!(j_econ["total_r2_storage_gb"], 50.0);
-        // 50 GB total - 10 GB Free R2 = 40 GB billable * $0.015 = $0.60 USD/month total ($0.06/DJ)!
-        assert_eq!(j_econ["total_monthly_cohort_cost_usd"], 0.6);
-
         // 3. Test Local Laptop / Server Direct Storage & P2P Seeder (`POST /api/v1/node/scan-local-dir` + `GET /api/v1/p2p/download/:track_id`)
         let temp_dir = std::env::temp_dir().join("hera_local_p2p_test_dir");
         let _ = std::fs::remove_dir_all(&temp_dir);
@@ -834,51 +799,7 @@ mod tests {
         assert_eq!(j_sim["matches"][0]["hamming_distance_bits"], 0);
         assert_eq!(j_sim["matches"][0]["popcnt_similarity_pct"], 100.0);
 
-        // 6. Test Safe Atomic Hot/Cold R2 Eviction (`POST /api/v1/broker/optimize-tiering`)
-        let req_tier = Request::builder()
-            .method("POST")
-            .uri("/api/v1/broker/optimize-tiering")
-            .body(Body::empty())
-            .unwrap();
-        let resp_tier = app.call(req_tier).await.unwrap();
-        assert_eq!(resp_tier.status(), StatusCode::OK);
-        let j_tier: serde_json::Value =
-            serde_json::from_slice(&to_bytes(resp_tier.into_body(), 1024 * 1024).await.unwrap())
-                .unwrap();
-        assert_eq!(j_tier["status"], "hot_cold_tier_optimized");
-        // Since `Ritual Del Sol` has a verified Google Drive backup replica from DaviDJ,
-        // the redundant R2 replica from DJR2TrialUser is safely hibernated, freeing 38 MB in R2!
-        assert_eq!(j_tier["cold_r2_replicas_hibernated"], 1);
-        assert_eq!(j_tier["r2_megabytes_freed"], 38.0);
-
-        // 7. Test Zero-Copy Cloud P2P Track Claim + Curator Quota Refund Bounty (`POST /api/v1/broker/claim-cloud-track`)
-        let req_claim = Request::builder()
-            .method("POST")
-            .uri("/api/v1/broker/claim-cloud-track")
-            .header("content-type", "application/json")
-            .body(Body::from(
-                serde_json::to_vec(&serde_json::json!({
-                    "claimer_dj": "DJCloudSubscriber",
-                    "target_track_or_cas": "hera-seed-001"
-                }))
-                .unwrap(),
-            ))
-            .unwrap();
-        let resp_claim = app.call(req_claim).await.unwrap();
-        assert_eq!(resp_claim.status(), StatusCode::CREATED);
-        let j_claim: serde_json::Value =
-            serde_json::from_slice(&to_bytes(resp_claim.into_body(), 1024 * 1024).await.unwrap())
-                .unwrap();
-        assert_eq!(j_claim["status"], "p2p_cloud_track_claimed_zero_copy");
-        assert_eq!(j_claim["physical_r2_mb_consumed"], 0.0);
-        assert_eq!(j_claim["pioneer_bounty_refunded_mb"], 38.0);
-        assert_eq!(
-            j_claim["linked_track"]["storage_provider"],
-            "r2_cas_zero_copy_link"
-        );
-        assert_eq!(j_claim["linked_track"]["share_on_p2p"], true);
-
-        // 8. Test P2P Sharing ON by default, and ability to turn it OFF only on higher plans (`pro_monthly`)
+        // 6. Verify P2P Sharing is ALWAYS ON by default (`share_on_p2p: true`) in the public P2P node
         let req_free_dj = Request::builder()
             .method("POST")
             .uri("/api/v1/dj/connect-drive")
@@ -912,64 +833,8 @@ mod tests {
                 .unwrap(),
         )
         .unwrap();
-        // Forced ON because `beta_mvp` requires P2P sharing by default!
         assert_eq!(j_free_dj["profile"]["p2p_sharing_enabled"], true);
         assert_eq!(j_free_dj["profile"]["can_disable_p2p_sharing"], false);
         assert_eq!(j_free_dj["admitted_tracks"][0]["share_on_p2p"], true);
-
-        // 8a. Attempting to turn off P2P sharing while on `beta_mvp` returns 403 FORBIDDEN (`PLAN_UPGRADE_REQUIRED`)
-        let req_toggle_blocked = Request::builder()
-            .method("POST")
-            .uri("/api/v1/dj/p2p-sharing")
-            .header("content-type", "application/json")
-            .body(Body::from(
-                serde_json::to_vec(&serde_json::json!({
-                    "dj_handle": "DJBetaShared",
-                    "p2p_sharing_enabled": false
-                }))
-                .unwrap(),
-            ))
-            .unwrap();
-        let resp_toggle_blocked = app.call(req_toggle_blocked).await.unwrap();
-        assert_eq!(resp_toggle_blocked.status(), StatusCode::FORBIDDEN);
-
-        // 8b. Upgrade `DJBetaShared` to `pro_monthly` -> now they CAN turn P2P sharing off (Private Vault mode) or back on!
-        let req_up_pro = Request::builder()
-            .method("POST")
-            .uri("/api/v1/dj/upgrade-tier")
-            .header("content-type", "application/json")
-            .body(Body::from(
-                serde_json::to_vec(&serde_json::json!({
-                    "dj_handle": "DJBetaShared",
-                    "tier": "pro_monthly"
-                }))
-                .unwrap(),
-            ))
-            .unwrap();
-        let resp_up_pro = app.call(req_up_pro).await.unwrap();
-        assert_eq!(resp_up_pro.status(), StatusCode::OK);
-
-        let req_toggle_ok = Request::builder()
-            .method("POST")
-            .uri("/api/v1/dj/p2p-sharing")
-            .header("content-type", "application/json")
-            .body(Body::from(
-                serde_json::to_vec(&serde_json::json!({
-                    "dj_handle": "DJBetaShared",
-                    "p2p_sharing_enabled": false
-                }))
-                .unwrap(),
-            ))
-            .unwrap();
-        let resp_toggle_ok = app.call(req_toggle_ok).await.unwrap();
-        assert_eq!(resp_toggle_ok.status(), StatusCode::OK);
-        let j_toggle_ok: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_toggle_ok.into_body(), 1024 * 1024)
-                .await
-                .unwrap(),
-        )
-        .unwrap();
-        assert_eq!(j_toggle_ok["profile"]["p2p_sharing_enabled"], false);
-        assert_eq!(j_toggle_ok["profile"]["can_disable_p2p_sharing"], true);
     }
 }
