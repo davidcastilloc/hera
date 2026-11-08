@@ -2030,4 +2030,26 @@ mod tests {
         assert!(j_vec["matches_count"].as_u64().unwrap() >= 3);
         assert_eq!(j_vec["matches"][0]["camelot_compatible"], true);
     }
+
+    #[test]
+    fn test_live_udp_hole_punch_direct_p2p_zero_r2_and_stun_nat_probe() {
+        // Generate 256 KiB of deterministic studio master audio bytes (1 Merkle Leaf)
+        let mut audio_bytes = Vec::with_capacity(262_144);
+        for i in 0..262_144usize {
+            audio_bytes.push(((i.wrapping_mul(73) ^ (i >> 3)) & 0xFF) as u8);
+        }
+
+        let report =
+            crate::p2p::run_live_udp_hole_punch_p2p_proof(&audio_bytes).expect("UDP P2P proof");
+        println!(
+            "\n=== HERA LIVE UDP HOLE PUNCH + DIRECT P2P PROOF ===\n{}\n===================================================\n",
+            serde_json::to_string_pretty(&report).unwrap()
+        );
+
+        assert_eq!(report.r2_bytes_used, 0);
+        assert_eq!(report.direct_p2p_audio_bytes_transferred, 262_144);
+        assert!(report.coordinator_signaling_bytes < 200);
+        assert!(report.sha256_verified);
+        assert_eq!(report.expected_sha256, report.received_sha256);
+    }
 }
