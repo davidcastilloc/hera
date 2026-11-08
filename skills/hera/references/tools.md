@@ -1,14 +1,19 @@
 # Referencia de Tools MCP de Hera
 
+## 0. `ensure_hera_updated` (Paso 0 Obligatorio al Iniciar)
+- **Descripción:** Verifica automáticamente si el repositorio de Hera, el entorno Python (`.venv`), el binario nativo Rust (`hera-node`), los binarios de soporte (`slskd`, `rclone`, `ffmpeg`, `fpcalc`) y las skills globales del agente (`hera` y `hera-dj-set-curator`) están instalados y actualizados a la última versión; si detecta código nuevo o binarios desactualizados, los actualiza, compila y sincroniza en caliente.
+- **Entrada:** `auto_compile_rust` (bool default True), `sync_skills` (bool default True), `pull_remote` (bool default True)
+- **Salida:** `status`, `git` (`local_commit`, `remote_commit`, `updated`, `dirty_worktree_preserved`), `rust_binary` (`binary_name`, `version`, `rebuilt`, `release_binary_path`), `python_env`, `companion_binaries`, `skills_sync`
+
 ## 1. `search_music`
-- **Entrada:** `query` (str), `filters` (dict opcional: format, version, min_bitrate_kbps), `providers` (list[str] opcional: ["local", "slskd"])
+- **Entrada:** `query` (str), `filters` (dict opcional: format, version, min_bitrate_kbps, camelot, bpm_min, bpm_max, subgenre), `providers` (list[str] opcional: ["local", "slskd", "ytdlp"])
 - **Salida:** `search_id` (str), `providers_completed` (list[str]), `providers_failed` (list[str]), `candidate_count` (int)
 
 ## 2. `get_track_candidates`
 - **Entrada:** `search_id` (str), `limit` (int default 10)
 - **Salida:** Lista de `Candidate` con:
   - `candidate_id`, `provider`, `artist`, `title`, `version`, `duration_ms`, `format`, `bitrate_kbps`
-  - `score` (0-100), `score_components`, `score_reasons`, `authorization_state`
+  - `score` (0-100), `score_components`, `score_reasons`, `authorization_state`, `hera_seal`
 
 ## 3. `download_track`
 - **Entrada:**
@@ -28,10 +33,10 @@
 
 ## 6. `analyze_track`
 - **Entrada:** `track_id` (str: soporta `trk_*`, promoción in-place de `cand_*` o ruta local), `profile` (str default "dj-standard"), `genre_hint` (str opcional para corrección Half/Double-Time)
-- **Salida:** `bpm`, `bpm_confidence`, `musical_key`, `camelot`, `key_confidence`, `energy`, `danceability`, `loudness_lufs`, `true_peak_dbtp`, `analysis_version`
+- **Salida:** `bpm`, `bpm_confidence`, `musical_key`, `camelot`, `key_confidence`, `energy`, `danceability`, `loudness_lufs`, `true_peak_dbtp`, `hot_cues` (4 puntos acústicos), `analysis_version`
 
 ## 7. `analyze_batch`
-- **Entrada:** `track_ids` (list[str]), `profile` (str default "dj-standard"), `genre_hint` (str opcional), `max_workers` (int default 4)
+- **Entrada:** `paths_or_ids` (list[str]), `profile` (str default "dj-standard"), `max_workers` (int default 6)
 - **Salida:** `processed` (int), `results` (list[dict]), `errors` (list[dict])
 
 ## 8. `organize_track`
@@ -45,3 +50,13 @@
 ## 10. `audit_repertoire`
 - **Entrada:** `sync_db` (bool default True), `check_queries` (list[str] opcional para validación anti-duplicados Fase 1)
 - **Salida:** `total_tracks_scanned`, `audio_count`, `video_count`, `own_productions_count`, `genre_distribution`, `chronology`, `inactivity_gaps_by_genre`, `query_dedup_audit`, `sync_summary`
+
+## 11. `hera_code_mode` & `get_code_mode_sdk`
+- **Descripción:** Ejecuta scripts TypeScript/JS o pipelines declarativos sobre el namespace `hera.*` en un solo turno sin enviar JSON intermedio por la ventana de contexto del LLM.
+- **Entrada (`hera_code_mode`):** `code` (str TypeScript/JS), `pipeline` (list[dict] opcional), `context` (dict opcional)
+- **Salida:** `executed_steps`, `logs`, `result`
+
+## 12. `connect_dj_drive` & `get_node_manifest`
+- **Descripción (`connect_dj_drive`):** Onboarding Zero-Tech para DJs conectando su carpeta compartida de Google Drive o bucket Cloudflare R2 con auditoría forense Zero-Trust, deduplicación CAS global (`content_sha256`) y SimHash 64-bit POPCNT.
+- **Entrada (`connect_dj_drive`):** `dj_handle` (str), `display_name` (str opcional), `gdrive_folder_link` (str opcional), `r2_bucket_url` (str opcional), `tracks` (list[dict] opcional)
+- **Salida:** `profile`, `admitted_count`, `quarantined_count`, `cas_deduplicated_count`, `admitted_tracks`

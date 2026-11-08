@@ -118,18 +118,42 @@ pub fn analyze_structure_and_style(
                 h_e += mag;
             }
 
-            // Pitch chroma accumulation (65 Hz - 2100 Hz)
-            if (65.0..=2100.0).contains(&f) {
-                let midi = 69.0 + 12.0 * (f / 440.0).log2();
-                let pc = (midi.round() as isize).rem_euclid(12) as usize;
-                chroma_accum[pc] += mag as f64;
-            }
-
             // 32 pseudo-Mel bands for 64D Style Embedding
             let band_idx = (((f / (sample_rate as f32 * 0.5)).sqrt() * 32.0) as usize).min(31);
             let mag64 = mag as f64;
             band_energy_32[band_idx] += mag64;
             band_sq_32[band_idx] += mag64 * mag64;
+        }
+
+        // Parabolic Peak-Interpolated Harmonic Chroma Accumulation (165 Hz - 2200 Hz)
+        // Eliminates coarse FFT bin quantization bias (which previously skewed toward 3A/12A)
+        for b in 2..(n_bins.saturating_sub(2)) {
+            let f_center = (b as f32) * bin_hz;
+            if !(165.0..=2200.0).contains(&f_center) {
+                continue;
+            }
+            let m_prev = (buf[b - 1].re * buf[b - 1].re + buf[b - 1].im * buf[b - 1].im).sqrt();
+            let m_curr = (buf[b].re * buf[b].re + buf[b].im * buf[b].im).sqrt();
+            let m_next = (buf[b + 1].re * buf[b + 1].re + buf[b + 1].im * buf[b + 1].im).sqrt();
+
+            // Only accumulate local tonal spectral peaks above neighborhood floor
+            if m_curr > m_prev && m_curr >= m_next && m_curr > 1e-4 {
+                let denom = m_prev - 2.0 * m_curr + m_next;
+                let delta = if denom.abs() > 1e-9 {
+                    (0.5 * (m_prev - m_next) / denom).clamp(-0.5, 0.5)
+                } else {
+                    0.0
+                };
+                let f_exact = ((b as f32) + delta) * bin_hz;
+                let midi = 69.0 + 12.0 * (f_exact / 440.0).log2();
+                let pc_float = midi.rem_euclid(12.0);
+                let pc_nearest = (pc_float.round() as isize).rem_euclid(12) as usize;
+                let cents_dist = (pc_float - (pc_float.round())).abs();
+                // Gaussian tuning window around semitone center + log-compressed harmonic weight
+                let tuning_weight = (-4.5 * cents_dist * cents_dist).exp();
+                let harm_weight = ((1.0 + m_curr * 15.0).ln() * tuning_weight) as f64;
+                chroma_accum[pc_nearest] += harm_weight;
+            }
         }
 
         sub_flux.push((s_e - prev_sub).max(0.0));
@@ -290,12 +314,15 @@ pub fn analyze_structure_and_style(
         .min(mix_hi);
 
     // 8. Intro / Outro Vocal Presence Detection
+    // Requires both high mid-band ratio relative to the track's peak AND vocal-mid dominance over sub/high
     let intro_end = 8usize.min(n_bars_decoded);
     let intro_vocal_ratio = mean_slice(&bar_mid[..intro_end]);
+    let intro_sub_ratio = mean_slice(&bar_sub[..intro_end]);
     let outro_start = n_bars_decoded.saturating_sub(8);
     let outro_vocal_ratio = mean_slice(&bar_mid[outro_start..]);
-    let has_intro_vocals = intro_vocal_ratio >= 0.48;
-    let has_outro_vocals = outro_vocal_ratio >= 0.48;
+    let outro_sub_ratio = mean_slice(&bar_sub[outro_start..]);
+    let has_intro_vocals = intro_vocal_ratio >= 0.68 && intro_vocal_ratio > intro_sub_ratio * 1.05;
+    let has_outro_vocals = outro_vocal_ratio >= 0.72 && outro_vocal_ratio > outro_sub_ratio * 1.05;
 
     // 9. Build 64D L2-Normalized Style Embedding
     let inv_f = 1.0 / (n_frames.max(1) as f64);
@@ -370,43 +397,147 @@ pub fn analyze_structure_and_style(
 }
 
 fn estimate_bpm_from_flux(sub_flux: &[f32], mid_flux: &[f32], frame_dt: f32) -> f32 {
-    let n = sub_flux.len().min(mid_flux.len());
-    if n < 64 {
+    let n_all = sub_flux.len().min(mid_flux.len());
+    if n_all < 128 {
         return 124.0;
     }
-    let combined: Vec<f32> = (0..n)
-        .map(|i| sub_flux[i] * 1.35 + mid_flux[i] * 0.65)
-        .collect();
 
-    let min_bpm = 84.0_f32;
-    let max_bpm = 156.0_f32;
-    let min_lag = ((60.0 / max_bpm) / frame_dt).round() as usize;
-    let max_lag = ((60.0 / min_bpm) / frame_dt).round() as usize;
+    // Focus on the rhythmic body of the track (skip beatless first 8% if track is long)
+    let start_idx = if n_all > 1500 { n_all / 12 } else { 0 };
+    let sub_slice = &sub_flux[start_idx..n_all];
+    let mid_slice = &mid_flux[start_idx..n_all];
+    let n = sub_slice.len();
 
-    let mut best_lag = ((60.0 / 124.0) / frame_dt).round() as usize;
-    let mut best_corr = -1.0_f64;
+    // Local moving-average onset novelty whitening (window = 16 frames ~ 170ms)
+    let mut novelty = vec![0.0_f32; n];
+    let mut sub_novelty = vec![0.0_f32; n];
+    let win = 16usize;
+    for i in 0..n {
+        let lo = i.saturating_sub(win);
+        let hi = (i + win + 1).min(n);
+        let len = (hi - lo) as f32;
+        let s_mean = sub_slice[lo..hi].iter().sum::<f32>() / len;
+        let m_mean = mid_slice[lo..hi].iter().sum::<f32>() / len;
+        let s_nov = (sub_slice[i] - s_mean).max(0.0);
+        let m_nov = (mid_slice[i] - m_mean).max(0.0);
+        sub_novelty[i] = s_nov;
+        novelty[i] = s_nov * 1.45 + m_nov * 0.55;
+    }
 
-    for lag in min_lag.max(2)..=max_lag.min(n / 2) {
+    let max_lag = (((60.0 / 35.0) / frame_dt).ceil() as usize).min(n / 2);
+    let min_lag = (((60.0 / 170.0) / frame_dt).floor() as usize).max(2);
+    if max_lag <= min_lag {
+        return 124.0;
+    }
+
+    let mut acf = vec![0.0_f32; max_lag + 1];
+    let mut acf_sub = vec![0.0_f32; max_lag + 1];
+    let norm0: f64 = novelty
+        .iter()
+        .map(|&x| (x as f64) * (x as f64))
+        .sum::<f64>()
+        .max(1e-9);
+    let norm0_sub: f64 = sub_novelty
+        .iter()
+        .map(|&x| (x as f64) * (x as f64))
+        .sum::<f64>()
+        .max(1e-9);
+
+    for lag in min_lag..=max_lag {
         let mut sum = 0.0_f64;
-        for i in 0..(n - lag) {
-            sum += (combined[i] as f64) * (combined[i + lag] as f64);
+        let mut sum_s = 0.0_f64;
+        let count = n - lag;
+        for i in 0..count {
+            sum += (novelty[i] as f64) * (novelty[i + lag] as f64);
+            sum_s += (sub_novelty[i] as f64) * (sub_novelty[i + lag] as f64);
         }
-        let corr = sum / ((n - lag) as f64);
-        if corr > best_corr {
-            best_corr = corr;
-            best_lag = lag;
+        let scale = (n as f64) / (count.max(1) as f64);
+        acf[lag] = ((sum * scale) / norm0) as f32;
+        acf_sub[lag] = ((sum_s * scale) / norm0_sub) as f32;
+    }
+
+    let interp_acf = |arr: &[f32], lag_f: f32| -> f32 {
+        let idx = lag_f.floor() as usize;
+        if idx < min_lag || idx + 1 >= arr.len() {
+            return 0.0;
+        }
+        let frac = lag_f - (idx as f32);
+        arr[idx] * (1.0 - frac) + arr[idx + 1] * frac
+    };
+
+    // Evaluate candidate BPMs in [75.0 .. 148.0] using a 4-Harmonic Pulse-Train Comb Filter
+    let mut best_bpm = 124.0_f32;
+    let mut best_score = -1e9_f32;
+
+    let mut cand_bpm = 75.0_f32;
+    while cand_bpm <= 148.0 {
+        let lag1 = (60.0 / cand_bpm) / frame_dt;
+        let c1 = interp_acf(&acf, lag1);
+        let c2 = interp_acf(&acf, lag1 * 2.0);
+        let c3 = interp_acf(&acf, lag1 * 3.0);
+        let c4 = interp_acf(&acf, lag1 * 4.0);
+        let sub1 = interp_acf(&acf_sub, lag1);
+        let sub2 = interp_acf(&acf_sub, lag1 * 2.0);
+
+        let mut comb = c1 * 1.00 + c2 * 0.60 + c3 * 0.30 + c4 * 0.25 + (sub1 + sub2) * 0.35;
+
+        // Natural DJ genre tempo prior: Urban/Reggaeton/Afrobeat (78..105) & Club/House/Guaracha (116..132)
+        let prior = if (78.0..=105.0).contains(&cand_bpm) || (116.0..=132.0).contains(&cand_bpm) {
+            1.08
+        } else if (105.0..116.0).contains(&cand_bpm) {
+            0.94
+        } else {
+            0.88
+        };
+        comb *= prior;
+
+        if comb > best_score {
+            best_score = comb;
+            best_bpm = cand_bpm;
+        }
+        cand_bpm += 0.25;
+    }
+
+    // Dembow / Afrobeat / Tresillo 4:3 Dotted-Eighth De-aliasing:
+    // In Reggaeton/Afrobeat (78..96 BPM), the tresillo snare/rimshot at 3/4 beat creates a peak at 4/3 * BPM (104..128 BPM).
+    let dembow_root = best_bpm * 0.75;
+    if (76.0..=97.0).contains(&dembow_root) {
+        let lag_root = (60.0 / dembow_root) / frame_dt;
+        let lag_cur = (60.0 / best_bpm) / frame_dt;
+        let root_sub = interp_acf(&acf_sub, lag_root) + interp_acf(&acf_sub, lag_root * 2.0);
+        let cur_sub = interp_acf(&acf_sub, lag_cur);
+        let thresh = if best_bpm < 117.6 { 0.82 } else { 1.18 };
+        if root_sub >= cur_sub * thresh {
+            best_bpm = dembow_root;
         }
     }
 
-    let raw_bpm = 60.0 / ((best_lag as f32) * frame_dt);
-    normalize_dj_bpm(raw_bpm)
+    // Conversely, in Afro-House / Club (118..130 BPM), a 4/5 polyrhythmic bassline (~94..104 BPM)
+    // can appear; check if 5/4 * best_bpm has stronger 4-on-the-floor kick periodicity.
+    let house_five_four = best_bpm * 1.25;
+    if (92.0..=104.5).contains(&best_bpm) && (117.0..=130.0).contains(&house_five_four) {
+        let lag_h = (60.0 / house_five_four) / frame_dt;
+        let h_sub = interp_acf(&acf_sub, lag_h) + 0.7 * interp_acf(&acf_sub, lag_h * 2.0);
+        let cur_sub = interp_acf(&acf_sub, (60.0 / best_bpm) / frame_dt);
+        if h_sub >= cur_sub * 1.05 {
+            best_bpm = house_five_four;
+        }
+    }
+
+    // Snap to integer BPM if very close (studio masters are almost always integer BPMs)
+    let nearest_int = best_bpm.round();
+    if (best_bpm - nearest_int).abs() <= 0.40 {
+        nearest_int
+    } else {
+        (best_bpm * 10.0).round() / 10.0
+    }
 }
 
 fn normalize_dj_bpm(mut bpm: f32) -> f32 {
-    while bpm < 82.0 {
+    while bpm < 75.0 {
         bpm *= 2.0;
     }
-    while bpm > 164.0 {
+    while bpm > 155.0 {
         bpm *= 0.5;
     }
     bpm
@@ -418,25 +549,53 @@ fn detect_camelot_key(chroma: &[f64; 12]) -> (String, String) {
         return ("8A".to_string(), "Am".to_string());
     }
 
+    let c_mean = (sum / 12.0) as f32;
+    let mut c_centered = [0.0_f32; 12];
+    let mut c_var = 0.0_f32;
+    for i in 0..12 {
+        let d = (chroma[i] as f32) - c_mean;
+        c_centered[i] = d;
+        c_var += d * d;
+    }
+    let c_std = c_var.sqrt().max(1e-9);
+
+    let maj_mean: f32 = MAJOR_PROFILE.iter().sum::<f32>() / 12.0;
+    let min_mean: f32 = MINOR_PROFILE.iter().sum::<f32>() / 12.0;
+    let maj_std: f32 = MAJOR_PROFILE
+        .iter()
+        .map(|&x| (x - maj_mean) * (x - maj_mean))
+        .sum::<f32>()
+        .sqrt()
+        .max(1e-9);
+    let min_std: f32 = MINOR_PROFILE
+        .iter()
+        .map(|&x| (x - min_mean) * (x - min_mean))
+        .sum::<f32>()
+        .sqrt()
+        .max(1e-9);
+
     let mut best_score = -1e9_f32;
     let mut best_camelot = "8A";
     let mut best_name = "Am".to_string();
 
     for root in 0..12 {
-        let mut maj_corr = 0.0_f32;
-        let mut min_corr = 0.0_f32;
+        let mut maj_cov = 0.0_f32;
+        let mut min_cov = 0.0_f32;
         for i in 0..12 {
-            let c_val = (chroma[(root + i) % 12] / sum) as f32;
-            maj_corr += c_val * MAJOR_PROFILE[i];
-            min_corr += c_val * MINOR_PROFILE[i];
+            let c_val = c_centered[(root + i) % 12];
+            maj_cov += c_val * (MAJOR_PROFILE[i] - maj_mean);
+            min_cov += c_val * (MINOR_PROFILE[i] - min_mean);
         }
-        if maj_corr > best_score {
-            best_score = maj_corr;
+        let maj_r = maj_cov / (c_std * maj_std);
+        let min_r = min_cov / (c_std * min_std);
+
+        if maj_r > best_score {
+            best_score = maj_r;
             best_camelot = CAMELOT_MAJOR[root];
             best_name = PITCH_NAMES[root].to_string();
         }
-        if min_corr > best_score {
-            best_score = min_corr;
+        if min_r > best_score {
+            best_score = min_r;
             best_camelot = CAMELOT_MINOR[root];
             best_name = format!("{}m", PITCH_NAMES[root]);
         }

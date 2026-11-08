@@ -139,8 +139,8 @@ else
   echo -e "${GREEN}[OK]${NC} rclone ya se encuentra instalado."
 fi
 
-# --- 7. Clonar Código de Hera (si no existe) y Configurar Entorno ---
-echo -e "\n${CYAN}${BOLD}==> [5/6] Configurando entorno y paquetes de Hera...${NC}"
+# --- 7. Clonar o Auto-Actualizar Código de Hera y Configurar Entorno ---
+echo -e "\n${CYAN}${BOLD}==> [5/6] Verificando instalación previa, actualizando código, binario Rust (hera-node) y Skills...${NC}"
 cd "${HERA_DIR}"
 
 if [ ! -d ".git" ]; then
@@ -148,6 +148,10 @@ if [ ! -d ".git" ]; then
   git clone https://github.com/davidcastilloc/hera.git /tmp/hera_repo
   cp -r /tmp/hera_repo/. "${HERA_DIR}/" || true
   rm -rf /tmp/hera_repo
+else
+  echo -e "${GREEN}[*]${NC} Instalación existente detectada. Sincronizando última versión desde origin/main..."
+  git fetch origin main --quiet || true
+  git pull --rebase origin main --quiet || true
 fi
 
 # Crear entorno virtual con uv si no existe
@@ -158,8 +162,14 @@ export VIRTUAL_ENV="${HERA_DIR}/.venv"
 export PATH="${HERA_DIR}/.venv/bin:${PATH}"
 
 # Instalar dependencias
-echo -e "${GREEN}[*]${NC} Instalando dependencias de Python..."
+echo -e "${GREEN}[*]${NC} Instalando/actualizando dependencias de Python..."
 uv pip install -e ".[analysis]" --quiet || uv pip install -e "." --quiet
+
+# Compilar binario nativo Rust (hera-node) si cargo está disponible y sincronizar Skills globales
+if [ -f "${HERA_DIR}/scripts/ensure_latest_hera.py" ]; then
+  echo -e "${GREEN}[*]${NC} Ejecutando auto-verificador de binarios (hera-node) y sincronización de Skills..."
+  "${HERA_DIR}/.venv/bin/python" "${HERA_DIR}/scripts/ensure_latest_hera.py" --no-pull || true
+fi
 
 # --- 8. Generar Configuración de slskd con Puertos Abiertos y 11 Salas ---
 SLSKD_CFG="${HERA_DIR}/bin/slskd.yml"
@@ -334,6 +344,12 @@ else
   if command -v uv &>/dev/null && [ -d "${HERA_DIR}/.venv" ]; then
     echo -e "${GREEN}[*]${NC} Actualizando dependencias de Python..."
     uv pip install -e ".[analysis]" --quiet 2>/dev/null || uv pip install -e "." --quiet
+  fi
+
+  # Recompilar binario Rust hera-node y sincronizar Skills globales
+  if [ -f "${HERA_DIR}/scripts/ensure_latest_hera.py" ] && [ -x "${HERA_DIR}/.venv/bin/python" ]; then
+    echo -e "${GREEN}[*]${NC} Actualizando binario nativo Rust (hera-node) y Skills globales..."
+    "${HERA_DIR}/.venv/bin/python" "${HERA_DIR}/scripts/ensure_latest_hera.py" --no-pull || true
   fi
 
   # Reiniciar servicio para aplicar cambios en caliente

@@ -67,6 +67,18 @@ pub fn list_mcp_tools() -> Value {
     json!({
         "tools": [
             {
+                "name": "ensure_hera_updated",
+                "description": "[MANDATORY STEP 0] Verify if Hera repository, native Rust binary (hera-node), Python environment, companion binaries (slskd, rclone, ffmpeg), and global AI agent skills are installed and updated to the latest version, auto-updating them if needed.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "auto_compile_rust": { "type": "boolean", "default": true },
+                        "sync_skills": { "type": "boolean", "default": true },
+                        "pull_remote": { "type": "boolean", "default": true }
+                    }
+                }
+            },
+            {
                 "name": "search_music",
                 "description": "Search acoustically verified studio masters on the Hera P2P Mesh by query, Camelot key, BPM range, or subgenre.",
                 "inputSchema": {
@@ -284,6 +296,44 @@ pub fn handle_mcp_request(req: JsonRpcRequest, state: &P2PMeshState) -> Option<J
 
 fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<Value, String> {
     match name {
+        "ensure_hera_updated" => {
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let mut cmd = std::process::Command::new("python");
+                cmd.arg("scripts/ensure_latest_hera.py").arg("--json");
+                if args.get("pull_remote").and_then(|v| v.as_bool()) == Some(false) {
+                    cmd.arg("--no-pull");
+                }
+                if args.get("auto_compile_rust").and_then(|v| v.as_bool()) == Some(false) {
+                    cmd.arg("--no-rust-build");
+                }
+                if args.get("sync_skills").and_then(|v| v.as_bool()) == Some(false) {
+                    cmd.arg("--no-skill-sync");
+                }
+                match cmd.output() {
+                    Ok(output) => {
+                        let stdout = String::from_utf8_lossy(&output.stdout);
+                        if let Ok(parsed) = serde_json::from_str::<Value>(&stdout) {
+                            return Ok(parsed);
+                        }
+                        return Ok(json!({
+                            "status": "ok",
+                            "engine": "hera-node-rs",
+                            "version": env!("CARGO_PKG_VERSION"),
+                            "stdout": stdout.trim()
+                        }));
+                    }
+                    Err(_) => {}
+                }
+            }
+            Ok(json!({
+                "status": "ok",
+                "engine": "hera-node-rs",
+                "version": env!("CARGO_PKG_VERSION"),
+                "runtime_target": current_runtime_target(),
+                "node_id": state.node_id
+            }))
+        }
         "search_music" => {
             let q = P2PSearchQuery {
                 q: args.get("query").and_then(|v| v.as_str()).map(String::from),
@@ -509,7 +559,7 @@ fn analyze_single_track_arg(args: &Value) -> Result<Value, String> {
                 .extension()
                 .and_then(|e| e.to_str())
                 .unwrap_or("wav");
-            let decoded = decode_audio_bytes(&bytes, Some(ext), 45.0)?;
+            let decoded = decode_audio_bytes(&bytes, Some(ext), 90.0)?;
             let forensics = audit_pcm_channels(
                 &decoded.left,
                 decoded.right.as_deref(),

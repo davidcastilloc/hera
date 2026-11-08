@@ -1,4 +1,7 @@
 from pathlib import Path
+import subprocess
+import sys
+import json
 from mcp.server.fastmcp import FastMCP
 from hera.domain.config import HeraConfig
 from hera.domain.database import Database
@@ -125,6 +128,34 @@ def create_mcp_server(config_path: Path | str | None = None) -> FastMCP:
         """Ejecuta auditoría maestra del repertorio (Audio, Video-DJ HD, Producciones Propias), zonas de BPM, Camelot, años de inactividad, validación anti-duplicados pre-descarga (`[SKIP - YA EXISTE]` vs `[MISSING]`) y sincronización in-place con `hera.db`."""
         await db.init_schema()
         return await handle_audit_repertoire(check_queries, sync_db, db, config)
+
+    @mcp.tool()
+    async def ensure_hera_updated(
+        auto_compile_rust: bool = True,
+        sync_skills: bool = True,
+        pull_remote: bool = True,
+    ) -> dict:
+        """[PASO 0 OBLIGATORIO] Verifica automáticamente si Hera, sus skills (`hera`, `hera-dj-set-curator`) y sus binarios (`hera`, `hera-node`, `slskd`, `rclone`, `ffmpeg`, `fpcalc`) están instalados y en su última versión, actualizándolos y compilándolos en caliente."""
+        script_path = base_dir / "scripts" / "ensure_latest_hera.py"
+        if not script_path.exists():
+            return {"status": "error", "message": f"No se encontró {script_path}"}
+        cmd = [sys.executable, str(script_path), "--json", "--hera-dir", str(base_dir)]
+        if not pull_remote:
+            cmd.append("--no-pull")
+        if not auto_compile_rust:
+            cmd.append("--no-rust-build")
+        if not sync_skills:
+            cmd.append("--no-skill-sync")
+        proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+        try:
+            return json.loads(proc.stdout)
+        except Exception:
+            return {
+                "status": "completed" if proc.returncode == 0 else "error",
+                "returncode": proc.returncode,
+                "stdout": proc.stdout,
+                "stderr": proc.stderr,
+            }
 
     return mcp
 
