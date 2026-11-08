@@ -303,7 +303,10 @@ def sync_global_skills(hera_dir: Path) -> dict[str, Any]:
         return {"synced": False, "reason": "No existe carpeta skills/ en el repositorio."}
 
     home = Path.home()
-    target_roots: list[Path] = []
+    target_roots: list[Path] = [
+        hera_dir / ".agent" / "skills",
+        hera_dir / ".claude" / "skills",
+    ]
     for candidate_root in [
         home / ".gemini" / "config" / "skills",
         home / ".claude" / "skills",

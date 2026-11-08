@@ -1,0 +1,44 @@
+{
+  "brief": "French Touch & Early Electro Club Anthems (2000-2005)",
+  "side": "Side A",
+  "min_duration_mins": 60.0,
+  "actual_duration_mins": 73.3,
+  "harmonic_flow": [
+    {
+      "position": 1,
+      "artist": "Modjo",
+      "title": "Lady (Hear Me Tonight)",
+      "format": "FLAC",
+      "bpm": 129.2,
+      "camelot": "3A",
+      "duration_mins": 5.1
+    },
+    {
+      "position": 2,
+      "artist": "Stardust",
+      "title": "Music Sounds Better With You",
+      "format": "FLAC",
+      "bpm": 123.0,
+      "camelot": "4A",
+      "duration_mins": 6.7
+    },
+    {
+      "position": 3,
+      "artist": "Daft Punk",
+      "title": "One More Time",
+      "format": "MP3 320k",
+      "bpm": 123.0,
+      "camelot": "10B",
+      "duration_mins": 5.4
+    }
+  ],
+  "p2p_sharing": {
+    "speed_kbps": 819200,
+    "upload_slots": 100,
+    "shared_folders": ["library", "sets"]
+  },
+  "cloud_backup": {
+    "provider": "google_drive",
+    "destination": "gdrive:Hera_Music/sets"
+  }
+}
