@@ -1,4 +1,5 @@
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditReport};
+use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
     compute_hera_seal, get_cloud_referral_catalog, CloudReferralOption, P2PMeshState,
     P2PSearchQuery, P2PVerifiedTrack,
@@ -89,6 +90,8 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
     Router::new()
         .route("/", get(health_handler))
         .route("/health", get(health_handler))
+        .route("/mcp", post(mcp_http_handler))
+        .route("/mcp/tools", get(mcp_tools_handler))
         .route("/api/v1/node/manifest", get(manifest_handler))
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
@@ -97,6 +100,20 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/p2p/announce", post(p2p_announce_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
+}
+
+async fn mcp_tools_handler() -> impl IntoResponse {
+    Json(list_mcp_tools())
+}
+
+async fn mcp_http_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<JsonRpcRequest>,
+) -> impl IntoResponse {
+    match handle_mcp_request(req, &state) {
+        Some(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap_or_default())),
+        None => (StatusCode::ACCEPTED, Json(serde_json::json!({ "status": "notification_ack" }))),
+    }
 }
 
 pub fn current_runtime_target() -> &'static str {

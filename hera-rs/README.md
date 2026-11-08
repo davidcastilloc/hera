@@ -32,10 +32,12 @@
    - Optimizes the entire DJ set sequence globally using **2-Opt Traveling Salesperson (TSP)** across Camelot harmony, BPM curve (`3:4` and `4:3` polyrhythmic bridges), transient punch & vocal clash prevention, and 64D style embeddings.
    - Exports ready-to-play `M3U8`, `Rekordbox XML` (with embedded Hot Cues), and Markdown Set Guides.
 
-4. **[`p2p.rs`](file:///c:/Users/David%20Castillo/Git-Repos/hera/hera-rs/src/p2p.rs) & [`router.rs`](file:///c:/Users/David%20Castillo/Git-Repos/hera/hera-rs/src/router.rs) — Universal `Axum` API & Quarantine-First P2P Mesh**:
+4. **[`mcp.rs`](file:///c:/Users/David%20Castillo/Git-Repos/hera/hera-rs/src/mcp.rs), [`p2p.rs`](file:///c:/Users/David%20Castillo/Git-Repos/hera/hera-rs/src/p2p.rs) & [`router.rs`](file:///c:/Users/David%20Castillo/Git-Repos/hera/hera-rs/src/router.rs) — Universal `Axum` API, MCP JSON-RPC 2.0 Server & Quarantine-First P2P Mesh**:
+   - **MCP `stdio` Server (`hera-node --mcp`)**: Native JSON-RPC 2.0 over `stdin`/`stdout` for AI coding/curation clients (Antigravity, Claude Desktop, Cursor, Codex) with zero Python dependency.
+   - **MCP HTTP/Edge Server (`POST /mcp` & `GET /mcp/tools`)**: Exposes all 8 MCP tools (`search_music`, `get_track_candidates`, `analyze_track`, `analyze_batch`, `build_dj_crate`, `audit_repertoire`, `announce_p2p_track`, `get_node_manifest`) over HTTP and Cloudflare Workers!
    - `GET  /health` — Node status & runtime target (`cloudflare-workers-wasm32` or `native-vps-tokio`).
    - `GET  /api/v1/node/manifest` — Capabilities, invariants & Cloud Referral catalog.
-   - `POST /api/v1/audio/analyze-file` — Upload raw `.wav`/`.flac`/`.mp3` bytes for instant pure-Rust DSP audit & 4 Hot Cues.
+   - `POST /api/v1/audio/analyze-file` — Upload raw `.wav`/`.flac`/`.mp3` bytes (up to 64 MB) for instant pure-Rust DSP audit & 4 Hot Cues.
    - `POST /api/v1/audio/analyze-pcm` — Analyze raw float32 PCM channels.
    - `POST /api/v1/crates/build` — Run global **2-Opt TSP** set curation.
    - `GET  /api/v1/p2p/search` — Search verified studio masters on the node.

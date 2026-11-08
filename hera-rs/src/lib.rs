@@ -1,4 +1,5 @@
 pub mod forensics;
+pub mod mcp;
 pub mod p2p;
 pub mod router;
 pub mod structure;
@@ -347,5 +348,46 @@ mod tests {
             .unwrap();
         let resp_crate = app.call(req_crate).await.unwrap();
         assert_eq!(resp_crate.status(), StatusCode::OK);
+
+        // 5. Test MCP JSON-RPC 2.0 endpoint (`POST /mcp` & `GET /mcp/tools`)
+        let req_mcp_init = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {}
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_mcp_init = app.call(req_mcp_init).await.unwrap();
+        assert_eq!(resp_mcp_init.status(), StatusCode::OK);
+
+        let req_mcp_call = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": 2,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "build_dj_crate",
+                        "arguments": {
+                            "brief": "MCP Rust Set",
+                            "energy_arc": "steady_climb"
+                        }
+                    }
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_mcp_call = app.call(req_mcp_call).await.unwrap();
+        assert_eq!(resp_mcp_call.status(), StatusCode::OK);
     }
 }
