@@ -7,7 +7,8 @@ use crate::p2p::{
     calculate_cloudflare_saas_economics_with_price, compute_hera_seal, get_cloud_referral_catalog,
     BrokerBatchLookupRequest, BrokerBridgeRequest, BrokerClaimCloudTrackRequest,
     BrokerSimilarQuery, CloudReferralOption, ConnectDjDriveRequest, P2PMeshState, P2PPeerNode,
-    P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest, UpgradeTierRequest,
+    P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest, SetP2PSharingRequest,
+    UpgradeTierRequest,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
 use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
@@ -111,6 +112,7 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/node/scan-local-dir", post(scan_local_dir_handler))
         .route("/api/v1/dj/connect-drive", post(connect_dj_drive_handler))
         .route("/api/v1/dj/upgrade-tier", post(upgrade_dj_tier_handler))
+        .route("/api/v1/dj/p2p-sharing", post(set_p2p_sharing_handler))
         .route("/api/v1/dj/profiles", get(list_dj_profiles_handler))
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
@@ -185,16 +187,32 @@ async fn broker_claim_cloud_track_handler(
     State(state): State<P2PMeshState>,
     Json(req): Json<BrokerClaimCloudTrackRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
-    match state.broker_claim_or_buy_cloud_track(req) {
+    match state.broker_claim_cloud_track(req) {
         Ok(res) => Ok((
             StatusCode::CREATED,
             Json(serde_json::to_value(res).unwrap_or_default()),
         )),
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+async fn set_p2p_sharing_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<SetP2PSharingRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    match state.set_p2p_sharing(req) {
+        Ok(profile) => Ok(Json(serde_json::json!({
+            "status": "p2p_sharing_updated",
+            "profile": profile
+        }))),
         Err(e) => {
-            let status = if e.starts_with("PAYMENT_REQUIRED") {
-                StatusCode::PAYMENT_REQUIRED
+            let status = if e.starts_with("PLAN_UPGRADE_REQUIRED") {
+                StatusCode::FORBIDDEN
             } else {
-                StatusCode::BAD_REQUEST
+                StatusCode::NOT_FOUND
             };
             Err((status, Json(serde_json::json!({ "error": e }))))
         }

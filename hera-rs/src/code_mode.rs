@@ -11,7 +11,7 @@ use crate::forensics::audit_pcm_channels;
 use crate::p2p::{
     get_cloud_referral_catalog, BrokerBatchLookupRequest, BrokerBridgeRequest,
     BrokerClaimCloudTrackRequest, BrokerSimilarQuery, ConnectDjDriveRequest, P2PMeshState,
-    P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
+    P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest, SetP2PSharingRequest,
 };
 use crate::router::current_runtime_target;
 use crate::synergy::{
@@ -463,15 +463,22 @@ fn execute_single_sdk_call(
         "hera.brokerClaimCloudTrack" | "brokerClaimCloudTrack" | "broker_claim_cloud_track" => {
             let req: BrokerClaimCloudTrackRequest = serde_json::from_value(args.clone())
                 .map_err(|e| format!("Invalid brokerClaimCloudTrack payload: {e}"))?;
-            let res = state.broker_claim_or_buy_cloud_track(req)?;
+            let res = state.broker_claim_cloud_track(req)?;
             log.push(format!(
-                "hera.brokerClaimCloudTrack('{}') -> 0.0 MB R2 copy (price=${:.2}, producer_payout=${:.2}, bounty={:.1} MB)",
-                res.linked_track.title,
-                res.track_price_usd,
-                res.producer_payout_usd,
-                res.pioneer_bounty_refunded_mb
+                "hera.brokerClaimCloudTrack('{}') -> 0.0 MB R2 copy (bounty={:.1} MB)",
+                res.linked_track.title, res.pioneer_bounty_refunded_mb
             ));
             serde_json::to_value(res).map_err(|e| e.to_string())
+        }
+        "hera.setP2PSharing" | "setP2PSharing" | "set_p2p_sharing" => {
+            let req: SetP2PSharingRequest = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid setP2PSharing payload: {e}"))?;
+            let profile = state.set_p2p_sharing(req)?;
+            log.push(format!(
+                "hera.setP2PSharing('{}') -> p2p_sharing_enabled={}",
+                profile.dj_handle, profile.p2p_sharing_enabled
+            ));
+            serde_json::to_value(profile).map_err(|e| e.to_string())
         }
         "hera.filterTracks" | "filterTracks" => {
             let tracks: Vec<P2PVerifiedTrack> = args

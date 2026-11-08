@@ -289,8 +289,7 @@ mod tests {
                 gdrive_file_id: None,
                 r2_object_key: None,
                 stream_url: None,
-                price_usd: 0.0,
-                is_vip_marketplace_track: false,
+                share_on_p2p: true,
                 node_id: "test".into(),
                 hera_seal: String::new(),
             },
@@ -859,7 +858,7 @@ mod tests {
             .header("content-type", "application/json")
             .body(Body::from(
                 serde_json::to_vec(&serde_json::json!({
-                    "buyer_or_claimer_dj": "DJCloudSubscriber",
+                    "claimer_dj": "DJCloudSubscriber",
                     "target_track_or_cas": "hera-seed-001"
                 }))
                 .unwrap(),
@@ -877,96 +876,100 @@ mod tests {
             j_claim["linked_track"]["storage_provider"],
             "r2_cas_zero_copy_link"
         );
+        assert_eq!(j_claim["linked_track"]["share_on_p2p"], true);
 
-        // 8. Test DJ Producer VIP Marketplace Track Sale (85% DJ Producer / 15% Hera Commission, 0 MB R2 copy!)
-        let req_vip_list = Request::builder()
+        // 8. Test P2P Sharing ON by default, and ability to turn it OFF only on higher plans (`pro_monthly`)
+        let req_free_dj = Request::builder()
             .method("POST")
             .uri("/api/v1/dj/connect-drive")
             .header("content-type", "application/json")
             .body(Body::from(
                 serde_json::to_vec(&serde_json::json!({
-                    "dj_handle": "DaviDJ",
-                    "r2_bucket_url": "https://cdn.hera-davidj.workers.dev",
-                    "subscription_tier": "founder_unlimited",
+                    "dj_handle": "DJBetaShared",
+                    "subscription_tier": "beta_mvp",
+                    "p2p_sharing_enabled": false, // Even if a Beta DJ passes false, default sharing stays ON!
                     "tracks": [
                         {
-                            "artist": "DaviDJ",
-                            "title": "Caracas Afterhours (DaviDJ VIP Club Dub)",
-                            "bpm": 126.0,
+                            "artist": "DJBetaShared",
+                            "title": "Beta Club Groove",
+                            "bpm": 125.0,
                             "camelot_key": "8A",
                             "format": "flac",
-                            "r2_object_key": "vip/davidj_caracas_afterhours.flac",
-                            "file_size_mb": 40.0,
-                            "effective_bandwidth_hz": 21900.0,
-                            "sub_bass_phase_correlation": 0.97,
-                            "price_usd": 2.00
+                            "effective_bandwidth_hz": 21500.0,
+                            "sub_bass_phase_correlation": 0.95,
+                            "share_on_p2p": false
                         }
                     ]
                 }))
                 .unwrap(),
             ))
             .unwrap();
-        let resp_vip_list = app.call(req_vip_list).await.unwrap();
-        assert_eq!(resp_vip_list.status(), StatusCode::CREATED);
-        let j_vip_list: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_vip_list.into_body(), 1024 * 1024)
+        let resp_free_dj = app.call(req_free_dj).await.unwrap();
+        assert_eq!(resp_free_dj.status(), StatusCode::CREATED);
+        let j_free_dj: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_free_dj.into_body(), 1024 * 1024)
                 .await
                 .unwrap(),
         )
         .unwrap();
-        let vip_track_id = j_vip_list["admitted_tracks"][0]["track_id"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        assert_eq!(
-            j_vip_list["admitted_tracks"][0]["is_vip_marketplace_track"],
-            true
-        );
+        // Forced ON because `beta_mvp` requires P2P sharing by default!
+        assert_eq!(j_free_dj["profile"]["p2p_sharing_enabled"], true);
+        assert_eq!(j_free_dj["profile"]["can_disable_p2p_sharing"], false);
+        assert_eq!(j_free_dj["admitted_tracks"][0]["share_on_p2p"], true);
 
-        // 8a. Attempting to claim a VIP Marketplace track without `payment_authorized: true` returns 402 PAYMENT_REQUIRED
-        let req_unpaid = Request::builder()
+        // 8a. Attempting to turn off P2P sharing while on `beta_mvp` returns 403 FORBIDDEN (`PLAN_UPGRADE_REQUIRED`)
+        let req_toggle_blocked = Request::builder()
             .method("POST")
-            .uri("/api/v1/broker/claim-cloud-track")
+            .uri("/api/v1/dj/p2p-sharing")
             .header("content-type", "application/json")
             .body(Body::from(
                 serde_json::to_vec(&serde_json::json!({
-                    "buyer_or_claimer_dj": "DJFoo",
-                    "target_track_or_cas": vip_track_id,
-                    "payment_authorized": false
+                    "dj_handle": "DJBetaShared",
+                    "p2p_sharing_enabled": false
                 }))
                 .unwrap(),
             ))
             .unwrap();
-        let resp_unpaid = app.call(req_unpaid).await.unwrap();
-        assert_eq!(resp_unpaid.status(), StatusCode::PAYMENT_REQUIRED);
+        let resp_toggle_blocked = app.call(req_toggle_blocked).await.unwrap();
+        assert_eq!(resp_toggle_blocked.status(), StatusCode::FORBIDDEN);
 
-        // 8b. Purchasing with `payment_authorized: true` links the track via Zero-Copy R2 (`0.0 MB` extra)
-        // and splits $2.00 USD -> $1.70 USD (85%) to DaviDJ's wallet + $0.30 USD (15%) to Hera!
-        let req_buy = Request::builder()
+        // 8b. Upgrade `DJBetaShared` to `pro_monthly` -> now they CAN turn P2P sharing off (Private Vault mode) or back on!
+        let req_up_pro = Request::builder()
             .method("POST")
-            .uri("/api/v1/broker/claim-cloud-track")
+            .uri("/api/v1/dj/upgrade-tier")
             .header("content-type", "application/json")
             .body(Body::from(
                 serde_json::to_vec(&serde_json::json!({
-                    "buyer_or_claimer_dj": "DJFoo",
-                    "target_track_or_cas": vip_track_id,
-                    "payment_authorized": true
+                    "dj_handle": "DJBetaShared",
+                    "tier": "pro_monthly"
                 }))
                 .unwrap(),
             ))
             .unwrap();
-        let resp_buy = app.call(req_buy).await.unwrap();
-        assert_eq!(resp_buy.status(), StatusCode::CREATED);
-        let j_buy: serde_json::Value =
-            serde_json::from_slice(&to_bytes(resp_buy.into_body(), 1024 * 1024).await.unwrap())
-                .unwrap();
-        assert_eq!(
-            j_buy["status"],
-            "vip_marketplace_track_purchased_zero_copy"
-        );
-        assert_eq!(j_buy["physical_r2_mb_consumed"], 0.0);
-        assert!((j_buy["track_price_usd"].as_f64().unwrap() - 2.0).abs() < 1e-4);
-        assert!((j_buy["producer_payout_usd"].as_f64().unwrap() - 1.7).abs() < 1e-4);
-        assert!((j_buy["hera_platform_commission_usd"].as_f64().unwrap() - 0.3).abs() < 1e-4);
+        let resp_up_pro = app.call(req_up_pro).await.unwrap();
+        assert_eq!(resp_up_pro.status(), StatusCode::OK);
+
+        let req_toggle_ok = Request::builder()
+            .method("POST")
+            .uri("/api/v1/dj/p2p-sharing")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "dj_handle": "DJBetaShared",
+                    "p2p_sharing_enabled": false
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_toggle_ok = app.call(req_toggle_ok).await.unwrap();
+        assert_eq!(resp_toggle_ok.status(), StatusCode::OK);
+        let j_toggle_ok: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_toggle_ok.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_toggle_ok["profile"]["p2p_sharing_enabled"], false);
+        assert_eq!(j_toggle_ok["profile"]["can_disable_p2p_sharing"], true);
     }
 }

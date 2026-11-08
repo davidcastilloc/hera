@@ -31,12 +31,15 @@ pub struct P2PVerifiedTrack {
     #[serde(default)]
     pub r2_object_key: Option<String>,
     pub stream_url: Option<String>,
-    #[serde(default)]
-    pub price_usd: f32,
-    #[serde(default)]
-    pub is_vip_marketplace_track: bool,
+    /// Always `true` by default: all uploaded songs are shared with the P2P swarm unless a Pro DJ explicitly turns P2P sharing off.
+    #[serde(default = "default_true")]
+    pub share_on_p2p: bool,
     pub node_id: String,
     pub hera_seal: String,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_owner_dj() -> String {
@@ -67,8 +70,12 @@ pub struct DjProfile {
     pub r2_used_mb: f32,
     #[serde(default)]
     pub bounty_refunded_mb: f32,
+    /// Enabled (`true`) by default for all DJs. Can only be turned OFF (`false`) on higher plans (`pro_monthly` / `founder_unlimited`).
+    #[serde(default = "default_true")]
+    pub p2p_sharing_enabled: bool,
+    /// Indicates whether this DJ's subscription plan allows turning off P2P sharing (Private Vault Mode).
     #[serde(default)]
-    pub producer_wallet_usd: f32,
+    pub can_disable_p2p_sharing: bool,
     pub verified_tracks_shared: usize,
     pub quarantined_rejected_tracks: usize,
 }
@@ -90,6 +97,12 @@ pub fn resolve_tier_r2_quota_mb(tier: &str) -> f32 {
         "founder_unlimited" => 1_000_000.0,   // Unlimited for DaviDJ
         _ => 5_120.0,
     }
+}
+
+/// Only higher plans (`pro_monthly`, `pro`, `founder_unlimited`) can turn off P2P sharing (`p2p_sharing_enabled = false`).
+/// Free / Beta plans ALWAYS keep P2P sharing ON (`true`) to nourish the community swarm.
+pub fn tier_allows_private_vault(tier: &str) -> bool {
+    matches!(tier, "pro_monthly" | "pro" | "founder_unlimited")
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,9 +132,8 @@ pub struct DjDriveTrackInput {
     pub sub_bass_phase_correlation: f32,
     #[serde(default)]
     pub is_synthetic_tone: bool,
-    /// Optional sale price in USD (`0.0` = free P2P community track, `> 0.0` = VIP Producer Track on Hera Marketplace)
-    #[serde(default)]
-    pub price_usd: f32,
+    /// Defaults to `true` (shared on P2P). Can only be set to `false` if the DJ has a higher plan (`pro_monthly`).
+    pub share_on_p2p: Option<bool>,
 }
 
 fn default_file_size_mb() -> f32 {
@@ -164,6 +176,8 @@ pub struct ConnectDjDriveRequest {
     /// Optional subscription tier (`"free"` = 100 MB R2 quota, `"pro_monthly"` = 50,000 MB R2 quota)
     #[serde(default)]
     pub subscription_tier: Option<String>,
+    /// Defaults to `true` (all uploaded tracks are shared on P2P). Can only be turned `false` on `pro_monthly` / higher plans.
+    pub p2p_sharing_enabled: Option<bool>,
     /// Optional list of tracks found in the DJ's shared Google Drive / R2 / Dropbox folder
     #[serde(default)]
     pub tracks: Vec<DjDriveTrackInput>,
@@ -208,6 +222,13 @@ pub struct UpgradeTierRequest {
     pub tier: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetP2PSharingRequest {
+    pub dj_handle: String,
+    /// `true` (default) shares tracks with the P2P swarm; `false` requires a higher plan (`pro_monthly`).
+    pub p2p_sharing_enabled: bool,
+}
+
 /// A live download/streaming route registered inside the Internal P2P Data Broker.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrokerSourceRoute {
@@ -234,37 +255,26 @@ pub struct BrokerIntelRecord {
     pub style_simhash_hex: String,
     pub hot_cues: Vec<HotCuePoint>,
     pub hera_seal: String,
-    #[serde(default)]
-    pub price_usd: f32,
-    #[serde(default)]
-    pub is_vip_marketplace_track: bool,
     pub swarm_replicas_count: usize,
     pub available_routes: Vec<BrokerSourceRoute>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrokerClaimCloudTrackRequest {
-    pub buyer_or_claimer_dj: String,
+    pub claimer_dj: String,
     /// Either a `track_id` (e.g. `"hera-seed-001"`) or a `cas_fingerprint` (e.g. `"cas-davidj-ritualdelsol-122bpm"`)
     pub target_track_or_cas: String,
-    /// Must be `true` when purchasing a VIP Producer Marketplace track (`price_usd > 0.0`)
-    #[serde(default)]
-    pub payment_authorized: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrokerClaimCloudTrackResponse {
     pub status: String,
-    pub buyer_or_claimer_dj: String,
-    pub pioneer_seller_dj: String,
+    pub claimer_dj: String,
+    pub pioneer_curator_dj: String,
     pub linked_track: P2PVerifiedTrack,
     pub physical_r2_mb_consumed: f32,
     pub transfer_latency_ms: f32,
     pub pioneer_bounty_refunded_mb: f32,
-    pub is_marketplace_purchase: bool,
-    pub track_price_usd: f32,
-    pub producer_payout_usd: f32,
-    pub hera_platform_commission_usd: f32,
     pub note: String,
 }
 
@@ -462,8 +472,7 @@ impl P2PMeshState {
                 stream_url: Some(build_gdrive_direct_download_url(
                     "1DaviDJ_RitualDelSol_MasterFLAC",
                 )),
-                price_usd: 0.0,
-                is_vip_marketplace_track: false,
+                share_on_p2p: true,
                 node_id: nid.clone(),
                 hera_seal: compute_hera_seal(
                     "hera-seed-001",
@@ -512,8 +521,7 @@ impl P2PMeshState {
                 stream_url: Some(build_gdrive_direct_download_url(
                     "1DaviDJ_GuarachaTurbo_MasterFLAC",
                 )),
-                price_usd: 0.0,
-                is_vip_marketplace_track: false,
+                share_on_p2p: true,
                 node_id: nid.clone(),
                 hera_seal: compute_hera_seal(
                     "hera-seed-002",
@@ -562,8 +570,7 @@ impl P2PMeshState {
                 stream_url: Some(build_gdrive_direct_download_url(
                     "1DaviDJ_Teteo96_MasterFLAC",
                 )),
-                price_usd: 0.0,
-                is_vip_marketplace_track: false,
+                share_on_p2p: true,
                 node_id: nid.clone(),
                 hera_seal: compute_hera_seal(
                     "hera-seed-003",
@@ -591,7 +598,8 @@ impl P2PMeshState {
             r2_quota_mb: 1_000_000.0,
             r2_used_mb: 112.5,
             bounty_refunded_mb: 0.0,
-            producer_wallet_usd: 0.0,
+            p2p_sharing_enabled: true,
+            can_disable_p2p_sharing: true,
             verified_tracks_shared: 3,
             quarantined_rejected_tracks: 0,
         }];
@@ -652,7 +660,7 @@ impl P2PMeshState {
                         effective_bandwidth_hz: 21000.0,
                         sub_bass_phase_correlation: 0.94,
                         is_synthetic_tone: false,
-                        price_usd: 0.0,
+                        share_on_p2p: Some(true),
                     });
                 }
             }
@@ -664,6 +672,13 @@ impl P2PMeshState {
             .unwrap_or_else(|| "beta_mvp".to_string());
         let r2_quota_mb = resolve_tier_r2_quota_mb(&sub_tier);
         let mut r2_used_mb = 0.0f32;
+        let can_disable_p2p = tier_allows_private_vault(&sub_tier);
+        // By default, P2P sharing is ALWAYS ON (`true`). Only higher plans (`pro_monthly` / `founder_unlimited`) can turn it OFF.
+        let p2p_sharing_enabled = if can_disable_p2p {
+            req.p2p_sharing_enabled.unwrap_or(true)
+        } else {
+            true
+        };
 
         let storage_provider = if req.r2_bucket_url.is_some() && gdrive_folder_id.is_some() {
             "gdrive+r2".to_string()
@@ -850,8 +865,11 @@ impl P2PMeshState {
                 gdrive_file_id: file_id,
                 r2_object_key: item.r2_object_key.clone(),
                 stream_url,
-                price_usd: item.price_usd.max(0.0),
-                is_vip_marketplace_track: item.price_usd > 0.0,
+                share_on_p2p: if can_disable_p2p {
+                    item.share_on_p2p.unwrap_or(p2p_sharing_enabled)
+                } else {
+                    true
+                },
                 node_id: self.node_id.clone(),
                 hera_seal: seal,
             };
@@ -876,7 +894,8 @@ impl P2PMeshState {
             r2_quota_mb,
             r2_used_mb,
             bounty_refunded_mb: 0.0,
-            producer_wallet_usd: 0.0,
+            p2p_sharing_enabled,
+            can_disable_p2p_sharing: can_disable_p2p,
             verified_tracks_shared: admitted.len(),
             quarantined_rejected_tracks: rejected.len(),
         };
@@ -886,7 +905,11 @@ impl P2PMeshState {
             p_guard.push(profile.clone());
         }
 
-        let total_network_tracks = self.catalog.read().map(|c| c.len()).unwrap_or(0);
+        let total_network_tracks = self
+            .catalog
+            .read()
+            .map(|c| c.iter().filter(|t| t.share_on_p2p).count())
+            .unwrap_or(0);
 
         ConnectDjDriveResponse {
             status: "connected".to_string(),
@@ -897,8 +920,9 @@ impl P2PMeshState {
             physical_r2_mb_saved,
             network_catalog_available: total_network_tracks,
             welcome_message: format!(
-                "¡Bienvenido {}! Tu almacenamiento quedó conectado. Se admitieron {} pistas verificadas ({} deduplicadas por CAS ahorrando {:.1} MB físicos en R2; {} rechazadas por aduana forense o cuota R2) y ya tienes acceso a las {} pistas verificadas de la red P2P.",
+                "¡Bienvenido {}! Tu almacenamiento quedó conectado (Compartir P2P activo por defecto: {}). Se admitieron {} pistas verificadas ({} deduplicadas por CAS ahorrando {:.1} MB físicos en R2; {} rechazadas por aduana forense o cuota R2) y ya tienes acceso a las {} pistas compartidas de la red P2P.",
                 handle,
+                p2p_sharing_enabled,
                 admitted.len(),
                 cas_deduplicated_hits,
                 physical_r2_mb_saved,
@@ -921,7 +945,51 @@ impl P2PMeshState {
 
         profile.subscription_tier = tier.to_string();
         profile.r2_quota_mb = resolve_tier_r2_quota_mb(tier);
+        profile.can_disable_p2p_sharing = tier_allows_private_vault(tier);
+        if !profile.can_disable_p2p_sharing {
+            profile.p2p_sharing_enabled = true;
+        }
         Ok(profile.clone())
+    }
+
+    /// Toggle P2P sharing for a DJ's uploaded songs (`p2p_sharing_enabled` is `true` by default).
+    /// Only DJs on a higher plan (`pro_monthly`, `pro`, `founder_unlimited`) can turn P2P sharing OFF (`false`)!
+    pub fn set_p2p_sharing(
+        &self,
+        req: SetP2PSharingRequest,
+    ) -> Result<DjProfile, String> {
+        let handle = req.dj_handle.trim();
+        let updated_profile = {
+            let mut guard = self
+                .dj_profiles
+                .write()
+                .map_err(|_| "Failed to lock dj_profiles".to_string())?;
+            let profile = guard
+                .iter_mut()
+                .find(|p| p.dj_handle.eq_ignore_ascii_case(handle))
+                .ok_or_else(|| format!("DJ profile `{handle}` not found"))?;
+
+            if !req.p2p_sharing_enabled && !tier_allows_private_vault(&profile.subscription_tier) {
+                return Err(format!(
+                    "PLAN_UPGRADE_REQUIRED: En el plan `{}` todas las canciones subidas se comparten en la red P2P por defecto. Actualiza a `pro_monthly` para poder apagar el P2P en tus canciones (Modo Bóveda Privada).",
+                    profile.subscription_tier
+                ));
+            }
+
+            profile.p2p_sharing_enabled = req.p2p_sharing_enabled;
+            profile.can_disable_p2p_sharing = tier_allows_private_vault(&profile.subscription_tier);
+            profile.clone()
+        };
+
+        if let Ok(mut cat) = self.catalog.write() {
+            for trk in cat.iter_mut() {
+                if trk.owner_dj.eq_ignore_ascii_case(handle) {
+                    trk.share_on_p2p = req.p2p_sharing_enabled;
+                }
+            }
+        }
+
+        Ok(updated_profile)
     }
 
     /// Local Laptop / Server Direct Storage & P2P Super-Seeder:
@@ -1075,8 +1143,7 @@ impl P2PMeshState {
                 gdrive_file_id: None,
                 r2_object_key: None,
                 stream_url: Some(stream_url),
-                price_usd: 0.0,
-                is_vip_marketplace_track: false,
+                share_on_p2p: true,
                 node_id: self.node_id.clone(),
                 hera_seal: seal,
             };
@@ -1115,7 +1182,8 @@ impl P2PMeshState {
             r2_quota_mb: 100.0,
             r2_used_mb: 0.0,
             bounty_refunded_mb: 0.0,
-            producer_wallet_usd: 0.0,
+            p2p_sharing_enabled: true,
+            can_disable_p2p_sharing: false,
             verified_tracks_shared: admitted.len(),
             quarantined_rejected_tracks: rejected.len(),
         };
@@ -1171,7 +1239,7 @@ impl P2PMeshState {
         let mut by_cas: HashMap<String, BrokerIntelRecord> = HashMap::new();
 
         for trk in catalog.iter() {
-            if trk.forensic_verdict != "VERIFIED_STUDIO_MASTER" {
+            if trk.forensic_verdict != "VERIFIED_STUDIO_MASTER" || !trk.share_on_p2p {
                 continue;
             }
             let cas = compute_cas_fingerprint(&trk.artist, &trk.title, trk.bpm);
@@ -1207,8 +1275,6 @@ impl P2PMeshState {
                     style_simhash_hex: format!("0x{simhash:016x}"),
                     hot_cues: trk.hot_cues.clone(),
                     hera_seal: trk.hera_seal.clone(),
-                    price_usd: trk.price_usd,
-                    is_vip_marketplace_track: trk.is_vip_marketplace_track,
                     swarm_replicas_count: 0,
                     available_routes: Vec::new(),
                 }
@@ -1477,20 +1543,18 @@ impl P2PMeshState {
         }
     }
 
-    /// Zero-Copy Cloud P2P Track Claim + Curator Quota Refund Bounty + DJ Producer Marketplace Gate:
-    /// 1. Links an existing verified Studio Master into `buyer_or_claimer_dj`'s Cloud Locker in `< 1 ms`
+    /// Zero-Copy Cloud P2P Track Claim + Curator Quota Refund Bounty:
+    /// 1. Links an existing shared Studio Master (`share_on_p2p == true`) into `claimer_dj`'s Cloud Locker in `< 1 ms`
     ///    using a Zero-Copy R2 CAS pointer (`0.0 MB` extra physical storage, `$0.00` egress).
-    /// 2. Credits the pioneer DJ (`owner_dj`) with a Curator Quota Refund Bounty (`+38.0 MB` freed from their R2 quota)
-    ///    when 2+ DJs share the track in the swarm.
-    /// 3. If the track is a VIP Producer Marketplace release (`price_usd > 0.0`), enforces payment authorization
-    ///    and splits revenue **85% to the DJ Producer's wallet (`producer_wallet_usd`)** and **15% to Hera (`hera_platform_commission_usd`)**!
-    pub fn broker_claim_or_buy_cloud_track(
+    /// 2. Credits the pioneer curator DJ (`owner_dj`) with a Curator Quota Refund Bounty (`+38.0 MB` freed from their R2 quota)
+    ///    for nourishing the P2P swarm!
+    pub fn broker_claim_cloud_track(
         &self,
         req: BrokerClaimCloudTrackRequest,
     ) -> Result<BrokerClaimCloudTrackResponse, String> {
-        let buyer = req.buyer_or_claimer_dj.trim().to_string();
-        if buyer.is_empty() {
-            return Err("`buyer_or_claimer_dj` cannot be empty".to_string());
+        let claimer = req.claimer_dj.trim().to_string();
+        if claimer.is_empty() {
+            return Err("`claimer_dj` cannot be empty".to_string());
         }
         let target = req.target_track_or_cas.trim();
 
@@ -1502,36 +1566,17 @@ impl P2PMeshState {
             guard
                 .iter()
                 .find(|t| {
-                    t.track_id.eq_ignore_ascii_case(target)
-                        || compute_cas_fingerprint(&t.artist, &t.title, t.bpm)
-                            .eq_ignore_ascii_case(target)
+                    t.share_on_p2p
+                        && (t.track_id.eq_ignore_ascii_case(target)
+                            || compute_cas_fingerprint(&t.artist, &t.title, t.bpm)
+                                .eq_ignore_ascii_case(target))
                 })
                 .cloned()
                 .ok_or_else(|| {
                     format!(
-                        "Track or CAS fingerprint `{target}` not found in the Internal P2P Broker"
+                        "Shared P2P track or CAS fingerprint `{target}` not found (or its owner turned P2P sharing off in Private Vault mode)"
                     )
                 })?
-        };
-
-        let price = source_track.price_usd.max(0.0);
-        let is_marketplace = price > 0.0;
-        if is_marketplace && !req.payment_authorized {
-            return Err(format!(
-                "PAYMENT_REQUIRED: VIP Producer Master '{}' by {} costs ${:.2} USD. Set `payment_authorized: true` to purchase (85% goes directly to the DJ Producer, 0 MB R2 duplication).",
-                source_track.title, source_track.owner_dj, price
-            ));
-        }
-
-        let producer_payout = if is_marketplace {
-            ((price * 0.85) * 100.0).round() / 100.0
-        } else {
-            0.0
-        };
-        let hera_commission = if is_marketplace {
-            ((price - producer_payout) * 100.0).round() / 100.0
-        } else {
-            0.0
         };
 
         let pioneer_dj = source_track.owner_dj.clone();
@@ -1540,7 +1585,7 @@ impl P2PMeshState {
 
         let new_track_id = format!(
             "cloud-link-{}-{}",
-            buyer.to_ascii_lowercase().replace(' ', "-"),
+            claimer.to_ascii_lowercase().replace(' ', "-"),
             source_track.track_id
         );
 
@@ -1548,7 +1593,7 @@ impl P2PMeshState {
             track_id: new_track_id.clone(),
             title: source_track.title.clone(),
             artist: source_track.artist.clone(),
-            owner_dj: buyer.clone(),
+            owner_dj: claimer.clone(),
             bpm: source_track.bpm,
             camelot_key: source_track.camelot_key.clone(),
             top_subgenre: source_track.top_subgenre.clone(),
@@ -1567,8 +1612,7 @@ impl P2PMeshState {
                 .clone()
                 .or_else(|| Some(format!("cas-vault/{cas_key}.{}", source_track.format))),
             stream_url: source_track.stream_url.clone(),
-            price_usd: 0.0,
-            is_vip_marketplace_track: is_marketplace,
+            share_on_p2p: true,
             node_id: self.node_id.clone(),
             hera_seal: source_track.hera_seal.clone(),
         };
@@ -1578,7 +1622,7 @@ impl P2PMeshState {
             c_guard.push(linked_track.clone());
         }
 
-        // Credit Pioneer DJ with Curator Quota Refund Bounty (38.0 MB freed) + Producer Marketplace Wallet (85% split)
+        // Credit Pioneer DJ with Curator Quota Refund Bounty (38.0 MB freed)
         let bounty_mb = 38.0f32;
         if let Ok(mut p_guard) = self.dj_profiles.write() {
             if let Some(pioneer_prof) = p_guard
@@ -1587,50 +1631,28 @@ impl P2PMeshState {
             {
                 pioneer_prof.bounty_refunded_mb += bounty_mb;
                 pioneer_prof.r2_used_mb = (pioneer_prof.r2_used_mb - bounty_mb).max(0.0);
-                if producer_payout > 0.0 {
-                    pioneer_prof.producer_wallet_usd =
-                        ((pioneer_prof.producer_wallet_usd + producer_payout) * 100.0).round()
-                            / 100.0;
-                }
             }
-            if let Some(buyer_prof) = p_guard
+            if let Some(claimer_prof) = p_guard
                 .iter_mut()
-                .find(|p| p.dj_handle.eq_ignore_ascii_case(&buyer))
+                .find(|p| p.dj_handle.eq_ignore_ascii_case(&claimer))
             {
-                buyer_prof.verified_tracks_shared += 1;
+                claimer_prof.verified_tracks_shared += 1;
             }
         }
 
-        let status = if is_marketplace {
-            "vip_marketplace_track_purchased_zero_copy".to_string()
-        } else {
-            "p2p_cloud_track_claimed_zero_copy".to_string()
-        };
-
-        let note = if is_marketplace {
-            format!(
-                "Compra VIP instantánea (<1 ms, 0.0 MB extra en R2): {} adquirió '{}' de {} por ${:.2} USD (${:.2} USD [85%] acreditados al productor {}, ${:.2} USD [15%] comisión Hera + {:.1} MB de Bounty devueltos).",
-                buyer, source_track.title, pioneer_dj, price, producer_payout, pioneer_dj, hera_commission, bounty_mb
-            )
-        } else {
-            format!(
-                "Enlace P2P Cloud Zero-Copy (<1 ms, 0.0 MB físicos adicionales en R2): {} vinculó '{}' a su maleta con los 4 Hot Cues listos. El curador pionero ({}) recibió {:.1} MB de Bounty de cuota libre en R2.",
-                buyer, source_track.title, pioneer_dj, bounty_mb
-            )
-        };
+        let note = format!(
+            "Enlace P2P Cloud Zero-Copy (<1 ms, 0.0 MB físicos adicionales en R2): {} vinculó '{}' a su maleta con los 4 Hot Cues listos. El curador pionero ({}) recibió {:.1} MB de Bounty de cuota libre en R2.",
+            claimer, source_track.title, pioneer_dj, bounty_mb
+        );
 
         Ok(BrokerClaimCloudTrackResponse {
-            status,
-            buyer_or_claimer_dj: buyer,
-            pioneer_seller_dj: pioneer_dj,
+            status: "p2p_cloud_track_claimed_zero_copy".to_string(),
+            claimer_dj: claimer,
+            pioneer_curator_dj: pioneer_dj,
             linked_track,
             physical_r2_mb_consumed: 0.0,
             transfer_latency_ms: 0.42,
             pioneer_bounty_refunded_mb: bounty_mb,
-            is_marketplace_purchase: is_marketplace,
-            track_price_usd: price,
-            producer_payout_usd: producer_payout,
-            hera_platform_commission_usd: hera_commission,
             note,
         })
     }
@@ -1740,6 +1762,9 @@ impl P2PMeshState {
         guard
             .iter()
             .filter(|t| {
+                if !t.share_on_p2p {
+                    return false;
+                }
                 if verified_only && t.forensic_verdict != "VERIFIED_STUDIO_MASTER" {
                     return false;
                 }
