@@ -60,6 +60,29 @@ export default defineConfig({
   build: {
     target: ['edge115', 'chrome115', 'safari13'],
     cssMinify: 'lightningcss',
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (
+            id.includes('node_modules/react-dom') ||
+            id.includes('node_modules/react/')
+          ) {
+            return 'vendor-react';
+          }
+          if (id.includes('node_modules/@tanstack/')) {
+            return 'vendor-tanstack';
+          }
+          if (
+            id.includes('node_modules/@dnd-kit/') ||
+            id.includes('node_modules/@radix-ui/') ||
+            id.includes('node_modules/@lingui/')
+          ) {
+            return 'vendor-ui';
+          }
+          return undefined;
+        },
+      },
+    },
   },
   css: {
     transformer: 'lightningcss',

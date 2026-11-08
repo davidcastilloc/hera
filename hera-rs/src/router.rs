@@ -1,3 +1,8 @@
+use crate::cloudflare_edge::{
+    get_cloudflare_edge_capabilities, lookup_edge_forensic_cache, query_edge_vectorize_matches,
+    store_edge_forensic_cache, sync_d1_dj_dna, D1DnaSyncRequest, EdgeForensicLookupRequest,
+    EdgeForensicStoreRequest, VectorizeMatchRequest,
+};
 use crate::code_mode::{
     execute_code_mode, get_openapi_3_1_spec, get_typescript_sdk_definitions, CodeModeRequest,
 };
@@ -131,7 +136,13 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
         .route("/api/v1/crates/build", post(build_crate_handler))
+        .route("/api/v1/crates/set-spine", post(build_crate_handler))
         .route("/api/v1/crates/export", post(export_crate_handler))
+        .route("/api/v1/edge/cloudflare-capabilities", get(edge_capabilities_handler))
+        .route("/api/v1/edge/forensic-cache/lookup", post(edge_forensic_lookup_handler))
+        .route("/api/v1/edge/forensic-cache/store", post(edge_forensic_store_handler))
+        .route("/api/v1/edge/d1-dna-sync", post(edge_d1_dna_sync_handler))
+        .route("/api/v1/edge/vectorize-match", post(edge_vectorize_match_handler))
         .route("/api/v1/p2p/search", get(p2p_search_handler))
         .route("/api/v1/p2p/announce", post(p2p_announce_handler))
         .route("/api/v1/p2p/peers", get(p2p_list_peers_handler))
@@ -879,3 +890,33 @@ async fn ai_cloudflare_free_chat_handler(
     let resp = evaluate_agent_harness_turn(&req, &state);
     (StatusCode::OK, Json(resp))
 }
+
+async fn edge_capabilities_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
+    Json(get_cloudflare_edge_capabilities(&state))
+}
+
+async fn edge_forensic_lookup_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<EdgeForensicLookupRequest>,
+) -> impl IntoResponse {
+    Json(lookup_edge_forensic_cache(&state, &req))
+}
+
+async fn edge_forensic_store_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<EdgeForensicStoreRequest>,
+) -> impl IntoResponse {
+    (StatusCode::CREATED, Json(store_edge_forensic_cache(&state, req)))
+}
+
+async fn edge_d1_dna_sync_handler(Json(req): Json<D1DnaSyncRequest>) -> impl IntoResponse {
+    Json(sync_d1_dj_dna(req))
+}
+
+async fn edge_vectorize_match_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<VectorizeMatchRequest>,
+) -> impl IntoResponse {
+    Json(query_edge_vectorize_matches(&state, &req))
+}
+

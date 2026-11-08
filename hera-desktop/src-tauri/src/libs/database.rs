@@ -145,7 +145,12 @@ impl DB {
                 track_of = ?,
                 disk_no = ?,
                 disk_of = ?,
-                is_compilation = ?
+                is_compilation = ?,
+                bpm = ?,
+                camelot = ?,
+                energy = ?,
+                hera_seal = ?,
+                hot_cues = ?
             WHERE id = ?
             "#,
         )
@@ -162,6 +167,11 @@ impl DB {
         .bind(track.disk_no)
         .bind(track.disk_of)
         .bind(track.is_compilation)
+        .bind(track.bpm.unwrap_or(124.0))
+        .bind(track.camelot.as_deref().unwrap_or("8A"))
+        .bind(track.energy.unwrap_or(0.80))
+        .bind(&track.hera_seal)
+        .bind(json!(track.hot_cues.as_deref().unwrap_or(&[])))
         .bind(&track.id)
         .execute(&mut self.connection)
         .await?;
@@ -197,8 +207,9 @@ impl DB {
                 r#"
                 INSERT INTO tracks (
                     id, path, title, album, album_artist, artists, genres, year,
-                    duration, track_no, track_of, disk_no, disk_of, is_compilation
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    duration, track_no, track_of, disk_no, disk_of, is_compilation,
+                    bpm, camelot, energy, hera_seal, hot_cues
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
             )
             .bind(&track.id)
@@ -215,6 +226,11 @@ impl DB {
             .bind(track.disk_no)
             .bind(track.disk_of)
             .bind(track.is_compilation)
+            .bind(track.bpm.unwrap_or(124.0))
+            .bind(track.camelot.as_deref().unwrap_or("8A"))
+            .bind(track.energy.unwrap_or(0.80))
+            .bind(&track.hera_seal)
+            .bind(json!(track.hot_cues.as_deref().unwrap_or(&[])))
             .execute(&mut *tx)
             .await?;
         }
@@ -245,7 +261,12 @@ impl DB {
                     track_of = ?,
                     disk_no = ?,
                     disk_of = ?,
-                    is_compilation = ?
+                    is_compilation = ?,
+                    bpm = ?,
+                    camelot = ?,
+                    energy = ?,
+                    hera_seal = ?,
+                    hot_cues = ?
                 WHERE id = ?
                 "#,
             )
@@ -262,6 +283,11 @@ impl DB {
             .bind(track.disk_no)
             .bind(track.disk_of)
             .bind(track.is_compilation)
+            .bind(track.bpm.unwrap_or(124.0))
+            .bind(track.camelot.as_deref().unwrap_or("8A"))
+            .bind(track.energy.unwrap_or(0.80))
+            .bind(&track.hera_seal)
+            .bind(json!(track.hot_cues.as_deref().unwrap_or(&[])))
             .bind(&track.id)
             .execute(&mut *tx)
             .await?;

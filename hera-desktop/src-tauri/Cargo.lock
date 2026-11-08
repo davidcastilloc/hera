@@ -2061,8 +2061,54 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "hera-desktop"
+version = "0.5.0"
+dependencies = [
+ "anyhow",
+ "axum 0.8.9",
+ "base64 0.22.1",
+ "dirs",
+ "futures",
+ "hera-node-rs",
+ "home-config",
+ "indexmap 2.14.0",
+ "itertools",
+ "lofty",
+ "log",
+ "m3u",
+ "memoize",
+ "nosleep",
+ "pathdiff",
+ "rayon",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "strum 0.28.0",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-clipboard-manager",
+ "tauri-plugin-dialog",
+ "tauri-plugin-fs",
+ "tauri-plugin-log",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-os",
+ "tauri-plugin-prevent-default",
+ "tauri-plugin-process",
+ "tauri-plugin-shell",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-window-state",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "ts-rs",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "hera-node-rs"
-version = "0.2.0"
+version = "0.5.0"
 dependencies = [
  "axum 0.7.9",
  "bytes",
@@ -2950,52 +2996,6 @@ dependencies = [
  "serde",
  "thiserror 2.0.18",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "museeks"
-version = "0.23.4"
-dependencies = [
- "anyhow",
- "axum 0.8.9",
- "base64 0.22.1",
- "dirs",
- "futures",
- "hera-node-rs",
- "home-config",
- "indexmap 2.14.0",
- "itertools",
- "lofty",
- "log",
- "m3u",
- "memoize",
- "nosleep",
- "pathdiff",
- "rayon",
- "serde",
- "serde_json",
- "sqlx",
- "strum 0.28.0",
- "tauri",
- "tauri-build",
- "tauri-plugin-clipboard-manager",
- "tauri-plugin-dialog",
- "tauri-plugin-fs",
- "tauri-plugin-log",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-os",
- "tauri-plugin-prevent-default",
- "tauri-plugin-process",
- "tauri-plugin-shell",
- "tauri-plugin-single-instance",
- "tauri-plugin-window-state",
- "thiserror 2.0.18",
- "tokio",
- "tokio-util",
- "ts-rs",
- "uuid",
- "walkdir",
 ]
 
 [[package]]

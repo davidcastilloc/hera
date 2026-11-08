@@ -1,3 +1,6 @@
+use hera_node_rs::cloudflare_edge::{
+    get_cloudflare_edge_capabilities, CloudflareEdgeCapabilities,
+};
 use hera_node_rs::dj_brain::{
     auto_detect_local_backend, compute_dj_style_dna, evaluate_agent_harness_turn,
     list_supported_ai_backends, probe_backend_models, AiBackendOption, CloudflareFreeAiTurnRequest,
@@ -5,6 +8,8 @@ use hera_node_rs::dj_brain::{
 };
 use hera_node_rs::export::{export_crate_bundle, ExportCrateRequest, ExportCrateResponse};
 use hera_node_rs::p2p::P2PMeshState;
+use hera_node_rs::router::BuildCrateRequest;
+use hera_node_rs::synergy::{optimize_crate_with_spine, OptimizedCrateResult, SetSpineConfig};
 use serde::{Deserialize, Serialize};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::Runtime;
@@ -81,6 +86,30 @@ pub fn compute_style_dna(request: DjStyleDnaRequest) -> Result<DjStyleDnaProfile
 #[tauri::command]
 pub fn export_crate(request: ExportCrateRequest) -> Result<ExportCrateResponse, String> {
     Ok(export_crate_bundle(&request))
+}
+
+#[tauri::command]
+pub fn build_dj_set_spine(request: BuildCrateRequest) -> Result<OptimizedCrateResult, String> {
+    if request.candidates.is_empty() {
+        return Err("La lista de pistas candidatas para ordenar no puede estar vacía".to_string());
+    }
+    let spine = SetSpineConfig {
+        anchors: request.anchors,
+        custom_energy_curve: request.custom_energy_curve,
+    };
+    Ok(optimize_crate_with_spine(
+        &request.brief,
+        &request.energy_arc,
+        request.candidates,
+        request.max_tracks,
+        &spine,
+    ))
+}
+
+#[tauri::command]
+pub fn get_cloudflare_edge_radar() -> Result<CloudflareEdgeCapabilities, String> {
+    let state = P2PMeshState::new("hera-desktop-local-node");
+    Ok(get_cloudflare_edge_capabilities(&state))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -279,6 +308,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(tauri::generate_handler![
             compute_style_dna,
             export_crate,
+            build_dj_set_spine,
+            get_cloudflare_edge_radar,
             chat_copilot,
             probe_ai_backend,
             list_ai_backends,

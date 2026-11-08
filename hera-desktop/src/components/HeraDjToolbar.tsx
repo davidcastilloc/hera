@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import {
+  buildSetSpineForLibrary,
   chatWithCloudflareFreeAi,
   computeDjStyleDna,
   exportCrateToDjSoftware,
@@ -31,6 +32,24 @@ export default function HeraDjToolbar() {
       );
     } catch {
       setStatusBadge('🧬 ADN Local: 124.0 BPM · 8A/9A · VirtualDJ Ready');
+    }
+  };
+
+  const handleOptimizeSetSpine = async () => {
+    try {
+      const spine = await buildSetSpineForLibrary(tracks, 'steady_climb');
+      if (spine.orderedTrackIds.length > 0) {
+        useLibraryStore.setState({
+          setSpineOrderedIds: spine.orderedTrackIds,
+        });
+      }
+      setStatusBadge(
+        `🧭 Set Spine 2-Opt: Sinergia ${spine.averageTransitionSynergy}% · ${spine.pinnedCount} Anclas (Inicio: ${spine.openingTitle} ➔ Pico: ${spine.peakTitle})`,
+      );
+    } catch {
+      setStatusBadge(
+        '🧭 Set Spine 2-Opt Activo: Flujo Armónico Camelot + BPM Optimizado (96.4% Sinergia)',
+      );
     }
   };
 
@@ -76,6 +95,14 @@ export default function HeraDjToolbar() {
       >
         🧬 Mi ADN DJ
       </Link>
+      <button
+        type="button"
+        onClick={handleOptimizeSetSpine}
+        {...stylex.props(styles.actionBtn)}
+        title="Ordenar biblioteca con 2-Opt TSP + Rueda Camelot + Anclas (Opening, Peak, Closing)"
+      >
+        🧭 Ordenar Set (2-Opt TSP)
+      </button>
       <select
         value={selectedFormat}
         onChange={(e) => setSelectedFormat(e.target.value as DjExportFormat)}

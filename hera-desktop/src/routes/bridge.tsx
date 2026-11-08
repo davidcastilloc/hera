@@ -5,8 +5,10 @@ import { useEffect, useState } from 'react';
 import View from '../elements/View';
 import {
   chatWithCloudflareFreeAi,
+  getCloudflareEdgeRadar,
   probeLocalAiBackend,
   resolveHarmonicBridge,
+  type CloudflareEdgeCapabilities,
   type HeraCloudflareFreeAiResponse,
   type ResolveHarmonicBridgeResponse,
 } from '../lib/bridge-hera';
@@ -50,6 +52,9 @@ function ViewHarmonicBridgeP2P() {
 
   const [bridgeResult, setBridgeResult] =
     useState<ResolveHarmonicBridgeResponse | null>(null);
+  const [edgeRadar, setEdgeRadar] = useState<CloudflareEdgeCapabilities | null>(
+    null,
+  );
   const [previewStatus, setPreviewStatus] = useState<string>('');
   const [turboCreditsMb, setTurboCreditsMb] = useState<number>(150.0);
   const [chatPrompt, setChatPrompt] = useState(
@@ -65,17 +70,21 @@ function ViewHarmonicBridgeP2P() {
     useState<HeraCloudflareFreeAiResponse | null>(null);
 
   const handleCalculateBridge = async () => {
-    const res = await resolveHarmonicBridge({
-      originTitle,
-      originArtist,
-      originBpm,
-      originCamelot,
-      targetTitle,
-      targetArtist,
-      targetBpm,
-      targetCamelot,
-    });
+    const [res, radar] = await Promise.all([
+      resolveHarmonicBridge({
+        originTitle,
+        originArtist,
+        originBpm,
+        originCamelot,
+        targetTitle,
+        targetArtist,
+        targetBpm,
+        targetCamelot,
+      }),
+      getCloudflareEdgeRadar(),
+    ]);
     setBridgeResult(res);
+    setEdgeRadar(radar);
   };
 
   useEffect(() => {
@@ -677,6 +686,56 @@ function ViewHarmonicBridgeP2P() {
             </div>
           )}
         </div>
+
+        {edgeRadar && (
+          <div {...stylex.props(styles.copilotBox)}>
+            <div {...stylex.props(styles.bridgeHeader)}>
+              <strong>
+                ☁️ Radar Enjambre P2P &amp; Cloudflare Edge Optimizer (
+                {edgeRadar.active_swarm_nodes} Nodos Guardian ·{' '}
+                {edgeRadar.kv_forensic_cache_entries} Masters en KV Cache ·{' '}
+                {edgeRadar.estimated_laptop_cpu_seconds_saved.toFixed(1)}s CPU
+                FFT Ahorrados)
+              </strong>
+              <span {...stylex.props(styles.camelotBadge)}>
+                ⚡ +{edgeRadar.pioneer_forensic_bounty_mb} MB Pioneer Bounty ·{' '}
+                1:{edgeRadar.turbo_credit_multiplier} Turbo Credit · $0.00 R2
+                Egress
+              </span>
+            </div>
+            <div {...stylex.props(styles.endpointsGrid)}>
+              {edgeRadar.primitives.slice(0, 4).map((prim) => (
+                <div key={prim.id} {...stylex.props(styles.endpointCard)}>
+                  <strong {...stylex.props(styles.tipText)}>
+                    🟢 {prim.name}
+                  </strong>
+                  <small {...stylex.props(styles.subtitle)}>
+                    {prim.role_in_hera}
+                  </small>
+                  <small {...stylex.props(styles.badgeOrigin)}>
+                    {prim.free_tier_allowance}
+                  </small>
+                </div>
+              ))}
+            </div>
+            {edgeRadar.recent_moq_harmonic_events.length > 0 && (
+              <div {...stylex.props(styles.aiReply)}>
+                <strong {...stylex.props(styles.tipText)}>
+                  📡 Eventos MoQ Harmonic Pub/Sub en Vivo (Pre-Fetch Automático
+                  Rueda Camelot):
+                </strong>
+                {edgeRadar.recent_moq_harmonic_events.map((ev) => (
+                  <small key={ev.event_id} {...stylex.props(styles.subtitle)}>
+                    • <code>{ev.topic_uri}</code> ➔ {ev.artist} — {ev.title} (
+                    {ev.bpm.toFixed(1)} BPM · {ev.camelot_key} ·{' '}
+                    {ev.hot_cues_count} Hot Cues · CAS:{' '}
+                    {ev.cas_fingerprint.slice(0, 14)})
+                  </small>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </View>
   );

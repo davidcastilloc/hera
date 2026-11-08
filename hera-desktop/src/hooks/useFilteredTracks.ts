@@ -23,10 +23,22 @@ export default function useFilteredTracks(
   sortOrder?: SortOrder,
 ): Array<Track> {
   const search = useLibraryStore((state) => stripAccents(state.search));
+  const setSpineOrderedIds = useLibraryStore(
+    (state) => state.setSpineOrderedIds,
+  );
 
   return useMemo(() => {
     // 1. Raw List
     let searchedTracks: Track[] = filterTracks(tracks, search);
+
+    if (setSpineOrderedIds && setSpineOrderedIds.length > 0) {
+      const rankMap = new Map(
+        setSpineOrderedIds.map((id, index) => [id, index]),
+      );
+      return [...searchedTracks].sort(
+        (a, b) => (rankMap.get(a.id) ?? 99999) - (rankMap.get(b.id) ?? 99999),
+      );
+    }
 
     if (sortBy && sortOrder) {
       // sorting being a costly operation, do it after filtering, ignore it if not needed
@@ -38,7 +50,7 @@ export default function useFilteredTracks(
     }
 
     return searchedTracks;
-  }, [tracks, search, sortBy, sortOrder]);
+  }, [tracks, search, sortBy, sortOrder, setSpineOrderedIds]);
 }
 
 /**

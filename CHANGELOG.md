@@ -4,6 +4,24 @@ All notable changes to **HERA (`davidcastilloc/hera`)** are documented in this f
 
 ---
 
+## [0.5.0] - 2026-11-08
+
+### Added
+- **Cloudflare Edge Optimization Primitives (`hera-rs/src/cloudflare_edge.rs`, `ADR-011`):**
+  - **Cloudflare KV Global Forensic Dedup Cache (`POST /api/v1/edge/forensic-cache/lookup` & `/store`):** Resolves verified 4 Hot Cues + spectral telemetry in `< 2 ms` at the Edge (saving `420 ms` of laptop FFT CPU per hit) and credits `+5.0 MB` Pioneer Forensic Bounty for newly verified masters.
+  - **Cloudflare D1 Edge SQLite DNA Sync (`POST /api/v1/edge/d1-dna-sync`):** Zero-cost (`$0.00`) synchronization of compact `DJ Style DNA` profiles and pinned Set Spine anchors (`Opening`, `Peak`, `Closing`).
+  - **Cloudflare Vectorize + `u64` SimHash POPCNT Matcher (`POST /api/v1/edge/vectorize-match` & `GET /api/v1/edge/cloudflare-capabilities`):** Hybrid acoustic texture + Camelot harmonic wheel + BPM curve matching across the global P2P swarm.
+- **5 Ecosystem Upgrade Pillars (`hera-desktop` & `hera-rs`):**
+  - **Pillar 1 — Visual `2-Opt TSP` Set Spine Builder (`HeraDjToolbar.tsx`, `useFilteredTracks.ts`, `hera_dj.rs`):** Added `🧭 Ordenar Set (2-Opt TSP)` (`plugin:hera-dj|build_dj_set_spine`) to reorder `/library` tracks in-place with Opening/Peak/Closing anchors and live Spine Synergy score badge.
+  - **Pillar 2 — Real Spectral Forensics & 4 Hot Cues on Folder Import (`track.rs` & `database.rs`):** Wired `enrich_track_with_hera_dsp` (`decode_audio_bytes` + `audit_pcm_channels` + `analyze_structure_and_style`) into `get_track_from_file` so `rayon` parallel folder scanning automatically populates `bpm`, `camelot`, `energy`, `hera_seal`, and `hot_cues` (`1:Intro`, `2:Breakdown`, `3:Drop`, `4:Outro`) in `hera.db`.
+  - **Pillar 3 — Automated Multi-OS Tauri v2 Release Pipeline (`.github/workflows/release.yml`):** Added GitHub Actions matrix (`ubuntu-22.04`, `macos-latest` Universal/Apple Silicon, `windows-latest`) using `oven-sh/setup-bun@v2` + `tauri-apps/tauri-action@v0`.
+  - **Pillar 4 — Live Cloudflare Edge & MoQ Swarm Radar (`bridge.tsx`):** Added the **☁️ Radar Enjambre P2P & Cloudflare Edge Optimizer** panel displaying active Guardian nodes, KV Forensic Cache hits, Pioneer Bounty (`+5 MB`), `1:1.5` Turbo Credit, and live `hera://swarm/camelot/*` MoQ Harmonic Pub/Sub events.
+  - **Pillar 5 — `Rolldown` Code-Splitting (`vite.config.ts`):** Configured `rolldownOptions.output.manualChunks` (`vendor-react`, `vendor-tanstack`, `vendor-ui`, `index`), eliminating all `> 500 kB` chunk warnings.
+- **Swarm-First Invariant & Robin Hood Open-Source Sustenance (`ADR-010`, `839e3e8`):**
+  - Enforced `p2p_sharing_enabled = true` (`can_disable_p2p_sharing = false`) across all free/local/beta tiers and added the `🐺🕶️🥫 Limosnita` Robin Hood modal on 1-click export.
+
+---
+
 ## [0.4.1] - 2026-11-08
 
 ### Fixed

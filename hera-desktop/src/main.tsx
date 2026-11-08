@@ -73,7 +73,7 @@ export const app = (
 
   await Promise.allSettled([
     logger.attachConsole(),
-    loadTranslation(window.__MUSEEKS_INITIAL_CONFIG.language),
+    loadTranslation(window.__MUSEEKS_INITIAL_CONFIG?.language ?? 'es'),
   ]);
 
   const wrap = document.getElementById('wrap');

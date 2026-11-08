@@ -51,6 +51,8 @@ fn main() {
                 tauri_build::InlinedPlugin::new().commands(&[
                     "compute_style_dna",
                     "export_crate",
+                    "build_dj_set_spine",
+                    "get_cloudflare_edge_radar",
                     "chat_copilot",
                     "probe_ai_backend",
                     "list_ai_backends",

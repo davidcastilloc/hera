@@ -1,6 +1,6 @@
 {
   "name": "hera-desktop",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "HERA Desktop — Pure-Rust DJ Curation, 4-Hot-Cue DSP, P2P Swarm & AI Copilot.",
   "bugs": {
     "url": "https://github.com/davidcastilloc/hera/issues"

@@ -1,3 +1,4 @@
+pub mod cloudflare_edge;
 pub mod code_mode;
 pub mod dj_brain;
 pub mod export;
@@ -1885,5 +1886,148 @@ mod tests {
         );
         assert_eq!(j_ai["estimated_cost_usd"], 0.0);
         assert!(j_ai["daily_neurons_remaining"].as_f64().unwrap() > 9800.0);
+    }
+
+    #[tokio::test]
+    async fn test_cloudflare_edge_kv_forensic_cache_d1_dna_sync_and_vectorize_simhash() {
+        use axum::body::{to_bytes, Body};
+        use axum::http::{Request, StatusCode};
+        use tower_service::Service;
+
+        let state = P2PMeshState::new("hera-edge-test-01");
+        let mut app = build_hera_router(state);
+
+        // 1. Verify GET /api/v1/edge/cloudflare-capabilities returns all 6 Cloudflare Edge primitives + MoQ events
+        let req_cap = Request::builder()
+            .uri("/api/v1/edge/cloudflare-capabilities")
+            .body(Body::empty())
+            .unwrap();
+        let resp_cap = app.call(req_cap).await.unwrap();
+        assert_eq!(resp_cap.status(), StatusCode::OK);
+        let j_cap: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_cap.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_cap["r2_egress_fee_usd_per_gb"], 0.0);
+        assert_eq!(j_cap["pioneer_forensic_bounty_mb"], 5.0);
+        assert_eq!(j_cap["primitives"].as_array().unwrap().len(), 6);
+        assert!(!j_cap["recent_moq_harmonic_events"].as_array().unwrap().is_empty());
+
+        // 2. Verify POST /api/v1/edge/forensic-cache/lookup hits on seeded track (< 2 ms, saves 420 ms laptop FFT CPU)
+        let req_hit = Request::builder()
+            .method("POST")
+            .uri("/api/v1/edge/forensic-cache/lookup")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "artist": "DaviDJ",
+                    "title": "Ritual Del Sol (DaviDJ Original Club Master)",
+                    "bpm": 122.0
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_hit = app.call(req_hit).await.unwrap();
+        assert_eq!(resp_hit.status(), StatusCode::OK);
+        let j_hit: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_hit.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_hit["kv_hit"], true);
+        assert_eq!(j_hit["cache_status"], "CLOUDFLARE_KV_EDGE_HIT");
+        assert_eq!(j_hit["laptop_fft_cpu_ms_saved"], 420);
+        assert_eq!(j_hit["entry"]["hot_cues"].as_array().unwrap().len(), 4);
+
+        // 3. Verify POST /api/v1/edge/forensic-cache/store stores a brand-new pioneer master and credits +5.0 MB bounty
+        let req_store = Request::builder()
+            .method("POST")
+            .uri("/api/v1/edge/forensic-cache/store")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "pioneer_dj": "DaviDJ",
+                    "artist": "Rampa & Keinemusik",
+                    "title": "Cesar (Hera Club VIP)",
+                    "bpm": 123.0,
+                    "camelot_key": "8A",
+                    "top_subgenre": "Afro House / Deep Tech",
+                    "duration_seconds": 368.0,
+                    "format": "flac",
+                    "effective_bandwidth_hz": 21900.0,
+                    "sub_bass_phase_correlation": 0.96,
+                    "hot_cues": j_hit["entry"]["hot_cues"].clone()
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_store = app.call(req_store).await.unwrap();
+        assert_eq!(resp_store.status(), StatusCode::CREATED);
+        let j_store: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_store.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_store["was_new_pioneer_entry"], true);
+        assert_eq!(j_store["pioneer_bounty_credited_mb"], 5.0);
+
+        // 4. Verify POST /api/v1/edge/d1-dna-sync generates deterministic Cloudflare D1 SQLite upsert at $0.00
+        let req_d1 = Request::builder()
+            .method("POST")
+            .uri("/api/v1/edge/d1-dna-sync")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "dj_handle": "DaviDJ",
+                    "preferred_software": "VirtualDJ",
+                    "dominant_bpm_zone": "club_afro_guaracha_122_132",
+                    "overall_average_bpm": 124.5,
+                    "dominant_camelot_keys": ["8A", "9A", "7A"],
+                    "prompt_block": "[HERA DJ STYLE DNA — DaviDJ]",
+                    "pinned_anchors": [
+                        { "track_id": "hera-seed-001", "title": "Ritual Del Sol", "role": "opening", "target_index": 0 }
+                    ]
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_d1 = app.call(req_d1).await.unwrap();
+        assert_eq!(resp_d1.status(), StatusCode::OK);
+        let j_d1: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_d1.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_d1["status"], "CLOUDFLARE_D1_DNA_SYNCED_ZERO_COST");
+        assert_eq!(j_d1["d1_cost_usd"], 0.0);
+        assert!(j_d1["record"]["d1_upsert_sql"]
+            .as_str()
+            .unwrap()
+            .contains("INSERT OR REPLACE INTO d1_dj_style_dna"));
+
+        // 5. Verify POST /api/v1/edge/vectorize-match ranks swarm tracks using 64-bit u64 SimHash POPCNT + Camelot compatibility
+        let req_vec = Request::builder()
+            .method("POST")
+            .uri("/api/v1/edge/vectorize-match")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "bpm": 122.5,
+                    "camelot_key": "8A",
+                    "subgenre": "Afro House / Deep Tech",
+                    "limit": 4
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_vec = app.call(req_vec).await.unwrap();
+        assert_eq!(resp_vec.status(), StatusCode::OK);
+        let j_vec: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_vec.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            j_vec["engine"],
+            "cloudflare_vectorize_u64_simhash_camelot_hybrid"
+        );
+        assert!(j_vec["matches_count"].as_u64().unwrap() >= 3);
+        assert_eq!(j_vec["matches"][0]["camelot_compatible"], true);
     }
 }

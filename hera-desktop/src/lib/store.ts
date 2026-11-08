@@ -5,6 +5,7 @@ import type { TrackListStatusInfo } from '../types/museeks';
 
 type LibraryState = {
   tracks: Array<Track>;
+  setSpineOrderedIds: Array<string> | null;
   search: string;
   refreshing: boolean;
   refresh: {
@@ -16,6 +17,7 @@ type LibraryState = {
 
 const useLibraryStore = create<LibraryState>()(() => ({
   tracks: [],
+  setSpineOrderedIds: null,
   search: '',
   refreshing: false,
   refresh: {

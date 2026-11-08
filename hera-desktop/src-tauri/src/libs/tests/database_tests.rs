@@ -25,6 +25,11 @@ fn sample_track_1() -> Track {
         disk_no: Some(1),
         disk_of: Some(1),
         is_compilation: false,
+        bpm: Some(124.0),
+        camelot: Some("8A".to_string()),
+        energy: Some(0.80),
+        hera_seal: None,
+        hot_cues: Some(vec![]),
     }
 }
 
@@ -44,6 +49,11 @@ fn sample_track_2() -> Track {
         disk_no: None,
         disk_of: None,
         is_compilation: false,
+        bpm: Some(124.0),
+        camelot: Some("8A".to_string()),
+        energy: Some(0.80),
+        hera_seal: None,
+        hot_cues: Some(vec![]),
     }
 }
 
@@ -63,6 +73,11 @@ fn sample_track_3() -> Track {
         disk_no: Some(1),
         disk_of: Some(2),
         is_compilation: false,
+        bpm: Some(124.0),
+        camelot: Some("8A".to_string()),
+        energy: Some(0.80),
+        hera_seal: None,
+        hot_cues: Some(vec![]),
     }
 }
 
@@ -132,6 +147,11 @@ async fn test_tracks_db() {
             disk_no: None,
             disk_of: None,
             is_compilation: false,
+            bpm: Some(124.0),
+            camelot: Some("8A".to_string()),
+            energy: Some(0.80),
+            hera_seal: None,
+            hot_cues: Some(vec![]),
         }]
     );
 

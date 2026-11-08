@@ -54,6 +54,8 @@
     "default-view:allow-set",
     "hera-dj:allow-compute-style-dna",
     "hera-dj:allow-export-crate",
+    "hera-dj:allow-build-dj-set-spine",
+    "hera-dj:allow-get-cloudflare-edge-radar",
     "hera-dj:allow-chat-copilot",
     "hera-dj:allow-probe-ai-backend",
     "hera-dj:allow-list-ai-backends",
