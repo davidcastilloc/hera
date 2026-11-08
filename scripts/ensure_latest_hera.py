@@ -114,6 +114,18 @@ def ensure_git_repo_updated(hera_dir: Path, pull_remote: bool = True) -> dict[st
     if rc_rem == 0 and remote_full:
         info["remote_commit"] = remote_full[:7]
 
+    # Ensure Multi-Instance ODD Git conventions (author 'david' + local hooks)
+    _run_cmd(["git", "config", "user.name", "david"], cwd=hera_dir, timeout=10)
+    if (hera_dir / ".githooks").exists():
+        _run_cmd(["git", "config", "core.hooksPath", ".githooks"], cwd=hera_dir, timeout=10)
+
+    # Also sync companion repo ../hera-cloud if cloned alongside hera
+    companion_cloud = hera_dir.parent / "hera-cloud"
+    if (companion_cloud / ".git").exists():
+        _run_cmd(["git", "config", "user.name", "david"], cwd=companion_cloud, timeout=10)
+        if pull_remote:
+            _run_cmd(["git", "pull", "--rebase", "origin", "main", "--quiet"], cwd=companion_cloud, timeout=60)
+
     if not remote_full or local_full == remote_full:
         info["message"] = f"Repositorio Git ya está en la última versión ({info['local_commit']})."
         return info
@@ -295,12 +307,15 @@ def _hash_file(path: Path) -> str:
 
 def sync_global_skills(hera_dir: Path) -> dict[str, Any]:
     """
-    Sincroniza automáticamente skills/hera y skills/hera-dj-set-curator desde el
-    repositorio hacia los directorios globales de skills del agente (.gemini, .claude, .agents).
+    Sincroniza automáticamente todas las skills de superpowers-odd (.agent/skills/) y de
+    Hera (skills/) hacia los directorios locales (.agent/skills, .claude/skills) y globales
+    del usuario (~/.gemini/config/skills, ~/.claude/skills, ~/.agents/skills).
     """
-    src_skills_root = hera_dir / "skills"
-    if not src_skills_root.exists():
-        return {"synced": False, "reason": "No existe carpeta skills/ en el repositorio."}
+    source_roots = [
+        p for p in (hera_dir / ".agent" / "skills", hera_dir / "skills") if p.exists()
+    ]
+    if not source_roots:
+        return {"synced": False, "reason": "No existe carpeta de skills en el repositorio."}
 
     home = Path.home()
     target_roots: list[Path] = [
@@ -315,16 +330,20 @@ def sync_global_skills(hera_dir: Path) -> dict[str, Any]:
         if candidate_root.exists() or candidate_root.parent.exists():
             target_roots.append(candidate_root)
 
+    # Discover all skill directories (those containing a SKILL.md)
+    discovered_skills: dict[str, Path] = {}
+    for src_root in source_roots:
+        for child in sorted(src_root.iterdir()):
+            if child.is_dir() and (child / "SKILL.md").exists():
+                discovered_skills[child.name] = child
+
     synced_targets: list[dict[str, Any]] = []
-    skill_names = ["hera", "hera-dj-set-curator"]
 
-    for skill_name in skill_names:
-        src_skill = src_skills_root / skill_name
-        if not src_skill.exists():
-            continue
-
+    for skill_name, src_skill in discovered_skills.items():
         for root in target_roots:
             dst_skill = root / skill_name
+            if src_skill.resolve() == dst_skill.resolve():
+                continue
             files_updated = 0
             files_checked = 0
             for src_file in src_skill.rglob("*"):
@@ -349,6 +368,7 @@ def sync_global_skills(hera_dir: Path) -> dict[str, Any]:
 
     return {
         "synced": True,
+        "skills_count": len(discovered_skills),
         "targets": synced_targets,
     }
 
