@@ -5,9 +5,9 @@ use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditRepo
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
     calculate_cloudflare_saas_economics_with_price, compute_hera_seal, get_cloud_referral_catalog,
-    BrokerBatchLookupRequest, BrokerBridgeRequest, CloudReferralOption, ConnectDjDriveRequest,
-    P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
-    UpgradeTierRequest,
+    BrokerBatchLookupRequest, BrokerBridgeRequest, BrokerSimilarQuery, CloudReferralOption,
+    ConnectDjDriveRequest, P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack,
+    ScanLocalDirRequest, UpgradeTierRequest,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
 use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
@@ -105,6 +105,8 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/broker/stats", get(broker_stats_handler))
         .route("/api/v1/broker/lookup-intel", post(broker_lookup_intel_handler))
         .route("/api/v1/broker/resolve-bridge", post(broker_resolve_bridge_handler))
+        .route("/api/v1/broker/similar", post(broker_similar_handler))
+        .route("/api/v1/broker/optimize-tiering", post(broker_optimize_tiering_handler))
         .route("/api/v1/node/scan-local-dir", post(scan_local_dir_handler))
         .route("/api/v1/dj/connect-drive", post(connect_dj_drive_handler))
         .route("/api/v1/dj/upgrade-tier", post(upgrade_dj_tier_handler))
@@ -159,6 +161,23 @@ async fn broker_resolve_bridge_handler(
         "bridge_candidates_count": candidates.len(),
         "candidates": candidates
     }))
+}
+
+async fn broker_similar_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<BrokerSimilarQuery>,
+) -> impl IntoResponse {
+    let matches = state.broker_find_similar_by_popcnt(req);
+    Json(serde_json::json!({
+        "node_id": state.node_id,
+        "engine": "u64_simhash_popcnt_in_ram",
+        "matches_count": matches.len(),
+        "matches": matches
+    }))
+}
+
+async fn broker_optimize_tiering_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
+    Json(state.broker_optimize_hot_cold_tier())
 }
 
 async fn scan_local_dir_handler(

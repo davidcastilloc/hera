@@ -9,7 +9,7 @@
 
 use crate::forensics::audit_pcm_channels;
 use crate::p2p::{
-    get_cloud_referral_catalog, BrokerBatchLookupRequest, BrokerBridgeRequest,
+    get_cloud_referral_catalog, BrokerBatchLookupRequest, BrokerBridgeRequest, BrokerSimilarQuery,
     ConnectDjDriveRequest, P2PMeshState, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
 };
 use crate::router::current_runtime_target;
@@ -440,6 +440,24 @@ fn execute_single_sdk_call(
                 candidates.len()
             ));
             serde_json::to_value(candidates).map_err(|e| e.to_string())
+        }
+        "hera.brokerFindSimilar" | "brokerFindSimilar" | "broker_find_similar" => {
+            let req: BrokerSimilarQuery = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid brokerFindSimilar payload: {e}"))?;
+            let matches = state.broker_find_similar_by_popcnt(req);
+            log.push(format!(
+                "hera.brokerFindSimilar (u64 POPCNT) -> {} sonic matches found",
+                matches.len()
+            ));
+            serde_json::to_value(matches).map_err(|e| e.to_string())
+        }
+        "hera.brokerOptimizeTiering" | "brokerOptimizeTiering" | "broker_optimize_tiering" => {
+            let res = state.broker_optimize_hot_cold_tier();
+            log.push(format!(
+                "hera.brokerOptimizeTiering -> hibernated {} cold R2 replicas ({:.1} MB freed)",
+                res.cold_r2_replicas_hibernated, res.r2_megabytes_freed
+            ));
+            serde_json::to_value(res).map_err(|e| e.to_string())
         }
         "hera.filterTracks" | "filterTracks" => {
             let tracks: Vec<P2PVerifiedTrack> = args

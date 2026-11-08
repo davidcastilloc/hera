@@ -806,5 +806,48 @@ mod tests {
             serde_json::from_slice(&to_bytes(resp_bridge.into_body(), 1024 * 1024).await.unwrap())
                 .unwrap();
         assert!(j_bridge["bridge_candidates_count"].as_u64().unwrap() >= 1);
+
+        // 5. Test 64-Bit SimHash POPCNT Sonic Similarity (`POST /api/v1/broker/similar`)
+        let req_sim = Request::builder()
+            .method("POST")
+            .uri("/api/v1/broker/similar")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "bpm": 122.0,
+                    "camelot_key": "8A",
+                    "subgenre": "Afro House / Deep Tech",
+                    "limit": 3
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_sim = app.call(req_sim).await.unwrap();
+        assert_eq!(resp_sim.status(), StatusCode::OK);
+        let j_sim: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_sim.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_sim["engine"], "u64_simhash_popcnt_in_ram");
+        assert!(j_sim["matches_count"].as_u64().unwrap() >= 1);
+        // Exact match (`Ritual Del Sol`, 122 BPM, 8A, Afro House / Deep Tech) must have 0 Hamming distance!
+        assert_eq!(j_sim["matches"][0]["hamming_distance_bits"], 0);
+        assert_eq!(j_sim["matches"][0]["popcnt_similarity_pct"], 100.0);
+
+        // 6. Test Safe Atomic Hot/Cold R2 Eviction (`POST /api/v1/broker/optimize-tiering`)
+        let req_tier = Request::builder()
+            .method("POST")
+            .uri("/api/v1/broker/optimize-tiering")
+            .body(Body::empty())
+            .unwrap();
+        let resp_tier = app.call(req_tier).await.unwrap();
+        assert_eq!(resp_tier.status(), StatusCode::OK);
+        let j_tier: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_tier.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_tier["status"], "hot_cold_tier_optimized");
+        // Since `Ritual Del Sol` has a verified Google Drive backup replica from DaviDJ,
+        // the redundant R2 replica from DJR2TrialUser is safely hibernated, freeing 38 MB in R2!
+        assert_eq!(j_tier["cold_r2_replicas_hibernated"], 1);
+        assert_eq!(j_tier["r2_megabytes_freed"], 38.0);
     }
 }
