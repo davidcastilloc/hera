@@ -1878,6 +1878,70 @@ impl P2PMeshState {
         }
     }
 
+    /// Auto-Federates this local/VPS node with a remote `hera` or `hera-cloud` HTTP endpoint (`--federate-url`)
+    /// by sending `POST /api/v1/p2p/federate-sync` and merging the returned federated swarm catalog back into local RAM.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn push_federation_over_http(
+        &self,
+        remote_url: &str,
+        dj_handle: &str,
+        public_url: Option<String>,
+        bandwidth_mbps: u32,
+    ) -> Result<FederatedSyncResponse, String> {
+        use std::io::{Read, Write};
+        use std::net::TcpStream;
+
+        let payload = self.build_federated_sync_payload(dj_handle, public_url, bandwidth_mbps);
+        let body_bytes =
+            serde_json::to_vec(&payload).map_err(|e| format!("JSON serialize error: {e}"))?;
+
+        let clean = remote_url
+            .trim()
+            .trim_start_matches("http://")
+            .trim_start_matches("https://");
+        let host_port = clean.split('/').next().unwrap_or("127.0.0.1:8080");
+        let addr = if host_port.contains(':') {
+            host_port.to_string()
+        } else {
+            format!("{host_port}:80")
+        };
+
+        let mut stream = TcpStream::connect(&addr)
+            .map_err(|e| format!("Failed to connect to federation hub `{addr}`: {e}"))?;
+        let req_str = format!(
+            "POST /api/v1/p2p/federate-sync HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            host_port,
+            body_bytes.len()
+        );
+        stream
+            .write_all(req_str.as_bytes())
+            .and_then(|_| stream.write_all(&body_bytes))
+            .map_err(|e| format!("Failed to send federation payload: {e}"))?;
+
+        let mut resp_buf = Vec::new();
+        stream
+            .read_to_end(&mut resp_buf)
+            .map_err(|e| format!("Failed to read federation response: {e}"))?;
+        let resp_str = String::from_utf8_lossy(&resp_buf);
+        let json_body = resp_str
+            .split("\r\n\r\n")
+            .nth(1)
+            .unwrap_or(resp_str.as_ref())
+            .trim();
+
+        let sync_resp: FederatedSyncResponse = serde_json::from_str(json_body)
+            .map_err(|e| format!("Invalid federation JSON response: {e}"))?;
+
+        if let Ok(mut c_guard) = self.catalog.write() {
+            for trk in &sync_resp.federated_swarm_catalog {
+                if !c_guard.iter().any(|existing| existing.track_id == trk.track_id) {
+                    c_guard.push(trk.clone());
+                }
+            }
+        }
+        Ok(sync_resp)
+    }
+
     /// Pre-Upload CAS Deduplication Check & Zero-Upload Claim (`POST /api/v1/cloud/check-cas`):
     /// Before a client uploads a 38 MB FLAC to Cloudflare R2, it asks `hera-cloud` if the `cas_fingerprint`
     /// already exists in the swarm.
@@ -2093,6 +2157,24 @@ impl P2PMeshState {
                     esc(&q.offending_cas_fingerprint),
                     esc(&q.expected_audio_sha256),
                     esc(&q.reported_audio_sha256)
+                ));
+            }
+        }
+
+        if let Ok(receipts) = self.delivery_receipts.read() {
+            for r in receipts.iter() {
+                sql.push_str(&format!(
+                    "INSERT OR REPLACE INTO swarm_delivery_receipts (receipt_id, ticket_id, serving_node_id, requester_dj, opaque_blob_key, bytes_delivered, megabytes_delivered, credits_earned_mb, credit_multiplier, receipt_hmac) VALUES ('{}', '{}', '{}', '{}', '{}', {}, {:.2}, {:.2}, {:.2}, '{}');\n",
+                    esc(&r.receipt_id),
+                    esc(&r.ticket_id),
+                    esc(&r.serving_node_id),
+                    esc(&r.requester_dj),
+                    esc(&r.opaque_blob_key),
+                    r.bytes_delivered,
+                    r.megabytes_delivered,
+                    r.credits_earned_mb,
+                    r.credit_multiplier,
+                    esc(&r.receipt_hmac)
                 ));
             }
         }
@@ -2734,10 +2816,8 @@ impl P2PMeshState {
                     .filter(|n| {
                         !n.quarantined
                             && !q_map.contains_key(&n.node_id)
-                            && (n.custody_status == "ONLINE_HEALTHY"
-                                || n.storage_mode.contains("seeder")
-                                || n.storage_mode.contains("federated")
-                                || n.storage_mode.contains("guardian"))
+                            && n.edge_guardian_active
+                            && n.custody_status == "ONLINE_HEALTHY"
                     })
                     .count()
             })
@@ -2759,10 +2839,8 @@ impl P2PMeshState {
             .filter(|n| {
                 !n.quarantined
                     && !q_map.contains_key(&n.node_id)
-                    && (n.custody_status == "ONLINE_HEALTHY"
-                        || n.storage_mode.contains("seeder")
-                        || n.storage_mode.contains("federated")
-                        || n.storage_mode.contains("guardian"))
+                    && n.edge_guardian_active
+                    && n.custody_status == "ONLINE_HEALTHY"
             })
             .collect();
 
@@ -2793,24 +2871,67 @@ impl P2PMeshState {
             total_replicated_demand_mb = 38.0 * (base_k as f32);
         }
 
-        // Water-Filling across healthy nodes with strict 9,000 MB R2 and 85,000 req/day safety caps
-        let mut allocations = Vec::with_capacity(healthy_nodes.len());
-        let mut remaining_demand_mb = total_replicated_demand_mb;
+        // Constrained Water-Filling across healthy nodes with strict 9,000 MB R2 and 85,000 req/day safety caps.
+        // Sort node indices by ascending effective headroom so tightest-headroom nodes are filled first
+        // and any overflow demand spills over to unconstrained nodes.
         let nodes_len = healthy_nodes.len().max(1);
+        let mut sorted_indices: Vec<usize> = (0..healthy_nodes.len()).collect();
+        sorted_indices.sort_by(|&ia, &ib| {
+            let na = &healthy_nodes[ia];
+            let nb = &healthy_nodes[ib];
+            let cap_a = na.r2_safe_cap_mb.clamp(100.0, CF_WORKER_SAFE_R2_CAP_MB);
+            let cap_b = nb.r2_safe_cap_mb.clamp(100.0, CF_WORKER_SAFE_R2_CAP_MB);
+            let req_cap_a = na
+                .daily_worker_request_safe_cap
+                .clamp(1_000, CF_WORKER_SAFE_REQ_CAP);
+            let req_cap_b = nb
+                .daily_worker_request_safe_cap
+                .clamp(1_000, CF_WORKER_SAFE_REQ_CAP);
+            let head_a = if na.daily_worker_requests_used >= req_cap_a {
+                0.0
+            } else {
+                (cap_a - na.r2_used_mb.min(cap_a)).max(0.0)
+            };
+            let head_b = if nb.daily_worker_requests_used >= req_cap_b {
+                0.0
+            } else {
+                (cap_b - nb.r2_used_mb.min(cap_b)).max(0.0)
+            };
+            head_a
+                .partial_cmp(&head_b)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
+        let mut water_added_by_idx = vec![0.0f32; healthy_nodes.len()];
+        let mut remaining_demand_mb = total_replicated_demand_mb;
+        for (step, &node_idx) in sorted_indices.iter().enumerate() {
+            let node = &healthy_nodes[node_idx];
+            let safe_r2_cap = node.r2_safe_cap_mb.clamp(100.0, CF_WORKER_SAFE_R2_CAP_MB);
+            let safe_req_cap = node
+                .daily_worker_request_safe_cap
+                .clamp(1_000, CF_WORKER_SAFE_REQ_CAP);
+            let current_used = node.r2_used_mb.min(safe_r2_cap);
+            let effective_headroom = if node.daily_worker_requests_used >= safe_req_cap {
+                0.0
+            } else {
+                (safe_r2_cap - current_used).max(0.0)
+            };
+            let nodes_left = (nodes_len - step).max(1) as f32;
+            let fair_water_level = (remaining_demand_mb / nodes_left).min(effective_headroom);
+            water_added_by_idx[node_idx] = fair_water_level;
+            remaining_demand_mb = (remaining_demand_mb - fair_water_level).max(0.0);
+        }
+
+        let mut allocations = Vec::with_capacity(healthy_nodes.len());
         for (idx, node) in healthy_nodes.iter().enumerate() {
             let safe_r2_cap = node.r2_safe_cap_mb.clamp(100.0, CF_WORKER_SAFE_R2_CAP_MB);
             let safe_req_cap = node
                 .daily_worker_request_safe_cap
                 .clamp(1_000, CF_WORKER_SAFE_REQ_CAP);
             let current_used = node.r2_used_mb.min(safe_r2_cap);
-            let headroom = (safe_r2_cap - current_used).max(0.0);
-
-            let nodes_left = (nodes_len - idx).max(1) as f32;
-            let fair_water_level = (remaining_demand_mb / nodes_left).min(headroom);
+            let fair_water_level = water_added_by_idx[idx];
             let allocated_mb =
                 ((current_used + fair_water_level).min(safe_r2_cap) * 100.0).round() / 100.0;
-            remaining_demand_mb = (remaining_demand_mb - fair_water_level).max(0.0);
 
             let assigned_shards = ((allocated_mb / 38.0).ceil() as usize).max(1);
             let req_used = node.daily_worker_requests_used.min(safe_req_cap);
@@ -2818,7 +2939,7 @@ impl P2PMeshState {
 
             let r2_ratio = allocated_mb / safe_r2_cap;
             let req_ratio = (req_used as f32) / (safe_req_cap as f32);
-            let load_factor_pct = ((r2_ratio * 0.5 + req_ratio * 0.5) * 1000.0).round() / 10.0;
+            let load_factor_pct = ((r2_ratio * 0.5 + req_ratio * 0.5) * 1000.0).round() / 100.0;
 
             allocations.push(WaterFillingNodeAllocation {
                 node_id: node.node_id.clone(),
@@ -2836,9 +2957,9 @@ impl P2PMeshState {
         }
 
         let total_free_r2_gb =
-            ((active_n as f32) * (CF_WORKER_FREE_R2_LIMIT_MB / 1024.0) * 100.0).round() / 100.0;
+            ((active_n as f32) * (CF_WORKER_FREE_R2_LIMIT_MB / 1000.0) * 100.0).round() / 100.0;
         let safe_usable_r2_gb =
-            (((active_n as f32) * (CF_WORKER_SAFE_R2_CAP_MB / 1024.0)) * 100.0).round() / 100.0;
+            (((active_n as f32) * (CF_WORKER_SAFE_R2_CAP_MB / 1000.0)) * 100.0).round() / 100.0;
         let total_daily_req = (active_n as u64) * CF_WORKER_FREE_REQ_LIMIT;
         let safe_daily_req = (active_n as u64) * CF_WORKER_SAFE_REQ_CAP;
 
@@ -2883,6 +3004,7 @@ impl P2PMeshState {
             .filter(|n| {
                 !n.quarantined
                     && !q_map.contains_key(&n.node_id)
+                    && n.edge_guardian_active
                     && n.custody_status == "ONLINE_HEALTHY"
                     && n.daily_worker_requests_used < n.daily_worker_request_safe_cap
             })
@@ -3048,9 +3170,9 @@ impl P2PMeshState {
         let expires_at_unix = issued_at_unix + SWARM_TICKET_TTL_SECS;
         let aligned_offset_bytes = (block_index as u64) * SWARM_ALIGNED_BLOCK_BYTES;
         let ticket_id = format!(
-            "tkt-{}-{}",
+            "tkt-{}-{:x}",
             &audio_sha256[..10],
-            issued_at_unix ^ (block_index as u64)
+            issued_at_unix ^ nonce
         );
         let hmac_signature = compute_swarm_ticket_hmac(
             &ticket_id,
@@ -3151,6 +3273,18 @@ impl P2PMeshState {
                 "Invalid or expired X-Hera-Swarm-Ticket signature/TTL (60s window exceeded)"
                     .to_string(),
             );
+        }
+
+        let already_redeemed = self
+            .delivery_receipts
+            .read()
+            .map(|r| r.iter().any(|rec| rec.ticket_id == ticket.ticket_id))
+            .unwrap_or(false);
+        if already_redeemed {
+            return Err(format!(
+                "Replay attack blocked: X-Hera-Swarm-Ticket '{}' has already been redeemed",
+                ticket.ticket_id
+            ));
         }
 
         let mut payload = synthesize_deterministic_64b_custody_slice(

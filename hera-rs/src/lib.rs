@@ -960,6 +960,8 @@ mod tests {
             "Mientras más nodos de Hera, más fuerte es el sistema de enjambres"
         );
         assert_eq!(j_s1["active_healthy_nodes"], 1);
+        assert_eq!(j_s1["total_free_r2_capacity_gb"], 10.0);
+        assert_eq!(j_s1["safe_usable_r2_capacity_gb"], 9.0);
         assert_eq!(j_s1["safe_daily_worker_requests_capacity"], 85_000);
         assert_eq!(j_s1["base_replication_factor_k"], 1);
         let strength_n1 = j_s1["swarm_strength_multiplier"].as_f64().unwrap();
@@ -989,6 +991,8 @@ mod tests {
                 .unwrap();
         assert_eq!(j_hb2["edge_guardian_active"], true);
         assert_eq!(j_hb2["swarm_strength"]["active_healthy_nodes"], 2);
+        assert_eq!(j_hb2["swarm_strength"]["total_free_r2_capacity_gb"], 20.0);
+        assert_eq!(j_hb2["swarm_strength"]["safe_usable_r2_capacity_gb"], 18.0);
         assert_eq!(
             j_hb2["swarm_strength"]["safe_daily_worker_requests_capacity"],
             170_000
@@ -1053,6 +1057,8 @@ mod tests {
             serde_json::from_slice(&to_bytes(resp_s5.into_body(), 1024 * 1024).await.unwrap())
                 .unwrap();
         assert_eq!(j_s5["active_healthy_nodes"], 5);
+        assert_eq!(j_s5["total_free_r2_capacity_gb"], 50.0);
+        assert_eq!(j_s5["safe_usable_r2_capacity_gb"], 45.0);
         assert_eq!(j_s5["safe_daily_worker_requests_capacity"], 425_000);
         assert_eq!(j_s5["base_replication_factor_k"], 2);
         assert!(j_s5["max_thermal_replication_k"].as_u64().unwrap() >= 3);
@@ -1122,6 +1128,19 @@ mod tests {
         let resp_bad_ticket = app.call(req_bad_ticket).await.unwrap();
         assert_eq!(resp_bad_ticket.status(), StatusCode::FORBIDDEN);
 
+        // 4b-bis. Attempting to fetch with an EXPIRED 60s ticket (`now_unix > expires_at_unix`) must be blocked (403 FORBIDDEN)
+        let req_expired_ticket = Request::builder()
+            .uri(&format!(
+                "/api/v1/swarm/shard/{}?now_unix={}",
+                blob_id,
+                expires + 1
+            ))
+            .header("x-hera-swarm-ticket", &signed_ticket_header)
+            .body(Body::empty())
+            .unwrap();
+        let resp_expired_ticket = app.call(req_expired_ticket).await.unwrap();
+        assert_eq!(resp_expired_ticket.status(), StatusCode::FORBIDDEN);
+
         // 4c. Valid 60s ticket succeeds, sets `Cache-Control: public, max-age=31536000, immutable`, and mints 1 : 1.5 Turbo credits!
         let req_good_shard = Request::builder()
             .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
@@ -1149,6 +1168,15 @@ mod tests {
         assert_eq!(j_delivery["megabytes_delivered"], 4.0);
         assert_eq!(j_delivery["credits_earned_mb"], 6.0);
         assert_eq!(j_delivery["credit_multiplier"], 1.5);
+
+        // 4d. Replaying the exact same `X-Hera-Swarm-Ticket` a second time must be rejected (403 FORBIDDEN) to prevent infinite credit farming!
+        let req_replay_shard = Request::builder()
+            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .header("x-hera-swarm-ticket", &signed_ticket_header)
+            .body(Body::empty())
+            .unwrap();
+        let resp_replay_shard = app.call(req_replay_shard).await.unwrap();
+        assert_eq!(resp_replay_shard.status(), StatusCode::FORBIDDEN);
 
         // 5. Meritocratic Autopilot (`Edge Guardian`) + 64-Byte `Proof-of-Custody` Challenge/Probe/Audit
         let req_chal = Request::builder()
@@ -1256,8 +1284,50 @@ mod tests {
             "GUARDIAN_REVOKED_SHARD_MISSING_404"
         );
 
-        // 5d. When DJFoo's node is offline/revoked, DJFoo automatically spends their earned 1:1.5 Turbo Credits!
-        let req_ticket_offline = Request::builder()
+        // Verify that the revoked node is immediately excluded from `active_healthy_nodes` and Water-Filling allocations!
+        let req_s4 = Request::builder()
+            .uri("/api/v1/swarm/strength")
+            .body(Body::empty())
+            .unwrap();
+        let resp_s4 = app.call(req_s4).await.unwrap();
+        let j_s4: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_s4.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_s4["active_healthy_nodes"], 4);
+        assert_eq!(j_s4["total_free_r2_capacity_gb"], 40.0);
+        assert_eq!(j_s4["safe_usable_r2_capacity_gb"], 36.0);
+
+        // 5d. When DJFoo's node is offline/revoked, DJFoo automatically spends their earned 1:1.5 Turbo Credits (`38.0 MB` per track)!
+        for block_idx in 1..=4 {
+            let req_ticket_offline = Request::builder()
+                .method("POST")
+                .uri("/api/v1/swarm/route-ticket")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&serde_json::json!({
+                        "track_id_or_cas": "hera-seed-001",
+                        "requester_dj": "DJFoo",
+                        "block_index": block_idx
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap();
+            let resp_ticket_offline = app.call(req_ticket_offline).await.unwrap();
+            assert_eq!(resp_ticket_offline.status(), StatusCode::OK);
+            let j_ticket_offline: serde_json::Value = serde_json::from_slice(
+                &to_bytes(resp_ticket_offline.into_body(), 1024 * 1024)
+                    .await
+                    .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(
+                j_ticket_offline["access_mode"],
+                "TURBO_CREDIT_REDEMPTION_FAST_LANE"
+            );
+        }
+
+        // 5e. Once DJFoo's Turbo Credits are exhausted (< 38.0 MB remaining while node is still revoked), access downgrades to `COMMUNITY_STANDARD_LANE`!
+        let req_ticket_standard = Request::builder()
             .method("POST")
             .uri("/api/v1/swarm/route-ticket")
             .header("content-type", "application/json")
@@ -1265,22 +1335,22 @@ mod tests {
                 serde_json::to_vec(&serde_json::json!({
                     "track_id_or_cas": "hera-seed-001",
                     "requester_dj": "DJFoo",
-                    "block_index": 1
+                    "block_index": 5
                 }))
                 .unwrap(),
             ))
             .unwrap();
-        let resp_ticket_offline = app.call(req_ticket_offline).await.unwrap();
-        assert_eq!(resp_ticket_offline.status(), StatusCode::OK);
-        let j_ticket_offline: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_ticket_offline.into_body(), 1024 * 1024)
+        let resp_ticket_standard = app.call(req_ticket_standard).await.unwrap();
+        assert_eq!(resp_ticket_standard.status(), StatusCode::OK);
+        let j_ticket_standard: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_ticket_standard.into_body(), 1024 * 1024)
                 .await
                 .unwrap(),
         )
         .unwrap();
         assert_eq!(
-            j_ticket_offline["access_mode"],
-            "TURBO_CREDIT_REDEMPTION_FAST_LANE"
+            j_ticket_standard["access_mode"],
+            "COMMUNITY_STANDARD_LANE"
         );
 
         // 6. Anti-Bait-and-Switch Double Cryptographic Seal (`audio_sha256` + `hera_seal`) & Quarantine Blacklist

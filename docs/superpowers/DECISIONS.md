@@ -48,3 +48,11 @@
 - **Decision:**
   1. Always initialize the Python development environment with `uv sync --all-extras` so `dev` (`pytest`, `ruff`, `mypy`) and `analysis` (`librosa`, `soundfile`) extras are present.
   2. Run `cargo test` in `hera-rs` and `hera-cloud` sequentially when both repositories are mounted on the same host to avoid `/tmp/hera_local_p2p_test_dir` race conditions.
+
+### [2026-11-08] ADR-003: Cloudflare P2P Swarm Water-Filling, Catalog Blinding & Custody Invariants
+- **Context:** Scaling the P2P swarm across community-contributed Cloudflare Workers (`10 GB` free R2, `100,000 req/day`) and `hera-cloud` required strict billing safety caps, anti-scraping catalog protection, and zero-trust custody enforcement while keeping `hera-rs` dual-target compatible (`native` binary + `wasm32` Worker).
+- **Decision:**
+  1. **Constrained Water-Filling & Active Node Filtering:** Cap community Workers at `9,000 MB` R2 (`9.0 GB`) and `85,000 req/day`. Sort nodes by ascending effective headroom during Water-Filling so constrained nodes saturate first and overflow demand spills over to unconstrained nodes. Filter healthy nodes strictly by `edge_guardian_active && custody_status == "ONLINE_HEALTHY"` so revoked nodes immediately drop out of swarm capacity and P2C routing.
+  2. **Single-Use 60s Signed Tickets & 4 MB Immutable Shards:** Blind R2 shard keys as `shard-blobs/{hmac}.hbin`, require HMAC-SHA256 `X-Hera-Swarm-Ticket` headers with a 60s TTL and unique `nonce` in `ticket_id`, reject ticket replays against `delivery_receipts`, and serve `4 MB` (`4,194,304` B) blocks with `Cache-Control: public, max-age=31536000, immutable` (`1 : 1.5` Turbo Credit ratio).
+  3. **Dual-Target Parity (`hera-rs` <-> `hera-cloud`):** Keep `#[cfg(not(target_arch = "wasm32"))] pub fn push_federation_over_http` in `P2PMeshState` so the native `hera-node` binary (`src/main.rs`) compiles cleanly alongside the Cloudflare Worker target, while keeping `/api/v1/cloud/economics` exclusively in `hera-cloud`.
+
