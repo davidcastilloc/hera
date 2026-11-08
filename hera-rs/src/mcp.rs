@@ -764,7 +764,7 @@ pub fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Resu
         "chat_with_dj_copilot" => {
             let req: crate::dj_brain::CloudflareFreeAiTurnRequest = serde_json::from_value(args)
                 .map_err(|e| format!("Invalid `chat_with_dj_copilot` payload: {e}"))?;
-            let resp = crate::dj_brain::evaluate_cloudflare_free_ai_turn(&req);
+            let resp = crate::dj_brain::evaluate_agent_harness_turn(&req, state);
             Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
         }
         _ => Err(format!("Unknown MCP tool `{name}`")),

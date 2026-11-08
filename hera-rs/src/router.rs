@@ -2,8 +2,9 @@ use crate::code_mode::{
     execute_code_mode, get_openapi_3_1_spec, get_typescript_sdk_definitions, CodeModeRequest,
 };
 use crate::dj_brain::{
-    compute_dj_style_dna, evaluate_cloudflare_free_ai_turn, list_supported_ai_backends,
-    CloudflareFreeAiTurnRequest, DjStyleDnaRequest,
+    auto_detect_local_backend, compute_dj_style_dna, evaluate_agent_harness_turn,
+    list_supported_ai_backends, probe_backend_models, CloudflareFreeAiTurnRequest,
+    DjStyleDnaRequest,
 };
 use crate::export::{export_crate_bundle, ExportCrateRequest};
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditReport};
@@ -125,6 +126,7 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/dj/profiles", get(list_dj_profiles_handler))
         .route("/api/v1/dj/style-dna", post(dj_style_dna_handler))
         .route("/api/v1/ai/backends", get(ai_backends_list_handler))
+        .route("/api/v1/ai/probe", get(ai_probe_backend_handler))
         .route("/api/v1/ai/chat", post(ai_cloudflare_free_chat_handler))
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
@@ -824,9 +826,52 @@ async fn ai_backends_list_handler() -> impl IntoResponse {
     }))
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiProbeQuery {
+    pub base_url: Option<String>,
+    pub backend: Option<String>,
+    pub api_key: Option<String>,
+}
+
+async fn ai_probe_backend_handler(Query(q): Query<AiProbeQuery>) -> impl IntoResponse {
+    if let Some(url) = q
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let models = probe_backend_models(url, q.api_key.as_deref());
+        let reachable = models.is_ok();
+        return Json(serde_json::json!({
+            "reachable": reachable,
+            "backend": q.backend.unwrap_or_else(|| "custom".to_string()),
+            "base_url": url,
+            "models": models.unwrap_or_default()
+        }));
+    }
+
+    if let Some((backend, url, _first)) = auto_detect_local_backend() {
+        let models = probe_backend_models(&url, None).unwrap_or_default();
+        return Json(serde_json::json!({
+            "reachable": true,
+            "backend": backend,
+            "base_url": url,
+            "models": models
+        }));
+    }
+
+    Json(serde_json::json!({
+        "reachable": false,
+        "backend": "lmstudio",
+        "base_url": "http://localhost:1234/v1",
+        "models": Vec::<String>::new()
+    }))
+}
+
 async fn ai_cloudflare_free_chat_handler(
+    State(state): State<P2PMeshState>,
     Json(req): Json<CloudflareFreeAiTurnRequest>,
 ) -> impl IntoResponse {
-    let resp = evaluate_cloudflare_free_ai_turn(&req);
+    let resp = evaluate_agent_harness_turn(&req, &state);
     (StatusCode::OK, Json(resp))
 }

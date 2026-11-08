@@ -64,10 +64,10 @@
   - Updated `/api/v1/ai/chat` handler in `hera-rs/src/router.rs` and `chat_with_dj_copilot` in `hera-rs/src/mcp.rs` passing `&state` to `evaluate_agent_harness_turn`
   - New `GET /api/v1/ai/probe` endpoint in `hera-rs/src/router.rs` to probe local/remote LLM endpoints (`LM Studio`, `Ollama`, custom URL) and return discovered models
 
-- [ ] **Step 1: Write unit & integration tests in `hera-rs/src/dj_brain.rs` using a local ephemeral TCP mock LM Studio server testing: (a) multi-turn ReAct tool calling (`search_music` -> `build_dj_crate` -> final synthesis), (b) self-healing recovery on invalid tool arguments, and (c) fallback `<tool_call>` tag parsing for quantized local models**
-- [ ] **Step 2: Implement `evaluate_agent_harness_turn`, dual tool-call parser, HTTP/1.1 `/v1/chat/completions` client, and wire `router.rs` + `mcp.rs`**
-- [ ] **Step 3: Run `cargo check --manifest-path hera-rs/Cargo.toml` and `cargo test --manifest-path hera-rs/Cargo.toml` and capture `exit code 0` receipt**
-- [ ] **Step 4: Mark `- [x]` in plan and commit atomically**
+- [x] **Step 1: Write unit & integration tests in `hera-rs/src/dj_brain.rs` using a local ephemeral TCP mock LM Studio server testing: (a) multi-turn ReAct tool calling (`search_music` -> `build_dj_crate` -> final synthesis), (b) self-healing recovery on invalid tool arguments, and (c) fallback `<tool_call>` tag parsing for quantized local models**
+- [x] **Step 2: Implement `evaluate_agent_harness_turn`, dual tool-call parser, HTTP/1.1 `/v1/chat/completions` client, and wire `router.rs` + `mcp.rs`**
+- [x] **Step 3: Run `cargo check --manifest-path hera-rs/Cargo.toml` and `cargo test --manifest-path hera-rs/Cargo.toml` and capture `exit code 0` receipt**
+- [x] **Step 4: Mark `- [x]` in plan and commit atomically**
 
 ---
 
