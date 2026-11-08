@@ -12,6 +12,7 @@ import ExternalLink from '../elements/ExternalLink';
 import Flexbox from '../elements/Flexbox';
 import Heart from '../elements/Heart';
 import useInvalidate, { useInvalidateCallback } from '../hooks/useInvalidate';
+import { HERA_ROBIN_HOOD_SUPPORT } from '../lib/bridge-hera';
 import { configQuery } from '../lib/queries';
 import { logAndNotifyError } from '../lib/utils';
 import { NON_DEFAULT_LANGUAGES } from '../translations/languages';
@@ -31,6 +32,33 @@ function ViewSettingsAbout() {
 
   return (
     <>
+      <Setting.Section>
+        <Setting.Title>
+          🐺🕶️🥫 HERA Open-Source DJ Engine &amp; Robin Hood Sustenance
+        </Setting.Title>
+        <Setting.Description>
+          <strong>{HERA_ROBIN_HOOD_SUPPORT.quote}</strong>
+        </Setting.Description>
+        <Setting.Description>
+          {HERA_ROBIN_HOOD_SUPPORT.philosophy}
+        </Setting.Description>
+        <Flexbox gap={8}>
+          <ExternalLink href={HERA_ROBIN_HOOD_SUPPORT.kofiUrl} type="url">
+            ☕ Ko-fi / Buy Me a Coffee
+          </ExternalLink>
+          {' · '}
+          <ExternalLink
+            href={HERA_ROBIN_HOOD_SUPPORT.githubSponsorsUrl}
+            type="url"
+          >
+            💖 GitHub Sponsors
+          </ExternalLink>
+          {' · '}
+          <ExternalLink href={HERA_ROBIN_HOOD_SUPPORT.repoUrl} type="url">
+            ⭐ GitHub (MIT)
+          </ExternalLink>
+        </Flexbox>
+      </Setting.Section>
       <Setting.Section>
         <Setting.Title>
           <Trans>About HERA</Trans>

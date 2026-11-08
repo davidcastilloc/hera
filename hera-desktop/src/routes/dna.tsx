@@ -49,6 +49,7 @@ function ViewDjStyleDna() {
   const [ruleOwnProductions, setRuleOwnProductions] = useState(true);
   const [ruleLossless320, setRuleLossless320] = useState(true);
   const [ruleStrictCamelot, setRuleStrictCamelot] = useState(true);
+  const [rulePrivateLocalVault, setRulePrivateLocalVault] = useState(true);
   const [dnaProfile, setDnaProfile] = useState<HeraStyleDnaResponse | null>(
     null,
   );
@@ -59,6 +60,8 @@ function ViewDjStyleDna() {
     ruleLossless320 && 'Calidad mínima FLAC / 320 kbps verificada por FFT',
     ruleStrictCamelot &&
       'Sinergia armónica Camelot estricta (±1 paso + 4 Hot Cues)',
+    rulePrivateLocalVault &&
+      'Bóveda Privada Local 100% Gratis (mis dubplates inéditos nunca salen sin permiso)',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -202,6 +205,20 @@ function ViewDjStyleDna() {
                 <strong>Sinergia Camelot + 4 Hot Cues Estrictos</strong>{' '}
                 (exportar siempre <code>1:Intro</code>, <code>2:Breakdown</code>
                 , <code>3:Drop</code>, <code>4:Outro</code>)
+              </span>
+            </label>
+
+            <label {...stylex.props(styles.switchRow)}>
+              <input
+                type="checkbox"
+                checked={rulePrivateLocalVault}
+                onChange={(e) => setRulePrivateLocalVault(e.target.checked)}
+              />
+              <span>
+                <strong>
+                  🔒 Bóveda Privada Local 100% Gratis (Open Source)
+                </strong>{' '}
+                (proteger mis dubplates y edits locales sin paywall)
               </span>
             </label>
 

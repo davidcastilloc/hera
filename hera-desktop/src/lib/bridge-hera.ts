@@ -8,6 +8,16 @@ export type DjExportFormat =
   | 'traktor_nml'
   | 'm3u8';
 
+export const HERA_ROBIN_HOOD_SUPPORT = {
+  quote:
+    '«¿Una limosnita para este pobre lobo ciego que te armó el set 100% gratis?»',
+  philosophy:
+    'HERA es 100% Open Source (MIT): motor DSP en Rust, 4 Hot Cues, optimizador 2-Opt, exportadores DJ, LLMs locales, Cloudflare AI (10k Neurons/día) y Bóveda Privada Local libres de paywalls. Pero como también tenemos que comer, si te ahorramos 4 horas antes del toque, tira una monedita en la lata:',
+  kofiUrl: 'https://ko-fi.com/davidcastilloc',
+  githubSponsorsUrl: 'https://github.com/sponsors/davidcastilloc',
+  repoUrl: 'https://github.com/davidcastilloc/hera',
+} as const;
+
 export type HeraStyleDnaResponse = {
   dj_handle: string;
   preferred_dj_software: string;

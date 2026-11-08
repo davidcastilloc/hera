@@ -148,10 +148,13 @@ pub fn resolve_tier_r2_quota_mb(tier: &str) -> f32 {
     }
 }
 
-/// Only higher plans (`pro_monthly`, `pro`, `founder_unlimited`) can turn off P2P sharing (`p2p_sharing_enabled = false`).
-/// Free / Beta plans ALWAYS keep P2P sharing ON (`true`) to nourish the community swarm.
+/// Local DJs (`local_unlimited`) and higher cloud plans (`pro_monthly`, `pro`, `founder_unlimited`) can turn off P2P sharing (`p2p_sharing_enabled = false`).
+/// Free / Beta cloud R2 plans keep P2P sharing ON (`true`) to nourish the community swarm.
 pub fn tier_allows_private_vault(tier: &str) -> bool {
-    matches!(tier, "pro_monthly" | "pro" | "founder_unlimited")
+    matches!(
+        tier,
+        "local_unlimited" | "pro_monthly" | "pro" | "founder_unlimited"
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1837,7 +1840,7 @@ impl P2PMeshState {
             r2_used_mb: 0.0,
             bounty_refunded_mb: 0.0,
             p2p_sharing_enabled: true,
-            can_disable_p2p_sharing: false,
+            can_disable_p2p_sharing: true,
             verified_tracks_shared: admitted.len(),
             quarantined_rejected_tracks: rejected.len(),
             edge_guardian_active: true,

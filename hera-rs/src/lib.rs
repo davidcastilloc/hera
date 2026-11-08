@@ -697,6 +697,7 @@ mod tests {
 
         assert_eq!(j_scan["admitted_tracks"].as_array().unwrap().len(), 1);
         assert_eq!(j_scan["rejected_quarantine_tracks"].as_array().unwrap().len(), 1);
+        assert!(crate::p2p::tier_allows_private_vault("local_unlimited"));
         let local_track_id = j_scan["admitted_tracks"][0]["track_id"]
             .as_str()
             .unwrap()
