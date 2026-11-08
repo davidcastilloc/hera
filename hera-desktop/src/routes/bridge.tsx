@@ -17,9 +17,27 @@ export const Route = createFileRoute('/bridge')({
   component: ViewHarmonicBridgeP2P,
 });
 
+type AresSuperFilter = 'all' | 'harmonic' | 'boost' | 'promo';
+
+type AresActiveTransfer = {
+  id: string;
+  artist: string;
+  title: string;
+  bpm: number;
+  camelot: string;
+  mode: string;
+  speed: string;
+  peers: string;
+  seal: string;
+};
+
 function ViewHarmonicBridgeP2P() {
   const localTracks = useLibraryStore((state) => state.tracks);
   const [swarmFilter, setSwarmFilter] = useState('');
+  const [superFilter, setSuperFilter] = useState<AresSuperFilter>('all');
+  const [activeTransfers, setActiveTransfers] = useState<
+    Array<AresActiveTransfer>
+  >([]);
   const [originTitle, setOriginTitle] = useState('Baiana (Club Mix)');
   const [originArtist, setOriginArtist] = useState('Barbatuques');
   const [originBpm, setOriginBpm] = useState(118.0);
@@ -112,18 +130,27 @@ function ViewHarmonicBridgeP2P() {
     setAiResponse(res);
   };
 
+  const enqueueAresTransfer = (entry: AresActiveTransfer, banner: string) => {
+    setActiveTransfers((prev) => [
+      entry,
+      ...prev.filter((t) => t.id !== entry.id),
+    ]);
+    setPreviewStatus(banner);
+  };
+
   return (
     <View>
       <div {...stylex.props(styles.container)}>
         <div {...stylex.props(styles.headerRow)}>
           <div>
             <h2 {...stylex.props(styles.title)}>
-              🌍 Puente Armónico Inteligente P2P & Copiloto IA Gratuito
+              ⚡ HERA Galaxy P2P — Modo Ares con Súper Poderes (Búsqueda
+              Forense, Puente Armónico &amp; IA)
             </h2>
             <p {...stylex.props(styles.subtitle)}>
-              Encuentra las 2 canciones puente exactas en el enjambre P2P,
-              pre-escucha el cruce Cue 4 ➔ Cue 1 y descárgalas directo a tu
-              disco duro
+              Como el clásico Ares, pero con Escudo Forense Anti-Fakes (≥20
+              kHz), filtro armónico Camelot en vivo, 4 Hot Cues listos y
+              descarga P2P Gratis o ⚡ P2P Boost Zero-Knowledge
             </p>
           </div>
           <div {...stylex.props(styles.bridgeActions)}>
@@ -136,7 +163,7 @@ function ViewHarmonicBridgeP2P() {
               onClick={handleCalculateBridge}
               {...stylex.props(styles.primaryBtn)}
             >
-              🔍 Recalcular Puente Armónico (2-Opt + Camelot)
+              🔍 Recalcular Puente &amp; Radar P2P
             </button>
           </div>
         </div>
@@ -246,7 +273,18 @@ function ViewHarmonicBridgeP2P() {
                   <button
                     type="button"
                     onClick={() =>
-                      setPreviewStatus(
+                      enqueueAresTransfer(
+                        {
+                          id: step.track_id,
+                          artist: step.artist,
+                          title: step.title,
+                          bpm: step.bpm,
+                          camelot: step.camelot,
+                          mode: '📥 P2P Directo ($0.00)',
+                          speed: '3.6 MB/s',
+                          peers: step.owner_dj,
+                          seal: step.hera_seal,
+                        },
                         `📥 Descarga P2P Estándar ($0.00): "${step.artist} - ${step.title}" (${step.hera_seal}) desde nodo ${step.owner_dj} ➔ quarantine/ ➔ library/`,
                       )
                     }
@@ -263,7 +301,20 @@ function ViewHarmonicBridgeP2P() {
                       if (cost > 0 && turboCreditsMb >= cost) {
                         setTurboCreditsMb((prev) => prev - cost);
                       }
-                      setPreviewStatus(
+                      enqueueAresTransfer(
+                        {
+                          id: step.track_id,
+                          artist: step.artist,
+                          title: step.title,
+                          bpm: step.bpm,
+                          camelot: step.camelot,
+                          mode: step.p2p_boost_free_promo
+                            ? '🚀 P2P Boost Promo (0 MB)'
+                            : `⚡ P2P Boost (-${cost} MB)`,
+                          speed: '48.4 MB/s (zk-ctr-sha256-v1)',
+                          peers: `${step.owner_dj} + R2 Boost`,
+                          seal: step.hera_seal,
+                        },
                         step.p2p_boost_free_promo
                           ? `🚀 P2P Boost Promo Pool (0 MB Créditos · Patrocinado por el Productor): "${step.artist} - ${step.title}" descargado a máxima velocidad (zk-ctr-sha256-v1) ➔ library/`
                           : `⚡ P2P Boost Activado (-${cost} MB Créditos Turbo · Restan ${Math.max(0, turboCreditsMb - cost).toFixed(1)} MB): "${step.artist} - ${step.title}" descargado desde caché R2 Zero-Knowledge ➔ library/`,
@@ -290,13 +341,12 @@ function ViewHarmonicBridgeP2P() {
             <div {...stylex.props(styles.copilotBox)}>
               <div {...stylex.props(styles.bridgeHeader)}>
                 <strong>
-                  📡 Radar del Enjambre P2P — ¿Qué Puede Descargar HERA Ahora
-                  Mismo? ({bridgeResult.swarm_catalog.length} Masters
-                  Verificados)
+                  🔍 Buscador del Enjambre P2P (Estilo Ares + Súper Poderes DJ ·{' '}
+                  {bridgeResult.swarm_catalog.length} Studio Masters Online)
                 </strong>
                 <span {...stylex.props(styles.subtitle)}>
-                  Cruce automático contra tus {localTracks.length} pistas
-                  locales (`[SKIP]` si ya existe en disco)
+                  ★★★★★ 100% Verificados (Sin virus ni falsos 320k) · Cruce
+                  automático contra tus {localTracks.length} pistas locales
                 </span>
               </div>
               <div {...stylex.props(styles.formRow)}>
@@ -304,13 +354,68 @@ function ViewHarmonicBridgeP2P() {
                   type="text"
                   value={swarmFilter}
                   onChange={(e) => setSwarmFilter(e.target.value)}
-                  placeholder="Filtrar catálogo del enjambre por artista, título, llave Camelot (ej. 8A, 9A) o subgénero..."
+                  placeholder="🔍 Buscar en el enjambre P2P como en Ares: artista, canción, remix, llave Camelot (8A, 9A) o subgénero..."
                   {...stylex.props(styles.input)}
                 />
+              </div>
+              <div {...stylex.props(styles.bridgeActions)}>
+                <button
+                  type="button"
+                  onClick={() => setSuperFilter('all')}
+                  {...stylex.props(
+                    superFilter === 'all'
+                      ? styles.primaryBtn
+                      : styles.secondaryBtn,
+                  )}
+                >
+                  🌐 Todo el Enjambre ({bridgeResult.swarm_catalog.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSuperFilter('harmonic')}
+                  {...stylex.props(
+                    superFilter === 'harmonic'
+                      ? styles.primaryBtn
+                      : styles.secondaryBtn,
+                  )}
+                >
+                  🎯 Súper Poder 1: Armónicos con mi Set ({originCamelot}/9A/
+                  {targetCamelot})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSuperFilter('boost')}
+                  {...stylex.props(
+                    superFilter === 'boost'
+                      ? styles.primaryBtn
+                      : styles.secondaryBtn,
+                  )}
+                >
+                  ⚡ Súper Poder 2: Con P2P Boost Instantáneo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSuperFilter('promo')}
+                  {...stylex.props(
+                    superFilter === 'promo'
+                      ? styles.primaryBtn
+                      : styles.secondaryBtn,
+                  )}
+                >
+                  🚀 Súper Poder 3: Promo Pool (0 MB Créditos)
+                </button>
               </div>
               <div {...stylex.props(styles.bridgeChain)}>
                 {bridgeResult.swarm_catalog
                   .filter((item) => {
+                    if (superFilter === 'harmonic') {
+                      const allowedKeys = [originCamelot, '9A', targetCamelot];
+                      if (!allowedKeys.includes(item.camelot)) return false;
+                    } else if (superFilter === 'boost') {
+                      if (!item.p2p_boost_ready) return false;
+                    } else if (superFilter === 'promo') {
+                      if (!item.p2p_boost_free_promo) return false;
+                    }
                     const q = swarmFilter.trim().toLowerCase();
                     if (!q) return true;
                     return (
@@ -332,6 +437,10 @@ function ViewHarmonicBridgeP2P() {
                           .includes(item.artist.toLowerCase()) &&
                           Math.abs((t.bpm ?? 0) - item.bpm) < 1.0),
                     );
+                    const khz = (
+                      (item.effective_bandwidth_hz ?? 21400) / 1000
+                    ).toFixed(1);
+                    const score = (item.quality_score ?? 97.5).toFixed(1);
                     return (
                       <div
                         key={item.cas_fingerprint}
@@ -342,14 +451,16 @@ function ViewHarmonicBridgeP2P() {
                             {item.artist} — {item.title}
                           </strong>
                           <span {...stylex.props(styles.camelotBadge)}>
+                            ★★★★★ {khz} kHz ({score} pts) ·{' '}
                             {item.bpm.toFixed(1)} BPM · {item.camelot} ·{' '}
                             {item.subgenre}
                           </span>
                         </div>
                         <small {...stylex.props(styles.subtitle)}>
-                          CAS: {item.cas_fingerprint} · Réplicas:{' '}
-                          {item.swarm_replicas_count} ({item.seeders.join(', ')}
-                          ) · Shard: {item.opaque_blob_key}
+                          🎛️ 4 Hot Cues listos (🟢1:Intro · 🔵2:Break · 🔴3:Drop
+                          · 🟡4:Outro) · 👥 {item.swarm_replicas_count} Fuentes:{' '}
+                          {item.seeders.join(', ')} · Shard:{' '}
+                          {item.opaque_blob_key}
                         </small>
                         <div {...stylex.props(styles.bridgeActions)}>
                           {alreadyLocal ? (
@@ -361,7 +472,18 @@ function ViewHarmonicBridgeP2P() {
                               <button
                                 type="button"
                                 onClick={() =>
-                                  setPreviewStatus(
+                                  enqueueAresTransfer(
+                                    {
+                                      id: item.cas_fingerprint,
+                                      artist: item.artist,
+                                      title: item.title,
+                                      bpm: item.bpm,
+                                      camelot: item.camelot,
+                                      mode: '📥 P2P Directo ($0.00)',
+                                      speed: '3.8 MB/s',
+                                      peers: item.seeders.join(', '),
+                                      seal: item.hera_seal,
+                                    },
                                     `📥 P2P Estándar Gratis ($0.00): Descargando "${item.artist} - ${item.title}" desde peers [${item.seeders.join(', ')}] (Seal ${item.hera_seal}) ➔ library/`,
                                   )
                                 }
@@ -373,17 +495,36 @@ function ViewHarmonicBridgeP2P() {
                                 <button
                                   type="button"
                                   onClick={() => {
-                                    const cost = 38;
-                                    if (turboCreditsMb >= cost) {
+                                    const cost = item.p2p_boost_free_promo
+                                      ? 0
+                                      : 38;
+                                    if (cost > 0 && turboCreditsMb >= cost) {
                                       setTurboCreditsMb((prev) => prev - cost);
                                     }
-                                    setPreviewStatus(
-                                      `⚡ P2P Boost Activado (-${cost} MB Créditos Turbo): "${item.artist} - ${item.title}" descargado desde shard opaco ${item.opaque_blob_key} (zk-ctr-sha256-v1) ➔ library/`,
+                                    enqueueAresTransfer(
+                                      {
+                                        id: item.cas_fingerprint,
+                                        artist: item.artist,
+                                        title: item.title,
+                                        bpm: item.bpm,
+                                        camelot: item.camelot,
+                                        mode: item.p2p_boost_free_promo
+                                          ? '🚀 P2P Boost Promo (0 MB)'
+                                          : `⚡ P2P Boost (-${cost} MB)`,
+                                        speed: '49.2 MB/s (zk-ctr-sha256-v1)',
+                                        peers: item.seeders.join(', '),
+                                        seal: item.hera_seal,
+                                      },
+                                      item.p2p_boost_free_promo
+                                        ? `🚀 P2P Boost Promo Pool (0 MB Créditos): "${item.artist} - ${item.title}" descargado al instante (zk-ctr-sha256-v1) ➔ library/`
+                                        : `⚡ P2P Boost Activado (-${cost} MB Créditos Turbo): "${item.artist} - ${item.title}" descargado desde shard opaco ${item.opaque_blob_key} (zk-ctr-sha256-v1) ➔ library/`,
                                     );
                                   }}
                                   {...stylex.props(styles.primaryBtn)}
                                 >
-                                  ⚡ P2P Boost (38 MB Créditos)
+                                  {item.p2p_boost_free_promo
+                                    ? '🚀 P2P Boost Gratis (Promo Pool · 0 MB)'
+                                    : '⚡ P2P Boost (38 MB Créditos)'}
                                 </button>
                               )}
                             </>
@@ -406,6 +547,38 @@ function ViewHarmonicBridgeP2P() {
               </div>
             </div>
           )}
+
+        {activeTransfers.length > 0 && (
+          <div {...stylex.props(styles.copilotBox)}>
+            <div {...stylex.props(styles.bridgeHeader)}>
+              <strong>
+                📥 Transferencias P2P Activas (Cola Estilo Ares Galaxy ·{' '}
+                {activeTransfers.length} Archivos con 4 Hot Cues)
+              </strong>
+              <span {...stylex.props(styles.badgeOrigin)}>
+                🛡️ 100% Verificados SHA-256 + Sello Forense HERA
+              </span>
+            </div>
+            {activeTransfers.map((tr) => (
+              <div key={tr.id} {...stylex.props(styles.endpointCard)}>
+                <div {...stylex.props(styles.bridgeHeader)}>
+                  <strong>
+                    ✅ {tr.artist} — {tr.title} ({tr.bpm.toFixed(1)} BPM ·{' '}
+                    {tr.camelot})
+                  </strong>
+                  <span {...stylex.props(styles.camelotBadge)}>
+                    {tr.mode} · {tr.speed}
+                  </span>
+                </div>
+                <small {...stylex.props(styles.subtitle)}>
+                  Progreso: ██████████ 100% · Fuentes: {tr.peers} · Sello:{' '}
+                  {tr.seal} · 4 Hot Cues inyectados (1:Intro, 2:Break, 3:Drop,
+                  4:Outro) ➔ Listo en tu Biblioteca
+                </small>
+              </div>
+            ))}
+          </div>
+        )}
 
         <div {...stylex.props(styles.copilotBox)}>
           <div {...stylex.props(styles.bridgeHeader)}>

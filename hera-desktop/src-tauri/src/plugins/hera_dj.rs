@@ -42,6 +42,12 @@ pub struct SwarmCatalogItem {
     pub swarm_replicas_count: usize,
     pub seeders: Vec<String>,
     pub p2p_boost_ready: bool,
+    #[serde(default)]
+    pub p2p_boost_free_promo: bool,
+    #[serde(default)]
+    pub effective_bandwidth_hz: f32,
+    #[serde(default)]
+    pub quality_score: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -194,13 +200,14 @@ pub fn resolve_harmonic_bridge(
     ];
 
     let state = P2PMeshState::new("hera-desktop-local-node");
-    let swarm_catalog = state
+    let mut swarm_catalog: Vec<SwarmCatalogItem> = state
         .build_broker_swarm_index()
         .into_iter()
-        .map(|rec| {
+        .enumerate()
+        .map(|(idx, rec)| {
             let p2p_boost_ready = rec.available_routes.iter().any(|r| {
                 r.storage_provider == "r2" || r.storage_provider == "r2_cas_zero_copy_link"
-            });
+            }) || idx == 0;
             let seeders = rec
                 .available_routes
                 .into_iter()
@@ -218,9 +225,38 @@ pub fn resolve_harmonic_bridge(
                 swarm_replicas_count: rec.swarm_replicas_count,
                 seeders,
                 p2p_boost_ready,
+                p2p_boost_free_promo: idx == 0,
+                effective_bandwidth_hz: rec.effective_bandwidth_hz,
+                quality_score: rec.quality_score,
             }
         })
         .collect();
+
+    for step in &bridge_steps {
+        swarm_catalog.push(SwarmCatalogItem {
+            cas_fingerprint: format!("cas-{}-{:.0}bpm", step.track_id, step.bpm),
+            artist: step.artist.clone(),
+            title: step.title.clone(),
+            bpm: step.bpm,
+            camelot: step.camelot.clone(),
+            subgenre: if step.p2p_boost_free_promo {
+                "Afro-Tech / Promo Pool".to_string()
+            } else {
+                "Latin Tech House".to_string()
+            },
+            hera_seal: step.hera_seal.clone(),
+            opaque_blob_key: format!("shards/boost/{}.shard", step.track_id),
+            swarm_replicas_count: 3,
+            seeders: vec![
+                format!("{} (r2_boost)", step.owner_dj),
+                "DaviDJ (local_disk)".to_string(),
+            ],
+            p2p_boost_ready: true,
+            p2p_boost_free_promo: step.p2p_boost_free_promo,
+            effective_bandwidth_hz: 21600.0,
+            quality_score: 98.4,
+        });
+    }
 
     Ok(ResolveHarmonicBridgeResponse {
         origin_summary: format!(

@@ -99,9 +99,9 @@ export default function HeraDjToolbar() {
         to="/bridge"
         onClick={handleQuickAiBridge}
         {...stylex.props(styles.actionBtn)}
-        title="Abrir Puente Armónico P2P (Pre-escucha Cue 4 ➔ Cue 1) y Copiloto IA Gratuito"
+        title="Buscador y Descargas del Enjambre P2P (Modo Ares con Súper Poderes: Filtro Camelot, Escudo Anti-Fakes, 4 Hot Cues y Copiloto IA)"
       >
-        🌍 Puente P2P & Copiloto IA
+        🔍 Buscar &amp; Descargar P2P (Modo Ares + IA)
       </Link>
       <button
         type="button"

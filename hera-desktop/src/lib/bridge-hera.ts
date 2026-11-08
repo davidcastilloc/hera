@@ -111,6 +111,9 @@ export type SwarmCatalogItem = {
   swarm_replicas_count: number;
   seeders: Array<string>;
   p2p_boost_ready: boolean;
+  p2p_boost_free_promo?: boolean;
+  effective_bandwidth_hz?: number;
+  quality_score?: number;
 };
 
 export type ResolveHarmonicBridgeResponse = {
@@ -382,6 +385,22 @@ export async function resolveHarmonicBridge(
     ],
     swarm_catalog: [
       {
+        cas_fingerprint: 'cas_keinemusik_cesonia_122_9a',
+        artist: 'Keinemusik & Rampa',
+        title: 'Cesonia (Afro-Tech P2P Bridge Edit)',
+        bpm: midBpm1,
+        camelot: step1Camelot,
+        subgenre: 'Afro-Tech / Promo Pool',
+        hera_seal: 'hera_seal_9f81c2e4b0a1',
+        opaque_blob_key: 'shards/boost/p2p-bridge-01.shard',
+        swarm_replicas_count: 3,
+        seeders: ['DaviDJ_EdgeGuardian (r2_boost)', 'DaviDJ (local_disk)'],
+        p2p_boost_ready: true,
+        p2p_boost_free_promo: true,
+        effective_bandwidth_hz: 21800,
+        quality_score: 99.1,
+      },
+      {
         cas_fingerprint: 'cas_barbatuques_baiana_124_8a',
         artist: 'Barbatuques',
         title: 'Baiana (DaviDJ Afro-Tribal VIP Edit)',
@@ -393,6 +412,9 @@ export async function resolveHarmonicBridge(
         swarm_replicas_count: 2,
         seeders: ['DaviDJ (r2)', 'DJFoo (gdrive)'],
         p2p_boost_ready: true,
+        p2p_boost_free_promo: false,
+        effective_bandwidth_hz: 21400,
+        quality_score: 98.2,
       },
       {
         cas_fingerprint: 'cas_victor_cardenas_baila_conmigo_128_9a',
@@ -403,22 +425,44 @@ export async function resolveHarmonicBridge(
         subgenre: 'Guaracha / Tribal House',
         hera_seal: 'hera_seal_9a128_baila',
         opaque_blob_key: 'shards/4d/72/4d72a8f103e9c112.shard',
-        swarm_replicas_count: 1,
-        seeders: ['DaviDJ (r2)'],
+        swarm_replicas_count: 2,
+        seeders: ['DaviDJ (r2)', 'MedellinNode (local_disk)'],
         p2p_boost_ready: true,
+        p2p_boost_free_promo: false,
+        effective_bandwidth_hz: 21200,
+        quality_score: 97.6,
       },
       {
         cas_fingerprint: 'cas_hugel_morenita_126_9a',
         artist: 'Hugel feat. Cumbiafrica',
         title: 'Morenita (Extended Club Master)',
-        bpm: 126.0,
-        camelot: '9A',
+        bpm: midBpm2,
+        camelot: step2Camelot,
         subgenre: 'Latin Tech House',
         hera_seal: 'hera_seal_9a126_morenita',
         opaque_blob_key: 'shards/c9/10/c910b4e7d21f8831.shard',
         swarm_replicas_count: 1,
-        seeders: ['DJFoo (gdrive)'],
+        seeders: ['DJFoo_MedellinNode (gdrive)'],
         p2p_boost_ready: false,
+        p2p_boost_free_promo: false,
+        effective_bandwidth_hz: 20900,
+        quality_score: 96.8,
+      },
+      {
+        cas_fingerprint: 'cas_davidj_teteo_96_8a',
+        artist: 'DaviDJ',
+        title: 'Teteo Polirritmico 96 (3:4 Bridge Master)',
+        bpm: 96.0,
+        camelot: '8A',
+        subgenre: 'Dembow / Urbano',
+        hera_seal: 'hera_seal_8a96_teteo',
+        opaque_blob_key: 'shards/7a/31/7a31e09c4412b801.shard',
+        swarm_replicas_count: 2,
+        seeders: ['DaviDJ (r2)', 'SantoDomingoNode (local_disk)'],
+        p2p_boost_ready: true,
+        p2p_boost_free_promo: false,
+        effective_bandwidth_hz: 21100,
+        quality_score: 96.5,
       },
     ],
   };
