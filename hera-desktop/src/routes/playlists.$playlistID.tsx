@@ -1,0 +1,139 @@
+import { Trans, useLingui } from '@lingui/react/macro';
+import { useSuspenseQuery } from '@tanstack/react-query';
+import {
+  createFileRoute,
+  redirect,
+  useLoaderData,
+} from '@tanstack/react-router';
+import { useCallback, useMemo } from 'react';
+
+import PlaylistsAPI from '../api/PlaylistsAPI';
+import TrackList from '../components/TrackList';
+import Link from '../elements/Link';
+import * as ViewMessage from '../elements/ViewMessage';
+import type { Track } from '../generated/typings';
+import useFilteredTracks from '../hooks/useFilteredTracks';
+import useGlobalTrackListStatus from '../hooks/useGlobalTrackListStatus';
+import useInvalidate from '../hooks/useInvalidate';
+import DatabaseBridge from '../lib/bridge-database';
+import { configQuery } from '../lib/queries';
+import useLibraryStore from '../lib/store';
+import type { QueueOrigin } from '../types/museeks';
+
+export const Route = createFileRoute('/playlists/$playlistID')({
+  component: ViewPlaylistDetails,
+  loader: async ({ params }) => {
+    try {
+      const playlist = await DatabaseBridge.getPlaylist(params.playlistID);
+      const playlistTracks = await DatabaseBridge.getTracks(playlist.tracks);
+
+      return { playlistTracks };
+    } catch (err) {
+      if (err === 'Playlist not found') {
+        throw redirect({ to: '/playlists' });
+      }
+
+      throw err;
+    }
+  },
+});
+
+function ViewPlaylistDetails() {
+  const { playlistTracks } = Route.useLoaderData();
+  const { playlists } = useLoaderData({ from: '/playlists' });
+  const { playlistID } = Route.useParams();
+  const config = useSuspenseQuery(configQuery).data;
+
+  const { t } = useLingui();
+
+  const invalidate = useInvalidate();
+
+  const search = useLibraryStore((state) => state.search);
+  const filteredTracks = useFilteredTracks(playlistTracks);
+  useGlobalTrackListStatus(filteredTracks);
+
+  const queueOrigin = useMemo(() => {
+    return { type: 'playlist', playlistID } satisfies QueueOrigin;
+  }, [playlistID]);
+
+  const onReorder = useCallback(
+    async (tracks: Track[]) => {
+      if (playlistID != null) {
+        await PlaylistsAPI.reorderTracks(playlistID, tracks);
+        await invalidate();
+      }
+    },
+    [invalidate, playlistID],
+  );
+
+  const extraContextMenu = useMemo(() => {
+    return [
+      {
+        label: t`Remove from playlist`,
+        action: async (selectedTracks: Set<string>) => {
+          await PlaylistsAPI.removeTracks(
+            playlistID,
+            Array.from(selectedTracks),
+          );
+          await invalidate();
+        },
+      },
+    ];
+  }, [playlistID, invalidate, t]);
+
+  if (playlistTracks.length === 0) {
+    return (
+      <ViewMessage.Notice>
+        <p>
+          <Trans>Empty playlist</Trans>
+        </p>
+        <ViewMessage.Sub>
+          <Trans>
+            You can add tracks from the{' '}
+            <Link linkOptions={{ to: '/library' }}>library view</Link>
+          </Trans>
+        </ViewMessage.Sub>
+      </ViewMessage.Notice>
+    );
+  }
+
+  if (filteredTracks.length === 0 && search.length > 0) {
+    return (
+      <ViewMessage.Notice>
+        <p>
+          <Trans>Your search returned no results</Trans>
+        </p>
+      </ViewMessage.Notice>
+    );
+  }
+
+  // A bit hacky though
+  if (filteredTracks && filteredTracks.length === 0) {
+    return (
+      <ViewMessage.Notice>
+        <p>
+          <Trans>Empty playlist</Trans>
+        </p>
+        <ViewMessage.Sub>
+          <Trans>
+            You can add tracks from the{' '}
+            <Link linkOptions={{ to: '/library' }}>library view</Link>
+          </Trans>
+        </ViewMessage.Sub>
+      </ViewMessage.Notice>
+    );
+  }
+
+  return (
+    <TrackList
+      layout="default"
+      data={filteredTracks}
+      tracksDensity={config.track_view_density}
+      playlists={playlists}
+      queueOrigin={queueOrigin}
+      onReorder={onReorder}
+      reorderable={true}
+      extraContextMenu={extraContextMenu}
+    />
+  );
+}

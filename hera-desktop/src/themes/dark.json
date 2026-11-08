@@ -1,0 +1,60 @@
+{
+  "_id": "dark",
+  "name": "Dark",
+  "themeSource": "dark",
+  "variables": {
+    "--color-scheme": "dark",
+    "--text": "hsl(0, 0%, 94%)",
+    "--text-muted": "hsl(0, 0%, 75%)",
+    "--text-interactive-bg": "hsla(0, 0%, 100%, 0.08)",
+    "--background": "hsl(216, 0%, 9.5%)",
+    "--faded-bg": "hsla(0, 0%, 0%, 0.8)",
+
+    "--border-color": "hsl(216, 0%, 20%)",
+    "--border-color-softer": "hsl(216, 0%, 24%)",
+    "--border-radius": "2px",
+
+    "--header-color": "hsl(0, 0%, 94%)",
+    "--header-bg": "hsl(216, 0%, 13%)",
+    "--header-bg-softer": "hsl(216, 0%, 16%)",
+
+    "--footer-bg": "hsl(216, 0%, 13%)",
+    "--footer-nav-bg-color-active": "hsl(216, 0%, 9.5%)",
+
+    "--active-item-bg": "hsl(216, 0%, 20%)",
+    "--active-item-color": "hsl(0, 0%, 94%)",
+
+    "--tracks-bg-even": "hsl(216, 0%, 9.5%)",
+    "--tracks-bg-odd": "hsl(216, 0%, 13%)",
+
+    "--tracks-header-bg": "hsl(216, 0%, 9.5%)",
+    "--tracks-header-color": "hsl(0, 0%, 94%)",
+
+    "--cover-bg": "hsl(216, 0%, 16%)",
+
+    "--success-color": "hsl(120, 39%, 56%)",
+    "--info-color": "hsl(191, 64%, 59%)",
+    "--warning-color": "hsl(38, 86%, 62%)",
+    "--danger-color": "hsl(0, 66%, 56%)",
+
+    "--toasts-bg": "hsl(216, 0%, 9.5%)",
+
+    "--progress-bg": "hsl(216, 0%, 8%)",
+
+    "--sidebar-bg": "hsl(216, 0%, 13%)",
+    "--sidebar-item-active-bg": "hsl(216, 0%, 9.5%)",
+
+    "--search-bg": "hsl(216, 0%, 9.5%)",
+    "--slider-bg": "hsl(216, 0%, 9.5%)",
+
+    "--queue-bg": "hsl(216, 0%, 9.5%)",
+    "--queue-header-bg": "hsl(216, 0%, 13%)",
+
+    "--checkbox-bg": "hsl(216, 0%, 17%)",
+    "--input-bg": "hsl(216, 0%, 15%)",
+    "--input-color": "hsl(0, 0%, 94%)",
+    "--button-bg": "hsl(216, 0%, 16%)",
+    "--button-border": "hsla(0, 0%, 100%, .1)",
+    "--button-color": "hsl(0, 0%, 94%)"
+  }
+}

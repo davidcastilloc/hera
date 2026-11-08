@@ -1,0 +1,224 @@
+/**
+ * Module in charge of persisting and returning the config to/from the filesystem
+ */
+use home_config::HomeConfig;
+use log::info;
+use serde::{Deserialize, Serialize};
+use std::fmt::Display;
+use std::{path::PathBuf, sync::RwLock};
+use tauri::plugin::{Builder, TauriPlugin};
+use tauri::{Manager, Runtime, State};
+use ts_rs::TS;
+
+use crate::libs::error::{AnyResult, MuseeksError};
+
+#[derive(Serialize, Deserialize, Debug, Clone, TS)]
+#[ts(export, export_to = "../../src/generated/typings.ts")]
+pub enum Repeat {
+    All,
+    One,
+    None,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, TS)]
+#[ts(export, export_to = "../../src/generated/typings.ts")]
+pub enum SortBy {
+    Artist,
+    Album,
+    Title,
+    Duration,
+    Genre,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, TS)]
+#[ts(export, export_to = "../../src/generated/typings.ts")]
+pub enum SortOrder {
+    Asc,
+    Dsc,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, TS)]
+#[ts(export, export_to = "../../src/generated/typings.ts")]
+pub enum DefaultView {
+    Library,
+    Artists,
+    Playlists,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, TS)]
+#[ts(export, export_to = "../../src/generated/typings.ts")]
+#[serde(rename_all = "lowercase")]
+pub enum TrackViewDensity {
+    Normal,
+    Compact,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, TS)]
+#[ts(export, export_to = "../../src/generated/typings.ts")]
+#[serde(default)]
+pub struct Config {
+    pub language: String,
+    pub theme: String,
+    pub ui_accent_color: Option<String>,
+    pub audio_volume: f32,
+    pub audio_playback_rate: Option<f32>,
+    pub audio_follow_playing_track: bool,
+    pub audio_muted: bool,
+    pub audio_shuffle: bool,
+    pub audio_repeat: Repeat,
+    pub audio_stream_server: bool,
+    pub default_view: DefaultView,
+    pub library_sort_by: SortBy,
+    pub library_sort_order: SortOrder,
+    pub library_folders: Vec<PathBuf>,
+    pub library_autorefresh: bool,
+    pub sleepblocker: bool,
+    pub auto_update_checker: bool,
+    pub notifications: bool,
+    pub track_view_density: TrackViewDensity,
+    pub wayland_compat: bool,
+    #[serde(default)]
+    pub menu_bar_visible: bool,
+}
+
+pub const SYSTEM_THEME: &str = "__system";
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            language: "en".to_owned(),
+            theme: SYSTEM_THEME.to_owned(),
+            ui_accent_color: None,
+            audio_volume: 1.0,
+            audio_playback_rate: Some(1.0),
+            audio_follow_playing_track: false,
+            audio_muted: false,
+            audio_shuffle: false,
+            audio_repeat: Repeat::None,
+            #[cfg(target_os = "linux")]
+            audio_stream_server: true,
+            #[cfg(not(target_os = "linux"))]
+            audio_stream_server: false,
+            default_view: DefaultView::Library,
+            library_sort_by: SortBy::Artist,
+            library_sort_order: SortOrder::Asc,
+            library_folders: vec![],
+            library_autorefresh: false,
+            sleepblocker: false,
+            auto_update_checker: true,
+            notifications: false,
+            track_view_density: TrackViewDensity::Normal,
+            wayland_compat: false,
+            menu_bar_visible: false,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ConfigManager {
+    manager: HomeConfig,
+    pub data: RwLock<Config>,
+}
+
+impl ConfigManager {
+    pub fn new(manager: HomeConfig, config: Config) -> Self {
+        Self {
+            manager,
+            data: RwLock::new(config),
+        }
+    }
+}
+
+fn config_err<T: Display>(err: T) -> MuseeksError {
+    MuseeksError::Config(format!("{}", err))
+}
+
+impl ConfigManager {
+    pub fn get(&self) -> AnyResult<Config> {
+        let lock = self.data.read().map_err(config_err)?;
+        Ok(lock.clone())
+    }
+
+    pub fn update(&self, config: Config) -> AnyResult<()> {
+        let mut writer = self.data.write().map_err(config_err)?;
+        *writer = config;
+        std::mem::drop(writer);
+        self.save()
+    }
+
+    pub fn set_sleepblocker(&self, sleepblocker: bool) -> AnyResult<()> {
+        let mut writer = self.data.write().map_err(config_err)?;
+        writer.sleepblocker = sleepblocker;
+        std::mem::drop(writer);
+        self.save()
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn set_menu_bar_visible(&self, visible: bool) -> AnyResult<()> {
+        let mut writer = self.data.write().map_err(config_err)?;
+        writer.menu_bar_visible = visible;
+        std::mem::drop(writer);
+        self.save()
+    }
+
+    pub fn set_default_view(&self, default_view: DefaultView) -> AnyResult<()> {
+        let mut writer = self.data.write().map_err(config_err)?;
+        writer.default_view = default_view;
+        std::mem::drop(writer);
+        self.save()
+    }
+
+    fn save(&self) -> AnyResult<()> {
+        let config = self.data.read().map_err(config_err)?;
+        self.manager.save_toml(config.clone()).unwrap();
+        info!("Config updated");
+        Ok(())
+    }
+}
+
+/**
+ * Get the app configuration/storage directory
+ */
+#[tauri::command]
+pub fn get_storage_dir() -> PathBuf {
+    // TODO: Replace with PathResolver::app_config_dir() + app identifier, somehow
+    let path = dirs::config_dir().expect("Get config dir");
+    path.join("museeks")
+}
+
+#[tauri::command]
+pub fn get_config(config_manager: State<ConfigManager>) -> AnyResult<Config> {
+    config_manager.get()
+}
+
+#[tauri::command]
+pub fn set_config(config_manager: State<ConfigManager>, config: Config) -> AnyResult<()> {
+    config_manager.update(config)
+}
+
+pub fn init<R: Runtime>(config: ConfigManager) -> TauriPlugin<R> {
+    // We need to inject the initial state of the config to the window object of
+    // our webview, because some of our front-end modules are instantiated at
+    // parsing time and require data that would otherwise only load-able asynchronously
+    let initial_config_script = format!(
+        r#"
+            window.__MUSEEKS_INITIAL_CONFIG = {};
+            window.__MUSEEKS_PLATFORM = {:?};
+        "#,
+        serde_json::to_string(&config.get().unwrap()).unwrap(),
+        tauri_plugin_os::type_().to_string()
+    );
+
+    Builder::<R>::new("config")
+        .invoke_handler(tauri::generate_handler![
+            get_storage_dir,
+            get_config,
+            set_config,
+        ])
+        .js_init_script(initial_config_script)
+        .setup(|app_handle, _api| {
+            app_handle.manage(config);
+            Ok(())
+        })
+        .build()
+}

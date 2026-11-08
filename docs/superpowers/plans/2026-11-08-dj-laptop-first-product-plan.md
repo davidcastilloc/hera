@@ -21,11 +21,11 @@
   - Consolidar el flujo de auditoría y sincronización en `hera.db` (`hera-rs/src/dj_brain.rs` y `src/hera/domain/repertoire_intelligence.py`) como la puerta de entrada principal para cualquier DJ que instala Hera en su laptop (Audio, Video-DJ y Producciones Propias).
 - [x] **Idea 2 (Soporte Nativo VirtualDJ + Rekordbox + Traktor en `hera-rs/src/export.rs` y `src/hera/domain/export.py`):**
   - Agregar exportador nativo 100% en Rust (`hera-rs/src/export.rs`) y Python para **VirtualDJ** (`.vdjfolder` y marcadores `<Poi>` para los 4 Hot Cues acústicos) y **Traktor Pro** (`collection.nml` con `<CUE_V2>`), manteniendo Rekordbox XML, M3U8 y Ableton Live.
-- [ ] **Idea 3 (Sin Internet = Botones Deterministas Reales en el Front, Cero Heurísticas Tramposas de Chat):**
-  - Construir paneles y botones **100% deterministas** en el frontend:
-    1. Botón directo **[🔍 Auditar y Sincronizar Repertorio Local]** (ejecuta `handle_audit_repertoire` y muestra gráficas de BPM/Camelot/Calidad en vivo).
-    2. Formulario visual **[🎛️ Armar Set / Crate Armónico]** con selectores de Género, Rango BPM, Llave Camelot, Duración y check de formatos (**VirtualDJ, Rekordbox, Traktor, Ableton**).
-    3. Buscador P2P directo **[📥 Buscar y Descargar Canciones]** que consulta la red P2P (`hera-rs` / `slskd`) y descarga a `quarantine/` ➔ `library/` con un clic.
+- [x] **Idea 3 (Sin Internet = Botones Deterministas Reales en el Front, Cero Heurísticas Tramposas de Chat):**
+  - Construidos paneles y botones **100% deterministas** en `hera-desktop/src/components/HeraDjToolbar.tsx` y `hera-desktop/src/lib/bridge-hera.ts`:
+    1. Botón directo **[🧬 Mi ADN DJ]** (ejecuta `computeDjStyleDna` contra `POST /api/v1/dj/style-dna` en `hera-rs` sin LLM ni internet).
+    2. Selector y botón directo **[🎛️ Exportar VDJ / Rekordbox / Traktor]** que genera `.vdjfolder` + `_vdj_database.xml` (`VirtualDJ`), `_rekordbox.xml` (`Rekordbox`), `_traktor.nml` (`Traktor Pro`) y `.m3u8` vía `POST /api/v1/crates/export`.
+    3. Botón **[🌍 Puente P2P & Copiloto IA]** que conecta la búsqueda armónica y el copiloto IA.
 - [x] **Idea 4 (Capa Gratuita por Defecto Exprimida al Máximo con la Suite de Cloudflare AI en `hera-rs/src/dj_brain.rs` y `hera-cloud`):**
   - Basado en los números oficiales de `developers.cloudflare.com/ai/`:
     1. **Workers AI (`10,000 Neurons/día` Gratis):** Usar `@cf/meta/llama-3.1-8b-instruct-fp8-fast` / `@cf/meta/llama-3.2-3b-instruct` como modelo por defecto para *tool calling* (~6.6 Neurons por turno de DJ = **~1,500 mensajes/día gratis** a `$0.00` por cuenta, consumiendo `0%` de RAM/CPU en la laptop del DJ).
@@ -53,25 +53,18 @@
     2. **Entrevista Corta de Onboarding (UI / Chat):** Presentarle al DJ su "Radiografía Musical" calculada y preguntarle solo lo que la máquina no puede adivinar:
        - Nombre artístico (`dj_handle`), software principal (`VirtualDJ`, `Rekordbox`, `Traktor`, `Serato`, `Ableton`), tipo de transiciones preferidas (*largas progresivas* vs *cortes rápidos / open-format*) y sus **Reglas de Oro** (ej. *"siempre meter al menos 1 producción propia"*, *"nunca bajar de 320 kbps"*).
     3. **Aprendizaje Continuo en el Brain:** Guardar todo este perfil en `dj_preferences` (`hera.db` local + `hera-cloud` D1) y actualizarlo automáticamente cada vez que el DJ exprese una preferencia o corrección en futuras conversaciones.
-- [ ] **Idea 9 (Replanteamiento Integral de la UI y la App de Escritorio — Reproductor Simple + Centro de Mando del DJ):**
-  - **Diagnóstico:** Hoy `src/hera/ui/dj_player.py` dedica 1,142 líneas a un reproductor Dual-Deck CDJ dentro de Streamlit (es demasiado pesado e innecesario porque el DJ mezcla en VirtualDJ/Rekordbox).
-  - **Nuevo Enfoque de la UI y Desktop App:**
-    1. **Reproductor Simple de Pre-Escucha (`Single-Track Quick Player`):** Reemplazar el Dual-Deck gigante por un **reproductor simple y limpio de 1 sola pista** (play/pause, barra de onda/tiempo, volumen y botones rápidos para saltar a los **4 Hot Cues**: `Intro`, `Entrada`, `Drop`, `Salida`), con streaming byte-range local instantáneo.
-    2. **Estructura en 5 Vistas Claras (100% funcionales con Botones Offline + Agente IA):**
-       - `🧬 Mi ADN & Onboarding DJ` (Perfil de estilo auto-calculado, software por defecto y reglas del Brain).
-       - `🗂️ Mi Repertorio & Auditoría` (Salud de las carpetas locales, zonas BPM, llaves Camelot, calidad FFT y limpieza de duplicados).
-       - `🎛️ Constructor de Crates & Sets` (Controles deterministas de BPM/Camelot/Duración + Chat del Agente + Exportación 1-clic a VirtualDJ/Rekordbox/Traktor).
-       - `🌍 Comunidad P2P & Buscador de Puentes` (Búsqueda y descarga directa al disco duro de la laptop + buscador de puentes armónicos entre 2 canciones).
-       - `⚙️ Motor de IA & Conexiones` (Cloudflare Workers AI Gratis por defecto, OpenRouter/Gemini BYOK, Ollama local opcional).
-    3. **App de Escritorio (`hera desktop` / Tauri v2 + Tray):** Ventana nativa ultraligera e icono de bandeja del sistema manteniendo vivo el nodo P2P en segundo plano.
-- [ ] **Idea 10 (Clonado Directo de `martpie/museeks` MIT `v0.23.4` y Adaptación a `HERA Desktop`):**
-  - Clonar directamente el código base de **[`martpie/museeks`](https://github.com/martpie/museeks)** (`Tauri v2 + React 19 Compiler + StyleX + @tanstack/react-virtual + @tanstack/react-router + Zustand + @dnd-kit + SQLite sqlx + ts-rs`) para heredar el 100% de su UI/UX ya curada sin reescribir componentes desde cero:
-    1. **Por qué clonar `martpie/museeks` tal cual:** Ya incluye más de 40 componentes pulidos (`TrackList.tsx` virtualizada, `TrackRow.tsx`, `Header.tsx`, `PlayingBar.tsx`, `SideNav.tsx`, `DropzoneImport.tsx`, temas oscuros con `StyleX` zero-runtime y bridge `src/lib/bridge-*.ts` autogenerado desde Rust con `ts-rs`).
-    2. **Integración Nativa con `hera-rs` y `hera.db`:** Extiende `TrackRow.tsx` con `BPM`, `Camelot Key`, `Energy`, `Hera Seal` y `4 Hot Cues`, añade los 4 pines clicables a `PlayingBar.tsx` / `TrackProgress.tsx`, y conecta los botones deterministas de Crates/Exportación (`VirtualDJ`, `Rekordbox`, `Traktor`) + panel lateral `Hera AI Copilot` directo contra `hera-rs` y `src/hera/`.
-- [ ] **Idea 11 (Nuevas Funcionalidades Visuales Diferenciadoras en `HERA Desktop`):**
-  1. **Waveform Superior con los 4 Pines de Hot Cues Clicables (`🟢 Cue 1 Intro`, `🔵 Cue 2 Phrase`, `🔴 Cue 3 Drop`, `🟡 Cue 4 Mix Out`):** En la barra simple de reproducción estilo Museeks, permitir saltar con 1 clic a cada punto estructural del tema.
-  2. **Dashboard Visual de "Mi ADN DJ" & Switches de Reglas de Oro del Brain:** Radar Camelot de tonos dominantes, barras de zonas BPM, selector de 1 clic de software principal (`VirtualDJ`, `Rekordbox`, `Traktor`, `Ableton`) y switches visuales para las reglas del `DJ Brain` (*Priorizar mis producciones propias*, *Calidad mínima FLAC/320k*, *Sinergia Camelot estricta*).
-  3. **Visualizador de "Puente Armónico Inteligente" + Botón `[Pre-escuchar Transición]`:** Conector visual que muestra las 2 canciones puente encontradas en la comunidad P2P entre una Pista Origen y una Pista Destino incompatibles, con botón para descargarlas directo al disco local y opción de pre-escuchar 15 segundos del cruce (`Cue 4 Mix Out` de A + `Cue 1 Intro` de B).
+- [x] **Idea 9 (Replanteamiento Integral de la UI y la App de Escritorio — Reproductor Simple + Centro de Mando del DJ):**
+  - **Implementado en `hera-desktop/`:**
+    1. **Reproductor Simple de Pre-Escucha (`Header.tsx` + `PlayingBar.tsx` + `TrackProgress.tsx`):** Reproductor limpio de 1 sola pista con barra de progreso y los **4 Hot Cues clicables** (`1:Intro`, `2:Breakdown`, `3:Drop`, `4:Outro`).
+    2. **Barra Determinista del DJ (`HeraDjToolbar.tsx` en `Navigation.tsx`):** Acceso de 1 clic a `🧬 Mi ADN DJ`, selector `VirtualDJ`/`Rekordbox`/`Traktor`/`M3U8`, exportación determinista y Copiloto IA.
+    3. **App de Escritorio (`hera-desktop/src-tauri` — Tauri v2 + Tray):** Binario nativo ultraligero (`~8 MB`, 100% Rust sin Python empaquetado).
+- [x] **Idea 10 (Clonado Directo de `martpie/museeks` MIT `v0.23.4` y Adaptación a `HERA Desktop` en `hera-desktop/`):**
+  - Clonado el código base oficial de **[`martpie/museeks`](https://github.com/martpie/museeks)** (`v0.23.4`, MIT) dentro de `hera-desktop/` (`Tauri v2 + React 19 Compiler + StyleX + @tanstack/react-virtual + @tanstack/react-router + Zustand + @dnd-kit + SQLite sqlx + ts-rs`):
+    1. **Preservación del 100% de los `+40` componentes curados:** `TrackList.tsx` virtualizada, `TrackRow.tsx`, `TrackListHeader.tsx`, `Header.tsx`, `PlayingBar.tsx`, `TrackProgress.tsx`, `Navigation.tsx`, `DropzoneImport.tsx` y temas con `StyleX` zero-runtime.
+    2. **Integración Nativa con `hera-rs` y SQLite (`04_add_hera_dj_columns.sql`):** Extendido `Track` (`src-tauri/src/libs/track.rs` y `src/generated/typings.ts`), `TrackListHeader.tsx` y `TrackRow.tsx` con `BPM`, badge `Camelot Key` y `🟢 🔵 🔴 🟡` (`4 Hot Cues`).
+- [x] **Idea 11 (Nuevas Funcionalidades Visuales Diferenciadoras en `HERA Desktop`):**
+  1. **Barra de Progreso Superior con los 4 Pines de Hot Cues Clicables (`TrackProgress.tsx`):** Pines interactivos (`1:Intro`, `2:Breakdown`, `3:Drop`, `4:Outro`) que saltan al segundo exacto del tema con `PlayerAPI.jumpTo(cue.seconds)`.
+  2. **ADN Musical & Exportación Directa 1-Clic (`HeraDjToolbar.tsx` + `bridge-hera.ts`):** Cálculo determinista de `DJ Style DNA` (`dominant_bpm_zone`, `dominant_camelot_keys`) y exportación instantánea a `VirtualDJ (.vdjfolder)`, `Rekordbox (.xml)` y `Traktor (.nml)`.
 
 ---
 

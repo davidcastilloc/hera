@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Request camera access for WebRTC</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Request microphone access for WebRTC</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<!-- app's bundle identifier -->
+			<string>Museeks</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- register the museeks:// schemes -->
+				<string>museeks</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

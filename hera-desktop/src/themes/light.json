@@ -1,0 +1,60 @@
+{
+  "_id": "light",
+  "name": "Light",
+  "themeSource": "light",
+  "variables": {
+    "--color-scheme": "light",
+    "--text": "hsl(0, 0%, 20%)",
+    "--text-muted": "hsl(0, 0%, 33%)",
+    "--text-interactive-bg": "hsla(0, 0%, 0%, 0.08)",
+    "--background": "hsl(0, 0%, 100%)",
+    "--faded-bg": "hsla(0, 0%, 100%, 0.9)",
+
+    "--border-color": "hsl(0, 0%, 85%)",
+    "--border-color-softer": "hsl(0, 0%, 89%)",
+    "--border-radius": "2px",
+
+    "--header-color": "hsl(0, 0%, 33%)",
+    "--header-bg": "hsl(0, 0%, 96%)",
+    "--header-bg-softer": "hsl(0, 0%, 98%)",
+
+    "--footer-bg": "hsl(0, 0%, 96%)",
+    "--footer-nav-bg-color-active": "hsl(0, 0%, 90%)",
+
+    "--active-item-bg": "hsl(0, 0%, 86%)",
+    "--active-item-color": "var(--text)",
+
+    "--tracks-bg-even": "hsl(0, 0%, 100%)",
+    "--tracks-bg-odd": "hsl(0, 0%, 96%)",
+
+    "--tracks-header-bg": "hsl(0, 0%, 100%)",
+    "--tracks-header-color": "hsl(0, 0%, 33%)",
+
+    "--cover-bg": "hsl(0, 0%, 96%)",
+
+    "--success-color": "hsl(120, 39%, 56%)",
+    "--info-color": "hsl(191, 64%, 59%)",
+    "--warning-color": "hsl(38, 86%, 62%)",
+    "--danger-color": "hsl(0, 66%, 56%)",
+
+    "--toasts-bg": "hsl(0, 0%, 100%)",
+
+    "--progress-bg": "hsl(0, 0%, 86%)",
+
+    "--sidebar-bg": "hsl(0, 0%, 96%)",
+    "--sidebar-item-active-bg": "hsl(0, 0%, 90%)",
+
+    "--search-bg": "hsl(0, 0%, 100%)",
+    "--slider-bg": "hsl(0, 0%, 85%)",
+
+    "--queue-bg": "hsl(0, 0%, 100%)",
+    "--queue-header-bg": "hsl(0, 0%, 96%)",
+
+    "--checkbox-bg": "hsl(0, 0%, 96%)",
+    "--input-bg": "hsl(0, 0%, 96%)",
+    "--input-color": "hsl(0, 0%, 20%)",
+    "--button-bg": "hsl(0, 0%, 95%)",
+    "--button-border": "hsla(0, 0%, 0%, 0.1)",
+    "--button-color": "hsl(0, 0%, 20%)"
+  }
+}

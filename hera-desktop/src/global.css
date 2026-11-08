@@ -1,0 +1,86 @@
+/* Colors (default theme) */
+:root {
+  --main-color: hsl(208, 77%, 59%);
+  --focus-color: color-mix(in srgb, var(--main-color) 80%, white);
+  --link-color: var(--main-color);
+  --bold: 600;
+}
+
+*,
+::before,
+::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 12px;
+  user-select: none;
+  height: 100%;
+  overflow: hidden;
+  color-scheme: var(--color-scheme);
+}
+
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Roboto,
+    Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  color: var(--text);
+  user-select: none;
+  height: 100%;
+  overflow: hidden;
+}
+
+/** Global focus styles */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  --focus-offset: 1px;
+  outline: 2px solid var(--focus-color);
+  outline-offset: var(--focus-offset);
+  border-radius: calc(
+    var(--border-radius) + var(--focus-offset)
+  ); /* compensate radius on elements */
+  position: relative;
+  z-index: 5 !important;
+}
+
+p {
+  line-height: 1.3;
+}
+
+/* App wrapper */
+#wrap {
+  height: 100vh;
+  isolation: isolate;
+}
+
+/**
+ * Museeks specific data-attributes to apply some easily reusable styles across the app.
+ */
+
+[data-museeks-os="linux"],
+[data-museeks-os="macos"] {
+  font-weight: 500;
+}
+
+/* For call-to-actions to show the interactibility of an element */
+[data-museeks-action] {
+  transition: transform 0.1s ease-in-out;
+}
+
+[data-museeks-action]:hover {
+  transform: scale(1.2);
+}
+
+[data-museeks-action]:active {
+  transform: scale(1);
+}
+
+/* Active state of some elements that get de-emphasized, is not focused */
+[data-museeks-list]:focus-within {
+  --active-item-bg: var(--main-color);
+  --active-item-color: white;
+}

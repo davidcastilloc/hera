@@ -1,0 +1,316 @@
+use std::path::PathBuf;
+use tauri::Emitter;
+use tauri::image::Image;
+use tauri::{
+    Manager, Runtime, State,
+    menu::{AboutMetadataBuilder, MenuBuilder, MenuId, MenuItemBuilder, SubmenuBuilder},
+    plugin::{Builder, TauriPlugin},
+};
+use tauri_plugin_opener::OpenerExt;
+
+use crate::libs::error::AnyResult;
+use crate::libs::events::IPCEvent;
+use crate::plugins::config::ConfigManager;
+
+#[tauri::command]
+pub async fn show<R: Runtime>(
+    window: tauri::Window<R>,
+    config_manager: State<'_, ConfigManager>,
+) -> AnyResult<()> {
+    // On macOS, the menu is global, and thus does not need to be toggled
+    #[cfg(not(target_os = "macos"))]
+    {
+        window.show_menu()?;
+        config_manager.set_menu_bar_visible(true)?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        drop(window);
+        drop(config_manager);
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn hide<R: Runtime>(
+    window: tauri::Window<R>,
+    config_manager: State<'_, ConfigManager>,
+) -> AnyResult<()> {
+    #[cfg(not(target_os = "macos"))]
+    {
+        window.hide_menu()?;
+        config_manager.set_menu_bar_visible(false)?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        drop(window);
+        drop(config_manager);
+    }
+
+    Ok(())
+}
+
+/// Show the window and apply the persisted menu visibility in one call.
+/// This avoids a GTK bug where show_all() (called internally by window.show())
+/// re-shows the menu bar that was hidden in on_window_ready.
+/// See: https://github.com/tauri-apps/tao/issues/1201
+#[tauri::command]
+pub async fn show_window<R: Runtime>(
+    window: tauri::Window<R>,
+    config_manager: State<'_, ConfigManager>,
+) -> AnyResult<()> {
+    window.show()?;
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let menu_visible = config_manager
+            .get()
+            .map(|c| c.menu_bar_visible)
+            .unwrap_or(false);
+
+        if menu_visible {
+            window.show_menu()?;
+        } else {
+            window.hide_menu()?;
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    drop(config_manager);
+
+    Ok(())
+}
+
+pub fn init<R: Runtime>() -> TauriPlugin<R> {
+    Builder::new("app-menu")
+        .invoke_handler(tauri::generate_handler![show, hide, show_window])
+        .on_window_ready(|window| {
+            let app_handle = window.app_handle();
+
+            // -----------------------------------------------------------------
+            // X-menu
+            // -----------------------------------------------------------------
+            let package_info = app_handle.package_info();
+            let version = package_info.version.to_string().into();
+            let resource_path: PathBuf = app_handle.path().resource_dir().unwrap();
+            let icon_path = resource_path.join("icons").join("icon.png");
+            let icon = Image::from_path(&icon_path)
+                .unwrap_or_else(|_| panic!("Failed to load icon from path: {:?}", &icon_path));
+
+            let about_metadata = AboutMetadataBuilder::new()
+                .version(version)
+                .authors(Some(vec![package_info.authors.to_string()]))
+                .license("MIT".into())
+                .website("https://museeks.io".into())
+                .website_label("museeks.io".into())
+                .icon(Some(icon))
+                .build();
+
+            // -----------------------------------------------------------------
+            // Edit sub-menu
+            // -----------------------------------------------------------------
+            let edit_menu = SubmenuBuilder::new(app_handle, "Edit")
+                .undo()
+                .redo()
+                .separator()
+                .cut()
+                .copy()
+                .paste()
+                .select_all()
+                .build()
+                .unwrap();
+
+            // -----------------------------------------------------------------
+            // View sub-menu
+            // -----------------------------------------------------------------
+            let view_menu = SubmenuBuilder::new(app_handle, "View")
+                .item(
+                    &MenuItemBuilder::new("Jump to playing track")
+                        .id(MenuId::new("jump_to_playing_track"))
+                        .accelerator("CmdOrCtrl+T")
+                        .build(app_handle)
+                        .unwrap(),
+                )
+                .separator()
+                .item(
+                    &MenuItemBuilder::new("Go to library")
+                        .id(MenuId::new("go_to_library"))
+                        .accelerator("CmdOrCtrl+L")
+                        .build(app_handle)
+                        .unwrap(),
+                )
+                .item(
+                    &MenuItemBuilder::new("Go to playlists")
+                        .id(MenuId::new("go_to_playlists"))
+                        .accelerator("CmdOrCtrl+P")
+                        .build(app_handle)
+                        .unwrap(),
+                )
+                .item(
+                    &MenuItemBuilder::new("Go to settings")
+                        .id(MenuId::new("go_to_settings"))
+                        .accelerator("CmdOrCtrl+,")
+                        .build(app_handle)
+                        .unwrap(),
+                )
+                .separator()
+                .item(
+                    &MenuItemBuilder::new("Reload")
+                        .id(MenuId::new("reload"))
+                        .accelerator("CmdOrCtrl+R")
+                        .build(app_handle)
+                        .unwrap(),
+                )
+                .item(
+                    &MenuItemBuilder::new("Toggle Developer Tools")
+                        .id(MenuId::new("toggle_devtools"))
+                        .accelerator("CmdOrCtrl+Alt+I")
+                        .build(app_handle)
+                        .unwrap(),
+                )
+                .build()
+                .unwrap();
+
+            // -----------------------------------------------------------------
+            // Window sub-menu
+            // -----------------------------------------------------------------
+            let window_menu: tauri::menu::Submenu<R> = SubmenuBuilder::new(app_handle, "Window")
+                .item(
+                    &MenuItemBuilder::new("Minimize")
+                        .id("minimize")
+                        .accelerator("CmdOrCtrl+M")
+                        .build(app_handle)
+                        .unwrap(),
+                )
+                .build()
+                .unwrap();
+
+            // -----------------------------------------------------------------
+            // Help sub-menu
+            // -----------------------------------------------------------------
+            let help_menu_builder = {
+                let builder = SubmenuBuilder::new(app_handle, "Help");
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    builder.about(Some(about_metadata))
+                }
+
+                #[cfg(target_os = "macos")]
+                {
+                    builder
+                }
+            };
+
+            let help_menu = help_menu_builder
+                .item(
+                    &MenuItemBuilder::new("Report an issue")
+                        .id("report_an_issue")
+                        .build(app_handle)
+                        .unwrap(),
+                )
+                .build()
+                .unwrap();
+
+            // -----------------------------------------------------------------
+            // Assembled menu + listeners
+            // -----------------------------------------------------------------
+            let menu_builder = {
+                let builder = MenuBuilder::new(app_handle);
+
+                #[cfg(target_os = "macos")]
+                {
+                    let museeks_menu = SubmenuBuilder::new(app_handle, "Museeks")
+                        .about(Some(about_metadata))
+                        .separator()
+                        .services()
+                        .hide()
+                        .hide_others()
+                        .show_all()
+                        .separator()
+                        .quit()
+                        .build()
+                        .unwrap();
+
+                    builder.items(&[&museeks_menu])
+                }
+
+                #[cfg(not(target_os = "macos"))]
+                {
+                    builder
+                }
+            };
+
+            // The menu on macOS is app-wide and not specific to one window
+            #[cfg(target_os = "macos")]
+            {
+                let file_menu = SubmenuBuilder::new(app_handle, "File")
+                    .close_window()
+                    .build()
+                    .unwrap();
+
+                let menu = menu_builder
+                    .items(&[&file_menu, &edit_menu, &view_menu, &window_menu, &help_menu])
+                    .build()
+                    .unwrap();
+
+                app_handle.set_menu(menu).unwrap();
+            }
+
+            // On Windows / Linux, app menus are wasting vertical space, so we
+            // hide it by default. The menu get toggle-able by pressing Alt.
+            #[cfg(not(target_os = "macos"))]
+            {
+                let menu = menu_builder
+                    // No file menu on Windows / Linux
+                    .items(&[&edit_menu, &view_menu, &window_menu, &help_menu])
+                    .build()
+                    .unwrap();
+
+                window.set_menu(menu).unwrap();
+                window.hide_menu().unwrap();
+            }
+
+            window.on_menu_event(|win, event| match event.id.as_ref() {
+                "jump_to_playing_track" => {
+                    win.emit(IPCEvent::JumpToPlayingTrack.as_ref(), ()).unwrap();
+                }
+                "go_to_library" => {
+                    win.emit(IPCEvent::GoToLibrary.as_ref(), ()).unwrap();
+                }
+                "go_to_playlists" => {
+                    win.emit(IPCEvent::GoToPlaylists.as_ref(), ()).unwrap();
+                }
+                "go_to_settings" => {
+                    win.emit(IPCEvent::GoToSettings.as_ref(), ()).unwrap();
+                }
+                "reload" => {
+                    let webview = win.get_webview_window("main").unwrap();
+                    webview
+                        .navigate(webview.url().expect("webview should havea a URL"))
+                        .unwrap();
+                }
+                "toggle_devtools" => {
+                    let webview = win.get_webview_window("main").unwrap();
+                    match webview.is_devtools_open() {
+                        true => webview.close_devtools(),
+                        false => webview.open_devtools(),
+                    }
+                }
+                "minimize" => {
+                    win.minimize().unwrap();
+                }
+                "report_an_issue" => {
+                    win.app_handle()
+                        .opener()
+                        .open_url("https://github.com/martpie/museeks/issues", None::<&str>)
+                        .unwrap();
+                }
+                _ => {}
+            });
+        })
+        .build()
+}

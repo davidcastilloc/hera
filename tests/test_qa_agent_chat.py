@@ -89,7 +89,10 @@ def test_qa_backend_registry_detection():
     """QA 8: Test LLM backend resolution."""
     backends = BackendRegistry.list_backends()
     assert isinstance(backends, list)
-    assert len(backends) == 12
+    assert len(backends) == 14
+    backend_names = {b.name for b in backends}
+    assert "cloudflare_free" in backend_names
+    assert "openrouter" in backend_names
 
     cfg = AgentConfig(backend="custom", base_url="http://localhost:11434/v1", model="test-model")
     resolved = BackendRegistry.resolve(cfg)

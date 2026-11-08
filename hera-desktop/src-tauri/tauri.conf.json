@@ -1,0 +1,103 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Museeks",
+  "mainBinaryName": "museeks",
+  "version": "0.23.4",
+  "identifier": "io.museeks.app",
+  "build": {
+    "beforeDevCommand": "vp run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "vp run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": {
+          "allow": ["**/*"]
+        }
+      },
+      "pattern": {
+        "use": "brownfield"
+      },
+      "csp": {
+        "default-src": "'self' asset: http://asset.localhost",
+        "connect-src": "'self' asset: http://asset.localhost blob: ipc: http://ipc.localhost https://api.github.com",
+        "img-src": "'self' asset: http://asset.localhost data:",
+        "media-src": "'self' asset: http://asset.localhost blob: data: http://127.0.0.1:*",
+        "child-src": "'self'; object-src 'self'",
+        "font-src": "'self' data:",
+        "style-src": "'self' 'unsafe-inline'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "category": "Music",
+    "targets": ["dmg", "nsis", "appimage", "deb", "rpm"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "icons/icon.png": "icons/icon.png"
+    },
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      },
+      "deb": {
+        "files": {
+          "/usr/share/metainfo/io.museeks.app.metainfo.xml": "release/flatpak.metainfo.xml"
+        }
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": ["aac"],
+        "mimeType": "audio/aac",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["mp3"],
+        "mimeType": "audio/mpeg",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["m4a"],
+        "mimeType": "audio/mp4",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["3gp"],
+        "mimeType": "audio/3gp",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["wav"],
+        "mimeType": "audio/wav",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["ogg", "opus"],
+        "mimeType": "audio/ogg",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["flac"],
+        "mimeType": "audio/flac",
+        "role": "Viewer"
+      },
+      {
+        "ext": ["weba"],
+        "mimeType": "audio/weba",
+        "role": "Viewer"
+      }
+    ]
+  }
+}
