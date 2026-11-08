@@ -1,3 +1,4 @@
+pub mod code_mode;
 pub mod forensics;
 pub mod mcp;
 pub mod p2p;
@@ -389,5 +390,37 @@ mod tests {
             .unwrap();
         let resp_mcp_call = app.call(req_mcp_call).await.unwrap();
         assert_eq!(resp_mcp_call.status(), StatusCode::OK);
+
+        // 6. Test OpenAPI 3.1.0 & Cloudflare Code Mode (`GET /openapi.json`, `GET /mcp/code-mode.d.ts`, `POST /mcp/code-mode`)
+        let req_openapi = Request::builder()
+            .uri("/openapi.json")
+            .body(Body::empty())
+            .unwrap();
+        let resp_openapi = app.call(req_openapi).await.unwrap();
+        assert_eq!(resp_openapi.status(), StatusCode::OK);
+
+        let req_dts = Request::builder()
+            .uri("/mcp/code-mode.d.ts")
+            .body(Body::empty())
+            .unwrap();
+        let resp_dts = app.call(req_dts).await.unwrap();
+        assert_eq!(resp_dts.status(), StatusCode::OK);
+
+        let ts_script = r#"
+            const tracks = await hera.searchMusic({ camelot: "8A" });
+            const clean = tracks.filter(t => t.quality_score >= 95 && t.mono_compatible_sub);
+            const crate = await hera.buildDjCrate({ brief: "Code Mode Peak Set", energy_arc: "peak_hour", candidates: clean });
+            return { selected_count: clean.length, synergy: crate.mean_synergy_score };
+        "#;
+        let req_cm = Request::builder()
+            .method("POST")
+            .uri("/mcp/code-mode")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({ "code": ts_script })).unwrap(),
+            ))
+            .unwrap();
+        let resp_cm = app.call(req_cm).await.unwrap();
+        assert_eq!(resp_cm.status(), StatusCode::OK);
     }
 }

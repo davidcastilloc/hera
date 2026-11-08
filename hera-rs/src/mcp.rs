@@ -1,3 +1,4 @@
+use crate::code_mode::{execute_code_mode, get_typescript_sdk_definitions, CodeModeRequest};
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes};
 use crate::p2p::{
     compute_hera_seal, get_cloud_referral_catalog, P2PMeshState, P2PSearchQuery, P2PVerifiedTrack,
@@ -156,6 +157,36 @@ pub fn list_mcp_tools() -> Value {
             {
                 "name": "get_node_manifest",
                 "description": "Return Hera Rust node status, runtime target (Cloudflare Workers WASM vs Native VPS), memory footprint, and 1-Click Cloud Referral options.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "hera_code_mode",
+                "description": "Cloudflare Code Mode power tool (https://blog.cloudflare.com/code-mode/): Execute a multi-step TypeScript/JS `hera.*` script or pipeline in a single sub-millisecond turn without bouncing intermediate JSON through the LLM context window.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "code": {
+                            "type": "string",
+                            "description": "TypeScript/JS code using the `hera` namespace, e.g.: `const tracks = await hera.searchMusic({ camelot: \"8A\" }); const clean = tracks.filter(t => t.quality_score >= 95 && t.mono_compatible_sub); return await hera.buildDjCrate({ brief: \"Code Mode Set\", energy_arc: \"peak_hour\", candidates: clean });`"
+                        },
+                        "pipeline": {
+                            "type": "array",
+                            "items": { "type": "object" },
+                            "description": "Optional declarative step pipeline [{ bind, call, args }]"
+                        },
+                        "context": {
+                            "type": "object",
+                            "description": "Optional initial variables"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "get_code_mode_sdk",
+                "description": "Return the TypeScript `.d.ts` ambient SDK declarations for `hera.*` Code Mode so the agent can write strongly-typed scripts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {}
@@ -421,6 +452,17 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
             "runtime_target": current_runtime_target(),
             "node_id": state.node_id,
             "cloud_referrals": get_cloud_referral_catalog()
+        })),
+        "hera_code_mode" => {
+            let req: CodeModeRequest = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `hera_code_mode` payload: {e}"))?;
+            let res = execute_code_mode(req, state)?;
+            Ok(serde_json::to_value(res).map_err(|e| e.to_string())?)
+        }
+        "get_code_mode_sdk" => Ok(json!({
+            "sdk_namespace": "hera",
+            "reference": "https://blog.cloudflare.com/code-mode/",
+            "typescript_declarations": get_typescript_sdk_definitions()
         })),
         _ => Err(format!("Unknown MCP tool `{name}`")),
     }

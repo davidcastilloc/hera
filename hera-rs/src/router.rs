@@ -1,3 +1,6 @@
+use crate::code_mode::{
+    execute_code_mode, get_openapi_3_1_spec, get_typescript_sdk_definitions, CodeModeRequest,
+};
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditReport};
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
@@ -90,8 +93,11 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
     Router::new()
         .route("/", get(health_handler))
         .route("/health", get(health_handler))
+        .route("/openapi.json", get(openapi_handler))
         .route("/mcp", post(mcp_http_handler))
         .route("/mcp/tools", get(mcp_tools_handler))
+        .route("/mcp/code-mode", post(code_mode_exec_handler))
+        .route("/mcp/code-mode.d.ts", get(code_mode_dts_handler))
         .route("/api/v1/node/manifest", get(manifest_handler))
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
@@ -100,6 +106,30 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/p2p/announce", post(p2p_announce_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
+}
+
+async fn openapi_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
+    Json(get_openapi_3_1_spec(&state.node_id))
+}
+
+async fn code_mode_dts_handler() -> impl IntoResponse {
+    (
+        [(http::header::CONTENT_TYPE, "application/typescript; charset=utf-8")],
+        get_typescript_sdk_definitions(),
+    )
+}
+
+async fn code_mode_exec_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<CodeModeRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    match execute_code_mode(req, &state) {
+        Ok(res) => Ok(Json(serde_json::to_value(res).unwrap_or_default())),
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
 }
 
 async fn mcp_tools_handler() -> impl IntoResponse {
