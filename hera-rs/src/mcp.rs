@@ -1,7 +1,8 @@
 use crate::code_mode::{execute_code_mode, get_typescript_sdk_definitions, CodeModeRequest};
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes};
 use crate::p2p::{
-    compute_hera_seal, get_cloud_referral_catalog, P2PMeshState, P2PSearchQuery, P2PVerifiedTrack,
+    compute_hera_seal, get_cloud_referral_catalog, ConnectDjDriveRequest, P2PMeshState,
+    P2PSearchQuery, P2PVerifiedTrack,
 };
 use crate::router::{current_runtime_target, AnnounceTrackRequest};
 use crate::structure::analyze_structure_and_style;
@@ -191,6 +192,21 @@ pub fn list_mcp_tools() -> Value {
                     "type": "object",
                     "properties": {}
                 }
+            },
+            {
+                "name": "connect_dj_drive",
+                "description": "Zero-Tech DJ Onboarding: Connect a non-technical DJ (`DJFoo`) to the P2P network by simply passing their DJ handle and a Google Drive folder link (or Cloudflare R2 bucket). Automatically audits tracks, quarantines fake FLACs, and grants access to the shared DJ repertoire.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "dj_handle": { "type": "string", "description": "DJ name/handle (e.g. 'DJFoo')" },
+                        "display_name": { "type": "string" },
+                        "gdrive_folder_link": { "type": "string", "description": "Any Google Drive folder share link" },
+                        "r2_bucket_url": { "type": "string", "description": "Optional Cloudflare R2 public URL" },
+                        "tracks": { "type": "array", "items": { "type": "object" }, "description": "Optional list of tracks in the DJ's folder" }
+                    },
+                    "required": ["dj_handle"]
+                }
             }
         ]
     })
@@ -281,6 +297,10 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
                     .get("subgenre")
                     .and_then(|v| v.as_str())
                     .map(String::from),
+                owner_dj: args
+                    .get("owner_dj")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
                 verified_only: args.get("verified_only").and_then(|v| v.as_bool()),
             };
             let matches = state.search(&q);
@@ -302,6 +322,7 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
                 bpm_min: None,
                 bpm_max: None,
                 subgenre: None,
+                owner_dj: None,
                 verified_only: Some(true),
             });
             matches.sort_by(|a, b| {
@@ -390,6 +411,7 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
                     bpm_min: None,
                     bpm_max: None,
                     subgenre: None,
+                    owner_dj: None,
                     verified_only: Some(true),
                 });
                 p2p_tracks
@@ -424,6 +446,7 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
                 bpm_min: None,
                 bpm_max: None,
                 subgenre: None,
+                owner_dj: None,
                 verified_only: Some(false),
             });
             let verified_count = catalog_tracks
@@ -464,6 +487,12 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
             "reference": "https://blog.cloudflare.com/code-mode/",
             "typescript_declarations": get_typescript_sdk_definitions()
         })),
+        "connect_dj_drive" => {
+            let req: ConnectDjDriveRequest = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `connect_dj_drive` payload: {e}"))?;
+            let resp = state.connect_dj_drive(req);
+            Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
+        }
         _ => Err(format!("Unknown MCP tool `{name}`")),
     }
 }

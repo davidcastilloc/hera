@@ -8,7 +8,10 @@
 //!    directly inside Rust (both on Cloudflare Workers WASM and Native VPS).
 
 use crate::forensics::audit_pcm_channels;
-use crate::p2p::{get_cloud_referral_catalog, P2PMeshState, P2PSearchQuery, P2PVerifiedTrack};
+use crate::p2p::{
+    get_cloud_referral_catalog, ConnectDjDriveRequest, P2PMeshState, P2PSearchQuery,
+    P2PVerifiedTrack,
+};
 use crate::router::current_runtime_target;
 use crate::synergy::{
     compute_bpm_synergy, compute_camelot_synergy, optimize_crate_2opt, CrateTrackCandidate,
@@ -362,6 +365,10 @@ fn execute_single_sdk_call(
                     .get("subgenre")
                     .and_then(|v| v.as_str())
                     .map(String::from),
+                owner_dj: args
+                    .get("owner_dj")
+                    .and_then(|v| v.as_str())
+                    .map(String::from),
                 verified_only: args.get("verified_only").and_then(|v| v.as_bool()),
             };
             let tracks = state.search(&q);
@@ -370,6 +377,23 @@ fn execute_single_sdk_call(
                 tracks.len()
             ));
             serde_json::to_value(tracks).map_err(|e| e.to_string())
+        }
+        "hera.connectDjDrive" | "connectDjDrive" | "connect_dj_drive" => {
+            let req: ConnectDjDriveRequest = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid connectDjDrive payload: {e}"))?;
+            let resp = state.connect_dj_drive(req);
+            log.push(format!(
+                "hera.connectDjDrive('{}') -> admitted {} tracks ({} quarantined)",
+                resp.profile.dj_handle,
+                resp.admitted_tracks.len(),
+                resp.rejected_quarantine_tracks.len()
+            ));
+            serde_json::to_value(resp).map_err(|e| e.to_string())
+        }
+        "hera.listDjs" | "listDjs" | "list_djs" => {
+            let profiles = state.list_dj_profiles();
+            log.push(format!("hera.listDjs -> {} connected DJs", profiles.len()));
+            serde_json::to_value(profiles).map_err(|e| e.to_string())
         }
         "hera.filterTracks" | "filterTracks" => {
             let tracks: Vec<P2PVerifiedTrack> = args
@@ -383,6 +407,7 @@ fn execute_single_sdk_call(
                         bpm_min: None,
                         bpm_max: None,
                         subgenre: None,
+                        owner_dj: None,
                         verified_only: Some(true),
                     })
                 });
@@ -525,6 +550,7 @@ fn execute_single_sdk_call(
                 bpm_min: None,
                 bpm_max: None,
                 subgenre: None,
+                owner_dj: None,
                 verified_only: Some(false),
             });
             let n = tracks.len().max(1) as f32;
@@ -598,6 +624,7 @@ fn default_candidates_from_state(state: &P2PMeshState) -> Vec<CrateTrackCandidat
             bpm_min: None,
             bpm_max: None,
             subgenre: None,
+            owner_dj: None,
             verified_only: Some(true),
         })
         .into_iter()

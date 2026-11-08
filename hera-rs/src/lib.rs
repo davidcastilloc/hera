@@ -284,6 +284,10 @@ mod tests {
                 quality_score: 0.0,
                 forensic_verdict: "REJECT_SYNTHETIC_TONE".into(),
                 hot_cues: vec![],
+                owner_dj: "Spammer".into(),
+                storage_provider: "google_drive".into(),
+                gdrive_file_id: None,
+                r2_object_key: None,
                 stream_url: None,
                 node_id: "test".into(),
                 hera_seal: String::new(),
@@ -422,5 +426,135 @@ mod tests {
             .unwrap();
         let resp_cm = app.call(req_cm).await.unwrap();
         assert_eq!(resp_cm.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn test_davidj_and_djfoo_zero_tech_gdrive_and_code_mode_simulation() {
+        use axum::body::to_bytes;
+
+        let state = P2PMeshState::new("hera-davidj-hub");
+        let mut app = build_hera_router(state);
+
+        // 1. Verify DaviDJ (David José) is already registered as Founder & Core Architect
+        let req_profiles = Request::builder()
+            .uri("/api/v1/dj/profiles")
+            .body(Body::empty())
+            .unwrap();
+        let resp_profiles = app.call(req_profiles).await.unwrap();
+        assert_eq!(resp_profiles.status(), StatusCode::OK);
+        let profiles_bytes = to_bytes(resp_profiles.into_body(), 1024 * 1024).await.unwrap();
+        let profiles_json: serde_json::Value = serde_json::from_slice(&profiles_bytes).unwrap();
+        assert_eq!(profiles_json["connected_djs_count"], 1);
+        assert_eq!(profiles_json["profiles"][0]["dj_handle"], "DaviDJ");
+
+        // 2. Non-technical DJFoo connects ONLY by pasting his Google Drive folder link!
+        // He has 1 genuine 20,600 Hz studio FLAC master and 1 fake 14,900 Hz YouTube-rip FLAC.
+        let djfoo_connect_payload = serde_json::json!({
+            "dj_handle": "DJFoo",
+            "display_name": "DJ Foo (New Club Resident)",
+            "gdrive_folder_link": "https://drive.google.com/drive/folders/1DJFoo_My_Club_Tracks_2026?usp=sharing",
+            "tracks": [
+                {
+                    "title": "Foo Groove",
+                    "artist": "DJFoo",
+                    "bpm": 125.0,
+                    "camelot_key": "8A",
+                    "top_subgenre": "Tech House",
+                    "duration_seconds": 330.0,
+                    "format": "flac",
+                    "gdrive_file_link": "https://drive.google.com/file/d/1DJFoo_Groove_125BPM_8A_Master/view?usp=sharing",
+                    "effective_bandwidth_hz": 20600.0,
+                    "sub_bass_phase_correlation": 0.96
+                },
+                {
+                    "title": "Fake YouTube Rip 128kbps Upscaled",
+                    "artist": "Unknown",
+                    "bpm": 126.0,
+                    "camelot_key": "8A",
+                    "top_subgenre": "Tech House",
+                    "duration_seconds": 210.0,
+                    "format": "flac",
+                    "gdrive_file_link": "https://drive.google.com/file/d/1DJFoo_Fake_Rip/view?usp=sharing",
+                    "effective_bandwidth_hz": 14900.0,
+                    "sub_bass_phase_correlation": 0.85
+                }
+            ]
+        });
+
+        let req_connect = Request::builder()
+            .method("POST")
+            .uri("/api/v1/dj/connect-drive")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&djfoo_connect_payload).unwrap()))
+            .unwrap();
+        let resp_connect = app.call(req_connect).await.unwrap();
+        assert_eq!(resp_connect.status(), StatusCode::CREATED);
+        let connect_bytes = to_bytes(resp_connect.into_body(), 1024 * 1024).await.unwrap();
+        let connect_json: serde_json::Value = serde_json::from_slice(&connect_bytes).unwrap();
+
+        // Zero-Trust Quarantine must admit ONLY the authentic 20.6 kHz master and reject the 14.9 kHz fake!
+        assert_eq!(connect_json["admitted_tracks"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            connect_json["rejected_quarantine_tracks"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        let djfoo_track_id = connect_json["admitted_tracks"][0]["track_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(
+            connect_json["admitted_tracks"][0]["stream_url"]
+                .as_str()
+                .unwrap()
+                .contains("1DJFoo_Groove_125BPM_8A_Master")
+        );
+
+        // 3. DJFoo's free Gemini CLI / Claude agent runs a SINGLE Cloudflare Code Mode script
+        // to collaborate with DaviDJ's catalog and build a 4-track B2B set (DaviDJ + DJFoo)!
+        let b2b_code_mode_script = r#"
+            const djs = await hera.listDjs();
+            const tracks = await hera.searchMusic({ camelot: "8A" });
+            const clean = tracks.filter(t => t.quality_score >= 95 && t.mono_compatible_sub);
+            const crate = await hera.buildDjCrate({ brief: "DaviDJ x DJFoo B2B Peak Set", energy_arc: "peak_hour", candidates: clean });
+            return { dj_count: djs.length, b2b_tracks: clean.length, synergy: crate.mean_synergy_score, total_crate_tracks: crate.total_tracks };
+        "#;
+        let req_b2b = Request::builder()
+            .method("POST")
+            .uri("/mcp/code-mode")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({ "code": b2b_code_mode_script })).unwrap(),
+            ))
+            .unwrap();
+        let resp_b2b = app.call(req_b2b).await.unwrap();
+        assert_eq!(resp_b2b.status(), StatusCode::OK);
+        let b2b_bytes = to_bytes(resp_b2b.into_body(), 1024 * 1024).await.unwrap();
+        let b2b_json: serde_json::Value = serde_json::from_slice(&b2b_bytes).unwrap();
+
+        assert_eq!(b2b_json["mode"], "cloudflare_code_mode_rust_sandbox");
+        assert_eq!(b2b_json["output"]["dj_count"], 2);
+        // 3 tracks from DaviDJ + 1 verified track from DJFoo = 4 tracks in the B2B crate!
+        assert_eq!(b2b_json["output"]["b2b_tracks"], 4);
+        assert_eq!(b2b_json["output"]["total_crate_tracks"], 4);
+        assert!(b2b_json["output"]["synergy"].as_f64().unwrap() > 0.78);
+
+        // 4. Verify DaviDJ can resolve DJFoo's direct Google Drive download link via /api/v1/p2p/stream/:track_id
+        let req_stream = Request::builder()
+            .uri(&format!("/api/v1/p2p/stream/{}", djfoo_track_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp_stream = app.call(req_stream).await.unwrap();
+        assert_eq!(resp_stream.status(), StatusCode::OK);
+        let stream_bytes = to_bytes(resp_stream.into_body(), 1024 * 1024).await.unwrap();
+        let stream_json: serde_json::Value = serde_json::from_slice(&stream_bytes).unwrap();
+        assert_eq!(stream_json["owner_dj"], "DJFoo");
+        assert_eq!(stream_json["storage_provider"], "gdrive");
+        assert_eq!(
+            stream_json["direct_download_url"],
+            "https://drive.google.com/uc?export=download&id=1DJFoo_Groove_125BPM_8A_Master"
+        );
     }
 }

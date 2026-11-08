@@ -4,14 +4,14 @@ use crate::code_mode::{
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditReport};
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
-    compute_hera_seal, get_cloud_referral_catalog, CloudReferralOption, P2PMeshState,
-    P2PSearchQuery, P2PVerifiedTrack,
+    compute_hera_seal, get_cloud_referral_catalog, CloudReferralOption, ConnectDjDriveRequest,
+    P2PMeshState, P2PSearchQuery, P2PVerifiedTrack,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
 use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
 use axum::{
     body::Bytes,
-    extract::{DefaultBodyLimit, Query, State},
+    extract::{DefaultBodyLimit, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -99,13 +99,58 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/mcp/code-mode", post(code_mode_exec_handler))
         .route("/mcp/code-mode.d.ts", get(code_mode_dts_handler))
         .route("/api/v1/node/manifest", get(manifest_handler))
+        .route("/api/v1/dj/connect-drive", post(connect_dj_drive_handler))
+        .route("/api/v1/dj/profiles", get(list_dj_profiles_handler))
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
         .route("/api/v1/crates/build", post(build_crate_handler))
         .route("/api/v1/p2p/search", get(p2p_search_handler))
         .route("/api/v1/p2p/announce", post(p2p_announce_handler))
+        .route("/api/v1/p2p/stream/:track_id", get(p2p_stream_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
+}
+
+async fn connect_dj_drive_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<ConnectDjDriveRequest>,
+) -> impl IntoResponse {
+    let resp = state.connect_dj_drive(req);
+    (StatusCode::CREATED, Json(resp))
+}
+
+async fn list_dj_profiles_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
+    let profiles = state.list_dj_profiles();
+    Json(serde_json::json!({
+        "node_id": state.node_id,
+        "connected_djs_count": profiles.len(),
+        "profiles": profiles
+    }))
+}
+
+async fn p2p_stream_handler(
+    State(state): State<P2PMeshState>,
+    Path(track_id): Path<String>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    if let Some(track) = state.find_track_by_id(&track_id) {
+        Ok(Json(serde_json::json!({
+            "track_id": track.track_id,
+            "title": track.title,
+            "artist": track.artist,
+            "owner_dj": track.owner_dj,
+            "storage_provider": track.storage_provider,
+            "gdrive_file_id": track.gdrive_file_id,
+            "r2_object_key": track.r2_object_key,
+            "direct_download_url": track.stream_url,
+            "hera_seal": track.hera_seal,
+            "hot_cues": track.hot_cues
+        })))
+    } else {
+        Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": format!("Track `{track_id}` not found in P2P catalog") })),
+        ))
+    }
 }
 
 async fn openapi_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {

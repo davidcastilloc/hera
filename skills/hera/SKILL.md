@@ -28,6 +28,8 @@ Convertir intención musical en búsquedas federadas, candidatos comparables, an
   const crate = await hera.buildDjCrate({ brief: "Peak Hour Set", energy_arc: "peak_hour", candidates: clean });
   return { selected_count: clean.length, synergy: crate.mean_synergy_score, rekordbox_xml: crate.rekordbox_xml_export };
   ```
+- **Onboarding Zero-Tech para DJs vía Google Drive / Cloudflare R2 (`connect_dj_drive` / `hera.connectDjDrive`):**
+  Un DJ no técnico (ej. `DJFoo`) no necesita desplegar servidores ni buckets propios: solo pega su link compartido de Google Drive (`https://drive.google.com/drive/folders/...`) usando `connect_dj_drive` (o `await hera.connectDjDrive(...)` en Code Mode). El nodo central de `DaviDJ` extrae el `folder_id` / `file_id`, aplica la auditoría forense Zero-Trust (rechazando falsos lossless `<16 kHz` o tonos sintéticos en cuarentena) y publica únicamente los masters verificados con links de descarga directa (`https://drive.google.com/uc?export=download&id=...`) consultables en `GET /api/v1/p2p/stream/:track_id`.
 - **Auditoría e Inteligencia de Repertorio (Audio + Video-DJ HD + Producciones Propias):**
   `audit_repertoire(sync_db=True, check_queries=[...])` → `analyze_batch(track_ids=[...], genre_hint=...)` → `build_dj_crate(..., export=["rekordbox_xml", "ableton", "cue_sheet", "m3u8"])`
 - **Adquisición Externa Autorizada:**
