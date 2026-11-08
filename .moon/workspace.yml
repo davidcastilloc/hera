@@ -1,0 +1,9 @@
+$schema: 'https://moonrepo.dev/schemas/workspace.json'
+
+projects:
+  hera-rs: 'hera-rs'
+  hera-desktop: 'hera-desktop'
+
+vcs:
+  client: 'git'
+  defaultBranch: 'main'

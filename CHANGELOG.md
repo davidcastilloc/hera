@@ -4,6 +4,18 @@ All notable changes to **HERA (`davidcastilloc/hera`)** are documented in this f
 
 ---
 
+## [0.4.0] - 2026-11-08
+
+### Added
+- **Hybrid `Bun 1.4.4` + `Vite+` (`Rolldown` / `Oxlint` / `Oxfmt`) + `moon 2.6.5` Monorepo Orchestration (`ADR-009`):**
+  - Migrated `hera-desktop` package management and script execution from `pnpm` to **`Bun 1.4.4`** (`bun.lock`, `~1.07s` clean install for 297 packages) while preserving 100% of `Vite+` (`Rolldown` + `Oxlint` + `Oxfmt`) and Tauri v2 plugins (`@stylexjs/unplugin`, `babel-plugin-react-compiler`, `@lingui/vite-plugin`, `@tanstack/router-plugin`, `vite-plugin-svgr`).
+  - Configured **`moon 2.6.5`** (`.moon/workspace.yml`, `hera-rs/moon.yml`, `hera-desktop/moon.yml`) with cross-project dependency graph (`hera-desktop` -> `hera-rs`) and content-addressed task caching (`moon run :check :test hera-desktop:build` completes 5 tasks in `128ms` on cache hit).
+- **Pure-Rust Multi-Turn ReAct Agent Harness (`HeraAgentHarness`) & 12-Backend LLM Registry (`ADR-008`, `7fd1bcf`):**
+  - Expanded `list_supported_ai_backends` to 12 backends (`cloudflare_workers_ai_free`, `lmstudio_local`, `ollama_local`, `jan_local`, `llamacpp_local`, `vllm_local`, `openrouter_free`, `groq_lpu`, `deepseek_r1`, `gemini_flash`, `openai_gpt4o`, `anthropic_claude`).
+  - Added live local `/v1/models` auto-discovery (`POST /api/v1/ai/probe`, Tauri `probe_ai_backend`) and a multi-turn ReAct tool-calling loop (`evaluate_agent_harness_turn`) executing against HERA's 20 operational MCP tools with dual OpenAI `tool_calls` + `<tool_call>` GGUF parsing and self-healing error recovery.
+
+---
+
 ## [0.3.0] - 2026-11-08
 
 ### Added

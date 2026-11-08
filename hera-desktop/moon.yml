@@ -1,0 +1,50 @@
+$schema: 'https://moonrepo.dev/schemas/project.json'
+
+language: 'typescript'
+stack: 'frontend'
+layer: 'application'
+
+dependsOn:
+  - 'hera-rs'
+
+tasks:
+  check:
+    command: 'bun run check'
+    inputs:
+      - 'src/**/*'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+
+  fmt:
+    command: 'bun run fmt'
+    inputs:
+      - 'src/**/*'
+      - 'README.md'
+      - 'package.json'
+
+  build:
+    command: 'bun run build'
+    inputs:
+      - 'src/**/*'
+      - 'index.html'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'vite.config.ts'
+    outputs:
+      - 'dist'
+
+  test:
+    command: 'bun run test'
+    inputs:
+      - 'src/**/*'
+      - 'package.json'
+      - 'vitest.config.ts'
+
+  clippy:
+    command: 'cargo clippy --manifest-path src-tauri/Cargo.toml'
+    inputs:
+      - 'src-tauri/src/**/*'
+      - 'src-tauri/Cargo.toml'
+      - 'src-tauri/build.rs'
+      - 'src-tauri/capabilities/**/*'

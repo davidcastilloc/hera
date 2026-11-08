@@ -266,8 +266,7 @@ export async function chatWithCloudflareFreeAi(
 
   return {
     backend_used: options?.backend || 'cloudflare_free',
-    model_used:
-      options?.model || '@cf/meta/llama-3.1-8b-instruct-fp8-fast',
+    model_used: options?.model || '@cf/meta/llama-3.1-8b-instruct-fp8-fast',
     cf_aig_cache_status: 'HIT',
     neurons_consumed_this_turn: 6.6,
     daily_neurons_remaining: 9993.4,

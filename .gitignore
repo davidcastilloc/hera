@@ -70,7 +70,8 @@ scratch/
 work/
 *.tmp
 
-# Rust & Cloudflare Workers build artifacts
+# Rust, Cloudflare Workers & moonrepo build artifacts
 **/target/
 .wrangler/
 node_modules/
+.moon/cache/

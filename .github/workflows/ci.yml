@@ -45,7 +45,7 @@ jobs:
           cargo test --manifest-path hera-rs/Cargo.toml
 
   hera-desktop-ui:
-    name: HERA Desktop UI (React 19 + StyleX + Vite+)
+    name: HERA Desktop UI (Bun + moon + React 19 + StyleX + Vite+)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -54,21 +54,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 24 & pnpm
+      - name: Setup Node.js 24 & Bun 1.4.4
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - name: Setup Node.js 24 runtime for Vite+
         uses: actions/setup-node@v4
         with:
           node-version: "24"
 
-      - name: Enable Corepack & Install Dependencies
-        run: |
-          corepack enable
-          pnpm install --ignore-scripts
+      - name: Install Dependencies with Bun (bun.lock)
+        run: bun install --ignore-scripts
 
-      - name: Run Vite+ Format, Lint & Typecheck (vp check)
-        run: ./node_modules/.bin/vp check
+      - name: Run Vite+ Format, Lint & Typecheck (bun run check)
+        run: bun run check
 
-      - name: Run Production Bundle Build (vp build)
-        run: ./node_modules/.bin/vp build
+      - name: Run Production Bundle Build (bun run build)
+        run: bun run build
 
-      - name: Run Unit Tests (vp test)
-        run: ./node_modules/.bin/vp test run --project unit
+      - name: Run Unit Tests (bun run test)
+        run: bun run test
+

@@ -29,16 +29,22 @@ This repository contains the canonical **100% Pure-Rust + Tauri v2** implementat
 
 ## 🛠️ Canonical Build, Typecheck & Test Commands
 
-Always use these exact commands verified against `hera-rs/Cargo.toml`:
+Always use these exact commands verified against `.moon/workspace.yml`, `hera-rs/Cargo.toml`, and `hera-desktop/package.json`:
 
 ```bash
-# 1. Fast Typecheck & Native Compilation Check (hera-rs)
+# 1. Polyglot Monorepo Check, Test & Build via moon (Rust + Bun + Vite+ with content-addressed cache)
+moon run :check :test hera-desktop:build
+
+# 2. Fast Typecheck & Native Compilation Check (hera-rs)
 cargo check --manifest-path hera-rs/Cargo.toml
 
-# 2. Full Rust Unit & Integration Test Suite (DSP, Exporters, DJ Brain, MCP, P2P Swarm)
+# 3. Full Rust Unit & Integration Test Suite (DSP, Exporters, DJ Brain ReAct Harness, MCP, P2P Swarm)
 cargo test --manifest-path hera-rs/Cargo.toml
 
-# 3. Cloudflare Workers WASM Build
+# 4. HERA Desktop Frontend Check, Build & Unit Tests (Bun + Vite+ Rolldown/Oxlint/Oxfmt)
+cd hera-desktop && bun run check && bun run test && bun run build
+
+# 5. Cloudflare Workers WASM Build
 cd hera-rs && worker-build --release -- --features cloudflare --no-default-features
 ```
 
