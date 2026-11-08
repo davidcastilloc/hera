@@ -4,7 +4,7 @@ use crate::code_mode::{
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditReport};
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
-    calculate_cloudflare_beta_economics, compute_hera_seal, get_cloud_referral_catalog,
+    calculate_cloudflare_saas_economics_with_price, compute_hera_seal, get_cloud_referral_catalog,
     CloudReferralOption, ConnectDjDriveRequest, P2PMeshState, P2PPeerNode, P2PSearchQuery,
     P2PVerifiedTrack, ScanLocalDirRequest, UpgradeTierRequest,
 };
@@ -122,12 +122,16 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
 pub struct EconomicsQuery {
     pub djs: Option<usize>,
     pub gb_per_dj: Option<f32>,
+    pub price_usd: Option<f32>,
 }
 
 async fn cloud_economics_handler(Query(q): Query<EconomicsQuery>) -> impl IntoResponse {
     let djs = q.djs.unwrap_or(10);
     let gb_per_dj = q.gb_per_dj.unwrap_or(5.0);
-    Json(calculate_cloudflare_beta_economics(djs, gb_per_dj))
+    let price_usd = q.price_usd.unwrap_or(5.99);
+    Json(calculate_cloudflare_saas_economics_with_price(
+        djs, gb_per_dj, price_usd,
+    ))
 }
 
 async fn scan_local_dir_handler(

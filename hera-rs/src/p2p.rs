@@ -1294,23 +1294,37 @@ pub struct CloudflareBetaEconomicsReport {
     pub approx_lossless_flac_tracks_per_dj: usize,
     pub total_shared_p2p_tracks_in_pool: usize,
     pub cloudflare_r2_free_tier_gb: f32,
+    pub max_zero_cost_djs_in_free_r2_tier: usize,
     pub billable_r2_gb: f32,
     pub monthly_r2_storage_cost_usd: f32,
     pub monthly_egress_bandwidth_cost_usd: f32,
     pub monthly_workers_d1_vectorize_cost_usd: f32,
     pub total_monthly_cohort_cost_usd: f32,
     pub cost_per_dj_usd: f32,
+    pub subscription_price_per_dj_usd: f32,
+    pub gross_monthly_revenue_usd: f32,
+    pub net_monthly_profit_usd: f32,
+    pub profit_margin_pct: f32,
 }
 
-/// Calculates exact monthly Cloudflare unit economics for a Beta MVP cohort of DJs maxing out the app.
+/// Calculates exact monthly Cloudflare unit economics & SaaS profit margins for a cohort of DJs maxing out the app.
 pub fn calculate_cloudflare_beta_economics(
     num_djs: usize,
     gb_per_dj: f32,
+) -> CloudflareBetaEconomicsReport {
+    calculate_cloudflare_saas_economics_with_price(num_djs, gb_per_dj, 5.99)
+}
+
+pub fn calculate_cloudflare_saas_economics_with_price(
+    num_djs: usize,
+    gb_per_dj: f32,
+    price_per_dj_usd: f32,
 ) -> CloudflareBetaEconomicsReport {
     let djs = num_djs.max(1);
     let gb_dj = gb_per_dj.max(0.1);
     let total_gb = (djs as f32) * gb_dj;
     let free_r2_gb = 10.0f32;
+    let max_free_djs = (free_r2_gb / gb_dj).floor() as usize;
     let billable_gb = (total_gb - free_r2_gb).max(0.0);
 
     // Cloudflare R2: $0.015 / GB-month, $0.00 egress
@@ -1326,6 +1340,15 @@ pub fn calculate_cloudflare_beta_economics(
     let per_dj = ((total_cost / (djs as f32)) * 1000.0).round() / 1000.0;
     let tracks_per_dj = ((gb_dj * 1024.0) / 38.0).round() as usize;
 
+    let price = price_per_dj_usd.max(0.0);
+    let gross_rev = ((djs as f32) * price * 100.0).round() / 100.0;
+    let net_profit = ((gross_rev - total_cost) * 100.0).round() / 100.0;
+    let margin_pct = if gross_rev > 0.0 {
+        (((net_profit / gross_rev) * 100.0) * 10.0).round() / 10.0
+    } else {
+        0.0
+    };
+
     CloudflareBetaEconomicsReport {
         cohort_djs_count: djs,
         r2_quota_gb_per_dj: gb_dj,
@@ -1333,11 +1356,16 @@ pub fn calculate_cloudflare_beta_economics(
         approx_lossless_flac_tracks_per_dj: tracks_per_dj,
         total_shared_p2p_tracks_in_pool: tracks_per_dj * djs,
         cloudflare_r2_free_tier_gb: free_r2_gb,
+        max_zero_cost_djs_in_free_r2_tier: max_free_djs,
         billable_r2_gb: billable_gb,
         monthly_r2_storage_cost_usd: r2_cost,
         monthly_egress_bandwidth_cost_usd: 0.0,
         monthly_workers_d1_vectorize_cost_usd: compute_db_cost,
         total_monthly_cohort_cost_usd: total_cost,
         cost_per_dj_usd: per_dj,
+        subscription_price_per_dj_usd: price,
+        gross_monthly_revenue_usd: gross_rev,
+        net_monthly_profit_usd: net_profit,
+        profit_margin_pct: margin_pct,
     }
 }
