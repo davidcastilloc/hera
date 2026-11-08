@@ -1,9 +1,10 @@
 use hera_node_rs::dj_brain::{
-    compute_dj_style_dna, evaluate_cloudflare_free_ai_turn, list_supported_ai_backends,
-    AiBackendOption, CloudflareFreeAiTurnRequest, CloudflareFreeAiTurnResponse, DjStyleDnaProfile,
-    DjStyleDnaRequest,
+    auto_detect_local_backend, compute_dj_style_dna, evaluate_agent_harness_turn,
+    list_supported_ai_backends, probe_backend_models, AiBackendOption, CloudflareFreeAiTurnRequest,
+    CloudflareFreeAiTurnResponse, DjStyleDnaProfile, DjStyleDnaRequest,
 };
 use hera_node_rs::export::{export_crate_bundle, ExportCrateRequest, ExportCrateResponse};
+use hera_node_rs::p2p::P2PMeshState;
 use serde::{Deserialize, Serialize};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::Runtime;
@@ -55,11 +56,60 @@ pub fn export_crate(request: ExportCrateRequest) -> Result<ExportCrateResponse, 
     Ok(export_crate_bundle(&request))
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProbeAiBackendResponse {
+    pub reachable: bool,
+    pub backend: String,
+    pub base_url: String,
+    pub models: Vec<String>,
+}
+
 #[tauri::command]
 pub fn chat_copilot(
     request: CloudflareFreeAiTurnRequest,
 ) -> Result<CloudflareFreeAiTurnResponse, String> {
-    Ok(evaluate_cloudflare_free_ai_turn(&request))
+    let state = P2PMeshState::new("hera-desktop-local-node");
+    Ok(evaluate_agent_harness_turn(&request, &state))
+}
+
+#[tauri::command]
+pub fn probe_ai_backend(
+    base_url: Option<String>,
+    api_key: Option<String>,
+) -> Result<ProbeAiBackendResponse, String> {
+    if let Some(url) = base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+    {
+        let models = probe_backend_models(url, api_key.as_deref());
+        let reachable = models.is_ok();
+        return Ok(ProbeAiBackendResponse {
+            reachable,
+            backend: if url.contains("11434") {
+                "ollama".to_string()
+            } else {
+                "lmstudio".to_string()
+            },
+            base_url: url.to_string(),
+            models: models.unwrap_or_default(),
+        });
+    }
+    if let Some((backend, url, _first)) = auto_detect_local_backend() {
+        let models = probe_backend_models(&url, api_key.as_deref()).unwrap_or_default();
+        return Ok(ProbeAiBackendResponse {
+            reachable: true,
+            backend,
+            base_url: url,
+            models,
+        });
+    }
+    Ok(ProbeAiBackendResponse {
+        reachable: false,
+        backend: "lmstudio".to_string(),
+        base_url: "http://localhost:1234/v1".to_string(),
+        models: Vec::new(),
+    })
 }
 
 #[tauri::command]
@@ -139,6 +189,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             compute_style_dna,
             export_crate,
             chat_copilot,
+            probe_ai_backend,
             list_ai_backends,
             resolve_harmonic_bridge
         ])

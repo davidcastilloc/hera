@@ -26,6 +26,28 @@ export type HeraExportCrateResponse = {
   written_files: Array<string>;
 };
 
+export type HeraToolExecutionStep = {
+  step: number;
+  tool_name: string;
+  arguments: unknown;
+  result_preview: string;
+  is_error: boolean;
+};
+
+export type HeraAiBackendParams = {
+  backend?: string;
+  baseUrl?: string;
+  model?: string;
+  apiKey?: string;
+};
+
+export type HeraProbeAiBackendResponse = {
+  reachable: boolean;
+  backend: string;
+  base_url: string;
+  models: Array<string>;
+};
+
 export type HeraCloudflareFreeAiResponse = {
   backend_used: string;
   model_used: string;
@@ -35,6 +57,8 @@ export type HeraCloudflareFreeAiResponse = {
   estimated_cost_usd: number;
   d1_synced_bytes: number;
   assistant_reply: string;
+  tool_calls_trace?: Array<HeraToolExecutionStep>;
+  iterations_executed?: number;
 };
 
 export type HarmonicBridgeStep = {
@@ -193,9 +217,33 @@ export async function exportCrateToDjSoftware(
   };
 }
 
+export async function probeLocalAiBackend(
+  baseUrl?: string,
+): Promise<HeraProbeAiBackendResponse> {
+  try {
+    const res = await invoke<HeraProbeAiBackendResponse>(
+      'plugin:hera-dj|probe_ai_backend',
+      {
+        baseUrl: baseUrl || null,
+        apiKey: null,
+      },
+    );
+    if (res && typeof res.reachable === 'boolean') return res;
+  } catch {
+    // Fallback when running outside native Tauri IPC
+  }
+  return {
+    reachable: false,
+    backend: 'lmstudio',
+    base_url: baseUrl || 'http://localhost:1234/v1',
+    models: [],
+  };
+}
+
 export async function chatWithCloudflareFreeAi(
   message: string,
   djHandle = 'DaviDJ',
+  options?: HeraAiBackendParams,
 ): Promise<HeraCloudflareFreeAiResponse> {
   try {
     const res = await invoke<HeraCloudflareFreeAiResponse>(
@@ -204,6 +252,10 @@ export async function chatWithCloudflareFreeAi(
         request: {
           dj_handle: djHandle,
           message,
+          backend: options?.backend ?? null,
+          base_url: options?.baseUrl ?? null,
+          model: options?.model ?? null,
+          api_key: options?.apiKey ?? null,
         },
       },
     );
@@ -213,14 +265,17 @@ export async function chatWithCloudflareFreeAi(
   }
 
   return {
-    backend_used: 'cloudflare_free',
-    model_used: '@cf/meta/llama-3.1-8b-instruct-fp8-fast',
+    backend_used: options?.backend || 'cloudflare_free',
+    model_used:
+      options?.model || '@cf/meta/llama-3.1-8b-instruct-fp8-fast',
     cf_aig_cache_status: 'HIT',
     neurons_consumed_this_turn: 6.6,
     daily_neurons_remaining: 9993.4,
     estimated_cost_usd: 0.0,
     d1_synced_bytes: 348,
     assistant_reply: `Transición armónica recomendada para ${djHandle}: sube progresivamente con 2 pistas puente en 9A (122.2 BPM -> 126.6 BPM) entrando en Cue 1 (Intro) y saliendo en Cue 4 (Mix Out). Listo para exportar a VirtualDJ (.vdjfolder).`,
+    tool_calls_trace: [],
+    iterations_executed: 1,
   };
 }
 

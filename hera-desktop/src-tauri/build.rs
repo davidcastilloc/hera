@@ -52,6 +52,7 @@ fn main() {
                     "compute_style_dna",
                     "export_crate",
                     "chat_copilot",
+                    "probe_ai_backend",
                     "list_ai_backends",
                     "resolve_harmonic_bridge",
                 ]),

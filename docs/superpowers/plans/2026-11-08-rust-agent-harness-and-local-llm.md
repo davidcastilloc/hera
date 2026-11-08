@@ -91,7 +91,7 @@
   - Backend selector (`cloudflare_free`, `lmstudio`, `ollama`, `openrouter`, `gemini`, `openai`, `custom`), `baseUrl` / `model` inputs, live model probe button, and `tool_calls_trace` visualization in `hera-desktop/src/routes/bridge.tsx`
   - Parity sync in `hera-cloud/src/{mcp.rs,dj_brain.rs,router.rs}` and `ADR-008` in `docs/superpowers/DECISIONS.md`
 
-- [ ] **Step 1: Update `hera-desktop/src-tauri/src/plugins/hera_dj.rs`, `build.rs`, `capabilities/main.json`, `bridge-hera.ts`, and `bridge.tsx`**
-- [ ] **Step 2: Synchronize `hera-cloud/src/{mcp.rs,dj_brain.rs,router.rs}` and record `ADR-008` in `docs/superpowers/DECISIONS.md`**
-- [ ] **Step 3: Verify `cargo check` and `cargo test` in `hera-rs`, `hera-desktop/src-tauri`, and `hera-cloud` with real `exit code 0` receipts**
-- [ ] **Step 4: Mark `- [x]` in plan and commit atomically**
+- [x] **Step 1: Update `hera-desktop/src-tauri/src/plugins/hera_dj.rs`, `build.rs`, `capabilities/main.json`, `bridge-hera.ts`, and `bridge.tsx`**
+- [x] **Step 2: Synchronize `hera-cloud/src/{mcp.rs,dj_brain.rs,router.rs}` and record `ADR-008` in `docs/superpowers/DECISIONS.md`**
+- [x] **Step 3: Verify `cargo check` and `cargo test` in `hera-rs`, `hera-desktop/src-tauri`, and `hera-cloud` with real `exit code 0` receipts**
+- [x] **Step 4: Mark `- [x]` in plan and commit atomically**

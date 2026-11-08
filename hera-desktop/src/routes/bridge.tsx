@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import View from '../elements/View';
 import {
   chatWithCloudflareFreeAi,
+  probeLocalAiBackend,
   resolveHarmonicBridge,
   type HeraCloudflareFreeAiResponse,
   type ResolveHarmonicBridgeResponse,
@@ -32,6 +33,12 @@ function ViewHarmonicBridgeP2P() {
   const [chatPrompt, setChatPrompt] = useState(
     'Armar transición de 118 BPM (8A) a 130 BPM (10A) y exportar a VirtualDJ',
   );
+  const [selectedBackend, setSelectedBackend] = useState<string>('lmstudio');
+  const [customBaseUrl, setCustomBaseUrl] = useState<string>(
+    'http://localhost:1234/v1',
+  );
+  const [customModel, setCustomModel] = useState<string>('default');
+  const [probeBanner, setProbeBanner] = useState<string>('');
   const [aiResponse, setAiResponse] =
     useState<HeraCloudflareFreeAiResponse | null>(null);
 
@@ -64,8 +71,40 @@ function ViewHarmonicBridgeP2P() {
     );
   };
 
+  const handleBackendChange = (nextBackend: string) => {
+    setSelectedBackend(nextBackend);
+    if (nextBackend === 'lmstudio') {
+      setCustomBaseUrl('http://localhost:1234/v1');
+      setCustomModel('default');
+    } else if (nextBackend === 'ollama') {
+      setCustomBaseUrl('http://localhost:11434/v1');
+      setCustomModel('llama3.3');
+    } else if (nextBackend === 'cloudflare_free') {
+      setCustomBaseUrl('');
+      setCustomModel('@cf/meta/llama-3.1-8b-instruct-fp8-fast');
+    }
+  };
+
+  const handleProbeModels = async () => {
+    const probe = await probeLocalAiBackend(customBaseUrl || undefined);
+    if (probe.reachable && probe.models.length > 0) {
+      setCustomModel(probe.models[0]);
+      setProbeBanner(
+        `✅ Conectado a ${probe.backend} (${probe.base_url}) · Modelos activos: ${probe.models.join(', ')}`,
+      );
+    } else {
+      setProbeBanner(
+        `⚠️ No se detectó servidor activo en ${probe.base_url} (usando fallback determinista o verifica LM Studio :1234)`,
+      );
+    }
+  };
+
   const handleAskCopilot = async () => {
-    const res = await chatWithCloudflareFreeAi(chatPrompt, 'DaviDJ');
+    const res = await chatWithCloudflareFreeAi(chatPrompt, 'DaviDJ', {
+      backend: selectedBackend,
+      baseUrl: customBaseUrl || undefined,
+      model: customModel || undefined,
+    });
     setAiResponse(res);
   };
 
@@ -215,13 +254,57 @@ function ViewHarmonicBridgeP2P() {
         <div {...stylex.props(styles.copilotBox)}>
           <div {...stylex.props(styles.bridgeHeader)}>
             <strong>
-              ⚡ Copiloto IA Gratuito (Cloudflare Workers AI · 10,000
-              Neurons/día a $0.00)
+              🤖 HERA Agentic Copilot (ReAct Multi-Turn + 20 Herramientas MCP ·
+              Local LM Studio / Ollama / Cloud Free)
             </strong>
             <span {...stylex.props(styles.subtitle)}>
-              @cf/meta/llama-3.1-8b-instruct-fp8-fast · 6.6 Neurons/turno
+              Motor activo: {selectedBackend} · Endpoint:{' '}
+              {customBaseUrl || 'Cloudflare Workers AI'}
             </span>
           </div>
+          <div {...stylex.props(styles.formRow)}>
+            <select
+              value={selectedBackend}
+              onChange={(e) => handleBackendChange(e.target.value)}
+              {...stylex.props(styles.input)}
+            >
+              <option value="lmstudio">
+                🖥️ LM Studio (Local :1234 / LAN OpenAI Server)
+              </option>
+              <option value="ollama">💻 Ollama (Local :11434)</option>
+              <option value="cloudflare_free">
+                ⚡ Hera Cloud Free (Workers AI · 10,000 Neurons/día a $0.00)
+              </option>
+              <option value="openrouter">🌐 OpenRouter (:free & Pro)</option>
+              <option value="gemini">✨ Google Gemini</option>
+              <option value="openai">🧠 OpenAI</option>
+              <option value="custom">🔌 Custom OpenAI Endpoint</option>
+            </select>
+            <input
+              type="text"
+              value={customBaseUrl}
+              onChange={(e) => setCustomBaseUrl(e.target.value)}
+              placeholder="http://localhost:1234/v1 o IP LAN"
+              {...stylex.props(styles.input)}
+            />
+            <input
+              type="text"
+              value={customModel}
+              onChange={(e) => setCustomModel(e.target.value)}
+              placeholder="Modelo (ej. qwen2.5-coder-14b)"
+              {...stylex.props(styles.input)}
+            />
+            <button
+              type="button"
+              onClick={handleProbeModels}
+              {...stylex.props(styles.secondaryBtn)}
+            >
+              🔍 Detectar LM Studio / Modelos
+            </button>
+          </div>
+          {probeBanner && (
+            <div {...stylex.props(styles.statusBanner)}>{probeBanner}</div>
+          )}
           <div {...stylex.props(styles.formRow)}>
             <input
               type="text"
@@ -239,11 +322,26 @@ function ViewHarmonicBridgeP2P() {
           </div>
           {aiResponse && (
             <div {...stylex.props(styles.aiReply)}>
+              {aiResponse.tool_calls_trace &&
+                aiResponse.tool_calls_trace.length > 0 && (
+                  <div {...stylex.props(styles.endpointCard)}>
+                    {aiResponse.tool_calls_trace.map((step, idx) => (
+                      <small
+                        key={`${step.step}-${step.tool_name}-${idx}`}
+                        {...stylex.props(styles.subtitle)}
+                      >
+                        🛠️ Paso {step.step}: {step.tool_name} -&gt;{' '}
+                        {step.result_preview}
+                      </small>
+                    ))}
+                  </div>
+                )}
               <p {...stylex.props(styles.tipText)}>
                 {aiResponse.assistant_reply}
               </p>
               <small {...stylex.props(styles.subtitle)}>
                 Motor: {aiResponse.backend_used} ({aiResponse.model_used}) ·
+                Iteraciones ReAct: {aiResponse.iterations_executed ?? 1} ·
                 Neurons consumidas: {aiResponse.neurons_consumed_this_turn} ·
                 Restantes hoy: {aiResponse.daily_neurons_remaining.toFixed(1)} ·
                 Costo: ${aiResponse.estimated_cost_usd.toFixed(2)}
