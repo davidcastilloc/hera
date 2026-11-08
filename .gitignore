@@ -69,3 +69,8 @@ workspace/
 scratch/
 work/
 *.tmp
+
+# Rust & Cloudflare Workers build artifacts
+**/target/
+.wrangler/
+node_modules/

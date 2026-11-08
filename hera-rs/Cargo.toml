@@ -1,0 +1,43 @@
+[package]
+name = "hera-node-rs"
+version = "0.2.0"
+edition = "2021"
+description = "Hera Universal Audio DSP, 2-Opt TSP Crate Curator & P2P Verified Node (Cloudflare Workers WASM + Native VPS)"
+license = "MIT"
+
+[lib]
+name = "hera_node_rs"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "hera-node"
+path = "src/main.rs"
+required-features = ["native"]
+
+[features]
+default = ["native"]
+native = ["dep:tokio", "axum/tokio", "axum/http1"]
+cloudflare = ["dep:worker"]
+
+[dependencies]
+axum = { version = "0.7", default-features = false, features = ["json", "query", "matched-path"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rustfft = "6.2"
+symphonia = { version = "0.5", default-features = false, features = ["pcm", "wav", "flac", "mp3", "ogg"] }
+http = "1.1"
+tower-service = "0.3"
+bytes = "1.7"
+
+# Native VPS / Local Server runtime (Railway, Vultr, DigitalOcean, Hetzner, Oracle Free Tier, PC)
+tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "net", "signal", "sync"], optional = true }
+
+# Cloudflare Workers Serverless Edge WASM runtime (`npx wrangler deploy`)
+worker = { version = "0.4", features = ["http", "axum"], optional = true }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

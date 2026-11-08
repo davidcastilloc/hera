@@ -1,0 +1,19 @@
+name = "hera-node"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-01-01"
+
+[vars]
+HERA_NODE_ID = "hera-cf-edge-node"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release -- --features cloudflare --no-default-features"
+
+# Optional Cloudflare D1 SQLite & R2 bindings for zero-cost P2P catalog storage:
+# [[d1_databases]]
+# binding = "HERA_DB"
+# database_name = "hera-p2p-catalog"
+# database_id = "YOUR-D1-DATABASE-ID"
+#
+# [[r2_buckets]]
+# binding = "HERA_LIBRARY_BUCKET"
+# bucket_name = "hera-verified-masters"
