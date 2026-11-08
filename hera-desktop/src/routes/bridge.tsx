@@ -30,6 +30,7 @@ function ViewHarmonicBridgeP2P() {
   const [bridgeResult, setBridgeResult] =
     useState<ResolveHarmonicBridgeResponse | null>(null);
   const [previewStatus, setPreviewStatus] = useState<string>('');
+  const [turboCreditsMb, setTurboCreditsMb] = useState<number>(150.0);
   const [chatPrompt, setChatPrompt] = useState(
     'Armar transición de 118 BPM (8A) a 130 BPM (10A) y exportar a VirtualDJ',
   );
@@ -122,13 +123,19 @@ function ViewHarmonicBridgeP2P() {
               disco duro
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleCalculateBridge}
-            {...stylex.props(styles.primaryBtn)}
-          >
-            🔍 Recalcular Puente Armónico (2-Opt + Camelot)
-          </button>
+          <div {...stylex.props(styles.bridgeActions)}>
+            <span {...stylex.props(styles.camelotBadge)}>
+              ⚡ Saldo P2P Boost: {turboCreditsMb.toFixed(1)} MB (Ganado 1:1.5
+              sembrando en el enjambre)
+            </span>
+            <button
+              type="button"
+              onClick={handleCalculateBridge}
+              {...stylex.props(styles.primaryBtn)}
+            >
+              🔍 Recalcular Puente Armónico (2-Opt + Camelot)
+            </button>
+          </div>
         </div>
 
         <div {...stylex.props(styles.endpointsGrid)}>
@@ -217,6 +224,9 @@ function ViewHarmonicBridgeP2P() {
                   <span {...stylex.props(styles.camelotBadge)}>
                     {step.bpm.toFixed(1)} BPM · {step.camelot} · Sinergia{' '}
                     {Math.round(step.synergy_score * 100)}%
+                    {step.p2p_boost_free_promo
+                      ? ' · 🚀 PROMO POOL (P2P Boost 0 MB)'
+                      : ''}
                   </span>
                 </div>
                 <p {...stylex.props(styles.tipText)}>{step.transition_tip}</p>
@@ -234,12 +244,33 @@ function ViewHarmonicBridgeP2P() {
                     type="button"
                     onClick={() =>
                       setPreviewStatus(
-                        `📥 Descargando "${step.artist} - ${step.title}" (${step.hera_seal}) desde ${step.owner_dj} ➔ quarantine/ ➔ library/`,
+                        `📥 Descarga P2P Estándar ($0.00): "${step.artist} - ${step.title}" (${step.hera_seal}) desde nodo ${step.owner_dj} ➔ quarantine/ ➔ library/`,
                       )
                     }
+                    {...stylex.props(styles.secondaryBtn)}
+                  >
+                    📥 P2P Gratis ({step.owner_dj})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cost = step.p2p_boost_free_promo
+                        ? 0
+                        : (step.boost_credit_cost_mb ?? 38);
+                      if (cost > 0 && turboCreditsMb >= cost) {
+                        setTurboCreditsMb((prev) => prev - cost);
+                      }
+                      setPreviewStatus(
+                        step.p2p_boost_free_promo
+                          ? `🚀 P2P Boost Promo Pool (0 MB Créditos · Patrocinado por el Productor): "${step.artist} - ${step.title}" descargado a máxima velocidad (zk-ctr-sha256-v1) ➔ library/`
+                          : `⚡ P2P Boost Activado (-${cost} MB Créditos Turbo · Restan ${Math.max(0, turboCreditsMb - cost).toFixed(1)} MB): "${step.artist} - ${step.title}" descargado desde caché R2 Zero-Knowledge ➔ library/`,
+                      );
+                    }}
                     {...stylex.props(styles.primaryBtn)}
                   >
-                    📥 Descargar al Disco Local ({step.owner_dj})
+                    {step.p2p_boost_free_promo
+                      ? '🚀 P2P Boost Gratis (Promo Pool · 0 MB)'
+                      : `⚡ P2P Boost (${step.boost_credit_cost_mb ?? 38} MB Créditos)`}
                   </button>
                 </div>
               </div>

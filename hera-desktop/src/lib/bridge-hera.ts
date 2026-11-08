@@ -84,6 +84,8 @@ export type HarmonicBridgeStep = {
   cue_out_seconds: number;
   synergy_score: number;
   transition_tip: string;
+  p2p_boost_free_promo?: boolean;
+  boost_credit_cost_mb?: number;
 };
 
 export type ResolveHarmonicBridgeParams = {
@@ -343,6 +345,8 @@ export async function resolveHarmonicBridge(
         cue_out_seconds: 168.4,
         synergy_score: 0.96,
         transition_tip: `Cruza Cue 4 (Mix Out) de '${params.originTitle}' con Cue 1 (Intro) en ${step1Camelot} a ${midBpm1.toFixed(1)} BPM`,
+        p2p_boost_free_promo: true,
+        boost_credit_cost_mb: 0.0,
       },
       {
         step_number: 2,
@@ -357,6 +361,8 @@ export async function resolveHarmonicBridge(
         cue_out_seconds: 174.0,
         synergy_score: 0.95,
         transition_tip: `Entrega en llave ${step2Camelot} (${midBpm2.toFixed(1)} BPM) directo al Cue 1 (Intro) de '${params.targetTitle}'`,
+        p2p_boost_free_promo: false,
+        boost_credit_cost_mb: 38.0,
       },
     ],
   };

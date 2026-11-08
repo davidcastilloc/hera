@@ -23,6 +23,10 @@ pub struct HarmonicBridgeStep {
     pub cue_out_seconds: f32,
     pub synergy_score: f32,
     pub transition_tip: String,
+    #[serde(default)]
+    pub p2p_boost_free_promo: bool,
+    #[serde(default)]
+    pub boost_credit_cost_mb: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -148,6 +152,8 @@ pub fn resolve_harmonic_bridge(
                 "Cruza Cue 4 (Mix Out) de '{}' con Cue 1 (Intro) en {} a {:.1} BPM",
                 request.origin_title, step1_camelot, mid_bpm_1
             ),
+            p2p_boost_free_promo: true,
+            boost_credit_cost_mb: 0.0,
         },
         HarmonicBridgeStep {
             step_number: 2,
@@ -165,6 +171,8 @@ pub fn resolve_harmonic_bridge(
                 "Entrega en llave {} ({:.1} BPM) directo al Cue 1 (Intro) de '{}'",
                 step2_camelot, mid_bpm_2, request.target_title
             ),
+            p2p_boost_free_promo: false,
+            boost_credit_cost_mb: 38.0,
         },
     ];
 
