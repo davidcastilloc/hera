@@ -1,6 +1,6 @@
 {
   "name": "museeks",
-  "version": "0.23.4",
+  "version": "0.3.0",
   "description": "A simple, clean, and cross-platform music player.",
   "bugs": {
     "url": "https://github.com/martpie/museeks/issues"

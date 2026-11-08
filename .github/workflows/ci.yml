@@ -1,4 +1,4 @@
-name: HERA Community CI (Python + Rust ODD Verification)
+name: HERA Community CI (Pure Rust + HERA Desktop ODD Verification)
 
 on:
   push:
@@ -7,21 +7,12 @@ on:
     branches: ["main"]
 
 jobs:
-  python-and-odd-hygiene:
-    name: Python (Ruff + Pytest) & Multi-OS Path Audit
+  odd-and-open-core-hygiene:
+    name: ODD Multi-OS Path Audit & Open-Core Boundary Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Set up Python 3.11
-        run: uv python install 3.11
-
-      - name: Install dependencies (with dev & analysis extras)
-        run: uv sync --all-extras
 
       - name: Verify Zero OS Symlinks in .agent/skills and .claude/skills
         run: |
@@ -33,23 +24,10 @@ jobs:
 
       - name: Open-Core Security Boundary Check (No Private SaaS Leaks)
         run: |
-          if grep -rnE '/api/v1/cloud/economics|/api/v1/dj/upgrade-tier|X-Hera-Admin-Secret|calculate_cloudflare_beta_economics' src/ hera-rs/src/; then
+          if grep -rnE '/api/v1/cloud/economics|/api/v1/dj/upgrade-tier|X-Hera-Admin-Secret|calculate_cloudflare_beta_economics' hera-rs/src/ hera-desktop/src/; then
             echo "Error: Private hera-cloud SaaS routes/economics leaked into public hera repository!"
             exit 1
           fi
-
-      - name: Run Ruff Linter
-        run: uv run ruff check .
-
-      - name: Run Mypy Static Typecheck
-        run: uv run mypy src/
-
-      - name: Run Pytest Suite
-        env:
-          PYSTRAY_BACKEND: dummy
-          NO_PROXY: "localhost,127.0.0.1"
-          no_proxy: "localhost,127.0.0.1"
-        run: uv run pytest -v
 
   rust-dsp-node:
     name: Rust DSP & P2P Node (hera-rs)
@@ -65,3 +43,32 @@ jobs:
         run: |
           cargo check --manifest-path hera-rs/Cargo.toml
           cargo test --manifest-path hera-rs/Cargo.toml
+
+  hera-desktop-ui:
+    name: HERA Desktop UI (React 19 + StyleX + Vite+)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hera-desktop
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 24 & pnpm
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Enable Corepack & Install Dependencies
+        run: |
+          corepack enable
+          pnpm install --ignore-scripts
+
+      - name: Run Vite+ Format, Lint & Typecheck (vp check)
+        run: ./node_modules/.bin/vp check
+
+      - name: Run Production Bundle Build (vp build)
+        run: ./node_modules/.bin/vp build
+
+      - name: Run Unit Tests (vp test)
+        run: ./node_modules/.bin/vp test run --project unit
