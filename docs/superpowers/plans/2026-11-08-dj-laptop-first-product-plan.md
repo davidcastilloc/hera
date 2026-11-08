@@ -17,9 +17,9 @@
 
 ## 📌 Backlog Vivo de Ideas de Planeación (En Construcción con David)
 
-- [ ] **Idea 1 (Caso de Uso Estrella — Organización e Inteligencia de Repertorio Local):**
+- [x] **Idea 1 (Caso de Uso Estrella — Organización e Inteligencia de Repertorio Local):**
   - Consolidar el flujo de auditoría y sincronización en `hera.db` (`src/hera/domain/repertoire_intelligence.py`) como la puerta de entrada principal para cualquier DJ que instala Hera en su laptop (Audio, Video-DJ y Producciones Propias).
-- [ ] **Idea 2 (Soporte Nativo VirtualDJ + Rekordbox + Traktor en `src/hera/domain/export.py`):**
+- [x] **Idea 2 (Soporte Nativo VirtualDJ + Rekordbox + Traktor en `src/hera/domain/export.py`):**
   - Agregar exportador nativo para **VirtualDJ** (`.vdjfolder` y marcadores `<Poi>` para los 4 Hot Cues acústicos) y **Traktor Pro** (`collection.nml` con `<CUE_V2>`), manteniendo Rekordbox XML, M3U8 y Ableton Live.
 - [ ] **Idea 3 (Sin Internet = Botones Deterministas Reales en el Front, Cero Heurísticas Tramposas de Chat):**
   - Construir paneles y botones **100% deterministas** en el frontend:
@@ -46,7 +46,7 @@
     1. **Memoria Estructurada del DJ (`DJ Brain`):** Inyectar automáticamente al inicio de cada sesión un contexto compacto (~300 tokens) con: resumen del repertorio (`hera.db`), software preferido del DJ (ej. `VirtualDJ`), géneros/BPM favoritos (`dj_preferences`) y últimos sets creados (`crates`).
     2. **Persistencia de Conversaciones (`conversation_sessions` y `conversation_messages`):** Guardar todos los hilos de conversación en `hera.db` local y sincronizarlos con **Cloudflare D1 en `hera-cloud`** para todos los planes.
     3. **Por qué cuesta `$0.00` en `hera-cloud`:** El texto es ultraligero (~350 bytes por mensaje). Los **`5 GB` gratuitos de Cloudflare D1** caben **~14 millones de mensajes** y permite **5 millones de lecturas/día + 100,000 escrituras/día gratis**.
-- [ ] **Idea 8 (Onboarding Inteligente del DJ + Agente Calculador de Estilo y ADN Musical — `DJ Style Profiler`):**
+- [x] **Idea 8 (Onboarding Inteligente del DJ + Agente Calculador de Estilo y ADN Musical — `DJ Style Profiler`):**
   - Al entrar por primera vez (o desde el panel **[Mi Perfil & Estilo DJ]**), Hera ejecuta un onboarding en 2 fases combinando cálculo automático + confirmación humana:
     1. **Auto-Análisis del Estilo del DJ desde su Disco (`Zero-Typing Style Discovery`):** Expandir `artist_dna_profile` en `src/hera/domain/repertoire_intelligence.py` + `analyzers/audio_features/style_embeddings.py` para analizar automáticamente la biblioteca local del DJ y extraer:
        - Sus zonas de BPM reales (ej. *Warm-up 70-105*, *Tropical 106-121*, *Club/Afro/Guaracha 122-132*, *Hora Loca 133+*).

@@ -158,24 +158,35 @@ async def handle_build_dj_crate(
         tracks=crate_tracks,
     )
 
-    # 6. Generar exportaciones (M3U8, Rekordbox XML, Cue Sheet, Ableton Live, JSON Manifest)
+    # 6. Generar exportaciones (M3U8, Rekordbox XML, VirtualDJ, Traktor NML, Cue Sheet, Ableton Live, JSON Manifest)
     exporter = CrateExporter(track_repo, config.exports_dir)
-    export_formats = [fmt.lower() for fmt in (export or ["m3u8", "rekordbox_xml", "cue_sheet"])]
+    export_formats = [
+        fmt.lower()
+        for fmt in (export or ["m3u8", "rekordbox_xml", "virtualdj", "traktor_nml", "cue_sheet"])
+    ]
     exports_map: dict[str, str] = {}
 
-    if "m3u8" in export_formats:
+    if "m3u8" in export_formats or "all" in export_formats:
         m3u8_p = await exporter.export_m3u8(crate, selected_tracks)
         exports_map["m3u8"] = str(m3u8_p.resolve())
 
-    if "rekordbox_xml" in export_formats:
+    if "rekordbox_xml" in export_formats or "rekordbox" in export_formats or "all" in export_formats:
         rb_p = await exporter.export_rekordbox_xml(crate, selected_tracks)
         exports_map["rekordbox_xml"] = str(rb_p.resolve())
 
-    if "cue_sheet" in export_formats:
+    if "virtualdj" in export_formats or "vdj" in export_formats or "all" in export_formats:
+        vdj_p = await exporter.export_virtualdj_folder(crate, selected_tracks)
+        exports_map["virtualdj_folder"] = str(vdj_p.resolve())
+
+    if "traktor_nml" in export_formats or "traktor" in export_formats or "all" in export_formats:
+        trk_p = await exporter.export_traktor_nml(crate, selected_tracks)
+        exports_map["traktor_nml"] = str(trk_p.resolve())
+
+    if "cue_sheet" in export_formats or "all" in export_formats:
         cs_p = await exporter.export_cue_sheet(crate, selected_tracks)
         exports_map["cue_sheet"] = str(cs_p.resolve())
 
-    if "ableton" in export_formats:
+    if "ableton" in export_formats or "all" in export_formats:
         abl_p = await exporter.export_ableton_curated(crate, selected_tracks)
         exports_map["ableton_index"] = str(abl_p.resolve())
 

@@ -179,12 +179,54 @@ class RepertoireAuditor:
             for k, v in sorted(genre_counts.items(), key=lambda x: x[1]["total"], reverse=True)
         ]
 
-        # 4. Perfil ADN de Producciones Propias
+        # 4. Perfil ADN de Producciones Propias + ADN Musical Integral del DJ (DJ Style Profiler)
         avg_own_bpm = round(sum(own_bpms) / len(own_bpms), 1) if own_bpms else 122.0
         artist_dna = {
             "total_own_productions": by_cat["own_productions"],
             "average_bpm": avg_own_bpm,
             "dominant_camelot_keys": [k for k, _ in camelot_own.most_common(5)],
+        }
+
+        artist_counter: Counter[str] = Counter()
+        all_bpms: list[float] = []
+        combined_camelot: Counter[str] = Counter()
+        for it in items:
+            art_name = (it.get("artist") or "").strip()
+            if art_name and art_name.lower() not in ("unknown", "unknown artist", "varios", "va"):
+                artist_counter[art_name] += 1
+            if it.get("bpm"):
+                all_bpms.append(float(it["bpm"]))
+            if it.get("camelot"):
+                combined_camelot[str(it["camelot"]).upper()] += 1
+
+        zone_totals = {
+            z_name: (z_vals["audio"] + z_vals["video"] + z_vals["own_productions"])
+            for z_name, z_vals in bpm_zones.items()
+        }
+        dominant_bpm_zone = (
+            max(zone_totals.items(), key=lambda kv: kv[1])[0]
+            if any(zone_totals.values())
+            else "club_afro_guaracha_122_132"
+        )
+        total_camelot_tagged = sum(combined_camelot.values())
+        minor_count = sum(cnt for cam_k, cnt in combined_camelot.items() if cam_k.endswith("A"))
+        minor_ratio_pct = round((minor_count / max(1, total_camelot_tagged)) * 100.0, 1)
+        overall_avg_bpm = round(sum(all_bpms) / len(all_bpms), 1) if all_bpms else 124.0
+
+        dj_style_dna = {
+            "dominant_bpm_zone": dominant_bpm_zone,
+            "overall_average_bpm": overall_avg_bpm,
+            "dominant_camelot_keys": [k for k, _ in combined_camelot.most_common(5)],
+            "minor_key_ratio_pct": minor_ratio_pct,
+            "top_anchor_artists": [
+                {"artist": name, "track_count": cnt}
+                for name, cnt in artist_counter.most_common(15)
+            ],
+            "media_mix_profile": {
+                "audio_pct": round((by_cat["audio_dj"] / max(1, total_files)) * 100.0, 1),
+                "video_pct": round((by_cat["video_dj"] / max(1, total_files)) * 100.0, 1),
+                "own_productions_pct": round((by_cat["own_productions"] / max(1, total_files)) * 100.0, 1),
+            },
         }
 
         report = {
@@ -211,6 +253,7 @@ class RepertoireAuditor:
                 "short_clip_or_fx_outside_tools_under_1_4mb": short_clip_suspects,
             },
             "artist_dna_profile": artist_dna,
+            "dj_style_dna": dj_style_dna,
         }
 
         if check_queries:
@@ -342,4 +385,177 @@ async def sync_local_library_to_db(db: Database, config: HeraConfig) -> dict:
         "updated_in_place_tracks": len(rows_to_update),
         "newly_indexed_tracks": len(to_insert),
         "total_tracks_in_db": total_in_db,
+    }
+
+
+async def persist_dj_style_dna_to_db(
+    db: Database,
+    audit_report: dict,
+    profile_id: str = "default",
+    onboarding_answers: dict | None = None,
+) -> dict:
+    """Persiste el ADN musical auto-calculado (`dj_style_dna`) y las respuestas de onboarding
+    en la tabla `dj_preferences` de `hera.db` (`DJ Brain` local)."""
+    import json
+
+    await db.init_schema()
+    conn = await db.connect()
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    dna = audit_report.get("dj_style_dna") or {}
+    artist_dna = audit_report.get("artist_dna_profile") or {}
+    summary = audit_report.get("summary") or {}
+
+    entries: list[tuple[str, str, str, str, float, str, str]] = [
+        (
+            profile_id,
+            "style_dna",
+            "dominant_bpm_zone",
+            str(dna.get("dominant_bpm_zone", "club_afro_guaracha_122_132")),
+            1.0,
+            "repertoire_auto_profiler",
+            now_iso,
+        ),
+        (
+            profile_id,
+            "style_dna",
+            "overall_average_bpm",
+            str(dna.get("overall_average_bpm", 124.0)),
+            1.0,
+            "repertoire_auto_profiler",
+            now_iso,
+        ),
+        (
+            profile_id,
+            "style_dna",
+            "dominant_camelot_keys",
+            json.dumps(dna.get("dominant_camelot_keys", []), ensure_ascii=False),
+            1.0,
+            "repertoire_auto_profiler",
+            now_iso,
+        ),
+        (
+            profile_id,
+            "style_dna",
+            "top_anchor_artists",
+            json.dumps(dna.get("top_anchor_artists", []), ensure_ascii=False),
+            1.0,
+            "repertoire_auto_profiler",
+            now_iso,
+        ),
+        (
+            profile_id,
+            "style_dna",
+            "media_mix_profile",
+            json.dumps(dna.get("media_mix_profile", {}), ensure_ascii=False),
+            1.0,
+            "repertoire_auto_profiler",
+            now_iso,
+        ),
+        (
+            profile_id,
+            "style_dna",
+            "own_productions_summary",
+            json.dumps(artist_dna, ensure_ascii=False),
+            1.0,
+            "repertoire_auto_profiler",
+            now_iso,
+        ),
+        (
+            profile_id,
+            "style_dna",
+            "library_size",
+            str(summary.get("total_unique_files", 0)),
+            1.0,
+            "repertoire_auto_profiler",
+            now_iso,
+        ),
+    ]
+
+    if onboarding_answers:
+        for k, v in onboarding_answers.items():
+            val_str = json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else str(v)
+            entries.append((
+                profile_id,
+                "onboarding",
+                str(k),
+                val_str,
+                1.0,
+                "dj_onboarding_confirmation",
+                now_iso,
+            ))
+
+    await conn.executemany(
+        """
+        INSERT OR REPLACE INTO dj_preferences (
+            profile_id, subject, feature, value, weight, evidence, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        entries,
+    )
+    await conn.commit()
+
+    return {
+        "profile_id": profile_id,
+        "persisted_features": len(entries),
+        "updated_at": now_iso,
+    }
+
+
+async def load_dj_brain_context(db: Database, profile_id: str = "default") -> dict:
+    """Carga desde `hera.db` el contexto compacto del `DJ Brain` (~250 tokens) con el ADN musical,
+    software preferido (`VirtualDJ`, `Rekordbox`, `Traktor`, `Ableton`), reglas de oro y últimos crates."""
+    await db.init_schema()
+    conn = await db.connect()
+
+    pref_cursor = await conn.execute(
+        "SELECT subject, feature, value FROM dj_preferences WHERE profile_id = ?",
+        (profile_id,),
+    )
+    pref_rows = await pref_cursor.fetchall()
+    preferences: dict[str, dict[str, str]] = {"style_dna": {}, "onboarding": {}}
+    for r in pref_rows:
+        subj = r["subject"]
+        preferences.setdefault(subj, {})[r["feature"]] = r["value"]
+
+    trk_cursor = await conn.execute("SELECT COUNT(*) AS cnt FROM tracks WHERE deleted_at IS NULL")
+    trk_row = await trk_cursor.fetchone()
+    total_tracks = int(trk_row["cnt"]) if trk_row else 0
+
+    crate_cursor = await conn.execute(
+        "SELECT name, brief, duration_target_minutes FROM crates ORDER BY updated_at DESC LIMIT 5"
+    )
+    crate_rows = await crate_cursor.fetchall()
+    recent_crates = [
+        {
+            "name": cr["name"],
+            "brief": cr["brief"],
+            "duration_minutes": cr["duration_target_minutes"],
+        }
+        for cr in crate_rows
+    ]
+
+    dna = preferences.get("style_dna", {})
+    onb = preferences.get("onboarding", {})
+    preferred_sw = onb.get("preferred_dj_software", "VirtualDJ / Rekordbox / Traktor")
+    dj_handle = onb.get("dj_handle", "DJ")
+    golden_rules = onb.get("golden_rules", "Priorizar alta calidad (FLAC/320k) y flujo armónico Camelot")
+
+    prompt_block = (
+        f"[MEMORIA ACTIVA DEL DJ BRAIN — PERFIL '{dj_handle}']\n"
+        f"- Tracks indexados en hera.db: {total_tracks}\n"
+        f"- Zona BPM dominante: {dna.get('dominant_bpm_zone', 'club_afro_guaracha_122_132')} "
+        f"(Promedio: {dna.get('overall_average_bpm', '124.0')} BPM)\n"
+        f"- Llaves Camelot dominantes: {dna.get('dominant_camelot_keys', '[]')}\n"
+        f"- Software principal de cabina: {preferred_sw}\n"
+        f"- Reglas de oro del DJ: {golden_rules}\n"
+        f"- Últimos crates armados: {[c['name'] for c in recent_crates]}"
+    )
+
+    return {
+        "profile_id": profile_id,
+        "total_tracks_in_db": total_tracks,
+        "preferences": preferences,
+        "recent_crates": recent_crates,
+        "prompt_block": prompt_block,
     }

@@ -249,3 +249,208 @@ class CrateExporter:
             json.dump(manifest_data, f, indent=2, ensure_ascii=False)
 
         return out_path
+
+    async def export_virtualdj_folder(self, crate: Crate, tracks: list[Track]) -> Path:
+        """Genera un archivo `.vdjfolder` nativo de VirtualDJ junto con su sidecar `_vdj_database.xml`
+        conteniendo el Beatgrid y los 4 Hot Cues acústicos (`<Poi Type="cue" Num="1..4">`)."""
+        clean_name = self._sanitize_name(crate.name)
+        vdjfolder_path = self.exports_dir / f"{clean_name}.vdjfolder"
+        vdj_db_path = self.exports_dir / f"{clean_name}_vdj_database.xml"
+
+        folder_root = ET.Element("VirtualFolder", Name=crate.name)
+        db_root = ET.Element("VirtualDJ_Database", Version="2026")
+
+        vdj_colors = [
+            "#28E214",  # Cue 1: Green (Intro Beat)
+            "#00D2FF",  # Cue 2: Cyan (Phrase / Vocal In)
+            "#FF2D2D",  # Cue 3: Red (Drop / Climax)
+            "#FFBE00",  # Cue 4: Amber (Mix Out)
+        ]
+
+        for idx, t in enumerate(tracks, start=1):
+            path_str = t.library_path or t.quarantine_path
+            if not path_str:
+                continue
+            file_p = Path(path_str).resolve()
+            bpm_val = float(t.bpm or 124.0)
+            dur_sec = (t.duration_ms / 1000.0) if t.duration_ms else 210.0
+            cam_str = (t.camelot or "8A").upper()
+            full_title = t.canonical_title + (f" ({t.version})" if t.version else "")
+
+            ET.SubElement(
+                folder_root,
+                "Song",
+                {
+                    "Path": str(file_p),
+                    "Idx": str(idx),
+                    "Artist": t.canonical_artist,
+                    "Title": full_title,
+                    "Bpm": f"{bpm_val:.2f}",
+                    "Key": cam_str,
+                },
+            )
+
+            song_el = ET.SubElement(
+                db_root,
+                "Song",
+                {
+                    "FilePath": str(file_p),
+                    "FileSize": str(t.file_size_bytes or 0),
+                },
+            )
+            ET.SubElement(
+                song_el,
+                "Tags",
+                {
+                    "Author": t.canonical_artist,
+                    "Title": full_title,
+                    "Bpm": f"{bpm_val:.2f}",
+                    "Key": cam_str,
+                    "Comment": f"Hera Set: {crate.name}",
+                },
+            )
+            ET.SubElement(
+                song_el,
+                "Infos",
+                {
+                    "SongLength": f"{dur_sec:.3f}",
+                    "Bitrate": str(t.bitrate_kbps or 1411),
+                },
+            )
+            ET.SubElement(
+                song_el,
+                "Scan",
+                {
+                    "Version": "801",
+                    "Bpm": f"{60.0 / max(1.0, bpm_val):.6f}",
+                    "Key": cam_str,
+                },
+            )
+
+            cues = self._resolve_structural_cues(t, bpm_val, dur_sec)
+            cue1_pos = float(cues[0]["position_sec"])
+            ET.SubElement(
+                song_el,
+                "Poi",
+                {
+                    "Pos": f"{cue1_pos:.3f}",
+                    "Type": "beatgrid",
+                    "Bpm": f"{60.0 / max(1.0, bpm_val):.6f}",
+                },
+            )
+            for idx_c, c_data in enumerate(cues[:4]):
+                ET.SubElement(
+                    song_el,
+                    "Poi",
+                    {
+                        "Name": str(c_data["name"]),
+                        "Pos": f"{float(c_data['position_sec']):.3f}",
+                        "Num": str(idx_c + 1),
+                        "Color": vdj_colors[idx_c],
+                        "Type": "cue",
+                    },
+                )
+
+        ET.ElementTree(folder_root).write(vdjfolder_path, encoding="UTF-8", xml_declaration=True)
+        ET.ElementTree(db_root).write(vdj_db_path, encoding="UTF-8", xml_declaration=True)
+        return vdjfolder_path
+
+    async def export_traktor_nml(self, crate: Crate, tracks: list[Track]) -> Path:
+        """Genera un archivo Native Instruments Traktor Pro (`_traktor.nml`, `VERSION="19"`)
+        con `<TEMPO>`, `<MUSICAL_KEY>` y los 4 Hot Cues estructurales (`<CUE_V2 HOTCUE="0..3">`)."""
+        clean_name = self._sanitize_name(crate.name)
+        out_path = self.exports_dir / f"{clean_name}_traktor.nml"
+
+        nml_root = ET.Element("NML", VERSION="19")
+        ET.SubElement(nml_root, "HEAD", COMPANY="Hera DJ", PROGRAM="Hera")
+        collection = ET.SubElement(nml_root, "COLLECTION", ENTRIES=str(len(tracks)))
+
+        playlist_keys: list[str] = []
+
+        for t in tracks:
+            path_str = t.library_path or t.quarantine_path
+            if not path_str:
+                continue
+            file_p = Path(path_str).resolve()
+            bpm_val = float(t.bpm or 124.0)
+            dur_sec = (t.duration_ms / 1000.0) if t.duration_ms else 210.0
+            cam_str = (t.camelot or "8A").upper()
+            full_title = t.canonical_title + (f" [{t.version}]" if t.version else "")
+
+            parts = [p for p in file_p.parent.parts if p not in ("/", "\\")]
+            traktor_dir = "/:" + "/:".join(parts) + "/:" if parts else "/:"
+            traktor_key = f"LocalDisk{traktor_dir}{file_p.name}"
+            playlist_keys.append(traktor_key)
+
+            entry = ET.SubElement(
+                collection,
+                "ENTRY",
+                {
+                    "TITLE": full_title,
+                    "ARTIST": t.canonical_artist,
+                },
+            )
+            ET.SubElement(
+                entry,
+                "LOCATION",
+                {
+                    "DIR": traktor_dir,
+                    "FILE": file_p.name,
+                    "VOLUME": "LocalDisk",
+                    "VOLUMEID": "LocalDisk",
+                },
+            )
+            ET.SubElement(
+                entry,
+                "INFO",
+                {
+                    "BITRATE": str((t.bitrate_kbps or 1411) * 1000),
+                    "PLAYTIME": str(int(round(dur_sec))),
+                    "PLAYTIME_FLOAT": f"{dur_sec:.3f}",
+                    "COMMENT": f"Camelot:{cam_str} | Energy:{(t.energy or 0.80):.2f}",
+                },
+            )
+            ET.SubElement(
+                entry,
+                "TEMPO",
+                {
+                    "BPM": f"{bpm_val:.2f}",
+                    "BPM_QUALITY": "100.000000",
+                },
+            )
+            ET.SubElement(
+                entry,
+                "MUSICAL_KEY",
+                {
+                    "VALUE": cam_str,
+                },
+            )
+
+            cues = self._resolve_structural_cues(t, bpm_val, dur_sec)
+            for idx_c, c_data in enumerate(cues[:4]):
+                start_ms = float(c_data["position_sec"]) * 1000.0
+                ET.SubElement(
+                    entry,
+                    "CUE_V2",
+                    {
+                        "NAME": str(c_data["name"]),
+                        "DISPL_ORDER": "0",
+                        "TYPE": "0",
+                        "START": f"{start_ms:.3f}",
+                        "LEN": "0.000000",
+                        "REPEATS": "-1",
+                        "HOTCUE": str(idx_c),
+                    },
+                )
+
+        playlists = ET.SubElement(nml_root, "PLAYLISTS")
+        root_node = ET.SubElement(playlists, "NODE", TYPE="FOLDER", NAME="$ROOT")
+        subnodes = ET.SubElement(root_node, "SUBNODES", COUNT="1")
+        pl_node = ET.SubElement(subnodes, "NODE", TYPE="PLAYLIST", NAME=crate.name)
+        pl_el = ET.SubElement(pl_node, "PLAYLIST", ENTRIES=str(len(playlist_keys)), TYPE="LIST", UUID=crate.id)
+        for pk in playlist_keys:
+            pl_entry = ET.SubElement(pl_el, "ENTRY")
+            ET.SubElement(pl_entry, "PRIMARYKEY", TYPE="TRACK", KEY=pk)
+
+        ET.ElementTree(nml_root).write(out_path, encoding="UTF-8", xml_declaration=True)
+        return out_path
