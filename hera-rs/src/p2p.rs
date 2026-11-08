@@ -65,11 +65,22 @@ pub struct DjProfile {
 }
 
 fn default_sub_tier() -> String {
-    "free".to_string()
+    "beta_mvp".to_string()
 }
 
 fn default_r2_quota() -> f32 {
-    100.0
+    5_120.0 // 5 GB (5,120 MB) per selected Beta MVP DJ (~130 lossless FLACs or ~500 MP3s)
+}
+
+pub fn resolve_tier_r2_quota_mb(tier: &str) -> f32 {
+    match tier {
+        "trial_100mb" => 100.0,
+        "beta_mvp" | "free" => 5_120.0,       // 5 GB per Beta MVP DJ
+        "beta_vip_10gb" => 10_240.0,          // 10 GB per VIP Beta DJ
+        "pro_monthly" | "pro" => 51_200.0,    // 50 GB Cloudflare R2 in Pro Monthly
+        "founder_unlimited" => 1_000_000.0,   // Unlimited for DaviDJ
+        _ => 5_120.0,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -478,12 +489,8 @@ impl P2PMeshState {
         let sub_tier = req
             .subscription_tier
             .clone()
-            .unwrap_or_else(|| "free".to_string());
-        let r2_quota_mb = match sub_tier.as_str() {
-            "pro_monthly" | "pro" => 51_200.0, // 50 GB Cloudflare R2 included in Pro Monthly
-            "founder_unlimited" => 1_000_000.0,
-            _ => 100.0, // Free tier gets a 100 MB R2 pocket (~2-3 FLAC masters); unlimited on Google Drive / Local P2P
-        };
+            .unwrap_or_else(|| "beta_mvp".to_string());
+        let r2_quota_mb = resolve_tier_r2_quota_mb(&sub_tier);
         let mut r2_used_mb = 0.0f32;
 
         let storage_provider = if req.r2_bucket_url.is_some() && gdrive_folder_id.is_some() {
@@ -713,11 +720,7 @@ impl P2PMeshState {
             .ok_or_else(|| format!("DJ profile `{dj_handle}` not found"))?;
 
         profile.subscription_tier = tier.to_string();
-        profile.r2_quota_mb = match tier {
-            "pro_monthly" | "pro" => 51_200.0,
-            "founder_unlimited" => 1_000_000.0,
-            _ => 100.0,
-        };
+        profile.r2_quota_mb = resolve_tier_r2_quota_mb(tier);
         Ok(profile.clone())
     }
 
@@ -1281,4 +1284,60 @@ pub fn get_cloud_referral_catalog() -> Vec<CloudReferralOption> {
             one_click_command: "curl -fsSL https://raw.githubusercontent.com/davidcastilloc/hera/main/deploy/install-node.sh | bash".to_string(),
         },
     ]
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CloudflareBetaEconomicsReport {
+    pub cohort_djs_count: usize,
+    pub r2_quota_gb_per_dj: f32,
+    pub total_r2_storage_gb: f32,
+    pub approx_lossless_flac_tracks_per_dj: usize,
+    pub total_shared_p2p_tracks_in_pool: usize,
+    pub cloudflare_r2_free_tier_gb: f32,
+    pub billable_r2_gb: f32,
+    pub monthly_r2_storage_cost_usd: f32,
+    pub monthly_egress_bandwidth_cost_usd: f32,
+    pub monthly_workers_d1_vectorize_cost_usd: f32,
+    pub total_monthly_cohort_cost_usd: f32,
+    pub cost_per_dj_usd: f32,
+}
+
+/// Calculates exact monthly Cloudflare unit economics for a Beta MVP cohort of DJs maxing out the app.
+pub fn calculate_cloudflare_beta_economics(
+    num_djs: usize,
+    gb_per_dj: f32,
+) -> CloudflareBetaEconomicsReport {
+    let djs = num_djs.max(1);
+    let gb_dj = gb_per_dj.max(0.1);
+    let total_gb = (djs as f32) * gb_dj;
+    let free_r2_gb = 10.0f32;
+    let billable_gb = (total_gb - free_r2_gb).max(0.0);
+
+    // Cloudflare R2: $0.015 / GB-month, $0.00 egress
+    let r2_cost = (billable_gb * 0.015 * 100.0).round() / 100.0;
+    // Heavy compute + D1 + Vectorize 64D (~$0.02/mo per DJ when covered by free/base allowances)
+    let compute_db_cost = if djs <= 25 {
+        0.0 // 100% covered inside Cloudflare Free Tier (100k req/day, 5M D1 reads/day, 30M Vectorize dims)
+    } else {
+        (((djs - 25) as f32) * 0.02 * 100.0).round() / 100.0
+    };
+
+    let total_cost = ((r2_cost + compute_db_cost) * 100.0).round() / 100.0;
+    let per_dj = ((total_cost / (djs as f32)) * 1000.0).round() / 1000.0;
+    let tracks_per_dj = ((gb_dj * 1024.0) / 38.0).round() as usize;
+
+    CloudflareBetaEconomicsReport {
+        cohort_djs_count: djs,
+        r2_quota_gb_per_dj: gb_dj,
+        total_r2_storage_gb: total_gb,
+        approx_lossless_flac_tracks_per_dj: tracks_per_dj,
+        total_shared_p2p_tracks_in_pool: tracks_per_dj * djs,
+        cloudflare_r2_free_tier_gb: free_r2_gb,
+        billable_r2_gb: billable_gb,
+        monthly_r2_storage_cost_usd: r2_cost,
+        monthly_egress_bandwidth_cost_usd: 0.0,
+        monthly_workers_d1_vectorize_cost_usd: compute_db_cost,
+        total_monthly_cohort_cost_usd: total_cost,
+        cost_per_dj_usd: per_dj,
+    }
 }

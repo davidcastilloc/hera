@@ -4,11 +4,12 @@ compatibility_date = "2025-01-01"
 
 [vars]
 HERA_NODE_ID = "hera-cf-edge-node"
+HERA_BETA_R2_QUOTA_MB = "5120" # 5 GB (5,120 MB) per selected Founding Beta MVP DJ (~130 lossless FLACs)
 
 [build]
 command = "cargo install -q worker-build && worker-build --release -- --features cloudflare --no-default-features"
 
-# Optional Cloudflare D1 SQLite & R2 bindings for zero-cost P2P catalog storage:
+# Full Cloudflare Stack Bindings (D1 + R2 + Vectorize 64D + Workers AI + KV + Queues):
 # [[d1_databases]]
 # binding = "HERA_DB"
 # database_name = "hera-p2p-catalog"
@@ -17,3 +18,18 @@ command = "cargo install -q worker-build && worker-build --release -- --features
 # [[r2_buckets]]
 # binding = "HERA_LIBRARY_BUCKET"
 # bucket_name = "hera-verified-masters"
+#
+# [[vectorize]]
+# binding = "HERA_VECTOR_INDEX"
+# index_name = "hera-64d-style-embeddings"
+#
+# [ai]
+# binding = "AI"
+#
+# [[kv_namespaces]]
+# binding = "HERA_KV_CACHE"
+# id = "YOUR-KV-NAMESPACE-ID"
+#
+# [[queues.producers]]
+# binding = "HERA_SCAN_QUEUE"
+# queue = "hera-gdrive-folder-scan"

@@ -593,20 +593,23 @@ mod tests {
             serde_json::from_slice(&to_bytes(resp1.into_body(), 1024 * 1024).await.unwrap())
                 .unwrap();
         assert_eq!(j1["admitted_tracks"].as_array().unwrap().len(), 2);
+        // Verify default Founding Beta MVP DJ gets 5,120 MB (5 GB) in Cloudflare R2!
+        assert_eq!(j1["profile"]["subscription_tier"], "beta_mvp");
+        assert_eq!(j1["profile"]["r2_quota_mb"], 5120.0);
         assert_eq!(
             j1["admitted_tracks"][0]["stream_url"],
             "https://drive.google.com/uc?export=download&id=1ZeroOAuth_File_ID_001"
         );
 
-        // 2. Test Cloudflare R2 Hard Quota (`free` = 100 MB limit vs 3 tracks of 45 MB = 135 MB)
+        // 2. Test Cloudflare R2 Hard Quota (`trial_100mb` = 100 MB limit vs 3 tracks of 45 MB = 135 MB)
         let r2_quota_req = serde_json::json!({
-            "dj_handle": "DJR2FreeUser",
+            "dj_handle": "DJR2TrialUser",
             "r2_bucket_url": "https://r2.hera-davidj.workers.dev",
-            "subscription_tier": "free",
+            "subscription_tier": "trial_100mb",
             "tracks": [
                 { "title": "R2 Track 1", "artist": "DJR2", "r2_object_key": "r2/t1.flac", "file_size_mb": 45.0 },
                 { "title": "R2 Track 2", "artist": "DJR2", "r2_object_key": "r2/t2.flac", "file_size_mb": 45.0 },
-                { "title": "R2 Track 3 (Over 100MB Free Quota)", "artist": "DJR2", "r2_object_key": "r2/t3.flac", "file_size_mb": 45.0 }
+                { "title": "R2 Track 3 (Over 100MB Trial Quota)", "artist": "DJR2", "r2_object_key": "r2/t3.flac", "file_size_mb": 45.0 }
             ]
         });
         let req2 = Request::builder()
@@ -629,14 +632,14 @@ mod tests {
                 .contains("R2_QUOTA_EXCEEDED")
         );
 
-        // Upgrade DJR2FreeUser to `pro_monthly` (50 GB = 51,200 MB R2 quota)
+        // Upgrade DJR2TrialUser to `pro_monthly` (50 GB = 51,200 MB R2 quota)
         let req_up = Request::builder()
             .method("POST")
             .uri("/api/v1/dj/upgrade-tier")
             .header("content-type", "application/json")
             .body(Body::from(
                 serde_json::to_vec(&serde_json::json!({
-                    "dj_handle": "DJR2FreeUser",
+                    "dj_handle": "DJR2TrialUser",
                     "tier": "pro_monthly"
                 }))
                 .unwrap(),
@@ -648,6 +651,21 @@ mod tests {
             serde_json::from_slice(&to_bytes(resp_up.into_body(), 1024 * 1024).await.unwrap())
                 .unwrap();
         assert_eq!(j_up["profile"]["r2_quota_mb"], 51200.0);
+
+        // Verify Cloudflare Beta Economics endpoint (`GET /api/v1/cloud/economics?djs=10&gb_per_dj=5`)
+        let req_econ = Request::builder()
+            .uri("/api/v1/cloud/economics?djs=10&gb_per_dj=5")
+            .body(Body::empty())
+            .unwrap();
+        let resp_econ = app.call(req_econ).await.unwrap();
+        assert_eq!(resp_econ.status(), StatusCode::OK);
+        let j_econ: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_econ.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_econ["cohort_djs_count"], 10);
+        assert_eq!(j_econ["total_r2_storage_gb"], 50.0);
+        // 50 GB total - 10 GB Free R2 = 40 GB billable * $0.015 = $0.60 USD/month total ($0.06/DJ)!
+        assert_eq!(j_econ["total_monthly_cohort_cost_usd"], 0.6);
 
         // 3. Test Local Laptop / Server Direct Storage & P2P Seeder (`POST /api/v1/node/scan-local-dir` + `GET /api/v1/p2p/download/:track_id`)
         let temp_dir = std::env::temp_dir().join("hera_local_p2p_test_dir");
