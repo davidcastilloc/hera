@@ -5,6 +5,7 @@ import type {
   TrackGroup,
 } from '../../generated/typings';
 import type { DatabaseBridgeInterface } from '../bridge-database';
+import useLibraryStore from '../store';
 
 // Thank you Pixabay for the copyright-free tracks
 const MOCK_TRACKS: Array<Track> = [
@@ -23,6 +24,8 @@ const MOCK_TRACKS: Array<Track> = [
     genres: ['rock', 'blues'],
     path: '/whiskey-blues.mp3',
     is_compilation: false,
+    bpm: 122.0,
+    camelot: '8A',
   },
   {
     id: '1',
@@ -39,6 +42,8 @@ const MOCK_TRACKS: Array<Track> = [
     genres: ['blues'],
     path: '/majestic-blues.mp3',
     is_compilation: false,
+    bpm: 124.0,
+    camelot: '9A',
   },
   {
     id: '2',
@@ -55,6 +60,8 @@ const MOCK_TRACKS: Array<Track> = [
     genres: ['blues'],
     path: '/romantic-blues.mp3',
     is_compilation: false,
+    bpm: 126.0,
+    camelot: '10A',
   },
 ];
 
@@ -83,6 +90,7 @@ class DatabaseBridge implements DatabaseBridgeInterface {
     _refresh = false,
   ): Promise<ScanResult> {
     tracks = MOCK_TRACKS;
+    useLibraryStore.setState({ tracks: MOCK_TRACKS });
 
     return {
       playlist_count: 0,

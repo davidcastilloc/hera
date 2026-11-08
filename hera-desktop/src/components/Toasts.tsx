@@ -5,7 +5,7 @@ import toastManager from '../lib/toast-manager';
 
 export default function Toasts() {
   return (
-    <Toast.Provider toastManager={toastManager} timeout={4000} limit={10}>
+    <Toast.Provider toastManager={toastManager} timeout={2800} limit={5}>
       <Toast.Portal>
         <Toast.Viewport {...stylex.props(styles.viewport)}>
           <ToastList />
@@ -21,6 +21,7 @@ function ToastList() {
     <Toast.Root
       key={toast.id}
       toast={toast}
+      onClick={() => toastManager.close(toast.id)}
       {...stylex.props(
         styles.toast,
         typeVariantsStyles[toast.type as keyof typeof typeVariantsStyles] ??
@@ -35,14 +36,15 @@ function ToastList() {
 const styles = stylex.create({
   viewport: {
     position: 'fixed',
-    bottom: '43px',
-    right: '10px',
-    width: '250px',
+    top: '56px',
+    right: '12px',
+    width: '260px',
     zIndex: 1000,
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '10px',
-    columnGap: '10px',
+    rowGap: '8px',
+    columnGap: '8px',
+    pointerEvents: 'none',
   },
   toast: {
     borderStyle: 'solid',
@@ -54,7 +56,11 @@ const styles = stylex.create({
     borderBottomColor: 'var(--border-color)',
     borderRadius: 'var(--border-radius)',
     color: 'var(--text)',
-    padding: '1rem',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    pointerEvents: 'auto',
   },
 });
 

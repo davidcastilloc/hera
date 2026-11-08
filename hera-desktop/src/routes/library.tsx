@@ -1,5 +1,6 @@
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
+import { useEffect } from 'react';
 
 import TrackList from '../components/TrackList';
 import TrackListStates from '../components/TrackListStates';
@@ -9,6 +10,7 @@ import useGlobalTrackListStatus from '../hooks/useGlobalTrackListStatus';
 import DatabaseBridge from '../lib/bridge-database';
 import { allTracksQuery, configQuery } from '../lib/queries';
 import queryClient from '../lib/query-client';
+import useLibraryStore from '../lib/store';
 import type { QueueOrigin } from '../types/museeks';
 
 const QUEUE_ORIGIN: QueueOrigin = { type: 'library' };
@@ -34,6 +36,12 @@ function ViewLibrary() {
   // while at the same time, the data will most of the time never change.
   // Using stale-while-revalidate libraries help us (fake-)loading this page faster
   const { data: tracks, isLoading } = useQuery(allTracksQuery);
+
+  useEffect(() => {
+    if (tracks) {
+      useLibraryStore.setState({ tracks });
+    }
+  }, [tracks]);
 
   const filteredTracks = useFilteredTracks(
     tracks ?? [],

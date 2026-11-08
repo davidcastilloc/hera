@@ -70,7 +70,7 @@
   - [x] **Alineación `1:1` de Columnas (`TrackListHeader.tsx` ↔ `TrackRow.tsx`) y Contraste Camelot:** Unificado el orden de celdas (`Title | BPM | Key | 4 Hot Cues | Duration | Artist | Album | Genre`), los anchos fijos (`width`/`minWidth`/`flexShrink: 0`) y `camelotBadgeSelected` para mantener legibilidad al seleccionar una fila.
   - [x] **Modo Oscuro de Cabina por Defecto + Rueda Camelot de 24 Llaves (`1A..12A` y `1B..12B`) + Barra Inferior Responsive (`900x550`):** Corregidos `SettingsAPI.ts`, `themes.ts`, `dna.tsx`, `Navigation.tsx` y `HeraDjToolbar.tsx`.
   - [x] **Tríada ACL de Tauri v2 para `hera-dj`:** Registrados `compute_style_dna`, `export_crate`, `chat_copilot`, `list_ai_backends` y `resolve_harmonic_bridge` en `hera-desktop/src-tauri/build.rs` y `hera-desktop/src-tauri/capabilities/main.json`.
-  - [ ] **Siguiente Iteración UI (Para el próximo agente):** Auto-descartar o reposicionar los `Toasts` de error de reproducción en `hera-desktop/src/components/Toasts.tsx` para que no se superpongan con el botón `🤖 Consultar Copiloto` en `/bridge`, y sincronizar `useLibraryStore.setState({ tracks })` al cargar `library.tsx` para que `HeraDjToolbar` siempre lea el conteo real de pistas cargadas.
+  - [x] **Siguiente Iteración UI (Completado):** Reposicionados los `Toasts` con cierre al clic en `hera-desktop/src/components/Toasts.tsx` (`top: 56px`, `right: 12px`, `pointerEvents: none` en viewport) para que nunca cubran `🤖 Consultar Copiloto` en `/bridge`, y sincronizado `useLibraryStore.setState({ tracks })` en `queries.ts`, `library.tsx` y `__mocks__/bridge-database.ts` para que `HeraDjToolbar` y `/dna` siempre lean el conteo real de pistas cargadas.
 
 ---
 
