@@ -292,7 +292,7 @@ pub fn audit_pcm_channels(
         power_db.iter().copied().fold(-120.0_f32, f32::max)
     };
 
-    let active_threshold_db = ref_db - 48.0;
+    let active_threshold_db = ref_db - 42.0;
     let mut effective_bandwidth_hz = 0.0_f32;
     for b in 0..n_bins {
         let f = b as f32 * bin_hz;
@@ -301,24 +301,29 @@ pub fn audit_pcm_channels(
         }
     }
 
-    // Check high-frequency brickwall drop (> 16.5 kHz vs midband)
-    let hf_mean_db = {
-        let mut sum = 0.0_f32;
-        let mut cnt = 0usize;
-        for b in 0..n_bins {
-            let f = b as f32 * bin_hz;
-            if (16800.0..=20500.0).contains(&f) {
-                sum += power_db[b];
-                cnt += 1;
-            }
+    // Check high-frequency brickwall drop (13.0-15.4 kHz vs 16.5-20.2 kHz)
+    let mut pre_sum = 0.0_f32;
+    let mut pre_cnt = 0usize;
+    let mut post_sum = 0.0_f32;
+    let mut post_cnt = 0usize;
+    for b in 0..n_bins {
+        let f = b as f32 * bin_hz;
+        if (13000.0..=15400.0).contains(&f) {
+            pre_sum += power_db[b];
+            pre_cnt += 1;
+        } else if (16500.0..=20200.0).contains(&f) {
+            post_sum += power_db[b];
+            post_cnt += 1;
         }
-        if cnt > 0 {
-            sum / (cnt as f32)
-        } else {
-            ref_db
-        }
+    }
+    let brickwall_drop_db = if pre_cnt > 0 && post_cnt > 0 {
+        (pre_sum / pre_cnt as f32) - (post_sum / post_cnt as f32)
+    } else {
+        0.0
     };
-    let brickwall_drop_db = ref_db - hf_mean_db;
+    if sample_rate >= 40000 && brickwall_drop_db >= 24.0 && effective_bandwidth_hz > 16200.0 {
+        effective_bandwidth_hz = 15800.0;
+    }
 
     let ext_lower = claimed_ext.trim_start_matches('.').to_ascii_lowercase();
     let is_lossless_container = matches!(

@@ -183,9 +183,10 @@ class StructuralCueAnalyzer:
         valid_max_bar = int(valid_indices[-1])
         valid_span = max(8, valid_max_bar - valid_min_bar + 1)
 
-        min_drop_bar = max(valid_min_bar + 4, valid_min_bar + int(valid_span * 0.25))
+        raw_min_drop = max(valid_min_bar + 4, valid_min_bar + int(valid_span * 0.25))
+        min_drop_bar = max(4, (raw_min_drop // 2) * 2)
         max_drop_bar = max(min_drop_bar + 4, min(valid_max_bar - 2, valid_min_bar + int(valid_span * 0.85)))
-        phrase_grid = [b for b in range(min_drop_bar, max_drop_bar, 2)]
+        phrase_grid = [b for b in range(min_drop_bar, max_drop_bar + 1, 2)]
         if not phrase_grid:
             phrase_grid = [min(valid_max_bar - 2, max(valid_min_bar + 4, 16))]
 

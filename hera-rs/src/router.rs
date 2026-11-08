@@ -7,7 +7,7 @@ use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
 use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
 use axum::{
     body::Bytes,
-    extract::{Query, State},
+    extract::{DefaultBodyLimit, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
@@ -38,6 +38,7 @@ fn default_ext() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnalyzeFileQuery {
     pub ext: Option<String>,
+    pub claimed_ext: Option<String>,
     pub bpm_hint: Option<f32>,
     pub track_id: Option<String>,
     pub max_seconds: Option<f32>,
@@ -94,6 +95,7 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/crates/build", post(build_crate_handler))
         .route("/api/v1/p2p/search", get(p2p_search_handler))
         .route("/api/v1/p2p/announce", post(p2p_announce_handler))
+        .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
 }
 
@@ -221,6 +223,7 @@ async fn analyze_file_handler(
     }
 
     let ext = q.ext.as_deref().unwrap_or("wav");
+    let claimed_ext = q.claimed_ext.as_deref().unwrap_or(ext);
     let max_sec = q.max_seconds.unwrap_or(45.0).clamp(5.0, 90.0);
 
     let decoded = decode_audio_bytes(&body, Some(ext), max_sec).map_err(|e| {
@@ -234,7 +237,7 @@ async fn analyze_file_handler(
         &decoded.left,
         decoded.right.as_deref(),
         decoded.sample_rate,
-        ext,
+        claimed_ext,
     );
 
     let structure = analyze_structure_and_style(

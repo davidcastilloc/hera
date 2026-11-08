@@ -160,7 +160,8 @@ pub fn analyze_structure_and_style(
     // 4. Cue 1: Real First Downbeat (`1.1.1`)
     let search_limit_sec = 15.0_f32.min(decoded_dur * 0.35);
     let max_search_frame = ((search_limit_sec / frame_dt) as usize)
-        .clamp(1, sub_flux.len().saturating_sub(1));
+        .max(1)
+        .min(sub_flux.len().saturating_sub(1));
     let local_max_flux = sub_flux[..max_search_frame]
         .iter()
         .copied()
@@ -181,7 +182,8 @@ pub fn analyze_structure_and_style(
             break;
         }
     }
-    let first_beat_sec = (first_kick_frame as f32) * frame_dt;
+    let first_beat_sec = ((first_kick_frame as f32) * frame_dt + (n_fft as f32 * 0.25) / (sample_rate as f32))
+        .min(decoded_dur * 0.35);
 
     // 5. Bar-level Sub, Mid & Total Energy Profiles locked to `first_beat_sec`
     let n_bars_decoded = (((decoded_dur - first_beat_sec) / bar_sec) as usize).max(4);
@@ -195,8 +197,8 @@ pub fn analyze_structure_and_style(
         let t0 = first_beat_sec + (b as f32) * bar_sec;
         let t1 = t0 + bar_sec;
         let f0 = ((t0 / frame_dt) as usize).min(n_frames.saturating_sub(1));
-        let f1 = ((t1 / frame_dt) as usize).clamp(f0 + 1, n_frames);
-        let len = (f1 - f0) as f32;
+        let f1 = ((t1 / frame_dt) as usize).max(f0 + 1).min(n_frames);
+        let len = (f1.saturating_sub(f0).max(1)) as f32;
         let s_mean: f32 = sub_env[f0..f1].iter().sum::<f32>() / len;
         let m_mean: f32 = mid_env[f0..f1].iter().sum::<f32>() / len;
         let h_mean: f32 = high_env[f0..f1].iter().sum::<f32>() / len;
@@ -279,10 +281,13 @@ pub fn analyze_structure_and_style(
         target_out_bars.max(best_drop_bar + 8)
     };
 
-    let phrase_in_sec = (first_beat_sec + (phrase_bar as f32) * bar_sec).min(total_dur * 0.45);
-    let main_drop_sec = (first_beat_sec + (best_drop_bar as f32) * bar_sec).min(total_dur * 0.65);
+    let phrase_in_sec = (first_beat_sec + (phrase_bar as f32) * bar_sec).min(total_dur * 0.55);
+    let main_drop_sec = (first_beat_sec + (best_drop_bar as f32) * bar_sec).min(total_dur * 0.85);
+    let mix_lo = (main_drop_sec + bar_sec * 2.0).min(total_dur * 0.85);
+    let mix_hi = (total_dur - bar_sec * 2.0).max(mix_lo);
     let mix_out_sec = (first_beat_sec + (mix_out_bar as f32) * bar_sec)
-        .clamp(main_drop_sec + bar_sec * 2.0, (total_dur - bar_sec).max(main_drop_sec));
+        .max(mix_lo)
+        .min(mix_hi);
 
     // 8. Intro / Outro Vocal Presence Detection
     let intro_end = 8usize.min(n_bars_decoded);
