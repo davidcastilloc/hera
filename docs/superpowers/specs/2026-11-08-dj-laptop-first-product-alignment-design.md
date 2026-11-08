@@ -108,22 +108,30 @@
 
 ---
 
-## 4. Definición Oficial del Stack (Frontend + Backend Local + Backend Cloud) y Rediseño UI (`Layout martpie/museeks` + `Svelte 5`)
+## 4. Definición Oficial del Stack (Frontend + Backend Local + Backend Cloud) y Rediseño UI (Clon Directo de `martpie/museeks` Adaptado a HERA)
 
-Con el cambio de paradigma (**"Hera es el Asistente, Organizador de Repertorio y Conector P2P que prepara tus sets para tu software real de DJ"**), reemplazamos el viejo reproductor Dual-Deck de Streamlit por una arquitectura nativa ultraligera inspirada en el layout de **[`martpie/museeks`](https://github.com/martpie/museeks)** pero potenciada con **Svelte 5 (sin Virtual DOM)**:
+Con el cambio de paradigma (**"Hera es el Asistente, Organizador de Repertorio y Conector P2P que prepara tus sets para tu software real de DJ"**), reemplazamos el viejo reproductor Dual-Deck de Streamlit **clonando directamente el código base real de [`martpie/museeks`](https://github.com/martpie/museeks) (`v0.23.4`, licencia MIT)** para aprovechar el 100% de su UI/UX ya curada sin reescribir nada desde cero y adaptándola a HERA:
 
-### A. Stack de Frontend (`HERA Desktop`)
-- **Desktop Shell:** **Tauri v2 (`src-tauri` en Rust)** — instalador nativo diminuto (`~5–8 MB`), WebView nativo del SO + icono en bandeja (`System Tray`), consumo mínimo de RAM/CPU para nunca interferir con `VirtualDJ`, `Rekordbox` o `Traktor` en vivo.
-- **UI Framework:** **Svelte 5 (`Runes`, Zero Virtual DOM) + TypeScript + Vite**
-  - **¿Por qué Svelte 5 en lugar de React?** Mientras `martpie/museeks` nos sirve de molde visual y de arquitectura Tauri+Rust+SQLite, **descartamos React** porque su Virtual DOM consume más memoria y ciclos de CPU en tablas masivas. **Svelte 5** compila directo a operaciones nativas del DOM con reactividad granular (*Runes*), permitiendo hacer scroll por `+14,200` canciones a `60 FPS` y mover el cursor del waveform de 1 pista con los **4 pines de Hot Cues clicables** (`🟢 Cue 1 Intro`, `🔵 Cue 2 Phrase`, `🔴 Cue 3 Drop`, `🟡 Cue 4 Mix Out`) con huella casi cero de RAM.
+### A. Stack de Frontend (`HERA Desktop` — Clon Directo de `martpie/museeks`)
+- **Desktop Shell:** **Tauri v2 (`src-tauri` en Rust)** — instalador nativo diminuto (`~5–8 MB`), WebView nativo del SO + icono en bandeja (`System Tray`), plugins nativos (`dialog`, `fs`, `notification`, `window-state`, `single-instance`) y bridge tipado automático Rust $\rightarrow$ TypeScript con **`ts-rs`**.
+- **UI Framework & Curated Components (Heredados al 100% de `martpie/museeks`):**
+  - **React 19 (`19.2.6`) + `babel-plugin-react-compiler` (`1.0.0`) + TypeScript (`strict`) + Vite (`vite-plus`)**: Aprovecha la auto-memoización en tiempo de compilación de React Compiler 1.0 y nos entrega listos los **+40 componentes UI/UX curados de Museeks** (`TrackList.tsx`, `TrackRow.tsx`, `Header.tsx`, `PlayingBar.tsx`, `PlayingBarInfo.tsx`, `TrackProgress.tsx`, `SideNav.tsx`, `DropzoneImport.tsx`, `Search.tsx`, `Queue.tsx` y `src/lib/bridge-*.ts`).
+  - **Virtualización, Estado, Drag-and-Drop y Estilos Zero-Runtime:**
+    - **`@tanstack/react-virtual`:** Renderiza solo las filas visibles en pantalla para mover `+14,200` tracks a `60 FPS`.
+    - **`@stylexjs/stylex` + `LightningCSS`:** CSS atómico compilado en build-time (`0 KB` de runtime CSS-in-JS) con soporte de temas oscuros.
+    - **`@tanstack/react-router` + `Zustand` + `@dnd-kit` + `@base-ui/react`:** Enrutado tipado (`library`, `playlists`, `artists`, `settings`), estado global reactivo y arrastrar-y-soltar nativo para armar Crates.
+  - **Adaptaciones Específicas para HERA sobre `martpie/museeks`:**
+    - En `PlayingBar.tsx` / `TrackProgress.tsx`: Waveform superior de 1 pista con los **4 pines de Hot Cues clicables** (`🟢 Cue 1 Intro`, `🔵 Cue 2 Phrase`, `🔴 Cue 3 Drop`, `🟡 Cue 4 Mix Out`).
+    - En `TrackList.tsx` / `TrackRow.tsx`: Columnas nativas de DJ (`BPM`, badge de color `Camelot Key`, `Energía`, `Calidad FFT / Hera Seal` y `4 Hot Cues`).
+    - En `SideNav.tsx` y rutas nuevas: Vistas para `🧬 Mi ADN DJ`, `🎛️ Constructor de Crates (VirtualDJ / Rekordbox / Traktor)`, `🌍 Puente Harmónico P2P` y panel lateral colapsable `🤖 Hera AI Copilot`.
 
 ### B. Stack de Backend Local (En la Laptop del DJ — `davidcastilloc/hera`)
-- **Motor Nativo Rust (`hera-rs/` — `hera-node-rs`):**
-  - `Symphonia` + `rustfft` (auditoría espectral Zero-Trust, detección de falsos FLACs, correlación de fase `<120 Hz` y detección acústica de los 4 Hot Cues).
+- **Motor Nativo Rust (`hera-rs/` — `hera-node-rs` + `src-tauri/`):**
+  - `Symphonia` + `rustfft` (auditoría espectral Zero-Trust, detección de falsos FLACs, correlación de fase `<120 Hz` y detección acústica de los 4 Hot Cues) + `lofty` / `sqlx` / `rayon` / `walkdir` (escaneo multihilo de carpetas de `martpie/museeks`).
   - Motor de sinergia de 4 capas + optimizador **`2-Opt TSP`** + búsqueda **`u64 SimHash POPCNT`**.
-  - Servidor local/IPC (`axum` + comandos Tauri) + protocolo **`MCP` (`stdio` + HTTP + `Code Mode`)** + nodo del Enjambre Post-P2P de 5 capas (`Merkle Proofs`, `endpoint_pubkey_id`, `Latency-Aware P2C Striping`, `Delta-CRDT`, `MoQ Pub/Sub`).
+  - Servidor local/IPC (`axum` + comandos Tauri `ts-rs`) + protocolo **`MCP` (`stdio` + HTTP + `Code Mode`)** + nodo del Enjambre Post-P2P de 5 capas (`Merkle Proofs`, `endpoint_pubkey_id`, `Latency-Aware P2C Striping`, `Delta-CRDT`, `MoQ Pub/Sub`).
 - **Orquestador de Dominio, `DJ Brain` y Exportadores en Python (`src/hera/`, Python `>=3.11` + `uv`):**
-  - **Base de Datos Local:** **SQLite (`hera.db` vía `aiosqlite`)** con el catálogo físico (`tracks`, `crates`), ADN y preferencias (`dj_preferences`) e historial de sesiones (`conversation_sessions`, `conversation_messages`).
+  - **Base de Datos Local:** **SQLite (`hera.db` vía `aiosqlite` / `sqlx`)** con el catálogo físico (`tracks`, `crates`), ADN y preferencias (`dj_preferences`) e historial de sesiones (`conversation_sessions`, `conversation_messages`).
   - **Inteligencia de Repertorio (`repertoire_intelligence.py`):** Clasifica Audio DJ, Video-DJ HD y Producciones Propias, zonas BPM y llaves Camelot dominantes.
   - **Exportadores Nativos (`export.py`):** `VirtualDJ` (`.vdjfolder` + `<Poi>`), `Rekordbox` (`rekordbox.xml`), `Traktor Pro` (`collection.nml` `<CUE_V2>`), `M3U8` y `Ableton Live`.
   - **Descarga Física a Disco (`slskd` + `rclone`):** Flujo estricto `quarantine/` ➔ auditoría FFT ➔ `mutagen` ➔ `library/` ➔ `sets/`.
@@ -133,11 +141,11 @@ Con el cambio de paradigma (**"Hera es el Asistente, Organizador de Repertorio y
 - **IA Gratuita por Defecto:** **Cloudflare Workers AI (`10,000 Neurons/día` gratis con `@cf/meta/llama-3.1-8b-instruct-fp8-fast` / `llama-3.2-3b-instruct` ≈ 1,500 turnos/día a `$0.00`)** + **Cloudflare AI Gateway** (caché global `0 Neurons`, rate-limiting y fallback dinámico a modelos `:free` de OpenRouter/Gemini).
 - **Super DB & Memoria Sincronizada:** **Cloudflare D1 (`5 GB` SQLite gratis ≈ 14M mensajes de `DJ Brain` + índice global de `hera_seal` y 4 Hot Cues)** + **Cloudflare Vectorize** (`5M` dimensiones gratis) + **Cloudflare R2 (`Zero-Egress`)**.
 
-### D. Los 5 Módulos Reales de `HERA Desktop` (`Svelte 5 + Tauri v2`):
+### D. Los 5 Módulos Reales de `HERA Desktop` (Sobre Base `martpie/museeks`):
 1. **Módulo 1 — 🧬 Onboarding & Mi ADN de DJ (`DJ Brain & Style Profile`):**
    - Radiografía visual automática de su estilo (zonas BPM, rueda Camelot dominante, artistas ancla, % Audio vs. Video-DJ vs. Producciones Propias) + configuración de su software principal (`VirtualDJ`, `Rekordbox`, `Traktor`, `Ableton`) y reglas de oro.
-2. **Módulo 2 — 🗂️ Biblioteca & Auditor de Repertorio (`TrackList Virtualizada en Svelte 5 + 1-Click Doctor`):**
-   - Tabla ultrarrápida conectada a `hera.db` con buscador instantáneo, filtro por BPM/Camelot, detector de duplicados/falsos FLAC (FFT) y reproductor superior simple con salto a los 4 Hot Cues.
+2. **Módulo 2 — 🗂️ Biblioteca & Auditor de Repertorio (`TrackList Virtualizada de Museeks + 1-Click Doctor`):**
+   - Tabla ultrarrápida `@tanstack/react-virtual` conectada a `hera.db` con buscador instantáneo, filtro por BPM/Camelot, detector de duplicados/falsos FLAC (FFT) y reproductor superior `PlayingBar` con salto a los 4 Hot Cues.
 3. **Módulo 3 — 🎛️ Creador de Crates y Sets Armónicos (`Deterministic + AI Crate Builder`):**
    - Funciona tanto con **controles visuales directos (offline)** como con el **Chat del Agente (online)** y botón **[Exportar directo a mi VirtualDJ / Rekordbox / Traktor / Carpeta USB]**.
 4. **Módulo 4 — 🌍 Comunidad Global P2P & Puentes Armónicos (`Discovery & Download to Disk`):**
