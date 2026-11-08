@@ -17,7 +17,6 @@ from hera.agent.backends import BACKENDS, BackendRegistry
 from hera.agent.brain import HeraBrain
 from hera.domain.community import CommunityStats
 from hera.domain.config import AgentConfig, HeraConfig
-from hera.ui.dj_player import render_dj_studio_tab
 
 # ─── Configuración de la página ──────────────────────────────────────────────
 st.set_page_config(
@@ -378,13 +377,17 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-tab_studio, tab_chat = st.tabs([
-    "🎛️ DJ Studio & Reproductor Dual-Deck (Biblioteca en Vivo)",
+tab_chat, tab_desktop = st.tabs([
     "🤖 Agente IA (Hera Chat & Soulseek P2P)",
+    "🖥️ HERA Desktop (Tauri v2 + 4 Hot Cues)",
 ])
 
-with tab_studio:
-    render_dj_studio_tab(get_hera_config())
+with tab_desktop:
+    st.info(
+        "El reproductor nativo con los **4 Hot Cues clicables (`1:Intro`, `2:Breakdown`, `3:Drop`, `4:Outro`)**, "
+        "tabla virtualizada (`BPM`, `Camelot Key`) y exportación 1-clic a **VirtualDJ / Rekordbox / Traktor** "
+        "vive en `hera-desktop/` (Tauri v2 + React 19 + StyleX + `hera-rs`, `~8 MB` nativo)."
+    )
 
 with tab_chat:
     # Renderizar historial de mensajes

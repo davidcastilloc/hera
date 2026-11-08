@@ -327,7 +327,7 @@ def sync_global_skills(hera_dir: Path) -> dict[str, Any]:
     del usuario (~/.gemini/config/skills, ~/.claude/skills, ~/.agents/skills).
     """
     source_roots = [
-        p for p in (hera_dir / ".agent" / "skills", hera_dir / "skills") if p.exists()
+        p for p in (hera_dir / ".agent" / "skills", hera_dir / ".claude" / "skills") if p.exists()
     ]
     if not source_roots:
         return {"synced": False, "reason": "No existe carpeta de skills en el repositorio."}
