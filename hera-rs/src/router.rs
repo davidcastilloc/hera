@@ -468,6 +468,10 @@ async fn swarm_shard_delivery_handler(
                         http::header::HeaderName::from_static("x-hera-merkle-proof"),
                         merkle_proof_json,
                     ),
+                    (
+                        http::header::HeaderName::from_static("x-hera-p2p-boost-cipher"),
+                        "zk-ctr-sha256-v1".to_string(),
+                    ),
                 ],
                 bytes,
             ))

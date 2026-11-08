@@ -3645,7 +3645,7 @@ impl P2PMeshState {
             ));
         }
 
-        let mut payload = synthesize_deterministic_64b_custody_slice(
+        let mut raw_payload = synthesize_deterministic_64b_custody_slice(
             &ticket.opaque_blob_key,
             &ticket.audio_sha256,
             ticket.aligned_offset_bytes,
@@ -3654,7 +3654,13 @@ impl P2PMeshState {
             "|HERA-4MB-IMMUTABLE-BLOCK|blob={}|sha256={}|offset={}",
             ticket.opaque_blob_key, ticket.audio_sha256, ticket.aligned_offset_bytes
         );
-        payload.extend_from_slice(footer.as_bytes());
+        raw_payload.extend_from_slice(footer.as_bytes());
+        let payload = transform_p2p_boost_shard_bytes(
+            &raw_payload,
+            &ticket.opaque_blob_key,
+            &ticket.audio_sha256,
+            ticket.aligned_offset_bytes,
+        );
 
         // 1 aligned block = 4 MB delivered -> 1.5x credit multiplier = 6.0 MB Turbo credit earned!
         let mb_delivered = (ticket.aligned_length_bytes as f32) / (1024.0 * 1024.0);
@@ -4721,6 +4727,33 @@ pub fn synthesize_deterministic_64b_custody_slice(
     let mut out = Vec::with_capacity(CUSTODY_PROOF_SLICE_BYTES);
     out.extend_from_slice(&block_a);
     out.extend_from_slice(&block_b);
+    out
+}
+
+/// Zero-Knowledge P2P Boost stream cipher (`zk-ctr-sha256-v1`).
+/// Seals or unseals `payload` in-place (involution: `seal(seal(x)) == x`) using a 32-byte
+/// counter-mode keystream derived from `(opaque_blob_key, audio_sha256, aligned_offset_bytes)`
+/// so R2 P2P Boost buckets never store or transmit plaintext audio headers or tags.
+pub fn transform_p2p_boost_shard_bytes(
+    payload: &[u8],
+    opaque_blob_key: &str,
+    audio_sha256: &str,
+    aligned_offset_bytes: u64,
+) -> Vec<u8> {
+    let mut out = Vec::with_capacity(payload.len());
+    for (chunk_idx, chunk) in payload.chunks(32).enumerate() {
+        let block_offset = aligned_offset_bytes.wrapping_add((chunk_idx as u64) * 32);
+        let seed = format!(
+            "HERA-P2P-BOOST-ZK-V1|{}|{}|{}",
+            opaque_blob_key.trim(),
+            audio_sha256.trim(),
+            block_offset
+        );
+        let keystream = compute_sha256_bytes(seed.as_bytes());
+        for (i, &b) in chunk.iter().enumerate() {
+            out.push(b ^ keystream[i]);
+        }
+    }
     out
 }
 

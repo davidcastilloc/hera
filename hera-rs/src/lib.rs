@@ -1177,6 +1177,26 @@ mod tests {
         assert_eq!(j_delivery["megabytes_delivered"], 4.0);
         assert_eq!(j_delivery["credits_earned_mb"], 6.0);
         assert_eq!(j_delivery["credit_multiplier"], 1.5);
+        assert_eq!(
+            resp_good_shard
+                .headers()
+                .get("x-hera-p2p-boost-cipher")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "zk-ctr-sha256-v1"
+        );
+        let wire_bytes = to_bytes(resp_good_shard.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        assert!(!String::from_utf8_lossy(&wire_bytes).contains("HERA-4MB-IMMUTABLE-BLOCK"));
+        let unsealed = crate::p2p_exchange::transform_p2p_boost_shard_bytes(
+            &wire_bytes,
+            &opaque_blob_key,
+            j_ticket["ticket"]["audio_sha256"].as_str().unwrap(),
+            j_ticket["ticket"]["aligned_offset_bytes"].as_u64().unwrap(),
+        );
+        assert!(String::from_utf8_lossy(&unsealed).contains("HERA-4MB-IMMUTABLE-BLOCK"));
 
         // 4d. Replaying the exact same `X-Hera-Swarm-Ticket` a second time must be rejected (403 FORBIDDEN) to prevent infinite credit farming!
         let req_replay_shard = Request::builder()
