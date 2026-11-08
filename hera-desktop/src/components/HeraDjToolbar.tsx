@@ -109,6 +109,7 @@ const styles = stylex.create({
     columnGap: '6px',
     marginLeft: 'auto',
     fontSize: '11px',
+    minWidth: 0,
   },
   actionBtn: {
     paddingBlock: '4px',

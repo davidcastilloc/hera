@@ -9,7 +9,7 @@ export const themes: Record<string, Theme> = {
   dark: darkTheme as Theme,
 };
 
-const DEFAULT_THEME = themes.light;
+const DEFAULT_THEME = themes.dark;
 
 /**
  * Given a theme ID, return the corresponding theme variables

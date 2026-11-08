@@ -126,7 +126,7 @@ const styles = stylex.create({
   viewLinksContainer: {
     display: 'flex',
     alignItems: 'stretch',
-    width: '30%',
+    flexShrink: 0,
   },
   viewLinks: {
     display: 'flex',
@@ -168,14 +168,16 @@ const styles = stylex.create({
     },
   },
   status: {
-    width: '40%',
     textAlign: 'center',
     fontSize: '12px',
     paddingTop: '7px',
     paddingBottom: '7px',
+    paddingInline: '12px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
   statusLibraryRefresh: {
     display: 'flex',

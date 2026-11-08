@@ -80,35 +80,44 @@ const styles = stylex.create({
   },
   cellTrackPlaying: {
     width: '30px',
+    flexShrink: 0,
   },
   cellTrack: {
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: '0%',
+    minWidth: 0,
   },
   cellBpm: {
     width: '64px',
     minWidth: '64px',
+    flexShrink: 0,
   },
   cellCamelot: {
     width: '56px',
     minWidth: '56px',
+    flexShrink: 0,
   },
   cellCues: {
     width: '86px',
     minWidth: '86px',
+    flexShrink: 0,
   },
   cellDuration: {
-    width: '7%',
-    minWidth: '70px',
+    width: '68px',
+    minWidth: '68px',
+    flexShrink: 0,
   },
   cellArtist: {
-    width: '18%',
+    width: '16%',
+    flexShrink: 0,
   },
   cellAlbum: {
-    width: '16%',
+    width: '14%',
+    flexShrink: 0,
   },
   cellGenre: {
-    width: '16%',
+    width: '12%',
+    flexShrink: 0,
   },
 });

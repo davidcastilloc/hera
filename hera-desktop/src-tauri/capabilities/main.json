@@ -52,6 +52,11 @@
     "database:allow-delete-playlist",
     "database:allow-reset",
     "default-view:allow-set",
+    "hera-dj:allow-compute-style-dna",
+    "hera-dj:allow-export-crate",
+    "hera-dj:allow-chat-copilot",
+    "hera-dj:allow-list-ai-backends",
+    "hera-dj:allow-resolve-harmonic-bridge",
     "sleepblocker:allow-enable",
     "sleepblocker:allow-disable"
   ],

@@ -26,6 +26,18 @@ const CAMELOT_WHEEL_KEYS = [
   '5A',
   '6A',
   '7A',
+  '8B',
+  '9B',
+  '10B',
+  '11B',
+  '12B',
+  '1B',
+  '2B',
+  '3B',
+  '4B',
+  '5B',
+  '6B',
+  '7B',
 ];
 
 const DJ_SOFTWARES = ['VirtualDJ', 'Rekordbox', 'Traktor', 'Serato', 'Ableton'];
@@ -284,9 +296,9 @@ const styles = stylex.create({
   },
   camelotGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    rowGap: '8px',
-    columnGap: '8px',
+    gridTemplateColumns: 'repeat(6, 1fr)',
+    rowGap: '6px',
+    columnGap: '6px',
   },
   camelotCell: {
     padding: '8px',

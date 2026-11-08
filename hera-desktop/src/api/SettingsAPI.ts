@@ -38,9 +38,16 @@ async function init(then: () => void): Promise<void> {
 
   // Blocking (the window should not be shown until it's done)
   const [theme, color] = await Promise.all([
-    getCurrentWindow()
-      .theme()
-      .then((maybeTheme) => maybeTheme ?? 'light'),
+    ConfigBridge.get('theme').then(async (cfgTheme) => {
+      if (cfgTheme === 'dark' || cfgTheme === 'light') {
+        return cfgTheme;
+      }
+      try {
+        return (await getCurrentWindow().theme()) ?? 'dark';
+      } catch {
+        return 'dark';
+      }
+    }),
     ConfigBridge.get('ui_accent_color').then((c) => c ?? DEFAULT_MAIN_COLOR),
   ]);
 

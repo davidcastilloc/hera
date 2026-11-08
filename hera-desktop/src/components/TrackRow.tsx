@@ -112,6 +112,29 @@ export default function TrackRow(props: Props) {
           </span>
         )}
       </div>
+      {props.simplified !== true && (
+        <>
+          <div {...stylex.props(cellStyles.cell, cellStyles.bpm)}>
+            {track.bpm != null ? `${track.bpm.toFixed(1)}` : '—'}
+          </div>
+          <div {...stylex.props(cellStyles.cell, cellStyles.camelot)}>
+            <span
+              {...stylex.props(
+                cellStyles.camelotBadge,
+                selected && cellStyles.camelotBadgeSelected,
+              )}
+            >
+              {track.camelot ?? '8A'}
+            </span>
+          </div>
+          <div
+            {...stylex.props(cellStyles.cell, cellStyles.hotCues)}
+            title="4 Hot Cues: 1:Intro · 2:Breakdown · 3:Drop · 4:Outro"
+          >
+            🟢 🔵 🔴 🟡
+          </div>
+        </>
+      )}
       <div
         {...stylex.props(
           cellStyles.cell,
@@ -131,20 +154,6 @@ export default function TrackRow(props: Props) {
           </div>
           <div {...stylex.props(cellStyles.cell, cellStyles.genre)}>
             {track.genres.join(', ')}
-          </div>
-          <div {...stylex.props(cellStyles.cell, cellStyles.bpm)}>
-            {track.bpm != null ? `${track.bpm.toFixed(1)}` : '—'}
-          </div>
-          <div {...stylex.props(cellStyles.cell, cellStyles.camelot)}>
-            <span {...stylex.props(cellStyles.camelotBadge)}>
-              {track.camelot ?? '8A'}
-            </span>
-          </div>
-          <div
-            {...stylex.props(cellStyles.cell, cellStyles.hotCues)}
-            title="4 Hot Cues: 1:Intro · 2:Breakdown · 3:Drop · 4:Outro"
-          >
-            🟢 🔵 🔴 🟡
           </div>
         </>
       )}
@@ -223,7 +232,7 @@ const cellStyles = stylex.create({
   title: {
     flexGrow: 1,
     flexShrink: 1,
-    flexBasis: 'auto',
+    flexBasis: '0%',
     minWidth: 0,
     display: 'flex',
     alignItems: 'baseline',
@@ -246,9 +255,10 @@ const cellStyles = stylex.create({
     whiteSpace: 'nowrap',
   },
   duration: {
-    width: '6%',
-    minWidth: '64px',
+    width: '68px',
+    minWidth: '68px',
     flexShrink: 0,
+    fontVariantNumeric: 'tabular-nums',
   },
   artist: {
     width: '16%',
@@ -263,14 +273,14 @@ const cellStyles = stylex.create({
     flexShrink: 0,
   },
   bpm: {
-    width: '6%',
-    minWidth: '58px',
+    width: '64px',
+    minWidth: '64px',
     flexShrink: 0,
     fontVariantNumeric: 'tabular-nums',
   },
   camelot: {
-    width: '6%',
-    minWidth: '54px',
+    width: '56px',
+    minWidth: '56px',
     flexShrink: 0,
   },
   camelotBadge: {
@@ -285,9 +295,13 @@ const cellStyles = stylex.create({
     backgroundColor: 'rgba(139, 92, 246, 0.16)',
     color: 'var(--main-color)',
   },
+  camelotBadgeSelected: {
+    backgroundColor: 'rgba(0, 0, 0, 0.28)',
+    color: 'var(--active-item-color)',
+  },
   hotCues: {
-    width: '8%',
-    minWidth: '90px',
+    width: '86px',
+    minWidth: '86px',
     flexShrink: 0,
     fontSize: '10px',
     letterSpacing: '1px',

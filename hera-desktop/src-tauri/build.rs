@@ -47,6 +47,16 @@ fn main() {
                 tauri_build::InlinedPlugin::new().commands(&["set"]),
             )
             .plugin(
+                "hera-dj",
+                tauri_build::InlinedPlugin::new().commands(&[
+                    "compute_style_dna",
+                    "export_crate",
+                    "chat_copilot",
+                    "list_ai_backends",
+                    "resolve_harmonic_bridge",
+                ]),
+            )
+            .plugin(
                 "sleepblocker",
                 tauri_build::InlinedPlugin::new().commands(&["enable", "disable"]),
             ),
