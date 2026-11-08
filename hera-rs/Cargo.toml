@@ -40,4 +40,6 @@ worker = { version = "0.4", features = ["http", "axum"], optional = true }
 opt-level = 3
 lto = true
 codegen-units = 1
-strip = true
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false
