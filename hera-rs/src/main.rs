@@ -27,6 +27,8 @@ async fn main() {
         .or_else(|| env::var("HERA_MUSIC_DIR").ok());
     let public_url = extract_cli_flag(&args, "--public-url")
         .or_else(|| env::var("HERA_PUBLIC_URL").ok());
+    let federate_url = extract_cli_flag(&args, "--federate-url")
+        .or_else(|| env::var("HERA_FEDERATE_URL").ok());
 
     let state = P2PMeshState::new(&node_id);
 
@@ -54,6 +56,25 @@ async fn main() {
         }
     }
 
+    // If `--federate-url` (`HERA_FEDERATE_URL`) is provided, automatically push this node's
+    // sealed catalog (`hera_seal`) to `hera-cloud` or another peer node on startup!
+    if let Some(ref remote_hub) = federate_url {
+        match state.push_federation_over_http(remote_hub, &dj_handle, public_url.clone(), 800) {
+            Ok(fed_res) => {
+                eprintln!(
+                    "🌐 Auto-Federated with `{}` (`{}`): {} tracks accepted, {} total swarm tracks synced.",
+                    remote_hub,
+                    fed_res.responder_node_id,
+                    fed_res.tracks_accepted,
+                    fed_res.federated_swarm_catalog.len()
+                );
+            }
+            Err(e) => {
+                eprintln!("⚠️ Auto-Federation to `{}` failed: {}", remote_hub, e);
+            }
+        }
+    }
+
     if is_mcp_stdio {
         // Pure JSON-RPC 2.0 over stdin/stdout for AI Agents (Claude, Antigravity, Cursor, Codex)
         run_mcp_stdio_loop(state);
@@ -76,13 +97,13 @@ async fn main() {
     println!("   ├─ POST /mcp                            (Remote MCP JSON-RPC 2.0 Server)");
     println!("   ├─ POST /mcp/code-mode                  (Cloudflare Code Mode TypeScript Runner)");
     println!("   ├─ POST /api/v1/node/scan-local-dir     (Local Laptop/VPS Direct Disk Storage & P2P Seeder)");
-    println!("   ├─ POST /api/v1/dj/connect-drive        (Zero-OAuth Google Drive / Dropbox / R2 Onboarding)");
-    println!("   ├─ POST /api/v1/dj/upgrade-tier         (Cloudflare R2 Free 100MB -> Pro 50GB Tier)");
+    println!("   ├─ POST /api/v1/dj/connect-drive        (Zero-OAuth Google Drive / Dropbox / OneDrive Onboarding)");
+    println!("   ├─ POST /api/v1/p2p/federate-sync       (Federated Node Handshake & Sealed Catalog Sync)");
     println!("   ├─ POST /api/v1/audio/analyze-file      (Pure-Rust Symphonia + rustfft Forensics & 4 Hot Cues)");
     println!("   ├─ POST /api/v1/crates/build            (4-Layer Synergy + Global 2-Opt TSP Crate Optimizer)");
     println!("   ├─ GET  /api/v1/p2p/search              (Zero-Trust Verified P2P Mesh Search)");
     println!("   └─ GET  /api/v1/p2p/download/:track_id  (Direct Local P2P Binary Audio Stream)");
-    println!("   💡 Tip: Run `hera-node --dj DJFoo --music-dir ./masters` to seed local files on P2P.");
+    println!("   💡 Tip: Run `hera-node --dj DJFoo --music-dir ./masters --federate-url http://hub:8080` to seed & auto-federate.");
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await

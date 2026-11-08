@@ -1309,6 +1309,108 @@ impl P2PMeshState {
         }
     }
 
+    /// Builds a signed `FederatedSyncRequest` payload containing all verified shared tracks on this node
+    /// so the node can auto-federate with `hera-cloud` or another peer node (`POST /api/v1/p2p/federate-sync`).
+    pub fn build_federated_sync_payload(
+        &self,
+        dj_handle: &str,
+        public_url: Option<String>,
+        bandwidth_mbps: u32,
+    ) -> FederatedSyncRequest {
+        let shared_tracks = self.search(&P2PSearchQuery {
+            q: None,
+            camelot: None,
+            bpm_min: None,
+            bpm_max: None,
+            subgenre: None,
+            owner_dj: None,
+            verified_only: Some(true),
+        });
+        let runtime_target = if cfg!(target_arch = "wasm32") {
+            "cloudflare-workers-wasm32".to_string()
+        } else {
+            "native-vps-tokio".to_string()
+        };
+        let peer = P2PPeerNode {
+            node_id: self.node_id.clone(),
+            dj_handle: dj_handle.to_string(),
+            endpoint_url: public_url.unwrap_or_else(|| "http://127.0.0.1:8080".to_string()),
+            runtime_target,
+            storage_mode: "federated_p2p_node".to_string(),
+            verified_tracks_count: shared_tracks.len(),
+            bandwidth_mbps,
+        };
+        FederatedSyncRequest {
+            peer,
+            shared_tracks,
+        }
+    }
+
+    /// Auto-Federates this local/VPS node with a remote `hera` or `hera-cloud` HTTP endpoint (`--federate-url`)
+    /// by sending `POST /api/v1/p2p/federate-sync` and merging the returned federated swarm catalog back into local RAM.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn push_federation_over_http(
+        &self,
+        remote_url: &str,
+        dj_handle: &str,
+        public_url: Option<String>,
+        bandwidth_mbps: u32,
+    ) -> Result<FederatedSyncResponse, String> {
+        use std::io::{Read, Write};
+        use std::net::TcpStream;
+
+        let payload = self.build_federated_sync_payload(dj_handle, public_url, bandwidth_mbps);
+        let body_bytes =
+            serde_json::to_vec(&payload).map_err(|e| format!("JSON serialize error: {e}"))?;
+
+        let clean = remote_url
+            .trim()
+            .trim_start_matches("http://")
+            .trim_start_matches("https://");
+        let host_port = clean.split('/').next().unwrap_or("127.0.0.1:8080");
+        let addr = if host_port.contains(':') {
+            host_port.to_string()
+        } else {
+            format!("{host_port}:80")
+        };
+
+        let mut stream = TcpStream::connect(&addr)
+            .map_err(|e| format!("Failed to connect to federation hub `{addr}`: {e}"))?;
+        let req_str = format!(
+            "POST /api/v1/p2p/federate-sync HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            host_port,
+            body_bytes.len()
+        );
+        stream
+            .write_all(req_str.as_bytes())
+            .and_then(|_| stream.write_all(&body_bytes))
+            .map_err(|e| format!("Failed to send federation payload: {e}"))?;
+
+        let mut resp_buf = Vec::new();
+        stream
+            .read_to_end(&mut resp_buf)
+            .map_err(|e| format!("Failed to read federation response: {e}"))?;
+        let resp_str = String::from_utf8_lossy(&resp_buf);
+        let json_body = resp_str
+            .split("\r\n\r\n")
+            .nth(1)
+            .unwrap_or(resp_str.as_ref())
+            .trim();
+
+        let sync_resp: FederatedSyncResponse = serde_json::from_str(json_body)
+            .map_err(|e| format!("Invalid federation JSON response: {e}"))?;
+
+        // Merge verified tracks returned by the remote federation hub into our local catalog!
+        if let Ok(mut c_guard) = self.catalog.write() {
+            for trk in &sync_resp.federated_swarm_catalog {
+                if !c_guard.iter().any(|existing| existing.track_id == trk.track_id) {
+                    c_guard.push(trk.clone());
+                }
+            }
+        }
+        Ok(sync_resp)
+    }
+
     /// Builds the unified Internal P2P Data Broker Swarm Index, grouping all verified replicas by CAS fingerprint
     /// and sorting routes so `$0.00` peer offload (`local_disk`, `gdrive`, `dropbox`) is prioritized alongside R2 CAS cache.
     pub fn build_broker_swarm_index(&self) -> Vec<BrokerIntelRecord> {

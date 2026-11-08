@@ -115,6 +115,7 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/p2p/peers", get(p2p_list_peers_handler))
         .route("/api/v1/p2p/peers/register", post(p2p_register_peer_handler))
         .route("/api/v1/p2p/federate-sync", post(p2p_federate_sync_handler))
+        .route("/api/v1/p2p/export-federation", get(p2p_export_federation_handler))
         .route("/api/v1/p2p/stream/:track_id", get(p2p_stream_handler))
         .route("/api/v1/p2p/download/:track_id", get(p2p_download_local_file_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
@@ -203,6 +204,23 @@ async fn p2p_federate_sync_handler(
 ) -> impl IntoResponse {
     let resp = state.federate_sync(req);
     (StatusCode::OK, Json(resp))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportFederationQuery {
+    pub dj_handle: Option<String>,
+    pub public_url: Option<String>,
+    pub bandwidth_mbps: Option<u32>,
+}
+
+async fn p2p_export_federation_handler(
+    State(state): State<P2PMeshState>,
+    Query(q): Query<ExportFederationQuery>,
+) -> impl IntoResponse {
+    let dj = q.dj_handle.unwrap_or_else(|| "DaviDJ".to_string());
+    let bw = q.bandwidth_mbps.unwrap_or(800);
+    let payload = state.build_federated_sync_payload(&dj, q.public_url, bw);
+    Json(payload)
 }
 
 async fn p2p_download_local_file_handler(

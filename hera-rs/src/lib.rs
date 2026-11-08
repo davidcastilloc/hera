@@ -918,5 +918,22 @@ mod tests {
         assert_eq!(j_fed["tracks_accepted"], 1);
         assert_eq!(j_fed["tracks_rejected_invalid_seal"], 1);
         assert!(j_fed["federated_swarm_catalog"].as_array().unwrap().len() >= 4);
+
+        // 7. Test `GET /api/v1/p2p/export-federation` payload builder
+        let req_exp = Request::builder()
+            .uri("/api/v1/p2p/export-federation?dj_handle=DJFoo&public_url=https://djfoo-hera.workers.dev")
+            .body(Body::empty())
+            .unwrap();
+        let resp_exp = app.call(req_exp).await.unwrap();
+        assert_eq!(resp_exp.status(), StatusCode::OK);
+        let j_exp: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_exp.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_exp["peer"]["dj_handle"], "DJFoo");
+        assert_eq!(
+            j_exp["peer"]["endpoint_url"],
+            "https://djfoo-hera.workers.dev"
+        );
+        assert!(j_exp["shared_tracks"].as_array().unwrap().len() >= 4);
     }
 }
