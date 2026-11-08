@@ -1,16 +1,20 @@
 """Bandeja de sistema (System Tray Icon) para Hera — Control visual 100% human-friendly."""
 
+import os
 import sys
 import webbrowser
 from pathlib import Path
 import threading
 import subprocess
 
+if sys.platform.startswith("linux") and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+    os.environ.setdefault("PYSTRAY_BACKEND", "dummy")
+
 try:
     from PIL import Image, ImageDraw
-    import pystray
+    import pystray  # type: ignore[import-not-found,import-untyped]
     HAS_TRAY = True
-except ImportError:
+except Exception:
     HAS_TRAY = False
 
 from hera.domain.config import HeraConfig

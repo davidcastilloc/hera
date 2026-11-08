@@ -110,7 +110,7 @@ class HeraBrain:
 
     def __init__(self, agent_config: AgentConfig | None = None):
         self.config = agent_config or AgentConfig()
-        self.agent = None
+        self.agent: Any = None
         self._initialized = False
         self._display = ""
         self.cost_tracker: CostTracker | None = None
@@ -146,7 +146,7 @@ class HeraBrain:
                 except Exception:
                     pass
 
-            from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig
+            from google.antigravity import Agent, LocalAgentConfig, CapabilitiesConfig  # type: ignore[import-untyped]
 
             backend_type = resolved["type"]
             caps = CapabilitiesConfig(enabled_tools=[])
@@ -172,7 +172,7 @@ class HeraBrain:
                 )
 
             elif backend_type == "openai_compatible":
-                from google.antigravity import LocalOpenAIAgentConfig
+                from google.antigravity import LocalOpenAIAgentConfig  # type: ignore[import-untyped]
                 env_dict = {}
                 if resolved.get("api_key"):
                     env_dict["OPENAI_API_KEY"] = resolved["api_key"]

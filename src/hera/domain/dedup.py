@@ -1,5 +1,6 @@
 """Motor de deduplicación multi-nivel y auditoría difusa pre-descarga (catalog_index.json >= 85%)."""
 
+from collections.abc import Sequence
 from difflib import SequenceMatcher
 from pathlib import Path
 import json
@@ -147,8 +148,8 @@ class DeduplicationEngine:
 
     @staticmethod
     def audit_queries_against_folders(
-        queries: list[str],
-        local_folders: list[str | Path],
+        queries: Sequence[str],
+        local_folders: Sequence[str | Path],
         fuzzy_threshold: float = 0.85,
         catalog_index_path: Path | str | None = None,
     ) -> dict:

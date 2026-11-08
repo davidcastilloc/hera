@@ -154,7 +154,7 @@ class Database:
         if self._conn is None:
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             conn_obj = aiosqlite.connect(str(self.db_path))
-            conn_obj.daemon = True
+            setattr(conn_obj, "daemon", True)
             if hasattr(conn_obj, "_thread") and conn_obj._thread is not None:
                 conn_obj._thread.daemon = True
             self._conn = await conn_obj

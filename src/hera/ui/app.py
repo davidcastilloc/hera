@@ -408,7 +408,7 @@ with tab_chat:
         # 2. Generar respuesta con HeraBrain
         with st.chat_message("assistant", avatar="🎧"):
             response_placeholder = st.empty()
-            full_response_chunks = []
+            full_response_chunks: list[str] = []
 
             def on_stream_token(token: str):
                 full_response_chunks.append(token)

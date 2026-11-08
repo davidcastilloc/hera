@@ -1,5 +1,6 @@
 """Proveedor local para escanear e importar carpetas del sistema de archivos (Audio y Video-DJ HD)."""
 
+from collections.abc import Sequence
 from pathlib import Path
 import os
 import re
@@ -113,7 +114,7 @@ def parse_dj_filename(file_name: str) -> tuple[str, str, str | None, float | Non
 class LocalProvider:
     name = "local"
 
-    def __init__(self, folders: list[Path | str] | None = None, supported_formats: list[str] | None = None):
+    def __init__(self, folders: Sequence[Path | str] | None = None, supported_formats: Sequence[str] | None = None):
         self.folders = [Path(f) for f in (folders or [])]
         self.supported_formats = {
             f.lower().lstrip(".") for f in (supported_formats or DEFAULT_LOCAL_FORMATS)

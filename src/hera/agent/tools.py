@@ -209,8 +209,8 @@ async def create_or_update_dj_set(set_name: str, tracks: list[str]) -> str:
                 idx += 1
 
     guide_path = set_folder / "_00_SET_GUIDE.txt"
-    with open(guide_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(cue_sheet) + "\n")
+    with open(guide_path, "w", encoding="utf-8") as guide_file:
+        guide_file.write("\n".join(cue_sheet) + "\n")
 
     return f"Created set '{set_name}' with {len(added)} real tracks in {set_folder}:\n" + "\n".join([f"  * {t}" for t in added])
 
@@ -348,12 +348,15 @@ async def audit_repertoire_intelligence(
         check_queries: Optional list of 'Artist - Title' queries to validate against the local repertoire (Phase 1 Anti-Duplicates).
     """
     import json
+    from hera.domain.database import Database
     from hera.mcp.handlers.audit import handle_audit_repertoire
 
     cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    db = Database(cfg.db_path)
     report = await handle_audit_repertoire(
-        sync_db=sync_db,
         check_queries=check_queries,
+        sync_db=sync_db,
+        db=db,
         config=cfg,
     )
     return json.dumps(report, indent=2, ensure_ascii=False)
@@ -382,9 +385,11 @@ async def build_strategic_dj_crate(
         export_ableton: Export Ableton Live curated files ([BPM]_[Camelot]_[Artist] - [Title].ext) and JSON index.
     """
     import json
+    from hera.domain.database import Database
     from hera.mcp.handlers.crate import handle_build_dj_crate
 
     cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    db = Database(cfg.db_path)
     exports = ["m3u8", "rekordbox_xml", "cue_sheet"]
     if export_ableton:
         exports.append("ableton")
@@ -401,6 +406,7 @@ async def build_strategic_dj_crate(
         duration_minutes=duration_minutes,
         constraints=constraints,
         export=exports,
+        db=db,
         config=cfg,
     )
     return json.dumps(res, indent=2, ensure_ascii=False)
@@ -420,14 +426,17 @@ async def analyze_tracks_dsp_batch(
         genre_hint: Optional genre context (e.g. 'reggaeton', 'afro house', 'salsa') for BPM octave disambiguation.
     """
     import json
+    from hera.domain.database import Database
     from hera.mcp.handlers.analyze import handle_analyze_batch
 
     cfg = HeraConfig.load("config/hera.toml").resolve_paths(Path("."))
+    db = Database(cfg.db_path)
+    profile = f"dj-standard {genre_hint}".strip() if genre_hint else "dj-standard"
     res = await handle_analyze_batch(
-        track_ids=track_paths_or_ids,
-        genre_hint=genre_hint or None,
+        paths_or_ids=track_paths_or_ids,
+        profile=profile,
         max_workers=4,
-        config=cfg,
+        db=db,
     )
     return json.dumps(res, indent=2, ensure_ascii=False)
 

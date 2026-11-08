@@ -1,5 +1,6 @@
 """Extractor de features musicales: BPM, tonalidad, Camelot, energía, LUFS Integrados y True Peak (dBTP)."""
 
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import re
@@ -81,7 +82,7 @@ class AudioFeatureAnalyzer:
 
     async def analyze_batch(
         self,
-        file_paths: list[Path | str],
+        file_paths: Sequence[Path | str],
         profile: str = "dj-standard",
         max_workers: int = 6,
     ) -> list[tuple[Path, FeatureAnalysisResult]]:

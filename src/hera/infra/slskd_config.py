@@ -2,7 +2,7 @@
 
 from pathlib import Path
 import uuid
-import yaml
+import yaml  # type: ignore[import-untyped]
 from hera.domain.config import HeraConfig
 
 

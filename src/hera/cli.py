@@ -224,7 +224,8 @@ def doctor(config: str):
 
     try:
         import librosa
-        click.echo(f"[OK] Motor acustico librosa: instalado ({librosa.__version__})")
+        librosa_ver = getattr(librosa, "__version__", "instalado")
+        click.echo(f"[OK] Motor acustico librosa: instalado ({librosa_ver})")
     except ImportError:
         click.echo("[WARN] Motor acustico librosa: no instalado (opcional)")
 

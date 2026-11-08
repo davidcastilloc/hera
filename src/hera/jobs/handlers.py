@@ -20,7 +20,7 @@ async def handle_download_job(job: Job, db: Database, config: HeraConfig) -> dic
     track_repo = TrackRepository(conn)
     audit_repo = AuditRepository(conn)
 
-    cand_id = job.input_json.get("candidate_id")
+    cand_id = str(job.input_json.get("candidate_id") or "")
     candidate = await cand_repo.get_by_id(cand_id)
     if not candidate:
         raise ValueError(f"Candidato {cand_id} no encontrado en base de datos.")
@@ -51,7 +51,7 @@ async def handle_download_job(job: Job, db: Database, config: HeraConfig) -> dic
         canonical_artist=candidate.artist,
         version=candidate.version,
         duration_ms=candidate.duration_ms,
-        format=candidate.format,
+        codec=candidate.format,
         bitrate_kbps=candidate.bitrate_kbps,
         file_size_bytes=target_path.stat().st_size if target_path.exists() else candidate.file_size_bytes,
         quarantine_path=str(target_path.resolve()),
@@ -105,7 +105,7 @@ async def handle_analyze_job(job: Job, db: Database, config: HeraConfig) -> dict
     conn = await db.connect()
     track_repo = TrackRepository(conn)
 
-    track_id = job.input_json.get("track_id")
+    track_id = str(job.input_json.get("track_id") or "")
     track = await track_repo.get_by_id(track_id)
     if not track:
         raise ValueError(f"Track {track_id} no encontrado")

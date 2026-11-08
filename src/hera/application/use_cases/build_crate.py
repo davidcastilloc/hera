@@ -76,7 +76,8 @@ class BuildHarmonicCrateUseCase:
             )
 
         # 3. Actividad vocal en Intro/Outro desde estructura acústica
-        struct_dict = telem.get("structure") if isinstance(telem.get("structure"), dict) else {}
+        raw_struct = telem.get("structure")
+        struct_dict: dict = raw_struct if isinstance(raw_struct, dict) else {}
         vocal_in = bool(struct_dict.get("vocal_intro_active", False))
         vocal_out = bool(struct_dict.get("vocal_outro_active", False))
 
@@ -169,7 +170,7 @@ class BuildHarmonicCrateUseCase:
 
         step_idx = 0
         while remaining:
-            best_track = None
+            best_track: Track = remaining[0]
             best_score = -1e9
 
             for cand in remaining:

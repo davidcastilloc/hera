@@ -115,15 +115,15 @@ class RepertoireAuditor:
             "club_afro_guaracha_122_132": {"audio": 0, "video": 0, "own_productions": 0},
             "hora_loca_merengue_133_plus": {"audio": 0, "video": 0, "own_productions": 0},
         }
-        camelot_audio = Counter()
-        camelot_video = Counter()
-        camelot_own = Counter()
+        camelot_audio: Counter[str] = Counter()
+        camelot_video: Counter[str] = Counter()
+        camelot_own: Counter[str] = Counter()
         own_bpms: list[float] = []
 
         genre_counts: dict[str, dict[str, int]] = defaultdict(lambda: {"audio": 0, "video": 0, "total": 0})
         low_bitrate_suspects = 0
         short_clip_suspects = 0
-        mtime_years = Counter()
+        mtime_years: Counter[int] = Counter()
 
         for it in items:
             cat = it["category"]

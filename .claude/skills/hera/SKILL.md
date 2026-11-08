@@ -53,6 +53,11 @@ Convertir intención musical en búsquedas federadas, candidatos comparables, an
 - **Internal P2P Data Broker & SimHash 64-bit POPCNT en RAM (`/api/v1/broker/*`):**
   - Búsqueda instantánea de similitud acústica en RAM mediante distancia de Hamming (`(simhash_a ^ simhash_b).count_ones()`) sobre embeddings de 64 dimensiones (`POST /api/v1/broker/similar`).
   - Resolución de puentes armónicos de emergencia (`POST /api/v1/broker/resolve-bridge`), telemetría de enjambre y tiering automático Hot/Cold en Cloudflare R2 (`POST /api/v1/broker/optimize-tiering`).
+- **Enjambre R2 Federado & Nodos `Edge Guardian` (`/api/v1/swarm/*` y `hera-rs/src/p2p_exchange.rs`):**
+  - *Lema:* «Mientras más nodos de Hera, más fuerte es el sistema de enjambres.»
+  - **Constrained Water-Filling (`get_swarm_strength` / `hera.getSwarmStrength`):** Reparte fragmentos inmutables de `4 MB` (`shard-blobs/{hmac}.hbin`) entre Workers comunitarios saludables respetando estrictamente los techos seguros de `9,000 MB` R2 (`CF_WORKER_SAFE_R2_CAP_MB`) y `85,000 req/día` (`CF_WORKER_SAFE_REQ_CAP`) para costo `$0.00` en Cloudflare Free Tier.
+  - **Balanceo `Power-of-Two-Choices (P2C)` y Tickets de `60s` (`swarm_route_ticket` / `hera.swarmRouteTicket`):** Enruta descargas al nodo saludable con menor carga y emite un ticket `X-Hera-Swarm-Ticket` firmado con HMAC-SHA256 de un solo uso (`TTL <= 60s`), acreditando `1.5 MB` de Crédito Turbo por cada `1.0 MB` servido (`SWARM_TURBO_CREDIT_MULTIPLIER = 1.5`).
+  - **Auditoría `Proof-of-Custody` de 64 Bytes y Cuarentena Anti-Poisoning (`swarm_custody_audit` / `hera.swarmCustodyAudit`):** Verifica rangos aleatorios de 64 bytes (`Range: bytes=offset..offset+63`); revoca inmediatamente `Edge Guardian` ante `404` y aísla ataques *Bait-and-Switch* en `GET /api/v1/swarm/quarantine` usando doble sello (`hera_seal` + `audio_sha256`).
 - **Auditoría e Inteligencia de Repertorio (Audio + Video-DJ HD + Producciones Propias):**
   `ensure_hera_updated()` → `audit_repertoire(sync_db=True, check_queries=[...])` → `analyze_batch(paths_or_ids=[...])` → `build_dj_crate(..., export=["rekordbox_xml", "ableton", "cue_sheet", "m3u8"])`
 - **Adquisición Externa Autorizada:**

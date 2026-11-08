@@ -1,8 +1,9 @@
 use crate::code_mode::{execute_code_mode, get_typescript_sdk_definitions, CodeModeRequest};
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes};
 use crate::p2p::{
-    compute_hera_seal, get_cloud_referral_catalog, ConnectDjDriveRequest, P2PMeshState,
-    P2PSearchQuery, P2PVerifiedTrack,
+    compute_hera_seal, get_cloud_referral_catalog, ConnectDjDriveRequest, CustodyAuditSubmission,
+    CustodyChallengeRequest, P2PMeshState, P2PSearchQuery, P2PVerifiedTrack,
+    SwarmHeartbeatRequest, SwarmRouteRequest,
 };
 use crate::router::{current_runtime_target, AnnounceTrackRequest};
 use crate::structure::analyze_structure_and_style;
@@ -218,6 +219,59 @@ pub fn list_mcp_tools() -> Value {
                         "tracks": { "type": "array", "items": { "type": "object" }, "description": "Optional list of tracks in the DJ's folder" }
                     },
                     "required": ["dj_handle"]
+                }
+            },
+            {
+                "name": "get_swarm_strength",
+                "description": "Compute Federated R2 Edge Swarm strength, Constrained Water-Filling shard allocations (9,000 MB R2 & 85,000 req/day safety caps), and elastic thermal replication K across all healthy Edge Guardian nodes.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {}
+                }
+            },
+            {
+                "name": "swarm_heartbeat",
+                "description": "Register or update an Edge Guardian node heartbeat, credit 1:1.5 Turbo Credits for megabytes served, and return Constrained Water-Filling allocations + outbound pull tickets.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "node_id": { "type": "string" },
+                        "owner_dj": { "type": "string" },
+                        "endpoint_url": { "type": "string" },
+                        "r2_used_mb": { "type": "number" },
+                        "daily_worker_requests_used": { "type": "integer" },
+                        "megabytes_served_delta": { "type": "number" }
+                    },
+                    "required": ["node_id", "owner_dj", "endpoint_url"]
+                }
+            },
+            {
+                "name": "swarm_route_ticket",
+                "description": "Route a track/shard download via Power-of-Two-Choices (P2C) to the healthiest Edge Guardian node with lowest request load, returning a single-use 60-second HMAC-signed X-Hera-Swarm-Ticket.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "requester_dj": { "type": "string" },
+                        "track_id_or_cas": { "type": "string" },
+                        "block_index": { "type": "integer" }
+                    },
+                    "required": ["requester_dj", "track_id_or_cas"]
+                }
+            },
+            {
+                "name": "swarm_custody_audit",
+                "description": "Issue or verify a 64-byte (Range: bytes=offset..offset+63) Proof-of-Custody challenge against an Edge Guardian node's R2 bucket.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "node_id": { "type": "string" },
+                        "cas_fingerprint_or_blob": { "type": "string" },
+                        "opaque_blob_key": { "type": "string" },
+                        "byte_offset": { "type": "integer" },
+                        "http_status": { "type": "integer" },
+                        "returned_slice_sha256": { "type": "string" }
+                    },
+                    "required": ["node_id"]
                 }
             }
         ]
@@ -542,6 +596,47 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
                 .map_err(|e| format!("Invalid `connect_dj_drive` payload: {e}"))?;
             let resp = state.connect_dj_drive(req);
             Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
+        }
+        "get_swarm_strength" => {
+            let report = state.compute_swarm_strength();
+            Ok(serde_json::to_value(report).map_err(|e| e.to_string())?)
+        }
+        "swarm_heartbeat" => {
+            let req: SwarmHeartbeatRequest = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `swarm_heartbeat` payload: {e}"))?;
+            let resp = state.process_swarm_heartbeat(req)?;
+            Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
+        }
+        "swarm_route_ticket" => {
+            let req: SwarmRouteRequest = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `swarm_route_ticket` payload: {e}"))?;
+            let resp = state.issue_route_ticket(req)?;
+            Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
+        }
+        "swarm_custody_audit" => {
+            if args.get("http_status").is_some() {
+                let sub: CustodyAuditSubmission = serde_json::from_value(args)
+                    .map_err(|e| format!("Invalid `swarm_custody_audit` submission: {e}"))?;
+                let res = state.verify_custody_audit(sub);
+                Ok(serde_json::to_value(res).map_err(|e| e.to_string())?)
+            } else {
+                let req = CustodyChallengeRequest {
+                    node_id: args
+                        .get("node_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("hera-edge-node")
+                        .to_string(),
+                    cas_fingerprint_or_blob: args
+                        .get("cas_fingerprint_or_blob")
+                        .or_else(|| args.get("opaque_blob_key"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("hera-seed-001")
+                        .to_string(),
+                    seed_nonce: args.get("seed_nonce").and_then(|v| v.as_u64()),
+                };
+                let chal = state.generate_custody_challenge(req)?;
+                Ok(serde_json::to_value(chal).map_err(|e| e.to_string())?)
+            }
         }
         _ => Err(format!("Unknown MCP tool `{name}`")),
     }

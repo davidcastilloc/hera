@@ -1,5 +1,6 @@
 """Cálculo de métricas de contribución a la comunidad P2P — Buen Ciudadano Soulseek."""
 
+from collections.abc import Sequence
 from pathlib import Path
 import httpx
 import os
@@ -22,7 +23,7 @@ class CommunityStats:
         self,
         library_dir: Path | str,
         sets_dir: Path | str | None = None,
-        extra_dirs: list[Path | str] | None = None,
+        extra_dirs: Sequence[Path | str] | None = None,
     ) -> dict:
         """Calcula el inventario compartido local y las métricas de transferencia desde slskd."""
         lib_path = Path(library_dir)

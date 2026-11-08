@@ -84,12 +84,12 @@ class RcloneStorageAdapter:
     async def sync(
         self,
         source: str | Path,
-        destination: str,
+        destination: str | Path,
         dry_run: bool = False,
         extra_args: list[str] | None = None,
     ) -> SyncResult:
         """Ejecuta una sincronización unidireccional (sync) entre origen y destino."""
-        cmd = [self.rclone_path, "sync", str(source), destination, "--stats=1s", "--stats-one-line"]
+        cmd = [self.rclone_path, "sync", str(source), str(destination), "--stats=1s", "--stats-one-line"]
         if dry_run:
             cmd.append("--dry-run")
         if self.config_path:
@@ -126,12 +126,12 @@ class RcloneStorageAdapter:
     async def copy(
         self,
         source: str | Path,
-        destination: str,
+        destination: str | Path,
         dry_run: bool = False,
         extra_args: list[str] | None = None,
     ) -> SyncResult:
         """Copia archivos recursivamente sin borrar archivos en el destino."""
-        cmd = [self.rclone_path, "copy", str(source), destination, "--stats=1s", "--stats-one-line"]
+        cmd = [self.rclone_path, "copy", str(source), str(destination), "--stats=1s", "--stats-one-line"]
         if dry_run:
             cmd.append("--dry-run")
         if self.config_path:

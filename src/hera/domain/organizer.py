@@ -52,6 +52,7 @@ class TrackOrganizer:
         collision_policy: str = "review",
     ) -> OrganizeResult:
         """Promueve un track desde cuarentena hacia la biblioteca organizada."""
+        track: Track | None
         if isinstance(track_id, Track):
             track = track_id
         else:
@@ -61,7 +62,7 @@ class TrackOrganizer:
 
         source_path_str = track.quarantine_path or track.library_path
         if not source_path_str:
-            raise HeraException(HeraErrorCode.INVALID_MEDIA, f"Track {track_id} no tiene ruta física asignada")
+            raise HeraException(HeraErrorCode.INVALID_MEDIA, f"Track {track.id} no tiene ruta física asignada")
 
         src = Path(source_path_str)
         if not src.exists():
@@ -81,7 +82,7 @@ class TrackOrganizer:
         if collision:
             if collision_policy == "review":
                 return OrganizeResult(
-                    track_id=track_id,
+                    track_id=track.id,
                     status="collision_needs_review",
                     source_path=str(src),
                     destination_path=str(dst),
@@ -92,7 +93,7 @@ class TrackOrganizer:
                 dst = dst.with_name(f"{dst.stem}_{track.id[:6]}{dst.suffix}")
             elif collision_policy == "skip":
                 return OrganizeResult(
-                    track_id=track_id,
+                    track_id=track.id,
                     status="skipped",
                     source_path=str(src),
                     destination_path=str(dst),

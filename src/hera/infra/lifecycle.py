@@ -5,6 +5,7 @@ from pathlib import Path
 import platform
 import subprocess
 import time
+from typing import Any
 import httpx
 import structlog
 
@@ -20,7 +21,7 @@ class SlskdLifecycle:
     def __init__(self, config: HeraConfig | None = None):
         self.config = config or HeraConfig()
         self._process: subprocess.Popen | None = None
-        self._log_file = None
+        self._log_file: Any = None
 
     @staticmethod
     def is_running_sync(base_url: str = "http://localhost:5030", timeout: float = 1.5) -> bool:

@@ -31,8 +31,18 @@ jobs:
             exit 1
           fi
 
+      - name: Open-Core Security Boundary Check (No Private SaaS Leaks)
+        run: |
+          if grep -rnE '/api/v1/cloud/economics|/api/v1/dj/upgrade-tier|X-Hera-Admin-Secret|calculate_cloudflare_beta_economics' src/ hera-rs/src/; then
+            echo "Error: Private hera-cloud SaaS routes/economics leaked into public hera repository!"
+            exit 1
+          fi
+
       - name: Run Ruff Linter
         run: uv run ruff check .
+
+      - name: Run Mypy Static Typecheck
+        run: uv run mypy src/
 
       - name: Run Pytest Suite
         env:

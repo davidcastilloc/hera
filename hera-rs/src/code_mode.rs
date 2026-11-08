@@ -10,8 +10,10 @@
 use crate::forensics::audit_pcm_channels;
 use crate::p2p::{
     get_cloud_referral_catalog, BrokerBatchLookupRequest, BrokerBridgeRequest,
-    BrokerClaimCloudTrackRequest, BrokerSimilarQuery, ConnectDjDriveRequest, P2PMeshState,
-    P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest, SetP2PSharingRequest,
+    BrokerClaimCloudTrackRequest, BrokerSimilarQuery, ConnectDjDriveRequest,
+    CustodyAuditSubmission, CustodyChallengeRequest, P2PMeshState, P2PSearchQuery,
+    P2PVerifiedTrack, ScanLocalDirRequest, SetP2PSharingRequest, SwarmHeartbeatRequest,
+    SwarmRouteRequest,
 };
 use crate::router::current_runtime_target;
 use crate::synergy::{
@@ -174,6 +176,36 @@ declare namespace hera {
     average_quality_score: number;
     tracks: P2PVerifiedTrack[];
   }>;
+
+  /** Compute Federated R2 Edge Swarm strength & Constrained Water-Filling allocations (9,000 MB R2 & 85,000 req/day safety caps). */
+  function getSwarmStrength(): Promise<any>;
+
+  /** Register an Edge Guardian node heartbeat and receive Water-Filling allocations & 1:1.5 Turbo Credits. */
+  function swarmHeartbeat(params: {
+    node_id: string;
+    owner_dj: string;
+    endpoint_url: string;
+    r2_used_mb?: number;
+    daily_worker_requests_used?: number;
+    megabytes_served_delta?: number;
+  }): Promise<any>;
+
+  /** Route a track download via Power-of-Two-Choices (P2C) and issue a single-use 60s signed X-Hera-Swarm-Ticket. */
+  function swarmRouteTicket(params: {
+    requester_dj: string;
+    track_id_or_cas: string;
+    block_index?: number;
+  }): Promise<any>;
+
+  /** Issue or verify a 64-byte Proof-of-Custody range audit against an Edge Guardian node. */
+  function swarmCustodyAudit(params: {
+    node_id: string;
+    cas_fingerprint_or_blob?: string;
+    opaque_blob_key?: string;
+    byte_offset?: number;
+    http_status?: number;
+    returned_slice_sha256?: string;
+  }): Promise<any>;
 }
 "#
 }
@@ -675,6 +707,69 @@ fn execute_single_sdk_call(
             log.push(format!("hera.auditPcm -> verdict={}", rep.forensic_verdict));
             serde_json::to_value(rep).map_err(|e| e.to_string())
         }
+        "hera.getSwarmStrength" | "getSwarmStrength" | "get_swarm_strength" => {
+            let report = state.compute_swarm_strength();
+            log.push(format!(
+                "hera.getSwarmStrength -> {} active nodes ({:.1} GB safe R2, K_max={})",
+                report.active_healthy_nodes,
+                report.safe_usable_r2_capacity_gb,
+                report.max_thermal_replication_k
+            ));
+            serde_json::to_value(report).map_err(|e| e.to_string())
+        }
+        "hera.swarmHeartbeat" | "swarmHeartbeat" | "swarm_heartbeat" => {
+            let req: SwarmHeartbeatRequest = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid swarmHeartbeat payload: {e}"))?;
+            let resp = state.process_swarm_heartbeat(req)?;
+            log.push(format!(
+                "hera.swarmHeartbeat('{}') -> guardian={}, credits={:.1} MB",
+                resp.node_id, resp.edge_guardian_active, resp.swarm_credit_balance_mb
+            ));
+            serde_json::to_value(resp).map_err(|e| e.to_string())
+        }
+        "hera.swarmRouteTicket" | "swarmRouteTicket" | "swarm_route_ticket" => {
+            let req: SwarmRouteRequest = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid swarmRouteTicket payload: {e}"))?;
+            let resp = state.issue_route_ticket(req)?;
+            log.push(format!(
+                "hera.swarmRouteTicket -> P2C node='{}', mode='{}'",
+                resp.p2c_selected_node_id, resp.access_mode
+            ));
+            serde_json::to_value(resp).map_err(|e| e.to_string())
+        }
+        "hera.swarmCustodyAudit" | "swarmCustodyAudit" | "swarm_custody_audit" => {
+            if args.get("http_status").is_some() {
+                let sub: CustodyAuditSubmission = serde_json::from_value(args.clone())
+                    .map_err(|e| format!("Invalid swarmCustodyAudit submission: {e}"))?;
+                let res = state.verify_custody_audit(sub);
+                log.push(format!(
+                    "hera.swarmCustodyAudit('{}') -> passed={}, status={}",
+                    res.node_id, res.passed, res.custody_status
+                ));
+                serde_json::to_value(res).map_err(|e| e.to_string())
+            } else {
+                let req = CustodyChallengeRequest {
+                    node_id: args
+                        .get("node_id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("hera-edge-node")
+                        .to_string(),
+                    cas_fingerprint_or_blob: args
+                        .get("cas_fingerprint_or_blob")
+                        .or_else(|| args.get("opaque_blob_key"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("hera-seed-001")
+                        .to_string(),
+                    seed_nonce: args.get("seed_nonce").and_then(|v| v.as_u64()),
+                };
+                let chal = state.generate_custody_challenge(req)?;
+                log.push(format!(
+                    "hera.swarmCustodyAudit('{}') -> issued 64B challenge '{}'",
+                    chal.node_id, chal.range_header
+                ));
+                serde_json::to_value(chal).map_err(|e| e.to_string())
+            }
+        }
         _ => Err(format!("Unsupported Code Mode SDK method `{call}`")),
     }
 }
@@ -950,6 +1045,34 @@ pub fn get_openapi_3_1_spec(node_id: &str) -> Value {
                     "operationId": "getNodeManifestAndReferrals",
                     "summary": "Get node invariants and 1-Click Cloud Referral deployment catalog",
                     "responses": { "200": { "description": "Manifest and referral catalog" } }
+                }
+            },
+            "/api/v1/swarm/strength": {
+                "get": {
+                    "operationId": "getSwarmStrength",
+                    "summary": "Compute Federated R2 Edge Swarm strength, Constrained Water-Filling allocations, and elastic replication K",
+                    "responses": { "200": { "description": "Swarm strength and Water-Filling report" } }
+                }
+            },
+            "/api/v1/swarm/heartbeat": {
+                "post": {
+                    "operationId": "postSwarmHeartbeat",
+                    "summary": "Register an Edge Guardian node heartbeat, credit 1:1.5 Turbo Credits, and receive Water-Filling allocations",
+                    "responses": { "200": { "description": "Heartbeat response and outbound pull tickets" } }
+                }
+            },
+            "/api/v1/swarm/route-ticket": {
+                "post": {
+                    "operationId": "postSwarmRouteTicket",
+                    "summary": "Route a shard download via Power-of-Two-Choices (P2C) and issue a single-use 60s signed X-Hera-Swarm-Ticket",
+                    "responses": { "200": { "description": "Signed 60s redirect ticket and P2C selected node" } }
+                }
+            },
+            "/api/v1/swarm/custody-audit": {
+                "post": {
+                    "operationId": "postSwarmCustodyAudit",
+                    "summary": "Verify a 64-byte Proof-of-Custody range audit response and enforce Edge Guardian meritocracy",
+                    "responses": { "200": { "description": "Custody audit result" } }
                 }
             }
         },

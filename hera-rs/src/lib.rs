@@ -2,6 +2,7 @@ pub mod code_mode;
 pub mod forensics;
 pub mod mcp;
 pub mod p2p;
+pub mod p2p_exchange;
 pub mod router;
 pub mod structure;
 pub mod synergy;
@@ -638,7 +639,10 @@ mod tests {
         );
 
         // 3. Test Local Laptop / Server Direct Storage & P2P Seeder (`POST /api/v1/node/scan-local-dir` + `GET /api/v1/p2p/download/:track_id`)
-        let temp_dir = std::env::temp_dir().join("hera_local_p2p_test_dir");
+        let temp_dir = std::env::temp_dir().join(format!(
+            "hera_local_p2p_test_dir_{}",
+            std::process::id()
+        ));
         let _ = std::fs::remove_dir_all(&temp_dir);
         std::fs::create_dir_all(&temp_dir).unwrap();
 
@@ -1464,6 +1468,49 @@ mod tests {
                 .unwrap()
                 .starts_with("shard-blobs/")
         );
+
+        // 8. Verify `crate::p2p_exchange` public helpers and Code Mode `hera.getSwarmStrength()`
+        assert_eq!(crate::p2p_exchange::SWARM_TURBO_CREDIT_MULTIPLIER, 1.5);
+        assert_eq!(
+            crate::p2p_exchange::compute_elastic_replication_factor(5, 10.0),
+            5
+        );
+        let blind_key = crate::p2p_exchange::derive_blind_shard_key("cas-test", "sha-test");
+        assert!(blind_key.starts_with("shard-blobs/"));
+        let ex_state = P2PMeshState::new("hera-exchange-helper-test");
+        let wf = crate::p2p_exchange::compute_water_filling_allocations(&ex_state);
+        assert_eq!(wf.len(), 1);
+        let chal_helper = crate::p2p_exchange::issue_custody_challenge(
+            &ex_state,
+            crate::p2p_exchange::CustodyChallengeRequest {
+                node_id: "hera-exchange-helper-test".to_string(),
+                cas_fingerprint_or_blob: "hera-seed-001".to_string(),
+                seed_nonce: Some(42),
+            },
+        )
+        .unwrap();
+        assert_eq!(chal_helper.slice_length, 64);
+
+        let req_cm_swarm = Request::builder()
+            .method("POST")
+            .uri("/mcp/code-mode")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "code": "const s = await hera.getSwarmStrength(); return s;"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_cm_swarm = app.call(req_cm_swarm).await.unwrap();
+        assert_eq!(resp_cm_swarm.status(), StatusCode::OK);
+        let j_cm_swarm: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_cm_swarm.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_cm_swarm["output"]["active_healthy_nodes"], 4);
     }
 }
 

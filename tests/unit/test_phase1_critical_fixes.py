@@ -131,3 +131,17 @@ def test_desktop_tray_syntax_and_import():
     importlib.reload(tray_mod)
     assert hasattr(tray_mod, "run_tray_app")
     assert hasattr(tray_mod, "create_tray_image")
+
+
+@pytest.mark.asyncio
+async def test_agent_tools_audit_repertoire_intelligence_dispatch():
+    """Agent Tools: audit_repertoire_intelligence debe pasar db y config a handle_audit_repertoire sin TypeError."""
+    import json
+    from hera.agent.tools import audit_repertoire_intelligence
+
+    raw = await audit_repertoire_intelligence(sync_db=False, check_queries=["DaviDJ - Ritual Del Sol"])
+    parsed = json.loads(raw)
+    assert "summary" in parsed
+    assert "total_unique_files" in parsed["summary"]
+    assert "deduplication_audit" in parsed
+
