@@ -6,7 +6,10 @@
 
 **Architecture:** Mantiene el núcleo local-first en Python + Rust (`src/hera/` y `hera-rs/`) donde toda la música aterriza físicamente en el disco del DJ (`quarantine/` -> `library/` -> `sets/`), extiende `CrateExporter` para soportar VirtualDJ y Traktor junto a Rekordbox/Ableton, y expone flujos de 1 clic en la UI local para DJs sin herramientas de desarrollo.
 
-**Tech Stack:** Python `>=3.11` (`uv`, `pydantic`, `aiosqlite`, `streamlit`, `click`), Rust (`hera-node-rs`), SQLite (`hera.db`).
+**Tech Stack:**
+- **Frontend & Desktop (`HERA Desktop`):** `Tauri v2` (`src-tauri`) + **`Svelte 5` (`Runes`, Zero Virtual DOM)** + `TypeScript` + `Vite` (inspirado en el layout de `martpie/museeks`, descartando React para minimizar RAM/CPU junto a VirtualDJ/Rekordbox).
+- **Backend Local (`hera` en la Laptop del DJ):** **Rust (`hera-rs` / `hera-node-rs`: `symphonia`, `rustfft`, `axum`, `2-Opt TSP`, `u64 SimHash POPCNT`, 5 capas Post-P2P, `MCP`)** + **Python `>=3.11` (`uv`, `pydantic`, `aiosqlite`, `click`, `repertoire_intelligence.py`, `export.py`, `DJ Brain`)** + **SQLite (`hera.db`)**.
+- **Backend Cloud (`hera-cloud` en Cloudflare Edge):** **Cloudflare Workers (`Rust` -> `wasm32`)** + **Cloudflare Workers AI (`10,000 Neurons/día` gratis por defecto)** + **AI Gateway** + **Cloudflare D1 (`5 GB` SQLite gratis)** + **Cloudflare Vectorize** + **Cloudflare R2 (`Zero-Egress`)**.
 
 **Spec:** `docs/superpowers/specs/2026-11-08-dj-laptop-first-product-alignment-design.md`
 
@@ -19,11 +22,10 @@
 - [ ] **Idea 2 (Soporte Nativo VirtualDJ + Rekordbox + Traktor en `src/hera/domain/export.py`):**
   - Agregar exportador nativo para **VirtualDJ** (`.vdjfolder` y marcadores `<Poi>` para los 4 Hot Cues acústicos) y **Traktor Pro** (`collection.nml` con `<CUE_V2>`), manteniendo Rekordbox XML, M3U8 y Ableton Live.
 - [ ] **Idea 3 (Sin Internet = Botones Deterministas Reales en el Front, Cero Heurísticas Tramposas de Chat):**
-  - Hoy en `src/hera/ui/app.py`, los botones de "Acciones Rápidas" solo mandan un texto al chat (que falla si no hay internet o LLM).
-  - **Solución:** Construir paneles y botones **100% deterministas** en el frontend (`hera ui`):
+  - Construir paneles y botones **100% deterministas** en el frontend:
     1. Botón directo **[🔍 Auditar y Sincronizar Repertorio Local]** (ejecuta `handle_audit_repertoire` y muestra gráficas de BPM/Camelot/Calidad en vivo).
     2. Formulario visual **[🎛️ Armar Set / Crate Armónico]** con selectores de Género, Rango BPM, Llave Camelot, Duración y check de formatos (**VirtualDJ, Rekordbox, Traktor, Ableton**).
-    3. Buscador P2P directo **[📥 Buscar y Descargar Canciones]** que consulta `slskd` y descarga a `quarantine/` ➔ `library/` con un clic.
+    3. Buscador P2P directo **[📥 Buscar y Descargar Canciones]** que consulta la red P2P (`hera-rs` / `slskd`) y descarga a `quarantine/` ➔ `library/` con un clic.
 - [ ] **Idea 4 (Capa Gratuita por Defecto Exprimida al Máximo con la Suite de Cloudflare AI):**
   - Basado en los números oficiales de `developers.cloudflare.com/ai/`:
     1. **Workers AI (`10,000 Neurons/día` Gratis):** Usar `@cf/meta/llama-3.1-8b-instruct-fp8-fast` / `@cf/meta/llama-3.2-3b-instruct` como modelo por defecto para *tool calling* (~6.6 Neurons por turno de DJ = **~1,500 mensajes/día gratis** a `$0.00` por cuenta, consumiendo `0%` de RAM/CPU en la laptop del DJ).
@@ -31,7 +33,7 @@
     3. **Cloudflare Vectorize (Gratis: 5M dimensiones guardadas / 30M consultadas al mes):** Búsqueda semántica musical en `hera-cloud` sin pagar servidores de vectores.
     4. **Federación de Neuronas Comunitarias (Bonus):** Igual que el enjambre R2 suma `9 GB` por cada nodo comunitario, cada `Edge Guardian` con un Cloudflare Worker gratuito aporta otras **`10,000 Neurons/día` gratis** al pool de IA de la comunidad.
 - [ ] **Idea 5 (Panel de Configuración de Motores LLM Intuitivo y Bonito en el Front):**
-  - Igual que el 99% de las herramientas modernas de IA, agregar en `src/hera/ui/app.py` una sección visual limpia y fácil de usar para configurar el motor de IA y guardarlo en `config/hera.toml`:
+  - Igual que el 99% de las herramientas modernas de IA, agregar en el frontend una sección visual limpia y fácil de usar para configurar el motor de IA y guardarlo en `config/hera.toml`:
     - **Por defecto:** `⚡ Hera Cloud Free (Cloudflare Workers AI)` — listo para usar sin claves.
     - **Cloud BYOK (Bring Your Own Key):** `OpenRouter` (con selector de modelos `:free` y pagos), `Google Gemini`, `OpenAI`, `Anthropic`.
     - **Local (Opcional para laptops potentes):** `Ollama` / `LM Studio` con autodetección de puerto y advertencia amigable del uso de RAM/CPU.
@@ -55,18 +57,18 @@
 - [ ] **Idea 9 (Replanteamiento Integral de la UI y la App de Escritorio — Reproductor Simple + Centro de Mando del DJ):**
   - **Diagnóstico:** Hoy `src/hera/ui/dj_player.py` dedica 1,142 líneas a un reproductor Dual-Deck CDJ dentro de Streamlit (es demasiado pesado e innecesario porque el DJ mezcla en VirtualDJ/Rekordbox).
   - **Nuevo Enfoque de la UI y Desktop App:**
-    1. **Reproductor Simple de Pre-Escucha (`Single-Track Quick Player`):** Reemplazar el Dual-Deck gigante por un **reproductor simple y limpio de 1 sola pista** (play/pause, barra de onda/tiempo, volumen y botones rápidos para saltar a los **4 Hot Cues**: `Intro`, `Entrada`, `Drop`, `Salida`), reutilizando el servidor ligero `_AudioRangeHandler` para streaming local instantáneo sin recargar la página.
+    1. **Reproductor Simple de Pre-Escucha (`Single-Track Quick Player`):** Reemplazar el Dual-Deck gigante por un **reproductor simple y limpio de 1 sola pista** (play/pause, barra de onda/tiempo, volumen y botones rápidos para saltar a los **4 Hot Cues**: `Intro`, `Entrada`, `Drop`, `Salida`), con streaming byte-range local instantáneo.
     2. **Estructura en 5 Vistas Claras (100% funcionales con Botones Offline + Agente IA):**
        - `🧬 Mi ADN & Onboarding DJ` (Perfil de estilo auto-calculado, software por defecto y reglas del Brain).
        - `🗂️ Mi Repertorio & Auditoría` (Salud de las carpetas locales, zonas BPM, llaves Camelot, calidad FFT y limpieza de duplicados).
        - `🎛️ Constructor de Crates & Sets` (Controles deterministas de BPM/Camelot/Duración + Chat del Agente + Exportación 1-clic a VirtualDJ/Rekordbox/Traktor).
        - `🌍 Comunidad P2P & Buscador de Puentes` (Búsqueda y descarga directa al disco duro de la laptop + buscador de puentes armónicos entre 2 canciones).
        - `⚙️ Motor de IA & Conexiones` (Cloudflare Workers AI Gratis por defecto, OpenRouter/Gemini BYOK, Ollama local opcional).
-    3. **App de Escritorio (`hera desktop` / Tray + Ventana Nativa Ligera):** Que el icono de bandeja del sistema (`src/hera/desktop/tray.py`) y el lanzador abran la interfaz como una app limpia de escritorio (modo ventana/app sin parecer una página técnica) mientras mantiene vivo el nodo P2P en segundo plano.
-- [ ] **Idea 10 (Investigación y Selección del Stack Ideal para el Frontend + Desktop App — Referencia `martpie/museeks`):**
-  - Tomar **[`martpie/museeks`](https://github.com/martpie/museeks)** (`Tauri v2 + Rust + SQLite + React/TypeScript + Vite`, licencia MIT) como referencia directa de arquitectura y simplicidad visual:
-    1. **Por qué calza como un guante en Hera:** Museeks migró de Electron a **Tauri v2 + Rust + SQLite** logrando una app de música multiplataforma ultraligera, con una tabla de pistas rapidísima, barra de reproducción simple de 1 pista, playlists/crates a la izquierda y consumo mínimo de RAM.
-    2. **Adaptación a Hera:** Nosotros ya tenemos el backend Rust (`hera-rs/`) y la base SQLite (`hera.db`). Podemos usar el mismo patrón arquitectónico de Museeks (`TrackList` virtualizada + `PlayerBar` de 1 pista + `Tauri v2`) sumándole las columnas DJ (`BPM`, `Camelot`, `4 Hot Cues`, `Sello FFT`), los botones deterministas de armado de Crates/Exportación (VirtualDJ, Rekordbox, Traktor) y el panel lateral del **Copiloto IA (DJ Brain)**.
+    3. **App de Escritorio (`hera desktop` / Tauri v2 + Tray):** Ventana nativa ultraligera e icono de bandeja del sistema manteniendo vivo el nodo P2P en segundo plano.
+- [ ] **Idea 10 (Stack Definitivo de Frontend + Desktop App: `Tauri v2 + Svelte 5 (Runes) + TypeScript + Vite` con Layout `martpie/museeks`):**
+  - Tomar **[`martpie/museeks`](https://github.com/martpie/museeks)** como referencia de layout y arquitectura de escritorio (`Tauri v2 + Rust + SQLite`), pero **usando `Svelte 5 (Runes, Zero Virtual DOM) + TypeScript + Vite` en lugar de React**:
+    1. **Por qué `Svelte 5 + Tauri v2` es superior a React para un DJ:** Compila a manipulación directa del DOM sin Virtual DOM, reduciendo drásticamente el consumo de RAM y CPU cuando el DJ hace scroll en `+14,200` canciones o anima el waveform a `60 FPS` mientras `VirtualDJ` / `Rekordbox` está corriendo en tiempo real.
+    2. **Integración Nativa con `hera-rs` y `hera.db`:** Conecta `TrackList` virtualizada + `PlayerBar` de 1 pista con los 4 Hot Cues + botones deterministas de Crates/Exportación (`VirtualDJ`, `Rekordbox`, `Traktor`) + panel lateral `Hera AI Copilot` directo contra el backend local (`hera-rs` + `src/hera/`).
 - [ ] **Idea 11 (Nuevas Funcionalidades Visuales Diferenciadoras en `HERA Desktop`):**
   1. **Waveform Superior con los 4 Pines de Hot Cues Clicables (`🟢 Cue 1 Intro`, `🔵 Cue 2 Phrase`, `🔴 Cue 3 Drop`, `🟡 Cue 4 Mix Out`):** En la barra simple de reproducción estilo Museeks, permitir saltar con 1 clic a cada punto estructural del tema.
   2. **Dashboard Visual de "Mi ADN DJ" & Switches de Reglas de Oro del Brain:** Radar Camelot de tonos dominantes, barras de zonas BPM, selector de 1 clic de software principal (`VirtualDJ`, `Rekordbox`, `Traktor`, `Ableton`) y switches visuales para las reglas del `DJ Brain` (*Priorizar mis producciones propias*, *Calidad mínima FLAC/320k*, *Sinergia Camelot estricta*).

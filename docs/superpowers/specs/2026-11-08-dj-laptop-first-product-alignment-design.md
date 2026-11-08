@@ -108,28 +108,42 @@
 
 ---
 
-## 4. Rediseño de la UI y la App de Escritorio (`Inspiración y Referencia Arquitectónica: martpie/museeks`)
+## 4. Definición Oficial del Stack (Frontend + Backend Local + Backend Cloud) y Rediseño UI (`Layout martpie/museeks` + `Svelte 5`)
 
-Con el cambio de paradigma (**"Hera es el Asistente, Organizador de Repertorio y Conector P2P que prepara tus sets para tu software real de DJ"**), la interfaz actual (`src/hera/ui/app.py`, `src/hera/ui/dj_player.py` y `src/hera/desktop/tray.py`) debe replantearse tomando como referencia directa la arquitectura y filosofía visual de **[`martpie/museeks`](https://github.com/martpie/museeks)**:
+Con el cambio de paradigma (**"Hera es el Asistente, Organizador de Repertorio y Conector P2P que prepara tus sets para tu software real de DJ"**), reemplazamos el viejo reproductor Dual-Deck de Streamlit por una arquitectura nativa ultraligera inspirada en el layout de **[`martpie/museeks`](https://github.com/martpie/museeks)** pero potenciada con **Svelte 5 (sin Virtual DOM)**:
 
-1. **¿Por qué `martpie/museeks` es el molde perfecto para Hera Desktop?**
-   - **Evolución de Pesado a Ultraligero (`Tauri v2 + Rust + SQLite + React/TypeScript + Vite`):** Museeks migró de Electron a **Tauri v2 + Rust (`src-tauri`)** con SQLite embebido y una tabla de pistas limpia, rápida y sin distracciones, logrando un instalador diminuto (~5–8 MB) y un consumo mínimo de RAM/CPU (ideal para correr junto a VirtualDJ/Rekordbox en laptops de Venezuela/LATAM).
-   - **Layout "Biblioteca como Protagonista + Reproductor Simple Fijo":**
-     - Barra superior/inferior de reproducción simple (1 sola pista, sin dos platos complejos) donde en Hera agregaremos los **4 botones de salto a los 4 Hot Cues** (`1. Intro`, `2. Entrada`, `3. Drop`, `4. Salida`).
-     - Tabla central virtualizada de alta velocidad con las +14,000 canciones del DJ (`TrackList`: Artista, Título, BPM, Llave Camelot, Duración, Calidad FFT).
-     - Navegación lateral limpia (`Sidebar`) para cambiar entre Biblioteca, Crates/Sets, Comunidad P2P, ADN del DJ y Configuración.
-   - **Encaje Natural con `hera-rs`:** Ya tenemos el motor nativo en Rust (`hera-rs/Cargo.toml` con `symphonia`, `rustfft`, `axum`) y la base de datos SQLite (`hera.db`), exactamente igual que el corazón de Museeks.
-2. **Los 5 Módulos Reales que Debe Tener la Nueva UI / App de Escritorio (Estilo Museeks + Copiloto DJ):**
-   - **Módulo 1 — 🧬 Onboarding & Mi ADN de DJ (`DJ Brain & Style Profile`):**
-     - Radiografía visual automática de su estilo (zonas BPM, rueda Camelot dominante, artistas ancla, % Audio vs. Video-DJ vs. Producciones Propias) + configuración de su software principal (`VirtualDJ`, `Rekordbox`, `Traktor`, `Ableton`) y reglas de oro.
-   - **Módulo 2 — 🗂️ Biblioteca & Auditor de Repertorio (`TrackList estilo Museeks + 1-Click Doctor`):**
-     - Tabla ultrarrápida tipo Museeks conectada a `hera.db` con buscador instantáneo, filtro por BPM/Camelot, detector de duplicados/falsos FLAC (FFT) y reproductor simple con salto a los 4 Hot Cues.
-   - **Módulo 3 — 🎛️ Creador de Crates y Sets Armónicos (`Deterministic + AI Crate Builder`):**
-     - Funciona tanto con **controles visuales directos (offline)** como con el **Chat del Agente (online)** y botón **[Exportar directo a mi VirtualDJ / Rekordbox / Traktor / Carpeta USB]**.
-   - **Módulo 4 — 🌍 Comunidad Global P2P & Puentes Armónicos (`Discovery & Download to Disk`):**
-     - Buscador directo de tracks y "Puentes Armónicos de Emergencia" (`resolve-bridge` / `similar`) en la red de DJs, descargando el archivo físico verificado directo a la carpeta local del DJ.
-   - **Módulo 5 — ⚙️ Configuración Limpia de IA & Red (`Zero-Friction Settings`):**
-     - Selector visual entre **Cloudflare Workers AI Free (Activo por defecto)**, **OpenRouter / Gemini / OpenAI (BYOK)** y **Modelos Locales (Ollama/LM Studio)**.
+### A. Stack de Frontend (`HERA Desktop`)
+- **Desktop Shell:** **Tauri v2 (`src-tauri` en Rust)** — instalador nativo diminuto (`~5–8 MB`), WebView nativo del SO + icono en bandeja (`System Tray`), consumo mínimo de RAM/CPU para nunca interferir con `VirtualDJ`, `Rekordbox` o `Traktor` en vivo.
+- **UI Framework:** **Svelte 5 (`Runes`, Zero Virtual DOM) + TypeScript + Vite**
+  - **¿Por qué Svelte 5 en lugar de React?** Mientras `martpie/museeks` nos sirve de molde visual y de arquitectura Tauri+Rust+SQLite, **descartamos React** porque su Virtual DOM consume más memoria y ciclos de CPU en tablas masivas. **Svelte 5** compila directo a operaciones nativas del DOM con reactividad granular (*Runes*), permitiendo hacer scroll por `+14,200` canciones a `60 FPS` y mover el cursor del waveform de 1 pista con los **4 pines de Hot Cues clicables** (`🟢 Cue 1 Intro`, `🔵 Cue 2 Phrase`, `🔴 Cue 3 Drop`, `🟡 Cue 4 Mix Out`) con huella casi cero de RAM.
+
+### B. Stack de Backend Local (En la Laptop del DJ — `davidcastilloc/hera`)
+- **Motor Nativo Rust (`hera-rs/` — `hera-node-rs`):**
+  - `Symphonia` + `rustfft` (auditoría espectral Zero-Trust, detección de falsos FLACs, correlación de fase `<120 Hz` y detección acústica de los 4 Hot Cues).
+  - Motor de sinergia de 4 capas + optimizador **`2-Opt TSP`** + búsqueda **`u64 SimHash POPCNT`**.
+  - Servidor local/IPC (`axum` + comandos Tauri) + protocolo **`MCP` (`stdio` + HTTP + `Code Mode`)** + nodo del Enjambre Post-P2P de 5 capas (`Merkle Proofs`, `endpoint_pubkey_id`, `Latency-Aware P2C Striping`, `Delta-CRDT`, `MoQ Pub/Sub`).
+- **Orquestador de Dominio, `DJ Brain` y Exportadores en Python (`src/hera/`, Python `>=3.11` + `uv`):**
+  - **Base de Datos Local:** **SQLite (`hera.db` vía `aiosqlite`)** con el catálogo físico (`tracks`, `crates`), ADN y preferencias (`dj_preferences`) e historial de sesiones (`conversation_sessions`, `conversation_messages`).
+  - **Inteligencia de Repertorio (`repertoire_intelligence.py`):** Clasifica Audio DJ, Video-DJ HD y Producciones Propias, zonas BPM y llaves Camelot dominantes.
+  - **Exportadores Nativos (`export.py`):** `VirtualDJ` (`.vdjfolder` + `<Poi>`), `Rekordbox` (`rekordbox.xml`), `Traktor Pro` (`collection.nml` `<CUE_V2>`), `M3U8` y `Ableton Live`.
+  - **Descarga Física a Disco (`slskd` + `rclone`):** Flujo estricto `quarantine/` ➔ auditoría FFT ➔ `mutagen` ➔ `library/` ➔ `sets/`.
+
+### C. Stack de Backend Cloud (`davidcastilloc/hera-cloud` — `$0.00` Base)
+- **Runtime Edge:** **Cloudflare Workers (`Rust` -> `wasm32-unknown-unknown`, `worker 0.4` + `axum`)**.
+- **IA Gratuita por Defecto:** **Cloudflare Workers AI (`10,000 Neurons/día` gratis con `@cf/meta/llama-3.1-8b-instruct-fp8-fast` / `llama-3.2-3b-instruct` ≈ 1,500 turnos/día a `$0.00`)** + **Cloudflare AI Gateway** (caché global `0 Neurons`, rate-limiting y fallback dinámico a modelos `:free` de OpenRouter/Gemini).
+- **Super DB & Memoria Sincronizada:** **Cloudflare D1 (`5 GB` SQLite gratis ≈ 14M mensajes de `DJ Brain` + índice global de `hera_seal` y 4 Hot Cues)** + **Cloudflare Vectorize** (`5M` dimensiones gratis) + **Cloudflare R2 (`Zero-Egress`)**.
+
+### D. Los 5 Módulos Reales de `HERA Desktop` (`Svelte 5 + Tauri v2`):
+1. **Módulo 1 — 🧬 Onboarding & Mi ADN de DJ (`DJ Brain & Style Profile`):**
+   - Radiografía visual automática de su estilo (zonas BPM, rueda Camelot dominante, artistas ancla, % Audio vs. Video-DJ vs. Producciones Propias) + configuración de su software principal (`VirtualDJ`, `Rekordbox`, `Traktor`, `Ableton`) y reglas de oro.
+2. **Módulo 2 — 🗂️ Biblioteca & Auditor de Repertorio (`TrackList Virtualizada en Svelte 5 + 1-Click Doctor`):**
+   - Tabla ultrarrápida conectada a `hera.db` con buscador instantáneo, filtro por BPM/Camelot, detector de duplicados/falsos FLAC (FFT) y reproductor superior simple con salto a los 4 Hot Cues.
+3. **Módulo 3 — 🎛️ Creador de Crates y Sets Armónicos (`Deterministic + AI Crate Builder`):**
+   - Funciona tanto con **controles visuales directos (offline)** como con el **Chat del Agente (online)** y botón **[Exportar directo a mi VirtualDJ / Rekordbox / Traktor / Carpeta USB]**.
+4. **Módulo 4 — 🌍 Comunidad Global P2P & Puentes Armónicos (`Discovery & Download to Disk`):**
+   - Buscador directo de tracks y "Puentes Armónicos de Emergencia" (`resolve-bridge` / `similar`) en la red de DJs, descargando el archivo físico verificado directo a la carpeta local del DJ.
+5. **Módulo 5 — ⚙️ Configuración Limpia de IA & Red (`Zero-Friction Settings`):**
+   - Selector visual entre **Cloudflare Workers AI Free (Activo por defecto)**, **OpenRouter / Gemini / OpenAI (BYOK)** y **Modelos Locales (Ollama/LM Studio)**.
 
 ### 3. Mockups Visuales de Referencia (`docs/superpowers/assets/`)
 
