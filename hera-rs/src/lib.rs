@@ -601,12 +601,14 @@ mod tests {
             "https://drive.google.com/uc?export=download&id=1ZeroOAuth_File_ID_001"
         );
 
-        // 2. Test Cloudflare R2 Hard Quota (`trial_100mb` = 100 MB limit vs 3 tracks of 45 MB = 135 MB)
+        // 2. Test Cloudflare R2 Hard Quota (`trial_100mb` = 100 MB limit) + Global CAS Deduplication
         let r2_quota_req = serde_json::json!({
             "dj_handle": "DJR2TrialUser",
             "r2_bucket_url": "https://r2.hera-davidj.workers.dev",
             "subscription_tier": "trial_100mb",
             "tracks": [
+                // This first track is a CAS Deduplication hit (already uploaded by DaviDJ at 122 BPM), so it costs 0 MB in R2!
+                { "title": "Ritual Del Sol (DaviDJ Original Club Master)", "artist": "DaviDJ", "bpm": 122.0, "r2_object_key": "r2/dup_ritual.flac", "file_size_mb": 45.0 },
                 { "title": "R2 Track 1", "artist": "DJR2", "r2_object_key": "r2/t1.flac", "file_size_mb": 45.0 },
                 { "title": "R2 Track 2", "artist": "DJR2", "r2_object_key": "r2/t2.flac", "file_size_mb": 45.0 },
                 { "title": "R2 Track 3 (Over 100MB Trial Quota)", "artist": "DJR2", "r2_object_key": "r2/t3.flac", "file_size_mb": 45.0 }
@@ -622,8 +624,10 @@ mod tests {
         let j2: serde_json::Value =
             serde_json::from_slice(&to_bytes(resp2.into_body(), 1024 * 1024).await.unwrap())
                 .unwrap();
-        // First 2 tracks (90 MB <= 100 MB) admitted; 3rd track rejected by R2_QUOTA_EXCEEDED!
-        assert_eq!(j2["admitted_tracks"].as_array().unwrap().len(), 2);
+        // 1 CAS-deduplicated track (0 MB physical R2) + 2 new tracks (90 MB <= 100 MB) = 3 admitted; 4th track rejected by R2_QUOTA_EXCEEDED!
+        assert_eq!(j2["cas_deduplicated_hits"], 1);
+        assert_eq!(j2["physical_r2_mb_saved"], 45.0);
+        assert_eq!(j2["admitted_tracks"].as_array().unwrap().len(), 3);
         assert_eq!(j2["rejected_quarantine_tracks"].as_array().unwrap().len(), 1);
         assert!(
             j2["rejected_quarantine_tracks"][0]

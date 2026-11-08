@@ -163,6 +163,10 @@ pub struct ConnectDjDriveResponse {
     pub profile: DjProfile,
     pub admitted_tracks: Vec<P2PVerifiedTrack>,
     pub rejected_quarantine_tracks: Vec<String>,
+    #[serde(default)]
+    pub cas_deduplicated_hits: usize,
+    #[serde(default)]
+    pub physical_r2_mb_saved: f32,
     pub network_catalog_available: usize,
     pub welcome_message: String,
 }
@@ -503,6 +507,8 @@ impl P2PMeshState {
 
         let mut admitted = Vec::new();
         let mut rejected = Vec::new();
+        let mut cas_deduplicated_hits = 0usize;
+        let mut physical_r2_mb_saved = 0.0f32;
 
         for (idx, item) in req.tracks.iter().enumerate() {
             let is_lossless = matches!(
@@ -534,19 +540,37 @@ impl P2PMeshState {
                 continue;
             }
 
-            // Enforce Cloudflare R2 Hard Quota if this track is stored in R2
+            // Global CAS (Content-Addressed Storage) Internal P2P Deduplication:
+            // If another DJ on the Hera Cloud already uploaded this exact master (matching canonical artist+title+BPM),
+            // reuse the existing R2/P2P master with ZERO extra physical R2 megabytes and ZERO extra DSP CPU!
+            let cas_key = compute_cas_fingerprint(&item.artist, &item.title, item.bpm);
+            let existing_cas_master = self.catalog.read().ok().and_then(|cat| {
+                cat.iter()
+                    .find(|t| compute_cas_fingerprint(&t.artist, &t.title, t.bpm) == cas_key)
+                    .cloned()
+            });
+
+            // Enforce Cloudflare R2 Hard Quota ONLY if this track is NOT already deduplicated in the CAS pool
             let wants_r2 = item.r2_object_key.is_some()
                 || (storage_provider == "r2" && item.gdrive_file_link_or_id.is_none());
             if wants_r2 {
                 let sz = item.file_size_mb.max(1.0);
-                if r2_used_mb + sz > r2_quota_mb {
-                    rejected.push(format!(
-                        "{} - {} [R2_QUOTA_EXCEEDED: Needs {:.1} MB, but {} tier has {:.1}/{:.1} MB used. Upgrade to `pro_monthly` (50 GB R2) or use Google Drive / Local P2P Node for $0]",
-                        item.artist, item.title, sz, sub_tier, r2_used_mb, r2_quota_mb
-                    ));
-                    continue;
+                if existing_cas_master.is_some() {
+                    // Internal P2P CAS Hit! 0 MB physical R2 storage consumed!
+                    cas_deduplicated_hits += 1;
+                    physical_r2_mb_saved += sz;
+                } else {
+                    if r2_used_mb + sz > r2_quota_mb {
+                        rejected.push(format!(
+                            "{} - {} [R2_QUOTA_EXCEEDED: Needs {:.1} MB, but {} tier has {:.1}/{:.1} MB used. Upgrade to `pro_monthly` (50 GB R2) or use Google Drive / Local P2P Node for $0]",
+                            item.artist, item.title, sz, sub_tier, r2_used_mb, r2_quota_mb
+                        ));
+                        continue;
+                    }
+                    r2_used_mb += sz;
                 }
-                r2_used_mb += sz;
+            } else if existing_cas_master.is_some() {
+                cas_deduplicated_hits += 1;
             }
 
             let file_id = item
@@ -697,11 +721,15 @@ impl P2PMeshState {
             profile,
             admitted_tracks: admitted.clone(),
             rejected_quarantine_tracks: rejected.clone(),
+            cas_deduplicated_hits,
+            physical_r2_mb_saved,
             network_catalog_available: total_network_tracks,
             welcome_message: format!(
-                "¡Bienvenido {}! Tu almacenamiento quedó conectado. Se admitieron {} pistas verificadas ({} rechazadas por aduana forense o cuota R2) y ya tienes acceso a las {} pistas verificadas de la red P2P.",
+                "¡Bienvenido {}! Tu almacenamiento quedó conectado. Se admitieron {} pistas verificadas ({} deduplicadas por CAS ahorrando {:.1} MB físicos en R2; {} rechazadas por aduana forense o cuota R2) y ya tienes acceso a las {} pistas verificadas de la red P2P.",
                 handle,
                 admitted.len(),
+                cas_deduplicated_hits,
+                physical_r2_mb_saved,
                 rejected.len(),
                 total_network_tracks
             ),
@@ -1221,6 +1249,26 @@ pub fn normalize_cloud_share_link(url: &str) -> (String, String) {
     }
 
     ("r2_or_direct".to_string(), trimmed.to_string())
+}
+
+/// Deterministic Content-Addressed Storage (CAS) fingerprint for internal Cloud P2P deduplication.
+/// Normalizes artist + title + rounded BPM so that if 20 DJs upload the same club master,
+/// Hera stores only 1 physical copy in Cloudflare R2 (`0 MB` extra R2 cost for DJs #2..#20).
+pub fn compute_cas_fingerprint(artist: &str, title: &str, bpm: f32) -> String {
+    let clean_a: String = artist
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect();
+    let clean_t: String = title
+        .trim()
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect();
+    let bpm_int = bpm.round() as u32;
+    format!("cas-{clean_a}-{clean_t}-{bpm_int}bpm")
 }
 
 /// Deterministic FNV-1a 64-bit acoustic verification seal for P2P trust.
