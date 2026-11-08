@@ -1,7 +1,7 @@
 # Superpowers-ODD Multi-Instance Integration Design (`hera`)
 
 - **Date:** 2026-11-08
-- **Author:** `david`
+- **Author:** `David Castillo <vikruzdavid@gmail.com>` (`davidcastilloc`)
 - **Repository:** `davidcastilloc/hera`
 - **Fork Source:** `https://github.com/davidcastilloc/superpowers-odd`
 

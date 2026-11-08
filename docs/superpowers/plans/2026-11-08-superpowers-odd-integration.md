@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Zero OS-dependent absolute paths (`C:\`, `/Users/`, `/home/`) in tracked files.
-- `git config user.name` must be `"david"` with Semantic Release / Conventional Commits.
+- `git config user.name` must be `"David Castillo"` and `git config user.email` must be `"vikruzdavid@gmail.com"` (`davidcastilloc`) with Semantic Release / Conventional Commits.
 - Every task completion requires real terminal receipts (`ruff`, `mypy`, `pytest`, `cargo check`).
 
 ## Review Focus
@@ -54,5 +54,5 @@
 - Verify: `docs/superpowers/plans/2026-11-08-superpowers-odd-integration.md`
 
 - [x] **Step 1: Run zero-regression suite (`uv run ruff check .`, `uv run pytest`, `cargo check --manifest-path hera-rs/Cargo.toml`)**
-- [x] **Step 2: Audit Git status, `user.name="david"`, and zero OS-specific paths**
+- [x] **Step 2: Audit Git status, `user.name="David Castillo"`, `user.email="vikruzdavid@gmail.com"`, and zero OS-specific paths**
 - [x] **Step 3: Run ODD Smoke Test and commit atomic handoff**

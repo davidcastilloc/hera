@@ -15,7 +15,7 @@ Execute plan by dispatching a fresh implementer subagent per task, a task review
 - **Zero Context Rot:** Ephemeral subagents per task (`50–200` lines max). Never pass accumulated session history between dispatches.
 - **Performance Gate (`rg` first):** Never bulk-read ignored directories (`node_modules`, `.venv`, `.svelte-kit`, `dist`, `build`, `target`, `.wrangler`). Always run surgical `ripgrep` (`rg`) searches before reading files.
 - **Anti-Hallucination Gate:** Forbidden to write fake tests (mocks testing mocks), empty stubs (`TODO` / `pass` / `unimplemented!()`), or delete existing tests to make the suite pass.
-- **Multi-Instance Handoff (`multi-instance-handoff`):** After each task passes review, mark `[x]` in `docs/superpowers/plans/`, update `docs/superpowers/DECISIONS.md` only if a critical technical finding occurred, and commit atomically with `git config user.name "david"` (Semantic Release / Conventional Commits) using repository-relative paths only.
+- **Multi-Instance Handoff (`multi-instance-handoff`):** After each task passes review, mark `[x]` in `docs/superpowers/plans/`, update `docs/superpowers/DECISIONS.md` only if a critical technical finding occurred, and commit atomically with `git config user.name "David Castillo"` and `git config user.email "vikruzdavid@gmail.com"` (Semantic Release / Conventional Commits) using repository-relative paths only.
 
 **Narration:** between tool calls, narrate at most one short line — the
 ledger and the tool results carry the record.

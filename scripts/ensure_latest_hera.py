@@ -114,15 +114,17 @@ def ensure_git_repo_updated(hera_dir: Path, pull_remote: bool = True) -> dict[st
     if rc_rem == 0 and remote_full:
         info["remote_commit"] = remote_full[:7]
 
-    # Ensure Multi-Instance ODD Git conventions (author 'david' + local hooks)
-    _run_cmd(["git", "config", "user.name", "david"], cwd=hera_dir, timeout=10)
+    # Ensure Multi-Instance ODD Git conventions (author 'David Castillo <vikruzdavid@gmail.com>' + local hooks)
+    _run_cmd(["git", "config", "user.name", "David Castillo"], cwd=hera_dir, timeout=10)
+    _run_cmd(["git", "config", "user.email", "vikruzdavid@gmail.com"], cwd=hera_dir, timeout=10)
     if (hera_dir / ".githooks").exists():
         _run_cmd(["git", "config", "core.hooksPath", ".githooks"], cwd=hera_dir, timeout=10)
 
     # Also sync companion repo ../hera-cloud if cloned alongside hera
     companion_cloud = hera_dir.parent / "hera-cloud"
     if (companion_cloud / ".git").exists():
-        _run_cmd(["git", "config", "user.name", "david"], cwd=companion_cloud, timeout=10)
+        _run_cmd(["git", "config", "user.name", "David Castillo"], cwd=companion_cloud, timeout=10)
+        _run_cmd(["git", "config", "user.email", "vikruzdavid@gmail.com"], cwd=companion_cloud, timeout=10)
         if pull_remote:
             _run_cmd(["git", "pull", "--rebase", "origin", "main", "--quiet"], cwd=companion_cloud, timeout=60)
 

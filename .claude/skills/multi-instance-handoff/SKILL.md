@@ -33,7 +33,7 @@ At the completion of **every subtask** in `docs/superpowers/plans/<plan>.md`:
 1. **Check the box:** Update `- [ ]` to `- [x]` in `docs/superpowers/plans/<plan>.md`.
 2. **Distill critical findings:** Update `docs/superpowers/DECISIONS.md` **only** if a critical architectural decision, non-obvious constraint, or root-cause bug discovery occurred. Never dump raw logs into `DECISIONS.md`.
 3. **Verify Git Identity & Semantic Release:**
-   - Ensure `git config user.name` is `"david"`.
+   - Ensure `git config user.name` is `"David Castillo"` and `git config user.email` is `"vikruzdavid@gmail.com"` (GitHub: `davidcastilloc`).
    - Create an atomic Conventional Commit (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`) so that any other instance (Windows, Mac, or Antigravity) can resume immediately with a simple `git pull`.
 
 ### 2. Performance Gate (Surgical Discovery)
@@ -54,4 +54,4 @@ When starting or resuming work on any machine (Windows / macOS / Linux / Antigra
 1. Run `git status -sb` and `git log -n 5 --oneline`.
 2. Read `CLAUDE.md` / `AGENTS.md` and `docs/superpowers/DECISIONS.md`.
 3. Inspect active plans in `docs/superpowers/plans/` and locate the first unchecked `- [ ]` step.
-4. Execute the next subtask (`50–200` LOC max), verify with real terminal receipts, mark `- [x]`, and commit under `user.name = "david"`.
+4. Execute the next subtask (`50–200` LOC max), verify with real terminal receipts, mark `- [x]`, and commit under `David Castillo <vikruzdavid@gmail.com>`.

@@ -27,7 +27,7 @@ Then announce "Using [skill] to [purpose]" and follow the skill exactly. If it h
 
 When multiple skills apply, process skills come first — they set the approach, then implementation skills carry it out:
 
-- **Every session start / resume / handoff across Windows, Mac, Linux/Antigravity:** `superpowers:multi-instance-handoff` is ALWAYS active (enforces `docs/superpowers/`, `rg` surgical searches, zero OS absolute paths, `git config user.name "david"`, and atomic `[x]` commits).
+- **Every session start / resume / handoff across Windows, Mac, Linux/Antigravity:** `superpowers:multi-instance-handoff` is ALWAYS active (enforces `docs/superpowers/`, `rg` surgical searches, zero OS absolute paths, `git config user.name "David Castillo"` / `user.email "vikruzdavid@gmail.com"`, and atomic `[x]` commits).
 - **Micro-change or bugfix (`< 30` lines):** Go directly to `superpowers:test-driven-development` + `superpowers:verification-before-completion` + `superpowers:multi-instance-handoff` (skip full spec/plan ceremony).
 - **"Let's build X" (`>= 30` lines):** `superpowers:brainstorming` (`docs/superpowers/specs/`) → `superpowers:writing-plans` (`docs/superpowers/plans/`) → `superpowers:subagent-driven-development` → `superpowers:verification-before-completion`.
 - **"Fix this complex bug":** `superpowers:systematic-debugging` first, then domain skills and `superpowers:verification-before-completion`.

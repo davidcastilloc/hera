@@ -37,7 +37,7 @@ A task is the smallest unit that carries its own test cycle (`50–200` lines ma
 - **Zero Context Rot:** Keep each task scoped to `50–200` lines so an ephemeral subagent can execute it cleanly without context bloat.
 - **Multi-OS Relative Paths Only:** Never write OS-dependent absolute paths (`C:\`, `/Users/`, `/home/`) in plans. All paths must be repository-relative.
 - **Stack Fidelity:** Use only dependencies and test runners already present in `pyproject.toml`, `Cargo.toml`, or `package.json`.
-- **Atomic Handoff Checkboxes (`multi-instance-handoff`):** Every task ends with marking `- [x]` in `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`, updating `docs/superpowers/DECISIONS.md` if a critical technical decision was made, and creating an atomic Semantic Release commit (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`) with `git config user.name "david"`.
+- **Atomic Handoff Checkboxes (`multi-instance-handoff`):** Every task ends with marking `- [x]` in `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`, updating `docs/superpowers/DECISIONS.md` if a critical technical decision was made, and creating an atomic Semantic Release commit (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`) with `git config user.name "David Castillo"` and `git config user.email "vikruzdavid@gmail.com"`.
 
 ## Step Granularity
 
@@ -46,7 +46,7 @@ A task is the smallest unit that carries its own test cycle (`50–200` lines ma
 - "Run it to make sure it fails (capture terminal receipt)" - step
 - "Implement the minimal code (`50-200` LOC max, zero `TODO`/`pass` placeholders) to make the test pass" - step
 - "Run linters, typecheck, and tests and capture green terminal receipt" - step
-- "Mark `- [x]` in plan, update `docs/superpowers/DECISIONS.md` if needed, and commit atomically as `david`" - step
+- "Mark `- [x]` in plan, update `docs/superpowers/DECISIONS.md` if needed, and commit atomically as `David Castillo <vikruzdavid@gmail.com>`" - step
 
 ## Plan Document Header
 

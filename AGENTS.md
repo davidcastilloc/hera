@@ -59,7 +59,7 @@ Every AI agent working across **Windows**, **macOS**, or **Linux / Antigravity**
    - All specifications live in `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
    - All implementation plans live in `docs/superpowers/plans/YYYY-MM-DD-<feature>.md` with `- [ ]` / `- [x]` checkboxes.
    - All distilled architectural decisions and root-cause bug findings live in `docs/superpowers/DECISIONS.md`.
-   - **Handoff Rule:** Upon finishing each subtask in `docs/superpowers/plans/`, mark `[x]`, update `docs/superpowers/DECISIONS.md` only if there was a critical technical finding, ensure `git config user.name "david"`, and create an atomic Semantic Release / Conventional Commit (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`) so any other instance can resume with `git pull`.
+   - **Handoff Rule:** Upon finishing each subtask in `docs/superpowers/plans/`, mark `[x]`, update `docs/superpowers/DECISIONS.md` only if there was a critical technical finding, ensure `git config user.name "David Castillo"` and `git config user.email "vikruzdavid@gmail.com"` (GitHub: `davidcastilloc`), and create an atomic Semantic Release / Conventional Commit (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`) so any other instance can resume with `git pull`.
    - **Zero OS-Specific Absolute Paths & Zero Symlinks:** Never commit paths containing `C:\`, `/Users/`, or `/home/`. Always use repository-relative paths and `pathlib.Path`. Keep skills as physical files in `.agent/skills/` and `.claude/skills/`.
 3. **ODD (Organic-Driven Development) Ceremony Scaling:**
    - **Micro-changes / Bugfixes (`< 30` LOC):** Go straight to failing test + minimal code fix + terminal verification receipt + atomic commit.

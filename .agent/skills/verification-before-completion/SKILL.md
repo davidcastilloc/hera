@@ -26,7 +26,7 @@ Before claiming completion on any task:
 2. **Zero Empty Stubs:** Verify no `TODO`, `pass`, or `unimplemented!()` placeholders were introduced as fake implementations.
 3. **Zero Deleted Tests:** Verify no existing tests were deleted or weakened to make the test suite pass.
 4. **Multi-OS Path Hygiene:** Verify `git diff` contains zero OS-specific absolute paths (`C:\Users\...`, `/Users/...`, `/home/...`).
-5. **Atomic Handoff Ready:** Verify `git config user.name` returns `"david"`, the task checkbox `[x]` is updated in `docs/superpowers/plans/`, and `docs/superpowers/DECISIONS.md` reflects any critical architectural findings.
+5. **Atomic Handoff Ready:** Verify `git config user.name` returns `"David Castillo"` and `git config user.email` returns `"vikruzdavid@gmail.com"`, the task checkbox `[x]` is updated in `docs/superpowers/plans/`, and `docs/superpowers/DECISIONS.md` reflects any critical architectural findings.
 
 ## The Gate Function
 

@@ -39,7 +39,7 @@
   1. Forked `obra/superpowers` to `davidcastilloc/superpowers-odd` with custom `multi-instance-handoff` master skill and ODD/RDD gates.
   2. Installed skills as regular tracked files in `.agent/skills/` and `.claude/skills/` (zero OS symlinks).
   3. Established `docs/superpowers/{specs,plans,DECISIONS.md}` as the Git-backed synchronization state across all instances.
-  4. Enforced Semantic Release / Conventional Commits under `git config user.name "david"` and removed hardcoded Windows paths from `AGENTS.md`.
+  4. Enforced Semantic Release / Conventional Commits under `git config user.name "David Castillo"` and `git config user.email "vikruzdavid@gmail.com"` (`davidcastilloc`) and removed hardcoded Windows paths from `AGENTS.md`.
 
 ### [2026-11-08] ADR-002: Test Suite Environment Requirements (`--all-extras` & Temp Dir Isolation)
 - **Context:** During Phase 3 zero-regression verification:

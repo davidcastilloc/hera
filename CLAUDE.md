@@ -41,7 +41,7 @@ cargo test --manifest-path hera-rs/Cargo.toml
   - Explicit type annotations (`str`, `Path`, `list[Track]`, `dict[str, Any]`) on all functions/methods.
   - Cross-platform paths via `pathlib.Path` — **never** hardcode OS-specific absolute paths (`C:\`, `/Users/`, `/home/`).
   - Async I/O (`asyncio`, `httpx`, `aiosqlite`) for network, DB, and subprocess tasks.
-  - Conventional Commits / Semantic Release (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`) with `git config user.name "david"`.
+  - Conventional Commits / Semantic Release (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`) with `git config user.name "David Castillo"` and `git config user.email "vikruzdavid@gmail.com"` (`davidcastilloc`).
 
 ---
 
@@ -54,7 +54,7 @@ Skills are physically vendored (zero OS symlinks) inside `.claude/skills/` and `
      - `docs/superpowers/specs/` — Design specs
      - `docs/superpowers/plans/` — Step-by-step plans with `- [ ]` / `- [x]` checkboxes
      - `docs/superpowers/DECISIONS.md` — Distilled architectural memory & critical bug log
-   - **Atomic Handoff:** At the end of every subtask in `docs/superpowers/plans/`, mark `[x]`, update `docs/superpowers/DECISIONS.md` only if a critical technical finding occurred, verify `git config user.name` is `"david"`, and create an atomic commit so any other machine can resume via `git pull`.
+   - **Atomic Handoff:** At the end of every subtask in `docs/superpowers/plans/`, mark `[x]`, update `docs/superpowers/DECISIONS.md` only if a critical technical finding occurred, verify `git config user.name` is `"David Castillo"` and `git config user.email` is `"vikruzdavid@gmail.com"`, and create an atomic commit so any other machine can resume via `git pull`.
 2. **ODD Ceremony Scaling:**
    - **Changes `< 30` lines:** Skip spec/plan ceremony -> failing test -> minimal code -> terminal verification receipt -> atomic commit.
    - **Changes `>= 30` lines:** `brainstorming` (`docs/superpowers/specs/`) -> `writing-plans` (`docs/superpowers/plans/`) -> `subagent-driven-development` (`50–200` LOC max per ephemeral subagent, zero context rot) -> `verification-before-completion`.
