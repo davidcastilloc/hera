@@ -83,6 +83,12 @@ Instead of just taking from the community (*leeching*), Hera configures the loca
 ### 4. Multi-Cloud Automated Redundancy
 With `hera sync push`, all 8 sets, audio masters, and cue sheets sync directly to **Google Drive (`gdrive:Hera_Music/sets`)** via headless OAuth, guaranteeing immediate access from any CDJ, standalone player, or mobile setup.
 
+### 5. 🐝 Federated R2 Edge Swarm & `Edge Guardian` Nodes (*«Mientras más nodos de Hera, más fuerte es el sistema de enjambres»*)
+Any community member who deploys [`hera-rs`](hera-rs/README.md) on the **Cloudflare Workers + R2 Free Tier (`$0.00/month`)** automatically strengthens the global P2P swarm ([full guide in `docs/FEDERATED_R2_SWARM.md`](docs/FEDERATED_R2_SWARM.md)):
+* **Constrained Water-Filling (`$0.00` Billing Protection)**: The swarm dynamically calculates optimal shard allocations across all community nodes while strictly respecting `9.0 GB` R2 (`CF_WORKER_SAFE_R2_CAP_MB`) and `85,000 req/day` (`CF_WORKER_SAFE_REQ_CAP`) safety ceilings so collaborators never incur Cloudflare charges.
+* **Meritocratic `Edge Guardian` Autopilot (`1 : 1.5` Turbo Credits)**: Nodes passing random **64-byte `Proof-of-Custody` range audits** unlock unlimited R2 Fast Lane access (`EDGE_GUARDIAN_UNLIMITED_FAST_LANE`) while online and earn **`1.5 MB` of Turbo Credit per `1.0 MB` served** (`ProofOfDeliveryReceipt`) for offline laptop sets.
+* **Blind Catalog Sharding & `4 MB` Immutable Blocks (`8.4x` Multiplier)**: Shards are stored as opaque `shard-blobs/{hmac}.hbin` blocks (`4 MB` aligned with `Cache-Control: public, max-age=31536000, immutable`), gated by single-use `60s` HMAC-signed `X-Hera-Swarm-Ticket` headers and verified by a double cryptographic seal (`hera_seal` + `audio_sha256`).
+
 ---
 
 ## ✨ Core Philosophy

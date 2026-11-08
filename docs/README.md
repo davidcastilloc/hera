@@ -9,6 +9,8 @@ This directory contains the canonical documentation, specifications, and archite
 | Document | Target Audience | Summary |
 |---|---|---|
 | [`../README.md`](../README.md) | All Users & Developers | Project overview, core features, architecture, Quickstart, CLI reference, and **Wishlist Board**. |
+| [`FEDERATED_R2_SWARM.md`](FEDERATED_R2_SWARM.md) | Community DJs & Self-Hosters | **Federated R2 Edge Swarm (`Edge Guardian`)**: Constrained Water-Filling (`9.0 GB` / `85k req/day` safe caps), `1:1.5` Turbo Credits, `4 MB` immutable blocks (`8.4x`), Blind Shards & 64B `Proof-of-Custody`. |
+| [`superpowers/specs/2026-11-08-cloudflare-p2p-swarm-design.md`](superpowers/specs/2026-11-08-cloudflare-p2p-swarm-design.md) | Systems & Rust Engineers | Mathematical & cryptographic specification of the Cloudflare P2P Swarm, Elastic Thermal $K$, and `P2C` load balancing. |
 | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) | Contributors & Maintainers | Development setup, architecture layers, coding standards, testing, and PR workflow. |
 | [`Hera_Especificacion_Tecnica_PRD_v0.1.docx`](Hera_Especificacion_Tecnica_PRD_v0.1.docx) | Product, Backend, DevOps | Full technical PRD: vision, providers, pipeline, data schema, roadmap, and MVP acceptance criteria. |
 | [`Hera_Guia_para_Agentes_AI.md`](Hera_Guia_para_Agentes_AI.md) | AI Agents & MCP Developers | Operational rules, tool contracts, execution sequences, state machines, and guardrails. |

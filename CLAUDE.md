@@ -36,7 +36,7 @@ cargo test --manifest-path hera-rs/Cargo.toml
   - `src/hera/mcp/`: MCP server (`stdio` + HTTP + Code Mode).
   - `src/hera/cli.py`: Click CLI commands (`setup`, `status`, `doctor`, `search`, `audit`, `set`, `serve`, `sync`, `ui`).
   - `analyzers/`: Acoustic DSP extractors (`librosa`, `ffmpeg`, `transients.py`, `style_embeddings.py`, `synergy_engine.py`).
-  - `hera-rs/src/`: Pure-Rust DSP (`forensics.rs`, `structure.rs`, `synergy.rs`), P2P broker (`p2p.rs`), and MCP (`mcp.rs`, `code_mode.rs`).
+  - `hera-rs/src/`: Pure-Rust DSP (`forensics.rs`, `structure.rs`, `synergy.rs`), P2P broker (`p2p.rs`), Federated R2 Edge Swarm (`p2p_exchange.rs`), and MCP (`mcp.rs`, `code_mode.rs`).
 - **Coding Standards:**
   - Explicit type annotations (`str`, `Path`, `list[Track]`, `dict[str, Any]`) on all functions/methods.
   - Cross-platform paths via `pathlib.Path` — **never** hardcode OS-specific absolute paths (`C:\`, `/Users/`, `/home/`).
