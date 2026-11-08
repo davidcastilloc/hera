@@ -47,4 +47,21 @@ uv run hera serve
 - **Unified Holistic Synergy:** Always use the 4-layer synergy engine (Camelot harmonic flow, gradual BPM tempo curves, transient punch matching, and Discogs-EffNet style embeddings) when arranging crates.
 - **Local Isolation:** Do not send audio files or library contents to external paid APIs.
 
+---
+
+## 🌐 Two-Repository Open-Core Ecosystem (`hera` ↔ `hera-cloud`)
+
+The Hera ecosystem is divided into two complementary repositories that work together:
+
+1. **`hera` (Public Repository — `c:\Users\David Castillo\Git-Repos\hera`)**:
+   - **Role:** Open-Source Client, Local/Edge Pure-Rust DSP Engine (`hera-rs/`), MCP Server (`stdio` + HTTP + Code Mode), and Community P2P Node (`DaviDJ` ↔ `DJFoo`).
+   - **Storage & Sharing Rule:** Connects Zero-OAuth Google Drive (`/embeddedfolderview`), Dropbox, OneDrive, or Local Disk P2P Seeder (`--music-dir`). **All uploaded tracks are shared on the P2P network by default (`share_on_p2p = true`).**
+   - **Security Boundary:** Never place private SaaS unit economics (`/api/v1/cloud/economics`), payment webhooks, or unauthenticated paid tier upgrades (`/api/v1/dj/upgrade-tier`) inside this public repository.
+
+2. **`hera-cloud` (Private Repository — `c:\Users\David Castillo\Git-Repos\hera-cloud`)**:
+   - **Role:** Private Cloudflare SaaS Control Plane, Paid R2 CAS Vault, Internal P2P Data Broker, and Subscription Tier Gatekeeper.
+   - **How `hera` talks to `hera-cloud`:**
+     - Local `hera` nodes analyze audio locally on the DJ's CPU (`$0.00` cloud CPU cost) and announce verified metadata (`hera_seal`, 4 Hot Cues, `cas_fingerprint`, `style_simhash_u64`) to `hera-cloud`.
+     - `hera-cloud` enforces the DJ's subscription tier (`beta_mvp` = `5 GB` R2 vs `pro_monthly` = `50 GB` R2), performs Global CAS Deduplication (`0 MB` extra R2 for duplicate tracks), awards the `+38 MB` Curator Quota Refund Bounty (`POST /api/v1/broker/claim-cloud-track`), runs Safe Atomic Hot/Cold R2 Eviction (`POST /api/v1/broker/optimize-tiering`), and unlocks the **Private Vault Toggle (`POST /api/v1/dj/p2p-sharing`, `share_on_p2p = false`)** exclusively for `pro_monthly` subscribers.
+
 See the root [`AGENTS.md`](../../AGENTS.md) and [`MANIFESTO.md`](../../MANIFESTO.md) for full architectural guidelines.
