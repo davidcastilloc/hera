@@ -74,8 +74,25 @@
 
 ---
 
-## 🖼️ Mockups Visuales Versionados en el Repositorio (`docs/superpowers/assets/`)
+## 🖼️ Mockups & Capturas Reales en Vivo (`docs/superpowers/assets/`)
 
+### Mockups de Diseño Inicial
 - **Vista 1 (Biblioteca estilo Museeks + Reproductor de 4 Hot Cues + Botones Deterministas + Copiloto IA):** `docs/superpowers/assets/hera_ui_1_library_crate.jpg`
 - **Vista 2 (Mi ADN Musical + Rueda Camelot + Selector VirtualDJ/Rekordbox/Traktor + Reglas del DJ Brain):** `docs/superpowers/assets/hera_ui_2_dna_onboarding.jpg`
 - **Vista 3 (Puente Armónico Inteligente P2P + Pre-escucha de Transición + Descarga a Disco Local):** `docs/superpowers/assets/hera_ui_3_harmonic_bridge_p2p.jpg`
+
+### Capturas Reales de Producción (`vp build` + Playwright Chromium)
+- **Live 1 — Biblioteca DJ + Barra Superior con 4 Pines de Hot Cues (`1100x680`):** `docs/superpowers/assets/hera_live_1_library_1100x680.png`
+- **Live 2 — Mi ADN Musical & Rueda Camelot de 24 Llaves (`/dna`, `1100x680`):** `docs/superpowers/assets/hera_live_2_dna_1100x680.png`
+- **Live 3 — Puente Armónico P2P + Pre-Escucha 15s + Copiloto IA (`/bridge`, `1100x680`):** `docs/superpowers/assets/hera_live_3_bridge_1100x680.png`
+- **Live 4 — Vista Compacta de Cabina (`900x550`):** `docs/superpowers/assets/hera_live_4_library_compact_900x550.png`
+
+---
+
+## 🎯 Qué Logra `HERA Desktop` para Nuestros DJs Nerds y Curadores Musicales
+
+1. **🎧 Audición Instantánea de Estructura Acústica (`TrackProgress.tsx` + `TrackRow.tsx`):** Salta en 1 clic a `🟢 1:Intro`, `🔵 2:Breakdown`, `🔴 3:Drop` y `🟡 4:Outro` en la barra superior sin perder horas marcando Hot Cues a mano.
+2. **🧬 Radiografía de Identidad Musical y Reglas de Oro (`/dna` + `dj_brain.rs`):** Auto-perfila el disco local en Rust sobre la Rueda Camelot de 24 llaves (`1A..12A` y `1B..12B`) y aplica switches físicos para priorizar `_mis_producciones` y bloquear transcodes falsos mediante FFT.
+3. **🌍 El "Puente Armónico Imposible" + Pre-Escucha de 15s (`/bridge` + `synergy.rs`):** Conecta cualquier pista Origen (Deck A) y Destino (Deck B) con 2 eslabones P2P óptimos, pre-escuchando el cruce `Cue 4 (Mix Out) ➔ Cue 1 (Intro)` antes de descargar a `quarantine/ ➔ library/`.
+4. **🎛️ Exportación Determinista 1-Clic Offline (`HeraDjToolbar.tsx` + `export.rs`):** Genera archivos nativos para **VirtualDJ (`.vdjfolder`)**, **Rekordbox (`.xml`)**, **Traktor Pro (`.nml`)** y **M3U8** con los 4 Hot Cues ya inyectados en los pads del controlador, incluso con 0% de internet.
+5. **⚡ Copiloto IA Gratuito (`$0.00`) + Instalador `~8 MB` 100% Rust:** Cero consumo parásito de RAM/CPU en cabina y acceso gratuito a `10,000 Neurons/día` en `Cloudflare Workers AI`, más 22 herramientas MCP (`hera-node --mcp`) para los curadores más técnicos.
