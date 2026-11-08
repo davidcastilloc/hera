@@ -1,6 +1,6 @@
 [package]
 name = "hera-node-rs"
-version = "0.4.0"
+version = "0.4.1"
 edition = "2021"
 description = "Hera Universal Audio DSP, 2-Opt TSP Crate Curator & P2P Verified Node (Cloudflare Workers WASM + Native VPS)"
 license = "MIT"

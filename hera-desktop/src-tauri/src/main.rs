@@ -49,7 +49,7 @@ fn main() {
                     Target::new(TargetKind::Webview),
                     Target::new(TargetKind::Folder {
                         path: get_storage_dir(),
-                        file_name: Some("museeks".into()),
+                        file_name: Some("hera".into()),
                     }),
                 ])
                 .level(LevelFilter::Info)

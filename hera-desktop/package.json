@@ -1,15 +1,15 @@
 {
-  "name": "museeks",
-  "version": "0.4.0",
-  "description": "A simple, clean, and cross-platform music player.",
+  "name": "hera-desktop",
+  "version": "0.4.1",
+  "description": "HERA Desktop — Pure-Rust DJ Curation, 4-Hot-Cue DSP, P2P Swarm & AI Copilot.",
   "bugs": {
-    "url": "https://github.com/martpie/museeks/issues"
+    "url": "https://github.com/davidcastilloc/hera/issues"
   },
   "license": "MIT",
-  "author": "Pierre de la Martinière <pierre.de.la.martiniere@gmail.com>",
+  "author": "David Castillo <vikruzdavid@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "https://github.com/martpie/museeks"
+    "url": "https://github.com/davidcastilloc/hera"
   },
   "type": "module",
   "scripts": {
@@ -97,5 +97,5 @@
     "pre-commit": "bun run gen:translations && git add src/translations"
   },
   "packageManager": "bun@1.4.4",
-  "productName": "Museeks"
+  "productName": "HERA"
 }

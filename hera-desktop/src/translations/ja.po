@@ -37,13 +37,13 @@ msgid "The playlist \"{name}\" was created"
 msgstr "プレイリスト「{name}」が作成されました"
 
 #. placeholder {0}: newRelease.tag_name
-#: src/api/SettingsAPI.ts:168
-msgid "Museeks {0} is available, check https://museeks.io!"
-msgstr "Museeks {0} が利用可能です。https://museeks.io をご確認ください！"
+#: src/api/SettingsAPI.ts:175
+msgid "HERA {0} is available at https://github.com/davidcastilloc/hera/releases!"
+msgstr ""
 
-#: src/api/SettingsAPI.ts:170
-msgid "Museeks {currentVersion} is the latest version available."
-msgstr "Museeks {currentVersion} が利用可能な最新バージョンです。"
+#: src/api/SettingsAPI.ts:177
+msgid "HERA {currentVersion} is the latest version available."
+msgstr ""
 
 #: src/components/ButtonRepeat.tsx:18
 msgid "Repeat"
@@ -103,36 +103,36 @@ msgstr ""
 msgid "Queue"
 msgstr "キュー"
 
-#: src/components/Navigation.tsx:48
+#: src/components/Navigation.tsx:49
 msgid "Main navigation"
 msgstr ""
 
-#: src/components/Navigation.tsx:51
+#: src/components/Navigation.tsx:52
 #: src/routes/settings.tsx:33
 msgid "Library"
 msgstr "ライブラリ"
 
-#: src/components/Navigation.tsx:54
+#: src/components/Navigation.tsx:55
 #: src/routes/artists.tsx:64
 #: src/routes/settings.ui.tsx:148
 msgid "Artists"
 msgstr "アーティスト"
 
-#: src/components/Navigation.tsx:57
+#: src/components/Navigation.tsx:58
 #: src/routes/playlists.tsx:165
 #: src/routes/settings.ui.tsx:151
 msgid "Playlists"
 msgstr "プレイリスト"
 
-#: src/components/Navigation.tsx:60
+#: src/components/Navigation.tsx:61
 msgid "Settings"
 msgstr "設定"
 
-#: src/components/Navigation.tsx:66
+#: src/components/Navigation.tsx:67
 msgid "Library status"
 msgstr ""
 
-#: src/components/Navigation.tsx:90
+#: src/components/Navigation.tsx:92
 msgid "scanning tracks..."
 msgstr "トラックをスキャン中..."
 
@@ -277,21 +277,21 @@ msgstr ""
 msgid "Title"
 msgstr "タイトル"
 
-#: src/components/TrackListHeader.tsx:31
+#: src/components/TrackListHeader.tsx:46
 #: src/routes/tracks.$trackID.tsx:241
 msgid "Duration"
 msgstr "再生時間"
 
-#: src/components/TrackListHeader.tsx:36
+#: src/components/TrackListHeader.tsx:51
 msgid "Artist"
 msgstr "アーティスト"
 
-#: src/components/TrackListHeader.tsx:41
+#: src/components/TrackListHeader.tsx:56
 #: src/routes/tracks.$trackID.tsx:99
 msgid "Album"
 msgstr "アルバム"
 
-#: src/components/TrackListHeader.tsx:46
+#: src/components/TrackListHeader.tsx:61
 #: src/routes/tracks.$trackID.tsx:139
 msgid "Genre"
 msgstr "ジャンル"
@@ -377,8 +377,8 @@ msgid "New Playlist"
 msgstr "新しいプレイリスト"
 
 #: src/routes/settings.about.tsx:36
-msgid "About Museeks"
-msgstr "Museeks について"
+msgid "About HERA"
+msgstr ""
 
 #: src/routes/settings.about.tsx:48
 msgid "release notes"
@@ -397,26 +397,26 @@ msgid "Contributors"
 msgstr "コントリビューター"
 
 #: src/routes/settings.about.tsx:72
-msgid "Made with <0/> by Pierre de la Martinière (<1>martpie.io</1>) and a bunch of <2>great people</2>"
-msgstr "Pierre de la Martinière（<1>martpie.io</1>）と多くの<2>素晴らしい人々</2>により <0/> で作られました"
+msgid "Created with <0/> by David Castillo (<1>@davidcastilloc</1>) and <2>HERA contributors</2> (UI foundation adapted from martpie/museeks MIT)"
+msgstr ""
 
-#: src/routes/settings.about.tsx:88
+#: src/routes/settings.about.tsx:89
 msgid "Translations:"
 msgstr "翻訳："
 
-#: src/routes/settings.about.tsx:102
+#: src/routes/settings.about.tsx:103
 msgid "Report issue / Ask for a feature"
 msgstr "問題を報告 / 機能をリクエスト"
 
-#: src/routes/settings.about.tsx:105
+#: src/routes/settings.about.tsx:106
 msgid "Bugs happen. Please, do not hesitate to report them or to ask for features you would like to see, using the <0>issue tracker</0>."
 msgstr "バグは発生するものです。<0>課題トラッカー</0>を使用して、遠慮なく報告したり、見たい機能をリクエストしてください。"
 
-#: src/routes/settings.about.tsx:120
+#: src/routes/settings.about.tsx:121
 msgid "Internals"
 msgstr "内部情報"
 
-#: src/routes/settings.about.tsx:125
+#: src/routes/settings.about.tsx:126
 msgid "Open storage directory"
 msgstr "ストレージディレクトリを開く"
 
@@ -453,8 +453,8 @@ msgid "Scan"
 msgstr "スキャン"
 
 #: src/routes/settings.library.tsx:96
-msgid "All track data will be updated from the base files, but your original files won't be modified. Any Museeks-specific edits you may have done will be reset."
-msgstr "すべてのトラックデータがベースファイルから更新されますが、元のファイルは変更されません。Museeks固有の編集は全てリセットされます。"
+msgid "All track data will be updated from the base files, but your original files won't be modified. Any HERA-specific edits you may have done will be reset."
+msgstr ""
 
 #: src/routes/settings.library.tsx:98
 msgid "Refresh all tracks?"
@@ -482,16 +482,16 @@ msgid "Danger zone"
 msgstr "危険ゾーン"
 
 #: src/routes/settings.library.tsx:132
-msgid "Delete all tracks and playlists from Museeks."
-msgstr "Museeks からすべてのトラックとプレイリストを削除します。"
+msgid "Delete all tracks and playlists from HERA."
+msgstr ""
 
 #: src/routes/settings.library.tsx:137
 msgid "Fully reset the library"
 msgstr "ライブラリを完全にリセット"
 
 #: src/routes/settings.library.tsx:141
-msgid "All your tracks and playlists will be deleted from Museeks."
-msgstr "すべてのトラックとプレイリストが Museeks から削除されます。"
+msgid "All your tracks and playlists will be deleted from HERA."
+msgstr ""
 
 #: src/routes/settings.library.tsx:143
 msgid "Reset library?"

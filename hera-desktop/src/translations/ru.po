@@ -37,13 +37,13 @@ msgid "The playlist \"{name}\" was created"
 msgstr "Создан плейлист \"{name}\""
 
 #. placeholder {0}: newRelease.tag_name
-#: src/api/SettingsAPI.ts:168
-msgid "Museeks {0} is available, check https://museeks.io!"
-msgstr "Доступна версия Museeks {0}, проверьте https://museeks.io!"
+#: src/api/SettingsAPI.ts:175
+msgid "HERA {0} is available at https://github.com/davidcastilloc/hera/releases!"
+msgstr ""
 
-#: src/api/SettingsAPI.ts:170
-msgid "Museeks {currentVersion} is the latest version available."
-msgstr "Museeks {currentVersion} является самой последней доступной версией."
+#: src/api/SettingsAPI.ts:177
+msgid "HERA {currentVersion} is the latest version available."
+msgstr ""
 
 #: src/components/ButtonRepeat.tsx:18
 msgid "Repeat"
@@ -103,36 +103,36 @@ msgstr ""
 msgid "Queue"
 msgstr "Очередь"
 
-#: src/components/Navigation.tsx:48
+#: src/components/Navigation.tsx:49
 msgid "Main navigation"
 msgstr ""
 
-#: src/components/Navigation.tsx:51
+#: src/components/Navigation.tsx:52
 #: src/routes/settings.tsx:33
 msgid "Library"
 msgstr "Библиотека"
 
-#: src/components/Navigation.tsx:54
+#: src/components/Navigation.tsx:55
 #: src/routes/artists.tsx:64
 #: src/routes/settings.ui.tsx:148
 msgid "Artists"
 msgstr "Исполнители"
 
-#: src/components/Navigation.tsx:57
+#: src/components/Navigation.tsx:58
 #: src/routes/playlists.tsx:165
 #: src/routes/settings.ui.tsx:151
 msgid "Playlists"
 msgstr "Плейлисты"
 
-#: src/components/Navigation.tsx:60
+#: src/components/Navigation.tsx:61
 msgid "Settings"
 msgstr "Настройки"
 
-#: src/components/Navigation.tsx:66
+#: src/components/Navigation.tsx:67
 msgid "Library status"
 msgstr ""
 
-#: src/components/Navigation.tsx:90
+#: src/components/Navigation.tsx:92
 msgid "scanning tracks..."
 msgstr "сканирование треков..."
 
@@ -277,21 +277,21 @@ msgstr ""
 msgid "Title"
 msgstr "Заголовок"
 
-#: src/components/TrackListHeader.tsx:31
+#: src/components/TrackListHeader.tsx:46
 #: src/routes/tracks.$trackID.tsx:241
 msgid "Duration"
 msgstr "Длительность"
 
-#: src/components/TrackListHeader.tsx:36
+#: src/components/TrackListHeader.tsx:51
 msgid "Artist"
 msgstr "Исполнитель"
 
-#: src/components/TrackListHeader.tsx:41
+#: src/components/TrackListHeader.tsx:56
 #: src/routes/tracks.$trackID.tsx:99
 msgid "Album"
 msgstr "Альбом"
 
-#: src/components/TrackListHeader.tsx:46
+#: src/components/TrackListHeader.tsx:61
 #: src/routes/tracks.$trackID.tsx:139
 msgid "Genre"
 msgstr "Жанр"
@@ -377,8 +377,8 @@ msgid "New Playlist"
 msgstr "Новый плейлист"
 
 #: src/routes/settings.about.tsx:36
-msgid "About Museeks"
-msgstr "О Museeks"
+msgid "About HERA"
+msgstr ""
 
 #: src/routes/settings.about.tsx:48
 msgid "release notes"
@@ -397,26 +397,26 @@ msgid "Contributors"
 msgstr "Участники"
 
 #: src/routes/settings.about.tsx:72
-msgid "Made with <0/> by Pierre de la Martinière (<1>martpie.io</1>) and a bunch of <2>great people</2>"
-msgstr "Создали <0/>Пьер де ла Мартиньер (<1>martpie.io</1>) и множество <2>замечательных людей</2>"
+msgid "Created with <0/> by David Castillo (<1>@davidcastilloc</1>) and <2>HERA contributors</2> (UI foundation adapted from martpie/museeks MIT)"
+msgstr ""
 
-#: src/routes/settings.about.tsx:88
+#: src/routes/settings.about.tsx:89
 msgid "Translations:"
 msgstr "Переводы:"
 
-#: src/routes/settings.about.tsx:102
+#: src/routes/settings.about.tsx:103
 msgid "Report issue / Ask for a feature"
 msgstr "Сообщить об ошибке / Предложить улучшение"
 
-#: src/routes/settings.about.tsx:105
+#: src/routes/settings.about.tsx:106
 msgid "Bugs happen. Please, do not hesitate to report them or to ask for features you would like to see, using the <0>issue tracker</0>."
 msgstr "Ошибки случаются. Пожалуйста, не стесняйтесь сообщать о них, а так же предлагать улучшения, которые вам хотелось бы видеть, посредством <0>трекера</0>."
 
-#: src/routes/settings.about.tsx:120
+#: src/routes/settings.about.tsx:121
 msgid "Internals"
 msgstr "Внутренности"
 
-#: src/routes/settings.about.tsx:125
+#: src/routes/settings.about.tsx:126
 msgid "Open storage directory"
 msgstr "Открыть папку-хранилище"
 
@@ -453,8 +453,8 @@ msgid "Scan"
 msgstr "Сканировать"
 
 #: src/routes/settings.library.tsx:96
-msgid "All track data will be updated from the base files, but your original files won't be modified. Any Museeks-specific edits you may have done will be reset."
-msgstr "Вся информация о треках будет обновлена из исходных файлов, но ваши исходные файлы не будут изменены. Все внесённые вами изменения, касающиеся Museeks, будут сброшены."
+msgid "All track data will be updated from the base files, but your original files won't be modified. Any HERA-specific edits you may have done will be reset."
+msgstr ""
 
 #: src/routes/settings.library.tsx:98
 msgid "Refresh all tracks?"
@@ -482,16 +482,16 @@ msgid "Danger zone"
 msgstr "Опасная зона"
 
 #: src/routes/settings.library.tsx:132
-msgid "Delete all tracks and playlists from Museeks."
-msgstr "Удалить все треки и плейлисты из Museeks."
+msgid "Delete all tracks and playlists from HERA."
+msgstr ""
 
 #: src/routes/settings.library.tsx:137
 msgid "Fully reset the library"
 msgstr "Полный сброс библиотеки"
 
 #: src/routes/settings.library.tsx:141
-msgid "All your tracks and playlists will be deleted from Museeks."
-msgstr "Все ваши треки и плейлисты будут удалены из Museeks."
+msgid "All your tracks and playlists will be deleted from HERA."
+msgstr ""
 
 #: src/routes/settings.library.tsx:143
 msgid "Reset library?"

@@ -223,7 +223,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 
                 #[cfg(target_os = "macos")]
                 {
-                    let museeks_menu = SubmenuBuilder::new(app_handle, "Museeks")
+                    let hera_menu = SubmenuBuilder::new(app_handle, "HERA")
                         .about(Some(about_metadata))
                         .separator()
                         .services()
@@ -235,7 +235,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                         .build()
                         .unwrap();
 
-                    builder.items(&[&museeks_menu])
+                    builder.items(&[&hera_menu])
                 }
 
                 #[cfg(not(target_os = "macos"))]
@@ -306,7 +306,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 "report_an_issue" => {
                     win.app_handle()
                         .opener()
-                        .open_url("https://github.com/martpie/museeks/issues", None::<&str>)
+                        .open_url("https://github.com/davidcastilloc/hera/issues", None::<&str>)
                         .unwrap();
                 }
                 _ => {}

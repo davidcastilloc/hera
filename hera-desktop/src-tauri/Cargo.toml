@@ -1,12 +1,12 @@
 # https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [package]
-name = "museeks"
-version = "0.4.0"
-description = "A simple, clean, and cross-platform music player"
-authors = ["Pierre de la Martinière <pierre.de.la.martiniere@gmail.com>"]
+name = "hera-desktop"
+version = "0.4.1"
+description = "HERA Desktop — Pure-Rust DJ Curation, 4-Hot-Cue DSP, P2P Swarm & AI Copilot"
+authors = ["David Castillo <vikruzdavid@gmail.com>"]
 license = "MIT"
-repository = "https://github.com/martpie/museeks"
+repository = "https://github.com/davidcastilloc/hera"
 edition = "2024"
 
 [build-dependencies]

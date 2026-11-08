@@ -11,11 +11,11 @@
 		<dict>
 			<key>CFBundleURLName</key>
 			<!-- app's bundle identifier -->
-			<string>Museeks</string>
+			<string>HERA</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<!-- register the museeks:// schemes -->
-				<string>museeks</string>
+				<!-- register the hera:// schemes -->
+				<string>hera</string>
 			</array>
 		</dict>
 	</array>

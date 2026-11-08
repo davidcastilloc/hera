@@ -9,15 +9,15 @@ use crate::{
 };
 
 pub fn init() -> AnyResult<ConfigManager> {
-    // 1. Ensure Config dir is "museeks" and not Museeks
+    // 1. Ensure Config dir is "hera"
     let config_dir = dirs::config_dir().expect("Could not find config directory");
 
-    let old_path = config_dir.join("./Museeks");
-    let new_path = config_dir.join("./museeks");
+    let old_path = config_dir.join("./HERA");
+    let new_path = config_dir.join("./hera");
 
     if old_path.exists() && !new_path.exists() {
         fs::rename(&old_path, &new_path)?;
-        println!("Renamed config folder from Museeks to museeks");
+        println!("Renamed config folder from HERA to hera");
     }
 
     // 2. Ensure Config is created and return it

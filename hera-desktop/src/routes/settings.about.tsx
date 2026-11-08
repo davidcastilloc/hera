@@ -33,17 +33,20 @@ function ViewSettingsAbout() {
     <>
       <Setting.Section>
         <Setting.Title>
-          <Trans>About Museeks</Trans>
+          <Trans>About HERA</Trans>
         </Setting.Title>
         <Setting.Description>
-          Museeks {version}
+          HERA {version}
           {' - '}
-          <ExternalLink href="https://museeks.io" type="url">
-            museeks.io
+          <ExternalLink
+            href="https://github.com/davidcastilloc/hera"
+            type="url"
+          >
+            github.com/davidcastilloc/hera
           </ExternalLink>
           {' - '}
           <ExternalLink
-            href={`https://github.com/martpie/museeks/releases/tag/${version}`}
+            href={`https://github.com/davidcastilloc/hera/releases/tag/v${version}`}
             type="url"
           >{t`release notes`}</ExternalLink>
         </Setting.Description>
@@ -70,17 +73,18 @@ function ViewSettingsAbout() {
         </Setting.Title>
         <Setting.Description>
           <Trans>
-            Made with <Heart /> by Pierre de la Martinière (
-            <ExternalLink href="https://martpie.io" type="url">
-              martpie.io
+            Created with <Heart /> by David Castillo (
+            <ExternalLink href="https://github.com/davidcastilloc" type="url">
+              @davidcastilloc
             </ExternalLink>
-            ) and a bunch of{' '}
+            ) and{' '}
             <ExternalLink
-              href="https://github.com/martpie/museeks/graphs/contributors"
+              href="https://github.com/davidcastilloc/hera/graphs/contributors"
               type="url"
             >
-              great people
-            </ExternalLink>
+              HERA contributors
+            </ExternalLink>{' '}
+            (UI foundation adapted from martpie/museeks MIT)
           </Trans>
           .
         </Setting.Description>
@@ -106,7 +110,7 @@ function ViewSettingsAbout() {
             Bugs happen. Please, do not hesitate to report them or to ask for
             features you would like to see, using the{' '}
             <ExternalLink
-              href="http://github.com/martpie/Museeks/issues"
+              href="https://github.com/davidcastilloc/hera/issues"
               type="url"
             >
               issue tracker

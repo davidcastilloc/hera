@@ -4,6 +4,14 @@ All notable changes to **HERA (`davidcastilloc/hera`)** are documented in this f
 
 ---
 
+## [0.4.1] - 2026-11-08
+
+### Fixed
+- **Complete `HERA` Desktop Branding (`hera-desktop`, `audio.hera.app`):**
+  - Replaced leftover `Museeks` / `museeks` / `io.museeks.app` branding with **`HERA`** / **`hera-desktop`** / **`audio.hera.app`** across `hera-desktop/package.json`, `hera-desktop/index.html`, `hera-desktop/src-tauri/tauri.conf.json`, `hera-desktop/src-tauri/Cargo.toml`, `hera-desktop/src-tauri/Info.plist`, `src-tauri/src/main.rs`, `src-tauri/src/plugins/{app_menu,config,db}.rs`, `src-tauri/src/libs/{error,init}.rs`, `src/routes/settings.{about,library}.tsx`, `src/api/SettingsAPI.ts`, `src/components/GlobalErrors.tsx`, and Lingui translation catalogs.
+
+---
+
 ## [0.4.0] - 2026-11-08
 
 ### Added
