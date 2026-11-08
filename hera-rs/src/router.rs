@@ -5,8 +5,9 @@ use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditRepo
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
     calculate_cloudflare_saas_economics_with_price, compute_hera_seal, get_cloud_referral_catalog,
-    CloudReferralOption, ConnectDjDriveRequest, P2PMeshState, P2PPeerNode, P2PSearchQuery,
-    P2PVerifiedTrack, ScanLocalDirRequest, UpgradeTierRequest,
+    BrokerBatchLookupRequest, BrokerBridgeRequest, CloudReferralOption, ConnectDjDriveRequest,
+    P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
+    UpgradeTierRequest,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
 use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
@@ -101,6 +102,9 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/mcp/code-mode.d.ts", get(code_mode_dts_handler))
         .route("/api/v1/node/manifest", get(manifest_handler))
         .route("/api/v1/cloud/economics", get(cloud_economics_handler))
+        .route("/api/v1/broker/stats", get(broker_stats_handler))
+        .route("/api/v1/broker/lookup-intel", post(broker_lookup_intel_handler))
+        .route("/api/v1/broker/resolve-bridge", post(broker_resolve_bridge_handler))
         .route("/api/v1/node/scan-local-dir", post(scan_local_dir_handler))
         .route("/api/v1/dj/connect-drive", post(connect_dj_drive_handler))
         .route("/api/v1/dj/upgrade-tier", post(upgrade_dj_tier_handler))
@@ -132,6 +136,29 @@ async fn cloud_economics_handler(Query(q): Query<EconomicsQuery>) -> impl IntoRe
     Json(calculate_cloudflare_saas_economics_with_price(
         djs, gb_per_dj, price_usd,
     ))
+}
+
+async fn broker_stats_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
+    Json(state.broker_stats())
+}
+
+async fn broker_lookup_intel_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<BrokerBatchLookupRequest>,
+) -> impl IntoResponse {
+    Json(state.broker_lookup_intel_batch(req))
+}
+
+async fn broker_resolve_bridge_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<BrokerBridgeRequest>,
+) -> impl IntoResponse {
+    let candidates = state.broker_resolve_emergency_bridge(req);
+    Json(serde_json::json!({
+        "node_id": state.node_id,
+        "bridge_candidates_count": candidates.len(),
+        "candidates": candidates
+    }))
 }
 
 async fn scan_local_dir_handler(

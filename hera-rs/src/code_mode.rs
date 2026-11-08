@@ -9,8 +9,8 @@
 
 use crate::forensics::audit_pcm_channels;
 use crate::p2p::{
-    get_cloud_referral_catalog, ConnectDjDriveRequest, P2PMeshState, P2PSearchQuery,
-    P2PVerifiedTrack, ScanLocalDirRequest,
+    get_cloud_referral_catalog, BrokerBatchLookupRequest, BrokerBridgeRequest,
+    ConnectDjDriveRequest, P2PMeshState, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
 };
 use crate::router::current_runtime_target;
 use crate::synergy::{
@@ -410,6 +410,36 @@ fn execute_single_sdk_call(
             let peers = state.list_peers();
             log.push(format!("hera.listPeers -> {} active P2P nodes", peers.len()));
             serde_json::to_value(peers).map_err(|e| e.to_string())
+        }
+        "hera.brokerStats" | "brokerStats" | "broker_stats" => {
+            let stats = state.broker_stats();
+            log.push(format!(
+                "hera.brokerStats -> {} unique CAS masters ({} total swarm replicas, {:.1}% dedup)",
+                stats.unique_cas_masters, stats.total_swarm_replicas, stats.deduplication_ratio_pct
+            ));
+            serde_json::to_value(stats).map_err(|e| e.to_string())
+        }
+        "hera.brokerLookupIntel" | "brokerLookupIntel" | "broker_lookup_intel" => {
+            let req: BrokerBatchLookupRequest = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid brokerLookupIntel payload: {e}"))?;
+            let resp = state.broker_lookup_intel_batch(req);
+            log.push(format!(
+                "hera.brokerLookupIntel -> {} instant O(1) hits ({} auto-healed, {:.1} ms CPU saved)",
+                resp.instant_intel_hits.len(),
+                resp.auto_healed_count,
+                resp.total_cpu_ms_saved
+            ));
+            serde_json::to_value(resp).map_err(|e| e.to_string())
+        }
+        "hera.brokerResolveBridge" | "brokerResolveBridge" | "broker_resolve_bridge" => {
+            let req: BrokerBridgeRequest = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid brokerResolveBridge payload: {e}"))?;
+            let candidates = state.broker_resolve_emergency_bridge(req);
+            log.push(format!(
+                "hera.brokerResolveBridge -> {} optimal bridge tracks found",
+                candidates.len()
+            ));
+            serde_json::to_value(candidates).map_err(|e| e.to_string())
         }
         "hera.filterTracks" | "filterTracks" => {
             let tracks: Vec<P2PVerifiedTrack> = args

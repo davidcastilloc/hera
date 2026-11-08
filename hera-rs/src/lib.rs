@@ -739,5 +739,72 @@ mod tests {
         assert_eq!(dl_bytes.len(), good_wav.len());
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+
+        // 4. Test the Internal P2P Data Broker (`GET /api/v1/broker/stats`, `POST /api/v1/broker/lookup-intel`, `POST /api/v1/broker/resolve-bridge`)
+        let req_bstats = Request::builder()
+            .uri("/api/v1/broker/stats")
+            .body(Body::empty())
+            .unwrap();
+        let resp_bstats = app.call(req_bstats).await.unwrap();
+        assert_eq!(resp_bstats.status(), StatusCode::OK);
+        let j_bstats: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_bstats.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        // Verify deduplication in the Broker: `Ritual Del Sol` has 2 replicas (DaviDJ + DJR2TrialUser) grouped under 1 CAS master!
+        assert!(j_bstats["total_swarm_replicas"].as_u64().unwrap() > j_bstats["unique_cas_masters"].as_u64().unwrap());
+
+        // Test Collective Crowd-DSP O(1) Lookup + Auto-Heal of a 14,800 Hz fake YouTube rip!
+        let req_lookup = Request::builder()
+            .method("POST")
+            .uri("/api/v1/broker/lookup-intel")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "requesting_dj": "DJNewbie",
+                    "tracks": [
+                        {
+                            "artist": "DaviDJ",
+                            "title": "Ritual Del Sol",
+                            "local_bandwidth_hz": 14800.0
+                        }
+                    ]
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_lookup = app.call(req_lookup).await.unwrap();
+        assert_eq!(resp_lookup.status(), StatusCode::OK);
+        let j_lookup: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_lookup.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_lookup["auto_healed_count"], 1);
+        assert_eq!(j_lookup["instant_intel_hits"][0]["needs_auto_heal"], true);
+        // Has 2 swarm download routes (DaviDJ's Google Drive + DJR2TrialUser's R2 CAS)!
+        assert_eq!(
+            j_lookup["instant_intel_hits"][0]["verified_master_intel"]["swarm_replicas_count"],
+            2
+        );
+
+        // Test Emergency Booth Bridge Resolver (Jumping from 128 BPM 8A to 96 BPM 8A via 3:4 polyrhythmic bridge)
+        let req_bridge = Request::builder()
+            .method("POST")
+            .uri("/api/v1/broker/resolve-bridge")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "from_bpm": 128.0,
+                    "from_camelot": "8A",
+                    "to_bpm": 96.0,
+                    "to_camelot": "8A"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_bridge = app.call(req_bridge).await.unwrap();
+        assert_eq!(resp_bridge.status(), StatusCode::OK);
+        let j_bridge: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_bridge.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert!(j_bridge["bridge_candidates_count"].as_u64().unwrap() >= 1);
     }
 }
