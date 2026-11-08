@@ -441,7 +441,7 @@ pub fn handle_mcp_request(req: JsonRpcRequest, state: &P2PMeshState) -> Option<J
     }
 }
 
-fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<Value, String> {
+pub fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<Value, String> {
     match name {
         "ensure_hera_updated" => {
             let pull_remote = args

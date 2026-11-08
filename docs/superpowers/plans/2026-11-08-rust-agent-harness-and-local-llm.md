@@ -40,10 +40,10 @@
   - `pub fn probe_backend_models(base_url: &str, api_key: Option<&str>) -> Result<Vec<String>, String>`
   - `pub fn auto_detect_local_backend() -> Option<(String, String, String)>`
 
-- [ ] **Step 1: Expose `pub fn dispatch_tool_call` in `hera-rs/src/mcp.rs` and add unit tests in `hera-rs/src/dj_brain.rs` for the 12-backend registry, OpenAI tool schema conversion, and model probing**
-- [ ] **Step 2: Implement `list_supported_ai_backends`, `build_openai_tools_catalog`, `build_agent_harness_system_prompt`, `probe_backend_models`, and `auto_detect_local_backend` in `hera-rs/src/dj_brain.rs`**
-- [ ] **Step 3: Run `cargo check --manifest-path hera-rs/Cargo.toml` and `cargo test --manifest-path hera-rs/Cargo.toml` and capture `exit code 0` receipt**
-- [ ] **Step 4: Mark `- [x]` in plan and commit atomically**
+- [x] **Step 1: Expose `pub fn dispatch_tool_call` in `hera-rs/src/mcp.rs` and add unit tests in `hera-rs/src/dj_brain.rs` for the 12-backend registry, OpenAI tool schema conversion, and model probing**
+- [x] **Step 2: Implement `list_supported_ai_backends`, `build_openai_tools_catalog`, `build_agent_harness_system_prompt`, `probe_backend_models`, and `auto_detect_local_backend` in `hera-rs/src/dj_brain.rs`**
+- [x] **Step 3: Run `cargo check --manifest-path hera-rs/Cargo.toml` and `cargo test --manifest-path hera-rs/Cargo.toml` and capture `exit code 0` receipt**
+- [x] **Step 4: Mark `- [x]` in plan and commit atomically**
 
 ---
 

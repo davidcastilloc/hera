@@ -178,53 +178,243 @@ pub struct AiBackendOption {
 }
 
 pub fn list_supported_ai_backends() -> Vec<AiBackendOption> {
-    vec![
-        AiBackendOption {
-            id: "cloudflare_free".to_string(),
-            display_name: "⚡ Hera Cloud Free (Cloudflare Workers AI + AI Gateway)".to_string(),
-            default_model: "@cf/meta/llama-3.1-8b-instruct-fp8-fast".to_string(),
-            base_url: "https://cloud.hera.audio/api/v1/ai/v1".to_string(),
-            requires_api_key: false,
-            is_default_free: true,
-            zero_laptop_cpu_ram: true,
-        },
-        AiBackendOption {
-            id: "openrouter".to_string(),
-            display_name: "🌐 OpenRouter (:free & Pro Models)".to_string(),
-            default_model: "meta-llama/llama-3.3-70b-instruct:free".to_string(),
-            base_url: "https://openrouter.ai/api/v1".to_string(),
-            requires_api_key: true,
-            is_default_free: false,
-            zero_laptop_cpu_ram: true,
-        },
-        AiBackendOption {
-            id: "gemini".to_string(),
-            display_name: "✨ Google Gemini API".to_string(),
-            default_model: "gemini-2.5-flash".to_string(),
-            base_url: "https://generativelanguage.googleapis.com/v1beta/openai".to_string(),
-            requires_api_key: true,
-            is_default_free: false,
-            zero_laptop_cpu_ram: true,
-        },
-        AiBackendOption {
-            id: "openai".to_string(),
-            display_name: "🧠 OpenAI".to_string(),
-            default_model: "gpt-4o".to_string(),
-            base_url: "https://api.openai.com/v1".to_string(),
-            requires_api_key: true,
-            is_default_free: false,
-            zero_laptop_cpu_ram: true,
-        },
-        AiBackendOption {
-            id: "ollama".to_string(),
-            display_name: "💻 Ollama (Local Optional)".to_string(),
-            default_model: "llama3.3".to_string(),
-            base_url: "http://localhost:11434/v1".to_string(),
-            requires_api_key: false,
-            is_default_free: false,
-            zero_laptop_cpu_ram: false,
-        },
-    ]
+    const SPECS: &[(&str, &str, &str, &str, bool, bool, bool)] = &[
+        ("cloudflare_free", "⚡ Hera Cloud Free (Cloudflare Workers AI + AI Gateway)", "@cf/meta/llama-3.1-8b-instruct-fp8-fast", "https://cloud.hera.audio/api/v1/ai/v1", false, true, true),
+        ("lmstudio", "🖥️ LM Studio (Local OpenAI Server :1234)", "default", "http://localhost:1234/v1", false, false, false),
+        ("ollama", "💻 Ollama (Local :11434)", "llama3.3", "http://localhost:11434/v1", false, false, false),
+        ("openrouter", "🌐 OpenRouter (:free & Pro Models)", "meta-llama/llama-3.3-70b-instruct:free", "https://openrouter.ai/api/v1", true, false, true),
+        ("gemini", "✨ Google Gemini API", "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai", true, false, true),
+        ("vertex", "☁️ Google Vertex AI", "gemini-2.5-flash", "https://aiplatform.googleapis.com/v1beta1/openai", true, false, true),
+        ("openai", "🧠 OpenAI", "gpt-4o", "https://api.openai.com/v1", true, false, true),
+        ("anthropic", "🎭 Anthropic Claude", "claude-sonnet-4-20250514", "https://api.anthropic.com/v1", true, false, true),
+        ("jan", "🤖 Jan (Local :1337)", "default", "http://localhost:1337/v1", false, false, false),
+        ("llamacpp", "⚡ llama.cpp Server (Local :8080)", "default", "http://localhost:8080/v1", false, false, false),
+        ("vllm", "🚀 vLLM (Local :8000)", "default", "http://localhost:8000/v1", false, false, false),
+        ("custom", "🔌 Custom OpenAI-Compatible Endpoint", "default", "http://localhost:1234/v1", false, false, false),
+    ];
+    SPECS
+        .iter()
+        .map(
+            |&(id, display_name, default_model, base_url, requires_api_key, is_default_free, zero_laptop_cpu_ram)| {
+                AiBackendOption {
+                    id: id.to_string(),
+                    display_name: display_name.to_string(),
+                    default_model: default_model.to_string(),
+                    base_url: base_url.to_string(),
+                    requires_api_key,
+                    is_default_free,
+                    zero_laptop_cpu_ram,
+                }
+            },
+        )
+        .collect()
+}
+
+pub fn build_openai_tools_catalog() -> Vec<serde_json::Value> {
+    let raw = crate::mcp::list_mcp_tools();
+    let Some(tools) = raw.get("tools").and_then(|v| v.as_array()) else {
+        return Vec::new();
+    };
+    tools
+        .iter()
+        .filter_map(|t| {
+            let name = t.get("name")?.as_str()?;
+            if name == "chat_with_dj_copilot" || name == "ensure_hera_updated" {
+                return None;
+            }
+            let description = t.get("description").and_then(|v| v.as_str()).unwrap_or("");
+            let parameters = t
+                .get("inputSchema")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({ "type": "object", "properties": {} }));
+            Some(serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": description,
+                    "parameters": parameters,
+                }
+            }))
+        })
+        .collect()
+}
+
+pub fn build_agent_harness_system_prompt(
+    dj_handle: &str,
+    style_dna: Option<&DjStyleDnaProfile>,
+    state: &crate::p2p::P2PMeshState,
+) -> String {
+    let verified_count = state
+        .search(&crate::p2p::P2PSearchQuery {
+            q: None,
+            camelot: None,
+            bpm_min: None,
+            bpm_max: None,
+            subgenre: None,
+            owner_dj: None,
+            verified_only: Some(true),
+        })
+        .len();
+    let dna_section = style_dna
+        .map(|d| d.prompt_block.clone())
+        .unwrap_or_else(|| {
+            format!(
+                "[MEMORIA ACTIVA DEL DJ BRAIN — PERFIL '{}']\n- Zona BPM: 122-128 BPM (8A/9A)\n- Software: VirtualDJ / Rekordbox",
+                dj_handle
+            )
+        });
+    format!(
+        "You are HERA Agentic Copilot (100% Pure-Rust ReAct Harness) assisting DJ `{dj_handle}` on node `{}` ({verified_count} verified Studio Masters online).\n\
+         Operational Invariants:\n\
+         1. Quarantine-First & Zero-Trust Spectral Forensics: only admit/recommend verified tracks passing FFT bandwidth, fake-lossless, synthetic-sine, and <120Hz sub-bass mono phase correlation checks.\n\
+         2. 4-Layer Holistic Synergy + Global 2-Opt TSP: sequence crates using Camelot wheel harmony, gradual BPM / 3:4 polyrhythmic bridges, vocal clash avoidance, and 64D style embeddings (`build_dj_crate`).\n\
+         3. Multi-Step Pipeline Efficiency: use `hera_code_mode` to chain multi-step filtering + crate building in a single turn when appropriate, and `export_dj_crate` for VirtualDJ, Rekordbox, Traktor, and M3U8 exports.\n\
+         4. Always rely on live tool observations over assumptions.\n\n\
+         {dna_section}",
+        state.node_id
+    )
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn http_get_json_local(
+    host_port: &str,
+    path: &str,
+    api_key: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    use std::io::{Read, Write};
+    use std::net::{TcpStream, ToSocketAddrs};
+    use std::time::Duration;
+
+    let timeout = Duration::from_millis(600);
+    let addr = host_port
+        .to_socket_addrs()
+        .map_err(|e| format!("Invalid address `{host_port}`: {e}"))?
+        .next()
+        .ok_or_else(|| format!("Could not resolve `{host_port}`"))?;
+    let mut stream = TcpStream::connect_timeout(&addr, timeout)
+        .map_err(|e| format!("Connect timeout/error to `{host_port}`: {e}"))?;
+    let _ = stream.set_read_timeout(Some(timeout));
+    let _ = stream.set_write_timeout(Some(timeout));
+
+    let auth_header = api_key
+        .filter(|k| !k.trim().is_empty())
+        .map(|k| format!("Authorization: Bearer {}\r\n", k.trim()))
+        .unwrap_or_default();
+    let req = format!(
+        "GET {path} HTTP/1.1\r\nHost: {host_port}\r\nAccept: application/json\r\n{auth_header}Connection: close\r\n\r\n"
+    );
+    stream
+        .write_all(req.as_bytes())
+        .map_err(|e| format!("Write failed to `{host_port}`: {e}"))?;
+
+    let mut raw = Vec::new();
+    let _ = stream.read_to_end(&mut raw);
+    let text = String::from_utf8_lossy(&raw);
+    let body = text
+        .split_once("\r\n\r\n")
+        .map(|(_, b)| b)
+        .or_else(|| text.split_once("\n\n").map(|(_, b)| b))
+        .unwrap_or(&text)
+        .trim();
+    // Handle HTTP chunked framing or leading/trailing non-JSON bytes by slicing `{...}`
+    let json_slice = match (body.find('{'), body.rfind('}')) {
+        (Some(start), Some(end)) if end >= start => &body[start..=end],
+        _ => body,
+    };
+    serde_json::from_str(json_slice).map_err(|e| format!("Invalid JSON from `{host_port}{path}`: {e}"))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn extract_models_from_payload(val: &serde_json::Value) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(arr) = val.get("data").and_then(|v| v.as_array()) {
+        for item in arr {
+            if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
+                if !id.to_ascii_lowercase().contains("embed") {
+                    out.push(id.to_string());
+                }
+            }
+        }
+    } else if let Some(arr) = val.get("models").and_then(|v| v.as_array()) {
+        for item in arr {
+            if let Some(name) = item
+                .get("name")
+                .or_else(|| item.get("model"))
+                .and_then(|v| v.as_str())
+            {
+                if !name.to_ascii_lowercase().contains("embed") {
+                    out.push(name.to_string());
+                }
+            }
+        }
+    }
+    out
+}
+
+pub fn probe_backend_models(base_url: &str, api_key: Option<&str>) -> Result<Vec<String>, String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = (base_url, api_key);
+        Err("Local TCP probing is only supported on native target".to_string())
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let trimmed = base_url.trim().trim_end_matches('/');
+        let without_scheme = trimmed
+            .strip_prefix("http://")
+            .or_else(|| trimmed.strip_prefix("https://"))
+            .unwrap_or(trimmed);
+        let (host_port_raw, base_path) = match without_scheme.split_once('/') {
+            Some((h, p)) => (h, format!("/{p}")),
+            None => (without_scheme, String::new()),
+        };
+        let host_port = if host_port_raw.contains(':') {
+            host_port_raw.to_string()
+        } else {
+            format!("{host_port_raw}:80")
+        };
+        let models_path = if base_path.ends_with("/models") {
+            base_path
+        } else if base_path.ends_with("/v1") {
+            format!("{base_path}/models")
+        } else if base_path.is_empty() {
+            "/v1/models".to_string()
+        } else {
+            format!("{base_path}/v1/models")
+        };
+
+        if let Ok(json_val) = http_get_json_local(&host_port, &models_path, api_key) {
+            let models = extract_models_from_payload(&json_val);
+            if !models.is_empty() {
+                return Ok(models);
+            }
+        }
+        if let Ok(json_val) = http_get_json_local(&host_port, "/api/tags", api_key) {
+            let models = extract_models_from_payload(&json_val);
+            if !models.is_empty() {
+                return Ok(models);
+            }
+        }
+        Err(format!("No active models discovered at `{base_url}`"))
+    }
+}
+
+pub fn auto_detect_local_backend() -> Option<(String, String, String)> {
+    let candidates = [
+        ("lmstudio", "http://127.0.0.1:1234/v1"),
+        ("ollama", "http://127.0.0.1:11434/v1"),
+        ("jan", "http://127.0.0.1:1337/v1"),
+        ("llamacpp", "http://127.0.0.1:8080/v1"),
+        ("vllm", "http://127.0.0.1:8000/v1"),
+    ];
+    for (backend_id, url) in candidates {
+        if let Ok(models) = probe_backend_models(url, None) {
+            if let Some(first) = models.into_iter().next() {
+                return Some((backend_id.to_string(), url.to_string(), first));
+            }
+        }
+    }
+    None
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -304,5 +494,62 @@ pub fn evaluate_cloudflare_free_ai_turn(
         estimated_cost_usd: 0.0,
         d1_synced_bytes: d1_bytes,
         assistant_reply: reply,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_12_backend_registry_and_openai_tools_catalog() {
+        let backends = list_supported_ai_backends();
+        assert_eq!(backends.len(), 12);
+        let lmstudio = backends.iter().find(|b| b.id == "lmstudio").unwrap();
+        assert_eq!(lmstudio.base_url, "http://localhost:1234/v1");
+        let ollama = backends.iter().find(|b| b.id == "ollama").unwrap();
+        assert_eq!(ollama.base_url, "http://localhost:11434/v1");
+
+        let tools = build_openai_tools_catalog();
+        assert_eq!(tools.len(), 20);
+        for t in &tools {
+            assert_eq!(t["type"], "function");
+            let fn_name = t["function"]["name"].as_str().unwrap();
+            assert_ne!(fn_name, "chat_with_dj_copilot");
+            assert!(t["function"]["parameters"].is_object());
+        }
+
+        let state = crate::p2p::P2PMeshState::new("hera-test-node");
+        let prompt = build_agent_harness_system_prompt("DaviDJ", None, &state);
+        assert!(prompt.contains("Quarantine-First"));
+        assert!(prompt.contains("hera_code_mode"));
+        assert!(prompt.contains("hera-test-node"));
+    }
+
+    #[test]
+    fn test_probe_backend_models_mock_lmstudio_ephemeral_tcp() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let handle = std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf);
+                let body = r#"{"data":[{"id":"qwen2.5-coder-14b-instruct-gguf"},{"id":"text-embedding-nomic"}]}"#;
+                let resp = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(resp.as_bytes());
+            }
+        });
+
+        let base_url = format!("http://{addr}/v1");
+        let models = probe_backend_models(&base_url, None).unwrap();
+        assert_eq!(models, vec!["qwen2.5-coder-14b-instruct-gguf".to_string()]);
+        let _ = handle.join();
     }
 }
