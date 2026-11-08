@@ -270,7 +270,8 @@ const styles = stylex.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: '12px',
+    rowGap: '12px',
+    columnGap: '12px',
   },
   title: {
     margin: 0,
@@ -284,7 +285,8 @@ const styles = stylex.create({
   endpointsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-    gap: '12px',
+    rowGap: '12px',
+    columnGap: '12px',
   },
   endpointCard: {
     padding: '12px',
@@ -309,7 +311,8 @@ const styles = stylex.create({
   },
   formRow: {
     display: 'flex',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
   input: {
     paddingBlock: '5px',
@@ -338,7 +341,8 @@ const styles = stylex.create({
   bridgeChain: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-    gap: '12px',
+    rowGap: '12px',
+    columnGap: '12px',
   },
   bridgeCard: {
     padding: '12px',
@@ -356,7 +360,8 @@ const styles = stylex.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: '6px',
+    rowGap: '6px',
+    columnGap: '6px',
     fontSize: '12px',
   },
   camelotBadge: {
@@ -373,7 +378,8 @@ const styles = stylex.create({
   },
   bridgeActions: {
     display: 'flex',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
     flexWrap: 'wrap',
   },
   primaryBtn: {
@@ -402,7 +408,8 @@ const styles = stylex.create({
     fontSize: '12px',
   },
   statusBanner: {
-    padding: '8px 12px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
     borderRadius: '6px',
     backgroundColor: 'rgba(40, 226, 20, 0.14)',
     fontSize: '12px',

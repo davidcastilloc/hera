@@ -17,7 +17,8 @@ use crate::p2p::{
 };
 use crate::router::current_runtime_target;
 use crate::synergy::{
-    compute_bpm_synergy, compute_camelot_synergy, optimize_crate_2opt, CrateTrackCandidate,
+    compute_bpm_synergy, compute_camelot_synergy, optimize_crate_with_spine, CrateTrackCandidate,
+    SetSpineConfig, SpineAnchor,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
@@ -679,7 +680,19 @@ fn execute_single_sdk_call(
                 default_candidates_from_state(state)
             };
 
-            let res = optimize_crate_2opt(brief, energy_arc, candidates, max_tracks);
+            let anchors: Vec<SpineAnchor> = args
+                .get("anchors")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let custom_energy_curve: Vec<f32> = args
+                .get("custom_energy_curve")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let spine = SetSpineConfig {
+                anchors,
+                custom_energy_curve,
+            };
+            let res = optimize_crate_with_spine(brief, energy_arc, candidates, max_tracks, &spine);
             log.push(format!(
                 "hera.buildDjCrate('{brief}', arc='{energy_arc}') -> sequenced {} tracks (synergy={:.1}%)",
                 res.total_tracks,

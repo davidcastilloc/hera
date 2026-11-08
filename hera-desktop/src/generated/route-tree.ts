@@ -9,11 +9,11 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './../routes/__root'
-import { Route as DnaRouteImport } from './../routes/dna'
-import { Route as BridgeRouteImport } from './../routes/bridge'
 import { Route as SettingsRouteImport } from './../routes/settings'
 import { Route as PlaylistsRouteImport } from './../routes/playlists'
 import { Route as LibraryRouteImport } from './../routes/library'
+import { Route as DnaRouteImport } from './../routes/dna'
+import { Route as BridgeRouteImport } from './../routes/bridge'
 import { Route as ArtistsRouteImport } from './../routes/artists'
 import { Route as TracksTrackIDRouteImport } from './../routes/tracks.$trackID'
 import { Route as SettingsUiRouteImport } from './../routes/settings.ui'
@@ -24,16 +24,6 @@ import { Route as PlaylistsPlaylistIDRouteImport } from './../routes/playlists.$
 import { Route as ArtistsArtistIDRouteImport } from './../routes/artists.$artistID'
 import { Route as ArtistsPresetsCompilationsRouteImport } from './../routes/artists.presets.compilations'
 
-const DnaRoute = DnaRouteImport.update({
-  id: '/dna',
-  path: '/dna',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BridgeRoute = BridgeRouteImport.update({
-  id: '/bridge',
-  path: '/bridge',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -47,6 +37,16 @@ const PlaylistsRoute = PlaylistsRouteImport.update({
 const LibraryRoute = LibraryRouteImport.update({
   id: '/library',
   path: '/library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DnaRoute = DnaRouteImport.update({
+  id: '/dna',
+  path: '/dna',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BridgeRoute = BridgeRouteImport.update({
+  id: '/bridge',
+  path: '/bridge',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ArtistsRoute = ArtistsRouteImport.update({
@@ -97,9 +97,9 @@ const ArtistsPresetsCompilationsRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/dna': typeof DnaRoute
-  '/bridge': typeof BridgeRoute
   '/artists': typeof ArtistsRouteWithChildren
+  '/bridge': typeof BridgeRoute
+  '/dna': typeof DnaRoute
   '/library': typeof LibraryRoute
   '/playlists': typeof PlaylistsRouteWithChildren
   '/settings': typeof SettingsRouteWithChildren
@@ -113,9 +113,9 @@ export interface FileRoutesByFullPath {
   '/artists/presets/compilations': typeof ArtistsPresetsCompilationsRoute
 }
 export interface FileRoutesByTo {
-  '/dna': typeof DnaRoute
-  '/bridge': typeof BridgeRoute
   '/artists': typeof ArtistsRouteWithChildren
+  '/bridge': typeof BridgeRoute
+  '/dna': typeof DnaRoute
   '/library': typeof LibraryRoute
   '/playlists': typeof PlaylistsRouteWithChildren
   '/settings': typeof SettingsRouteWithChildren
@@ -130,9 +130,9 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/dna': typeof DnaRoute
-  '/bridge': typeof BridgeRoute
   '/artists': typeof ArtistsRouteWithChildren
+  '/bridge': typeof BridgeRoute
+  '/dna': typeof DnaRoute
   '/library': typeof LibraryRoute
   '/playlists': typeof PlaylistsRouteWithChildren
   '/settings': typeof SettingsRouteWithChildren
@@ -148,9 +148,9 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/dna'
-    | '/bridge'
     | '/artists'
+    | '/bridge'
+    | '/dna'
     | '/library'
     | '/playlists'
     | '/settings'
@@ -164,9 +164,9 @@ export interface FileRouteTypes {
     | '/artists/presets/compilations'
   fileRoutesByTo: FileRoutesByTo
   to:
-    | '/dna'
-    | '/bridge'
     | '/artists'
+    | '/bridge'
+    | '/dna'
     | '/library'
     | '/playlists'
     | '/settings'
@@ -180,9 +180,9 @@ export interface FileRouteTypes {
     | '/artists/presets/compilations'
   id:
     | '__root__'
-    | '/dna'
-    | '/bridge'
     | '/artists'
+    | '/bridge'
+    | '/dna'
     | '/library'
     | '/playlists'
     | '/settings'
@@ -197,9 +197,9 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  DnaRoute: typeof DnaRoute
-  BridgeRoute: typeof BridgeRoute
   ArtistsRoute: typeof ArtistsRouteWithChildren
+  BridgeRoute: typeof BridgeRoute
+  DnaRoute: typeof DnaRoute
   LibraryRoute: typeof LibraryRoute
   PlaylistsRoute: typeof PlaylistsRouteWithChildren
   SettingsRoute: typeof SettingsRouteWithChildren
@@ -208,20 +208,6 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/dna': {
-      id: '/dna'
-      path: '/dna'
-      fullPath: '/dna'
-      preLoaderRoute: typeof DnaRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/bridge': {
-      id: '/bridge'
-      path: '/bridge'
-      fullPath: '/bridge'
-      preLoaderRoute: typeof BridgeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -241,6 +227,20 @@ declare module '@tanstack/react-router' {
       path: '/library'
       fullPath: '/library'
       preLoaderRoute: typeof LibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dna': {
+      id: '/dna'
+      path: '/dna'
+      fullPath: '/dna'
+      preLoaderRoute: typeof DnaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bridge': {
+      id: '/bridge'
+      path: '/bridge'
+      fullPath: '/bridge'
+      preLoaderRoute: typeof BridgeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/artists': {
@@ -353,9 +353,9 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
 )
 
 const rootRouteChildren: RootRouteChildren = {
-  DnaRoute: DnaRoute,
-  BridgeRoute: BridgeRoute,
   ArtistsRoute: ArtistsRouteWithChildren,
+  BridgeRoute: BridgeRoute,
+  DnaRoute: DnaRoute,
   LibraryRoute: LibraryRoute,
   PlaylistsRoute: PlaylistsRouteWithChildren,
   SettingsRoute: SettingsRouteWithChildren,

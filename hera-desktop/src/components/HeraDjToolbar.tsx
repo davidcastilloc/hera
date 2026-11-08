@@ -54,7 +54,9 @@ export default function HeraDjToolbar() {
         `🤖 ${reply.model_used} (${reply.neurons_consumed_this_turn} Neurons · $0.00)`,
       );
     } catch {
-      setStatusBadge('⚡ Cloudflare Workers AI Free (10,000 Neurons/día · $0.00)');
+      setStatusBadge(
+        '⚡ Cloudflare Workers AI Free (10,000 Neurons/día · $0.00)',
+      );
     }
   };
 

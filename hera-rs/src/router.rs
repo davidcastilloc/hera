@@ -18,7 +18,10 @@ use crate::p2p::{
     SWARM_ALIGNED_BLOCK_BYTES,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
-use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
+use crate::synergy::{
+    optimize_crate_with_spine, CrateTrackCandidate, OptimizedCrateResult, SetSpineConfig,
+    SpineAnchor,
+};
 use axum::{
     body::Bytes,
     extract::{DefaultBodyLimit, Path, Query, State},
@@ -73,6 +76,10 @@ pub struct BuildCrateRequest {
     #[serde(default = "default_arc")]
     pub energy_arc: String,
     pub max_tracks: Option<usize>,
+    #[serde(default)]
+    pub anchors: Vec<SpineAnchor>,
+    #[serde(default)]
+    pub custom_energy_curve: Vec<f32>,
     pub candidates: Vec<CrateTrackCandidate>,
 }
 
@@ -755,7 +762,17 @@ async fn build_crate_handler(
             Json(serde_json::json!({ "error": "Crate `candidates` list cannot be empty" })),
         ));
     }
-    let result = optimize_crate_2opt(&req.brief, &req.energy_arc, req.candidates, req.max_tracks);
+    let spine = SetSpineConfig {
+        anchors: req.anchors,
+        custom_energy_curve: req.custom_energy_curve,
+    };
+    let result = optimize_crate_with_spine(
+        &req.brief,
+        &req.energy_arc,
+        req.candidates,
+        req.max_tracks,
+        &spine,
+    );
     Ok(Json(result))
 }
 

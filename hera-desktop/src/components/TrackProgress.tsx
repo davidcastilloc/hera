@@ -70,7 +70,10 @@ export default function TrackProgress(props: Props) {
           {hotCues.map((cue) => {
             const pct = Math.min(
               99,
-              Math.max(0.5, (cue.seconds / Math.max(1, trackPlaying.duration)) * 100),
+              Math.max(
+                0.5,
+                (cue.seconds / Math.max(1, trackPlaying.duration)) * 100,
+              ),
             );
             return (
               <button

@@ -57,6 +57,29 @@ pub struct TransitionTelemetry {
     pub mix_recommendation: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SpineAnchor {
+    pub track_id: String,
+    /// Named role (`"opener"`, `"peak"`, `"bridge"`, `"closer"`) used when `slot`/`position` are omitted.
+    #[serde(default)]
+    pub role: Option<String>,
+    /// Exact 0-based slot index in the crate (`0..limit`).
+    #[serde(default)]
+    pub slot: Option<usize>,
+    /// Normalized position along the set (`0.0..=1.0`).
+    #[serde(default)]
+    pub position: Option<f32>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct SetSpineConfig {
+    #[serde(default)]
+    pub anchors: Vec<SpineAnchor>,
+    /// Custom energy control points (`0.0..=1.0`) linearly interpolated across all slots.
+    #[serde(default)]
+    pub custom_energy_curve: Vec<f32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OptimizedCrateResult {
     pub brief: String,
@@ -64,9 +87,15 @@ pub struct OptimizedCrateResult {
     pub total_tracks: usize,
     pub total_duration_seconds: f32,
     pub mean_synergy_score: f32,
+    #[serde(default)]
+    pub energy_curve_adherence: f32,
     pub harmonic_match_pct: f32,
     pub polyrhythmic_bridges: usize,
     pub vocal_clash_warnings: usize,
+    #[serde(default)]
+    pub target_energy_curve: Vec<f32>,
+    #[serde(default)]
+    pub pinned_slots: Vec<usize>,
     pub sequence: Vec<CrateTrackCandidate>,
     pub transitions: Vec<TransitionTelemetry>,
     pub m3u8_export: String,
@@ -245,12 +274,83 @@ pub fn evaluate_transition(a: &CrateTrackCandidate, b: &CrateTrackCandidate) -> 
     }
 }
 
+/// Build target normalized energy curve across `0..limit` from custom control points or named presets.
+pub fn compute_target_energy_curve(
+    limit: usize,
+    energy_arc: &str,
+    custom_curve: &[f32],
+) -> Vec<f32> {
+    if limit == 0 {
+        return vec![];
+    }
+    if !custom_curve.is_empty() {
+        if custom_curve.len() == 1 || limit == 1 {
+            return vec![round3(custom_curve[0].clamp(0.10, 1.0)); limit];
+        }
+        let max_idx = (custom_curve.len() - 1) as f32;
+        return (0..limit)
+            .map(|slot| {
+                let pos = ((slot as f32) / ((limit - 1) as f32)) * max_idx;
+                let lo = (pos.floor() as usize).min(custom_curve.len() - 1);
+                let hi = (lo + 1).min(custom_curve.len() - 1);
+                let frac = pos - (lo as f32);
+                round3((custom_curve[lo] * (1.0 - frac) + custom_curve[hi] * frac).clamp(0.10, 1.0))
+            })
+            .collect();
+    }
+
+    (0..limit)
+        .map(|slot| {
+            let x = if limit > 1 {
+                (slot as f32) / ((limit - 1) as f32)
+            } else {
+                0.5
+            };
+            let val = match energy_arc {
+                "rollercoaster" => {
+                    (0.55 + 0.35 * (x * std::f32::consts::PI * 2.0).sin()).clamp(0.30, 0.98)
+                }
+                "peak_hour" => (0.80 + 0.16 * (x * std::f32::consts::PI).sin()).clamp(0.65, 0.99),
+                "club_journey" | "warmup_peak_cooldown" => {
+                    if x <= 0.70 {
+                        0.45 + (x / 0.70) * 0.51
+                    } else {
+                        0.96 - ((x - 0.70) / 0.30) * 0.34
+                    }
+                }
+                "double_peak" | "festival_wave" => {
+                    (0.66 + 0.28 * (x * std::f32::consts::PI * 3.0).sin()).clamp(0.40, 0.97)
+                }
+                _ => (0.48 + 0.46 * x).clamp(0.35, 0.96), // steady_climb
+            };
+            round3(val)
+        })
+        .collect()
+}
+
 /// Global 2-Opt Traveling Salesperson (TSP) Crate Optimizer with Energy Arcs.
 pub fn optimize_crate_2opt(
     brief: &str,
     energy_arc: &str,
     candidates: Vec<CrateTrackCandidate>,
     max_tracks: Option<usize>,
+) -> OptimizedCrateResult {
+    optimize_crate_with_spine(
+        brief,
+        energy_arc,
+        candidates,
+        max_tracks,
+        &SetSpineConfig::default(),
+    )
+}
+
+/// Constrained 2-Opt TSP ("Set Spine Builder") with locked anchor tracks and custom energy curves.
+pub fn optimize_crate_with_spine(
+    brief: &str,
+    energy_arc: &str,
+    candidates: Vec<CrateTrackCandidate>,
+    max_tracks: Option<usize>,
+    spine: &SetSpineConfig,
 ) -> OptimizedCrateResult {
     let limit = max_tracks.unwrap_or(candidates.len()).min(candidates.len());
     if limit == 0 {
@@ -260,9 +360,12 @@ pub fn optimize_crate_2opt(
             total_tracks: 0,
             total_duration_seconds: 0.0,
             mean_synergy_score: 0.0,
+            energy_curve_adherence: 0.0,
             harmonic_match_pct: 0.0,
             polyrhythmic_bridges: 0,
             vocal_clash_warnings: 0,
+            target_energy_curve: vec![],
+            pinned_slots: vec![],
             sequence: vec![],
             transitions: vec![],
             m3u8_export: String::new(),
@@ -272,7 +375,6 @@ pub fn optimize_crate_2opt(
     }
 
     let n_all = candidates.len();
-    // Precompute pairwise transition synergy matrix
     let mut matrix = vec![vec![0.0_f32; n_all]; n_all];
     for i in 0..n_all {
         for j in 0..n_all {
@@ -282,79 +384,159 @@ pub fn optimize_crate_2opt(
         }
     }
 
-    // Target normalized energy curve across slots 0..limit
-    let target_energy: Vec<f32> = (0..limit)
-        .map(|slot| {
-            let x = if limit > 1 {
-                (slot as f32) / ((limit - 1) as f32)
-            } else {
-                0.5
-            };
-            match energy_arc {
-                "rollercoaster" => (0.55 + 0.35 * (x * std::f32::consts::PI * 2.0).sin()).clamp(0.3, 0.98),
-                "peak_hour" => (0.80 + 0.16 * (x * std::f32::consts::PI).sin()).clamp(0.65, 0.99),
-                _ => (0.48 + 0.46 * x).clamp(0.35, 0.96), // steady_climb
-            }
+    let target_energy = compute_target_energy_curve(limit, energy_arc, &spine.custom_energy_curve);
+    let max_energy_slot = (0..limit)
+        .max_by(|&a, &b| {
+            target_energy[a]
+                .partial_cmp(&target_energy[b])
+                .unwrap_or(std::cmp::Ordering::Equal)
         })
-        .collect();
+        .unwrap_or(limit / 2);
 
-    // 1. Greedy seed path starting from track closest to initial target energy
+    // Resolve Spine Anchors into locked slot indices
+    let mut pinned: Vec<Option<usize>> = vec![None; limit];
     let mut used = vec![false; n_all];
-    let mut order = Vec::with_capacity(limit);
+    for anchor in &spine.anchors {
+        let Some(cand_idx) = candidates
+            .iter()
+            .position(|c| c.track_id == anchor.track_id)
+        else {
+            continue;
+        };
+        if used[cand_idx] {
+            continue;
+        }
+        let desired_slot = if let Some(s) = anchor.slot {
+            s.min(limit - 1)
+        } else if let Some(p) = anchor.position {
+            ((p.clamp(0.0, 1.0) * (limit.saturating_sub(1) as f32)).round() as usize)
+                .min(limit - 1)
+        } else {
+            match anchor
+                .role
+                .as_deref()
+                .unwrap_or("opener")
+                .to_ascii_lowercase()
+                .as_str()
+            {
+                "closer" | "outro" => limit - 1,
+                "peak" | "climax" => max_energy_slot,
+                "bridge" | "pivot" | "mid" | "valley" => limit / 2,
+                _ => 0,
+            }
+        };
+        let resolved_slot = if pinned[desired_slot].is_none() {
+            Some(desired_slot)
+        } else {
+            (0..limit)
+                .filter(|&s| pinned[s].is_none())
+                .min_by_key(|&s| s.abs_diff(desired_slot))
+        };
+        if let Some(slot) = resolved_slot {
+            pinned[slot] = Some(cand_idx);
+            used[cand_idx] = true;
+        }
+    }
 
-    let first_idx = (0..n_all)
-        .min_by(|&a, &b| {
-            let da = (candidates[a].energy_score - target_energy[0]).abs() + candidates[a].bpm * 0.001;
-            let db = (candidates[b].energy_score - target_energy[0]).abs() + candidates[b].bpm * 0.001;
-            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
-        })
-        .unwrap_or(0);
+    let (syn_w, ene_w) = if !spine.custom_energy_curve.is_empty() {
+        (0.62_f32, 0.38_f32)
+    } else {
+        (0.76_f32, 0.24_f32)
+    };
+    let slot_energy_fit = |cand: usize, slot: usize| -> f32 {
+        let diff = (candidates[cand].energy_score - target_energy[slot]).abs();
+        (1.0 - diff - (diff * diff * 0.65)).clamp(0.0, 1.0)
+    };
 
-    used[first_idx] = true;
-    order.push(first_idx);
-
-    for slot in 1..limit {
-        let prev = *order.last().unwrap();
+    // 1. Constrained Greedy Seed with Lookahead to Next Anchor
+    let mut order = vec![0usize; limit];
+    for slot in 0..limit {
+        if let Some(c_idx) = pinned[slot] {
+            order[slot] = c_idx;
+            continue;
+        }
+        let next_anchor = ((slot + 1)..limit).find_map(|s| pinned[s].map(|c| (s, c)));
         let mut best_next = 0usize;
         let mut best_val = -1e9_f32;
         for cand in 0..n_all {
             if used[cand] {
                 continue;
             }
-            let syn = matrix[prev][cand];
-            let e_fit = 1.0 - (candidates[cand].energy_score - target_energy[slot]).abs();
-            let val = syn * 0.80 + e_fit * 0.20;
+            let e_fit = slot_energy_fit(cand, slot);
+            let mut val = if slot == 0 {
+                e_fit - candidates[cand].bpm * 0.0005
+            } else {
+                let prev = order[slot - 1];
+                matrix[prev][cand] * syn_w + e_fit * ene_w
+            };
+            if let Some((anchor_slot, anchor_cand)) = next_anchor {
+                let dist = (anchor_slot - slot) as f32;
+                let pull_weight = if dist <= 1.0 { syn_w } else { 0.40 / dist };
+                val += matrix[cand][anchor_cand] * pull_weight;
+            }
             if val > best_val {
                 best_val = val;
                 best_next = cand;
             }
         }
         used[best_next] = true;
-        order.push(best_next);
+        order[slot] = best_next;
     }
 
-    // 2. Global 2-Opt Local Search Refinement
+    // 2. Constrained 2-Opt + Cross-Anchor Unpinned Swap + Pool Bridge Replacement
     let route_score = |seq: &[usize]| -> f32 {
-        if seq.len() <= 1 {
-            return 1.0;
+        if seq.is_empty() {
+            return 0.0;
         }
-        let mut s = 0.0_f32;
-        for k in 0..(seq.len() - 1) {
-            let syn = matrix[seq[k]][seq[k + 1]];
-            let e_fit = 1.0 - (candidates[seq[k]].energy_score - target_energy[k]).abs();
-            s += syn * 0.82 + e_fit * 0.18;
+        let e_sum: f32 = (0..seq.len()).map(|k| slot_energy_fit(seq[k], k)).sum();
+        let mean_e = e_sum / (seq.len() as f32);
+        if seq.len() == 1 {
+            return mean_e;
         }
-        s / ((seq.len() - 1) as f32)
+        let syn_sum: f32 = (0..(seq.len() - 1))
+            .map(|k| matrix[seq[k]][seq[k + 1]])
+            .sum();
+        let mean_s = syn_sum / ((seq.len() - 1) as f32);
+        mean_s * syn_w + mean_e * ene_w
     };
 
-    if order.len() >= 4 {
+    if order.len() >= 2 {
         let mut current_best = route_score(&order);
-        for _pass in 0..30 {
+        for _pass in 0..35 {
             let mut improved = false;
-            for i in 0..(order.len() - 2) {
-                for k in (i + 2)..order.len() {
+
+            // Move A: Constrained 2-Opt segment reversal (only when pinned slots stay fixed)
+            if order.len() >= 4 {
+                for i in 0..(order.len() - 2) {
+                    for k in (i + 2)..order.len() {
+                        let valid_rev =
+                            (i..=k).all(|s| pinned[s].is_none() || s == i + k - s);
+                        if !valid_rev {
+                            continue;
+                        }
+                        let mut trial = order.clone();
+                        trial[i..=k].reverse();
+                        let sc = route_score(&trial);
+                        if sc > current_best + 1e-4 {
+                            order = trial;
+                            current_best = sc;
+                            improved = true;
+                        }
+                    }
+                }
+            }
+
+            // Move B: Pairwise swap of unpinned slots (jumps across locked intermediate anchors)
+            for i in 0..order.len() {
+                if pinned[i].is_some() {
+                    continue;
+                }
+                for k in (i + 1)..order.len() {
+                    if pinned[k].is_some() {
+                        continue;
+                    }
                     let mut trial = order.clone();
-                    trial[i..=k].reverse();
+                    trial.swap(i, k);
                     let sc = route_score(&trial);
                     if sc > current_best + 1e-4 {
                         order = trial;
@@ -363,12 +545,36 @@ pub fn optimize_crate_2opt(
                     }
                 }
             }
+
+            // Move C: Candidate pool bridge replacement when max_tracks < candidates.len()
+            if limit < n_all {
+                for slot in 0..order.len() {
+                    if pinned[slot].is_some() {
+                        continue;
+                    }
+                    for cand in 0..n_all {
+                        if order.contains(&cand) {
+                            continue;
+                        }
+                        let mut trial = order.clone();
+                        trial[slot] = cand;
+                        let sc = route_score(&trial);
+                        if sc > current_best + 1e-4 {
+                            order = trial;
+                            current_best = sc;
+                            improved = true;
+                        }
+                    }
+                }
+            }
+
             if !improved {
                 break;
             }
         }
     }
 
+    let pinned_slots: Vec<usize> = (0..limit).filter(|&s| pinned[s].is_some()).collect();
     let sequence: Vec<CrateTrackCandidate> =
         order.iter().map(|&idx| candidates[idx].clone()).collect();
 
@@ -399,6 +605,10 @@ pub fn optimize_crate_2opt(
     } else {
         sum_syn / n_trans
     };
+    let energy_adherence = (0..sequence.len())
+        .map(|i| 1.0 - (sequence[i].energy_score - target_energy[i]).abs())
+        .sum::<f32>()
+        / (sequence.len().max(1) as f32);
     let harmonic_pct = if transitions.is_empty() {
         100.0
     } else {
@@ -412,7 +622,10 @@ pub fn optimize_crate_2opt(
         brief,
         energy_arc,
         mean_synergy,
+        energy_adherence,
         harmonic_pct,
+        &target_energy,
+        &pinned_slots,
         &sequence,
         &transitions,
     );
@@ -423,9 +636,12 @@ pub fn optimize_crate_2opt(
         total_tracks: sequence.len(),
         total_duration_seconds: round2(total_dur),
         mean_synergy_score: round3(mean_synergy),
+        energy_curve_adherence: round3(energy_adherence),
         harmonic_match_pct: round2(harmonic_pct),
         polyrhythmic_bridges: poly_count,
         vocal_clash_warnings: vocal_warnings,
+        target_energy_curve: target_energy,
+        pinned_slots,
         sequence,
         transitions,
         m3u8_export,
@@ -511,26 +727,38 @@ fn build_set_guide(
     brief: &str,
     energy_arc: &str,
     mean_synergy: f32,
+    energy_adherence: f32,
     harmonic_pct: f32,
+    target_energy: &[f32],
+    pinned_slots: &[usize],
     seq: &[CrateTrackCandidate],
     transitions: &[TransitionTelemetry],
 ) -> String {
     let mut md = format!(
-        "# HERA RUST 2-OPT TSP SET GUIDE — {}\n- **Energy Arc**: `{}`\n- **Global Synergy**: `{:.1}%`\n- **Harmonic Lock**: `{:.1}%`\n\n",
+        "# HERA RUST 2-OPT TSP SET GUIDE — {}\n- **Energy Arc**: `{}`\n- **Global Synergy**: `{:.1}%`\n- **Spine Adherence**: `{:.1}%`\n- **Harmonic Lock**: `{:.1}%`\n\n",
         brief,
         energy_arc,
         mean_synergy * 100.0,
+        energy_adherence * 100.0,
         harmonic_pct
     );
     for (i, t) in seq.iter().enumerate() {
+        let pin_tag = if pinned_slots.contains(&i) {
+            " 📌 `[ANCHOR]`"
+        } else {
+            ""
+        };
+        let tgt_e = target_energy.get(i).copied().unwrap_or(t.energy_score);
         md.push_str(&format!(
-            "{:02}. **{} - {}** (`{:.1} BPM` | `{}` | Energy `{:.0}%`)\n",
+            "{:02}. **{} - {}**{} (`{:.1} BPM` | `{}` | Energy `{:.0}%` vs Target `{:.0}%`)\n",
             i + 1,
             t.artist,
             t.title,
+            pin_tag,
             t.bpm,
             t.camelot_key,
-            t.energy_score * 100.0
+            t.energy_score * 100.0,
+            tgt_e * 100.0
         ));
         if !t.hot_cues.is_empty() {
             let cues_str: Vec<String> = t
@@ -566,4 +794,177 @@ fn round2(v: f32) -> f32 {
 
 fn round3(v: f32) -> f32 {
     (v * 1000.0).round() / 1000.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mock_track(
+        id: &str,
+        title: &str,
+        bpm: f32,
+        key: &str,
+        energy: f32,
+        outro_vox: bool,
+        intro_vox: bool,
+    ) -> CrateTrackCandidate {
+        CrateTrackCandidate {
+            track_id: id.to_string(),
+            title: title.to_string(),
+            artist: "SimDJ".to_string(),
+            file_path: format!("/library/{id}.flac"),
+            duration_seconds: 210.0,
+            bpm,
+            camelot_key: key.to_string(),
+            energy_score: energy,
+            punch_index: (energy * 0.9).clamp(0.3, 0.95),
+            groove_type: "four_on_floor".to_string(),
+            top_subgenre: "Club".to_string(),
+            has_intro_vocals: intro_vox,
+            has_outro_vocals: outro_vox,
+            embedding_64d: vec![0.125; 64],
+            hot_cues: vec![],
+        }
+    }
+
+    #[test]
+    fn test_set_spine_builder_multi_scenario_simulation() {
+        let pool = vec![
+            mock_track("t_opener", "Deep Sunset Opener", 122.0, "8A", 0.45, false, false),
+            mock_track("t_warmup_2", "Organic Terrace", 123.0, "8A", 0.55, false, false),
+            mock_track("t_bridge_9a", "Rolling Groove 9A", 125.0, "9A", 0.68, false, false),
+            mock_track("t_build_9a", "Acid Riser 9A", 127.0, "9A", 0.80, false, false),
+            mock_track("t_build_10a", "Hypnotic Tunnel 10A", 128.0, "10A", 0.88, false, false),
+            mock_track("t_peak_anthem", "Mainstage Peak Anthem", 130.0, "10A", 0.96, false, false),
+            mock_track("t_after_peak", "Melodic Release 10B", 126.0, "10B", 0.76, false, false),
+            mock_track("t_sunrise_closer", "Sunrise Emotional Closer", 124.0, "9B", 0.62, false, false),
+            // Distractors / wrong-key / vocal clash traps / polyrhythmic bridge tracks
+            mock_track("t_clash_3b", "Dissonant Industrial 3B", 138.0, "3B", 0.92, true, true),
+            mock_track("t_96_bass_closer", "Halftime 96 BPM Bass Outro", 96.0, "10A", 0.60, false, false),
+            mock_track("t_valley_ambient", "Deep Breakdown Interlude", 124.0, "9A", 0.36, false, false),
+        ];
+
+        // SCENARIO 1: Club Journey (8 tracks selected from 11) with Opener + Peak + Closer Anchors
+        let spine_s1 = SetSpineConfig {
+            anchors: vec![
+                SpineAnchor {
+                    track_id: "t_opener".into(),
+                    role: Some("opener".into()),
+                    slot: None,
+                    position: None,
+                },
+                SpineAnchor {
+                    track_id: "t_peak_anthem".into(),
+                    role: Some("peak".into()),
+                    slot: None,
+                    position: None,
+                },
+                SpineAnchor {
+                    track_id: "t_sunrise_closer".into(),
+                    role: Some("closer".into()),
+                    slot: None,
+                    position: None,
+                },
+            ],
+            custom_energy_curve: vec![],
+        };
+        let res_s1 = optimize_crate_with_spine(
+            "Scenario 1: Club Journey Spine",
+            "club_journey",
+            pool.clone(),
+            Some(8),
+            &spine_s1,
+        );
+        println!("\n=== SCENARIO 1: CLUB JOURNEY (OPENER + PEAK + CLOSER) ===\n{}", res_s1.set_guide_markdown);
+        assert_eq!(res_s1.sequence.len(), 8);
+        assert_eq!(res_s1.sequence[0].track_id, "t_opener");
+        assert_eq!(res_s1.sequence[5].track_id, "t_peak_anthem"); // 70% of 0..=7 is slot 5
+        assert_eq!(res_s1.sequence[7].track_id, "t_sunrise_closer");
+        assert_eq!(res_s1.pinned_slots, vec![0, 5, 7]);
+        assert!(res_s1.mean_synergy_score >= 0.85, "Synergy was {}", res_s1.mean_synergy_score);
+        assert!(!res_s1.sequence.iter().any(|t| t.track_id == "t_clash_3b"));
+
+        // SCENARIO 2: Custom Drawn "V-Valley Breakdown" Curve ([0.88, 0.36, 0.96])
+        let spine_s2 = SetSpineConfig {
+            anchors: vec![],
+            custom_energy_curve: vec![0.88, 0.36, 0.96],
+        };
+        let res_s2 = optimize_crate_with_spine(
+            "Scenario 2: V-Valley Custom Curve",
+            "custom",
+            pool.clone(),
+            Some(5),
+            &spine_s2,
+        );
+        println!("\n=== SCENARIO 2: CUSTOM V-VALLEY CURVE ===\n{}", res_s2.set_guide_markdown);
+        assert_eq!(res_s2.target_energy_curve, vec![0.88, 0.62, 0.36, 0.66, 0.96]);
+        // Slot 2 (the 0.36 valley) or adjacent mid slot should dip significantly below start and end
+        let mid_min_energy = res_s2.sequence[1..=3]
+            .iter()
+            .map(|t| t.energy_score)
+            .fold(1.0_f32, f32::min);
+        assert!(mid_min_energy <= 0.56, "Expected valley dip in middle slots, got {mid_min_energy}");
+        assert!(res_s2.sequence[4].energy_score >= 0.88);
+
+        // SCENARIO 3: 3:4 Polyrhythmic Bridge into Locked 96 BPM Closer Anchor
+        let spine_s3 = SetSpineConfig {
+            anchors: vec![
+                SpineAnchor {
+                    track_id: "t_opener".into(),
+                    role: None,
+                    slot: Some(0),
+                    position: None,
+                },
+                SpineAnchor {
+                    track_id: "t_96_bass_closer".into(),
+                    role: Some("closer".into()),
+                    slot: None,
+                    position: None,
+                },
+            ],
+            custom_energy_curve: vec![0.45, 0.70, 0.85, 0.88, 0.60],
+        };
+        let res_s3 = optimize_crate_with_spine(
+            "Scenario 3: 128->96 BPM Polyrhythmic Anchor Bridge",
+            "custom",
+            pool.clone(),
+            Some(5),
+            &spine_s3,
+        );
+        println!("\n=== SCENARIO 3: POLYRHYTHMIC BRIDGE TO 96 BPM CLOSER ===\n{}", res_s3.set_guide_markdown);
+        assert_eq!(res_s3.sequence[4].track_id, "t_96_bass_closer");
+        // The track placed at slot 3 right before 96 BPM (10A) should be t_build_10a (128 BPM, 10A -> exact 4:3 bridge!)
+        assert_eq!(res_s3.sequence[3].track_id, "t_build_10a");
+        assert!(res_s3.transitions[3].is_polyrhythmic_bridge);
+
+        // SCENARIO 4: Anchor Slot Collision Resolution (two tracks pinned to slot 0)
+        let spine_s4 = SetSpineConfig {
+            anchors: vec![
+                SpineAnchor {
+                    track_id: "t_opener".into(),
+                    role: None,
+                    slot: Some(0),
+                    position: None,
+                },
+                SpineAnchor {
+                    track_id: "t_warmup_2".into(),
+                    role: None,
+                    slot: Some(0),
+                    position: None,
+                },
+            ],
+            custom_energy_curve: vec![],
+        };
+        let res_s4 = optimize_crate_with_spine(
+            "Scenario 4: Anchor Collision Resolution",
+            "steady_climb",
+            pool,
+            Some(4),
+            &spine_s4,
+        );
+        assert_eq!(res_s4.sequence[0].track_id, "t_opener");
+        assert_eq!(res_s4.sequence[1].track_id, "t_warmup_2");
+        assert_eq!(res_s4.pinned_slots, vec![0, 1]);
+    }
 }

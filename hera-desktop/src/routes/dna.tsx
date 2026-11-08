@@ -42,9 +42,11 @@ function ViewDjStyleDna() {
   );
 
   const composedRules = [
-    ruleOwnProductions && 'Priorizar mis producciones propias (_mis_producciones)',
+    ruleOwnProductions &&
+      'Priorizar mis producciones propias (_mis_producciones)',
     ruleLossless320 && 'Calidad mínima FLAC / 320 kbps verificada por FFT',
-    ruleStrictCamelot && 'Sinergia armónica Camelot estricta (±1 paso + 4 Hot Cues)',
+    ruleStrictCamelot &&
+      'Sinergia armónica Camelot estricta (±1 paso + 4 Hot Cues)',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -193,7 +195,9 @@ function ViewDjStyleDna() {
 
             <div {...stylex.props(styles.promptBox)}>
               <div {...stylex.props(styles.promptHeader)}>
-                <span>Prompt Block Persistente (~250 tokens · D1 Sync $0.00)</span>
+                <span>
+                  Prompt Block Persistente (~250 tokens · D1 Sync $0.00)
+                </span>
               </div>
               <code {...stylex.props(styles.promptCode)}>
                 {dnaProfile?.prompt_block ??
@@ -221,7 +225,8 @@ const styles = stylex.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: '12px',
+    rowGap: '12px',
+    columnGap: '12px',
   },
   title: {
     margin: 0,
@@ -235,7 +240,8 @@ const styles = stylex.create({
   },
   softwarePills: {
     display: 'flex',
-    gap: '6px',
+    rowGap: '6px',
+    columnGap: '6px',
     flexWrap: 'wrap',
   },
   softwareBtn: {
@@ -258,7 +264,8 @@ const styles = stylex.create({
   grid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-    gap: '16px',
+    rowGap: '16px',
+    columnGap: '16px',
   },
   card: {
     padding: '16px',
@@ -278,7 +285,8 @@ const styles = stylex.create({
   camelotGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
   camelotCell: {
     padding: '8px',
@@ -302,7 +310,8 @@ const styles = stylex.create({
   statsRow: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
   statBox: {
     padding: '8px',

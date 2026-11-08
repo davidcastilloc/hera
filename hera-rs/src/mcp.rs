@@ -7,7 +7,9 @@ use crate::p2p::{
 };
 use crate::router::{current_runtime_target, AnnounceTrackRequest};
 use crate::structure::analyze_structure_and_style;
-use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate};
+use crate::synergy::{
+    optimize_crate_with_spine, CrateTrackCandidate, SetSpineConfig, SpineAnchor,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -619,7 +621,19 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
                     .collect()
             };
 
-            let res = optimize_crate_2opt(brief, energy_arc, candidates, max_tracks);
+            let anchors: Vec<SpineAnchor> = args
+                .get("anchors")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let custom_energy_curve: Vec<f32> = args
+                .get("custom_energy_curve")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
+            let spine = SetSpineConfig {
+                anchors,
+                custom_energy_curve,
+            };
+            let res = optimize_crate_with_spine(brief, energy_arc, candidates, max_tracks, &spine);
             Ok(serde_json::to_value(res).map_err(|e| e.to_string())?)
         }
         "audit_repertoire" => {

@@ -312,6 +312,8 @@ mod tests {
             brief: "Test Crate".into(),
             energy_arc: "steady_climb".into(),
             max_tracks: Some(2),
+            anchors: vec![],
+            custom_energy_curve: vec![],
             candidates: vec![
                 CrateTrackCandidate {
                     track_id: "c1".into(),
