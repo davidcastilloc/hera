@@ -289,6 +289,8 @@ mod tests {
                 gdrive_file_id: None,
                 r2_object_key: None,
                 stream_url: None,
+                price_usd: 0.0,
+                is_vip_marketplace_track: false,
                 node_id: "test".into(),
                 hera_seal: String::new(),
             },
@@ -849,5 +851,122 @@ mod tests {
         // the redundant R2 replica from DJR2TrialUser is safely hibernated, freeing 38 MB in R2!
         assert_eq!(j_tier["cold_r2_replicas_hibernated"], 1);
         assert_eq!(j_tier["r2_megabytes_freed"], 38.0);
+
+        // 7. Test Zero-Copy Cloud P2P Track Claim + Curator Quota Refund Bounty (`POST /api/v1/broker/claim-cloud-track`)
+        let req_claim = Request::builder()
+            .method("POST")
+            .uri("/api/v1/broker/claim-cloud-track")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "buyer_or_claimer_dj": "DJCloudSubscriber",
+                    "target_track_or_cas": "hera-seed-001"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_claim = app.call(req_claim).await.unwrap();
+        assert_eq!(resp_claim.status(), StatusCode::CREATED);
+        let j_claim: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_claim.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_claim["status"], "p2p_cloud_track_claimed_zero_copy");
+        assert_eq!(j_claim["physical_r2_mb_consumed"], 0.0);
+        assert_eq!(j_claim["pioneer_bounty_refunded_mb"], 38.0);
+        assert_eq!(
+            j_claim["linked_track"]["storage_provider"],
+            "r2_cas_zero_copy_link"
+        );
+
+        // 8. Test DJ Producer VIP Marketplace Track Sale (85% DJ Producer / 15% Hera Commission, 0 MB R2 copy!)
+        let req_vip_list = Request::builder()
+            .method("POST")
+            .uri("/api/v1/dj/connect-drive")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "dj_handle": "DaviDJ",
+                    "r2_bucket_url": "https://cdn.hera-davidj.workers.dev",
+                    "subscription_tier": "founder_unlimited",
+                    "tracks": [
+                        {
+                            "artist": "DaviDJ",
+                            "title": "Caracas Afterhours (DaviDJ VIP Club Dub)",
+                            "bpm": 126.0,
+                            "camelot_key": "8A",
+                            "format": "flac",
+                            "r2_object_key": "vip/davidj_caracas_afterhours.flac",
+                            "file_size_mb": 40.0,
+                            "effective_bandwidth_hz": 21900.0,
+                            "sub_bass_phase_correlation": 0.97,
+                            "price_usd": 2.00
+                        }
+                    ]
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_vip_list = app.call(req_vip_list).await.unwrap();
+        assert_eq!(resp_vip_list.status(), StatusCode::CREATED);
+        let j_vip_list: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_vip_list.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        let vip_track_id = j_vip_list["admitted_tracks"][0]["track_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(
+            j_vip_list["admitted_tracks"][0]["is_vip_marketplace_track"],
+            true
+        );
+
+        // 8a. Attempting to claim a VIP Marketplace track without `payment_authorized: true` returns 402 PAYMENT_REQUIRED
+        let req_unpaid = Request::builder()
+            .method("POST")
+            .uri("/api/v1/broker/claim-cloud-track")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "buyer_or_claimer_dj": "DJFoo",
+                    "target_track_or_cas": vip_track_id,
+                    "payment_authorized": false
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_unpaid = app.call(req_unpaid).await.unwrap();
+        assert_eq!(resp_unpaid.status(), StatusCode::PAYMENT_REQUIRED);
+
+        // 8b. Purchasing with `payment_authorized: true` links the track via Zero-Copy R2 (`0.0 MB` extra)
+        // and splits $2.00 USD -> $1.70 USD (85%) to DaviDJ's wallet + $0.30 USD (15%) to Hera!
+        let req_buy = Request::builder()
+            .method("POST")
+            .uri("/api/v1/broker/claim-cloud-track")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "buyer_or_claimer_dj": "DJFoo",
+                    "target_track_or_cas": vip_track_id,
+                    "payment_authorized": true
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_buy = app.call(req_buy).await.unwrap();
+        assert_eq!(resp_buy.status(), StatusCode::CREATED);
+        let j_buy: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_buy.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(
+            j_buy["status"],
+            "vip_marketplace_track_purchased_zero_copy"
+        );
+        assert_eq!(j_buy["physical_r2_mb_consumed"], 0.0);
+        assert!((j_buy["track_price_usd"].as_f64().unwrap() - 2.0).abs() < 1e-4);
+        assert!((j_buy["producer_payout_usd"].as_f64().unwrap() - 1.7).abs() < 1e-4);
+        assert!((j_buy["hera_platform_commission_usd"].as_f64().unwrap() - 0.3).abs() < 1e-4);
     }
 }

@@ -9,8 +9,9 @@
 
 use crate::forensics::audit_pcm_channels;
 use crate::p2p::{
-    get_cloud_referral_catalog, BrokerBatchLookupRequest, BrokerBridgeRequest, BrokerSimilarQuery,
-    ConnectDjDriveRequest, P2PMeshState, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
+    get_cloud_referral_catalog, BrokerBatchLookupRequest, BrokerBridgeRequest,
+    BrokerClaimCloudTrackRequest, BrokerSimilarQuery, ConnectDjDriveRequest, P2PMeshState,
+    P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
 };
 use crate::router::current_runtime_target;
 use crate::synergy::{
@@ -456,6 +457,19 @@ fn execute_single_sdk_call(
             log.push(format!(
                 "hera.brokerOptimizeTiering -> hibernated {} cold R2 replicas ({:.1} MB freed)",
                 res.cold_r2_replicas_hibernated, res.r2_megabytes_freed
+            ));
+            serde_json::to_value(res).map_err(|e| e.to_string())
+        }
+        "hera.brokerClaimCloudTrack" | "brokerClaimCloudTrack" | "broker_claim_cloud_track" => {
+            let req: BrokerClaimCloudTrackRequest = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid brokerClaimCloudTrack payload: {e}"))?;
+            let res = state.broker_claim_or_buy_cloud_track(req)?;
+            log.push(format!(
+                "hera.brokerClaimCloudTrack('{}') -> 0.0 MB R2 copy (price=${:.2}, producer_payout=${:.2}, bounty={:.1} MB)",
+                res.linked_track.title,
+                res.track_price_usd,
+                res.producer_payout_usd,
+                res.pioneer_bounty_refunded_mb
             ));
             serde_json::to_value(res).map_err(|e| e.to_string())
         }
