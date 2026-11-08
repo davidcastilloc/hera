@@ -1,4 +1,6 @@
 pub mod code_mode;
+pub mod dj_brain;
+pub mod export;
 pub mod forensics;
 pub mod mcp;
 pub mod p2p;
@@ -1725,5 +1727,140 @@ mod tests {
                 .len()
                 >= 2
         );
+    }
+
+    #[tokio::test]
+    async fn test_pure_rust_desktop_engine_exports_style_dna_and_cloudflare_free_ai() {
+        use axum::body::to_bytes;
+
+        let state = P2PMeshState::new("hera-desktop-pure-rust-test");
+        let mut app = build_hera_router(state);
+
+        let sample_tracks = serde_json::json!([
+            {
+                "track_id": "trk_keine_1",
+                "artist": "Keinemusik",
+                "title": "Move",
+                "version": "Extended Mix",
+                "file_path": "/Music/Hera/124_8A_Keinemusik - Move.flac",
+                "bpm": 124.0,
+                "camelot": "8A",
+                "duration_seconds": 390.0,
+                "bitrate_kbps": 1411,
+                "energy": 0.84,
+                "file_size_bytes": 42000000,
+                "is_video": false,
+                "is_own_production": false
+            },
+            {
+                "track_id": "trk_david_1",
+                "artist": "David Castillo",
+                "title": "Caracas Dub",
+                "version": "Original Master",
+                "file_path": "/Music/Hera/_MIS_PRODUCCIONES/126_9A_David Castillo - Caracas Dub.flac",
+                "bpm": 126.0,
+                "camelot": "9A",
+                "duration_seconds": 360.0,
+                "bitrate_kbps": 1411,
+                "energy": 0.88,
+                "file_size_bytes": 38000000,
+                "is_video": false,
+                "is_own_production": true
+            }
+        ]);
+
+        // 1. Verify Pure Rust Native Exporters (VirtualDJ .vdjfolder/<Poi>, Rekordbox XML, Traktor NML <CUE_V2>, M3U8)
+        let req_exp = Request::builder()
+            .method("POST")
+            .uri("/api/v1/crates/export")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "crate_name": "Caracas Club Peak Set",
+                    "brief": "Afro & Latin Tech House 124-126 BPM",
+                    "tracks": sample_tracks,
+                    "formats": ["m3u8", "rekordbox_xml", "virtualdj", "traktor_nml"]
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_exp = app.call(req_exp).await.unwrap();
+        assert_eq!(resp_exp.status(), StatusCode::OK);
+        let j_exp: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_exp.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_exp["track_count"], 2);
+        assert!(j_exp["m3u8_content"].as_str().unwrap().contains("#EXTM3U"));
+        assert!(j_exp["rekordbox_xml_content"]
+            .as_str()
+            .unwrap()
+            .contains("<POSITION_MARK"));
+        assert!(j_exp["virtualdj_folder_xml"]
+            .as_str()
+            .unwrap()
+            .contains("<VirtualFolder"));
+        assert!(j_exp["virtualdj_database_xml"]
+            .as_str()
+            .unwrap()
+            .contains("Type=\"cue\""));
+        assert!(j_exp["traktor_nml_content"]
+            .as_str()
+            .unwrap()
+            .contains("<CUE_V2"));
+
+        // 2. Verify Pure Rust DJ Style DNA Auto-Profiler
+        let req_dna = Request::builder()
+            .method("POST")
+            .uri("/api/v1/dj/style-dna")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "tracks": sample_tracks,
+                    "dj_handle": "DaviDJ",
+                    "preferred_dj_software": "VirtualDJ",
+                    "golden_rules": "Siempre incluir 1 produccion propia y respetar Camelot"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_dna = app.call(req_dna).await.unwrap();
+        assert_eq!(resp_dna.status(), StatusCode::OK);
+        let j_dna: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_dna.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_dna["dominant_bpm_zone"], "club_afro_guaracha_122_132");
+        assert!(j_dna["prompt_block"].as_str().unwrap().contains("VirtualDJ"));
+
+        // 3. Verify Cloudflare Workers AI Free Default (`10,000 Neurons/day` at $0.00 + AI Gateway Cache Hit + Fallback)
+        let req_ai = Request::builder()
+            .method("POST")
+            .uri("/api/v1/ai/chat")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "dj_handle": "DaviDJ",
+                    "message": "Ármame un puente entre 8A y 9A a 125 BPM para VirtualDJ",
+                    "style_dna": j_dna,
+                    "daily_neurons_used_so_far": 120.0,
+                    "cache_hit": false
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_ai = app.call(req_ai).await.unwrap();
+        assert_eq!(resp_ai.status(), StatusCode::OK);
+        let j_ai: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_ai.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_ai["backend_used"], "cloudflare_workers_ai_free");
+        assert_eq!(
+            j_ai["model_used"],
+            "@cf/meta/llama-3.1-8b-instruct-fp8-fast"
+        );
+        assert_eq!(j_ai["estimated_cost_usd"], 0.0);
+        assert!(j_ai["daily_neurons_remaining"].as_f64().unwrap() > 9800.0);
     }
 }

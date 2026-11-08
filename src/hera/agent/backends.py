@@ -26,6 +26,23 @@ class BackendDef:
 
 
 BACKENDS: dict[str, BackendDef] = {
+    # ── Default Free Cloud Gateway (Cloudflare Workers AI + AI Gateway) ──
+    "cloudflare_free": BackendDef(
+        name="cloudflare_free",
+        display_name="Hera Cloud Free (Cloudflare Workers AI)",
+        default_base_url="https://cloud.hera.audio/api/v1/ai/v1",
+        default_model="@cf/meta/llama-3.1-8b-instruct-fp8-fast",
+        api_key_env="HERA_CLOUD_TOKEN",
+        is_local=False,
+    ),
+    "openrouter": BackendDef(
+        name="openrouter",
+        display_name="OpenRouter (:free & Pro Models)",
+        default_base_url="https://openrouter.ai/api/v1",
+        default_model="meta-llama/llama-3.3-70b-instruct:free",
+        api_key_env="OPENROUTER_API_KEY",
+        is_local=False,
+    ),
     # ── Cloud Providers ──
     "gemini": BackendDef(
         name="gemini",

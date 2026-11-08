@@ -1,6 +1,11 @@
 use crate::code_mode::{
     execute_code_mode, get_openapi_3_1_spec, get_typescript_sdk_definitions, CodeModeRequest,
 };
+use crate::dj_brain::{
+    compute_dj_style_dna, evaluate_cloudflare_free_ai_turn, list_supported_ai_backends,
+    CloudflareFreeAiTurnRequest, DjStyleDnaRequest,
+};
+use crate::export::{export_crate_bundle, ExportCrateRequest};
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditReport};
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
@@ -111,9 +116,13 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/node/scan-local-dir", post(scan_local_dir_handler))
         .route("/api/v1/dj/connect-drive", post(connect_dj_drive_handler))
         .route("/api/v1/dj/profiles", get(list_dj_profiles_handler))
+        .route("/api/v1/dj/style-dna", post(dj_style_dna_handler))
+        .route("/api/v1/ai/backends", get(ai_backends_list_handler))
+        .route("/api/v1/ai/chat", post(ai_cloudflare_free_chat_handler))
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
         .route("/api/v1/crates/build", post(build_crate_handler))
+        .route("/api/v1/crates/export", post(export_crate_handler))
         .route("/api/v1/p2p/search", get(p2p_search_handler))
         .route("/api/v1/p2p/announce", post(p2p_announce_handler))
         .route("/api/v1/p2p/peers", get(p2p_list_peers_handler))
@@ -776,4 +785,31 @@ async fn p2p_announce_handler(
             })),
         )),
     }
+}
+
+async fn export_crate_handler(Json(req): Json<ExportCrateRequest>) -> impl IntoResponse {
+    let resp = export_crate_bundle(&req);
+    (StatusCode::OK, Json(resp))
+}
+
+async fn dj_style_dna_handler(Json(req): Json<DjStyleDnaRequest>) -> impl IntoResponse {
+    let profile = compute_dj_style_dna(&req);
+    (StatusCode::OK, Json(profile))
+}
+
+async fn ai_backends_list_handler() -> impl IntoResponse {
+    let backends = list_supported_ai_backends();
+    Json(serde_json::json!({
+        "default_backend": "cloudflare_free",
+        "free_daily_neurons": 10_000,
+        "estimated_free_turns_per_day": 1_500,
+        "backends": backends
+    }))
+}
+
+async fn ai_cloudflare_free_chat_handler(
+    Json(req): Json<CloudflareFreeAiTurnRequest>,
+) -> impl IntoResponse {
+    let resp = evaluate_cloudflare_free_ai_turn(&req);
+    (StatusCode::OK, Json(resp))
 }
