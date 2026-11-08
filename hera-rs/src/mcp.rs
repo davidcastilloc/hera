@@ -442,41 +442,29 @@ pub fn handle_mcp_request(req: JsonRpcRequest, state: &P2PMeshState) -> Option<J
 fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<Value, String> {
     match name {
         "ensure_hera_updated" => {
+            let pull_remote = args
+                .get("pull_remote")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let mut git_pulled = false;
             #[cfg(not(target_arch = "wasm32"))]
-            {
-                let mut cmd = std::process::Command::new("python");
-                cmd.arg("scripts/ensure_latest_hera.py").arg("--json");
-                if args.get("pull_remote").and_then(|v| v.as_bool()) == Some(false) {
-                    cmd.arg("--no-pull");
-                }
-                if args.get("auto_compile_rust").and_then(|v| v.as_bool()) == Some(false) {
-                    cmd.arg("--no-rust-build");
-                }
-                if args.get("sync_skills").and_then(|v| v.as_bool()) == Some(false) {
-                    cmd.arg("--no-skill-sync");
-                }
-                match cmd.output() {
-                    Ok(output) => {
-                        let stdout = String::from_utf8_lossy(&output.stdout);
-                        if let Ok(parsed) = serde_json::from_str::<Value>(&stdout) {
-                            return Ok(parsed);
-                        }
-                        return Ok(json!({
-                            "status": "ok",
-                            "engine": "hera-node-rs",
-                            "version": env!("CARGO_PKG_VERSION"),
-                            "stdout": stdout.trim()
-                        }));
-                    }
-                    Err(_) => {}
+            if pull_remote {
+                if let Ok(output) = std::process::Command::new("git")
+                    .args(["pull", "--rebase", "origin", "main", "--quiet"])
+                    .output()
+                {
+                    git_pulled = output.status.success();
                 }
             }
+            let _ = pull_remote;
             Ok(json!({
                 "status": "ok",
-                "engine": "hera-node-rs",
+                "engine": "hera-node-rs (100% Pure Rust)",
                 "version": env!("CARGO_PKG_VERSION"),
                 "runtime_target": current_runtime_target(),
-                "node_id": state.node_id
+                "node_id": state.node_id,
+                "git_pulled": git_pulled,
+                "python_dependency": "none (0 MB)"
             }))
         }
         "search_music" => {
