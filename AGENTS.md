@@ -55,6 +55,7 @@ The Hera ecosystem is divided into two complementary repositories that work toge
 
 1. **`hera` (Public Repository — `c:\Users\David Castillo\Git-Repos\hera`)**:
    - **Role:** Open-Source Client, Local/Edge Pure-Rust DSP Engine (`hera-rs/`), MCP Server (`stdio` + HTTP + Code Mode), and Community P2P Node (`DaviDJ` ↔ `DJFoo`).
+   - **Dual-Runtime Self-Hosting (VPS + Custom Cloudflare Workers):** Developers in the community can deploy this public `hera` repo either on **their own VPS / Local Machine** (`cargo run --release` / `--features native`) OR on **their own Cloudflare Workers instance** (`cd hera-rs && npx wrangler deploy` / `--features cloudflare --no-default-features`). Any self-hosted `hera` instance can federate with other nodes and with `hera-cloud` via `POST /api/v1/p2p/federate-sync`.
    - **Storage & Sharing Rule:** Connects Zero-OAuth Google Drive (`/embeddedfolderview`), Dropbox, OneDrive, or Local Disk P2P Seeder (`--music-dir`). **All uploaded tracks are shared on the P2P network by default (`share_on_p2p = true`).**
    - **Security Boundary:** Never place private SaaS unit economics (`/api/v1/cloud/economics`), payment webhooks, or unauthenticated paid tier upgrades (`/api/v1/dj/upgrade-tier`) inside this public repository.
 

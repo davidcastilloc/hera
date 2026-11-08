@@ -836,5 +836,87 @@ mod tests {
         assert_eq!(j_free_dj["profile"]["p2p_sharing_enabled"], true);
         assert_eq!(j_free_dj["profile"]["can_disable_p2p_sharing"], false);
         assert_eq!(j_free_dj["admitted_tracks"][0]["share_on_p2p"], true);
+
+        // 7. Test Federated Node Sync (`POST /api/v1/p2p/federate-sync`) from a Developer's Self-Hosted Cloudflare Worker / VPS
+        let valid_seal = crate::p2p::compute_hera_seal(
+            "cf-worker-dev-001",
+            126.0,
+            "9A",
+            96.0,
+            "VERIFIED_STUDIO_MASTER",
+        );
+        let req_fed = Request::builder()
+            .method("POST")
+            .uri("/api/v1/p2p/federate-sync")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "peer": {
+                        "node_id": "hera-dev-cf-worker-01",
+                        "dj_handle": "DJDevWorker",
+                        "endpoint_url": "https://hera-node.djdev.workers.dev",
+                        "runtime_target": "cloudflare-workers-wasm32",
+                        "storage_mode": "cloudflare_worker_self_hosted",
+                        "verified_tracks_count": 1,
+                        "bandwidth_mbps": 1000
+                    },
+                    "shared_tracks": [
+                        {
+                            "track_id": "cf-worker-dev-001",
+                            "title": "Edge Worker Groove",
+                            "artist": "DJDevWorker",
+                            "owner_dj": "DJDevWorker",
+                            "bpm": 126.0,
+                            "camelot_key": "9A",
+                            "top_subgenre": "Tech House",
+                            "duration_seconds": 280.0,
+                            "format": "flac",
+                            "effective_bandwidth_hz": 21200.0,
+                            "sub_bass_phase_correlation": 0.94,
+                            "mono_compatible_sub": true,
+                            "quality_score": 96.0,
+                            "forensic_verdict": "VERIFIED_STUDIO_MASTER",
+                            "hot_cues": [],
+                            "storage_provider": "gdrive",
+                            "stream_url": "https://drive.google.com/uc?export=download&id=1DevWorkerTrack",
+                            "share_on_p2p": true,
+                            "node_id": "hera-dev-cf-worker-01",
+                            "hera_seal": valid_seal
+                        },
+                        {
+                            "track_id": "cf-worker-forged-002",
+                            "title": "Tampered Seal Track",
+                            "artist": "BadActor",
+                            "owner_dj": "BadActor",
+                            "bpm": 126.0,
+                            "camelot_key": "9A",
+                            "top_subgenre": "Tech House",
+                            "duration_seconds": 280.0,
+                            "format": "flac",
+                            "effective_bandwidth_hz": 21200.0,
+                            "sub_bass_phase_correlation": 0.94,
+                            "mono_compatible_sub": true,
+                            "quality_score": 96.0,
+                            "forensic_verdict": "VERIFIED_STUDIO_MASTER",
+                            "hot_cues": [],
+                            "storage_provider": "gdrive",
+                            "share_on_p2p": true,
+                            "node_id": "hera-dev-cf-worker-01",
+                            "hera_seal": "hera-seal-0000000000000000"
+                        }
+                    ]
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_fed = app.call(req_fed).await.unwrap();
+        assert_eq!(resp_fed.status(), StatusCode::OK);
+        let j_fed: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_fed.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_fed["status"], "federated_node_synced");
+        assert_eq!(j_fed["tracks_accepted"], 1);
+        assert_eq!(j_fed["tracks_rejected_invalid_seal"], 1);
+        assert!(j_fed["federated_swarm_catalog"].as_array().unwrap().len() >= 4);
     }
 }

@@ -5,8 +5,8 @@ use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditRepo
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
     compute_hera_seal, get_cloud_referral_catalog, BrokerBatchLookupRequest, BrokerBridgeRequest,
-    BrokerSimilarQuery, CloudReferralOption, ConnectDjDriveRequest, P2PMeshState, P2PPeerNode,
-    P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
+    BrokerSimilarQuery, CloudReferralOption, ConnectDjDriveRequest, FederatedSyncRequest,
+    P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
 use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
@@ -114,6 +114,7 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/p2p/announce", post(p2p_announce_handler))
         .route("/api/v1/p2p/peers", get(p2p_list_peers_handler))
         .route("/api/v1/p2p/peers/register", post(p2p_register_peer_handler))
+        .route("/api/v1/p2p/federate-sync", post(p2p_federate_sync_handler))
         .route("/api/v1/p2p/stream/:track_id", get(p2p_stream_handler))
         .route("/api/v1/p2p/download/:track_id", get(p2p_download_local_file_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
@@ -194,6 +195,14 @@ async fn p2p_register_peer_handler(
             "peers": peers
         })),
     )
+}
+
+async fn p2p_federate_sync_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<FederatedSyncRequest>,
+) -> impl IntoResponse {
+    let resp = state.federate_sync(req);
+    (StatusCode::OK, Json(resp))
 }
 
 async fn p2p_download_local_file_handler(

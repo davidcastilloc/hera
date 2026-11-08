@@ -378,6 +378,27 @@ pub struct P2PPeerNode {
     pub bandwidth_mbps: u32,
 }
 
+/// Federated Node-to-Node Sync Payload (`POST /api/v1/p2p/federate-sync`):
+/// Allows any self-hosted `hera` instance (running on a developer's own Cloudflare Worker or VPS)
+/// to register as a peer and exchange cryptographically sealed (`hera_seal`) tracks with other nodes or `hera-cloud`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederatedSyncRequest {
+    pub peer: P2PPeerNode,
+    #[serde(default)]
+    pub shared_tracks: Vec<P2PVerifiedTrack>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FederatedSyncResponse {
+    pub status: String,
+    pub responder_node_id: String,
+    pub peer_registered: P2PPeerNode,
+    pub tracks_accepted: usize,
+    pub tracks_rejected_invalid_seal: usize,
+    pub federated_swarm_catalog: Vec<P2PVerifiedTrack>,
+    pub active_peers: Vec<P2PPeerNode>,
+}
+
 fn default_storage_mode() -> String {
     "local_disk_p2p_seeder".to_string()
 }
@@ -1228,6 +1249,64 @@ impl P2PMeshState {
 
     pub fn list_peers(&self) -> Vec<P2PPeerNode> {
         self.peers.read().map(|g| g.clone()).unwrap_or_default()
+    }
+
+    /// Federated Handshake & Catalog Exchange (`POST /api/v1/p2p/federate-sync`):
+    /// Connects a developer's self-hosted Cloudflare Worker (`wasm32`) or VPS (`tokio`) node into the P2P mesh,
+    /// verifies each incoming track's cryptographic `hera_seal` + forensic verdict, merges valid shared tracks,
+    /// and returns the full federated catalog so both nodes are immediately in sync.
+    pub fn federate_sync(&self, req: FederatedSyncRequest) -> FederatedSyncResponse {
+        let mut accepted = 0usize;
+        let mut rejected = 0usize;
+
+        if let Ok(mut c_guard) = self.catalog.write() {
+            for mut trk in req.shared_tracks {
+                let expected_seal = compute_hera_seal(
+                    &trk.track_id,
+                    trk.bpm,
+                    &trk.camelot_key,
+                    trk.quality_score,
+                    &trk.forensic_verdict,
+                );
+                if trk.forensic_verdict != "VERIFIED_STUDIO_MASTER"
+                    || !trk.mono_compatible_sub
+                    || trk.effective_bandwidth_hz < 16800.0
+                    || trk.hera_seal != expected_seal
+                {
+                    rejected += 1;
+                    continue;
+                }
+                trk.share_on_p2p = true;
+                c_guard.retain(|existing| existing.track_id != trk.track_id);
+                c_guard.push(trk);
+                accepted += 1;
+            }
+        }
+
+        let mut peer = req.peer;
+        if accepted > 0 {
+            peer.verified_tracks_count = peer.verified_tracks_count.max(accepted);
+        }
+        let active_peers = self.register_peer_node(peer.clone());
+        let federated_catalog = self.search(&P2PSearchQuery {
+            q: None,
+            camelot: None,
+            bpm_min: None,
+            bpm_max: None,
+            subgenre: None,
+            owner_dj: None,
+            verified_only: Some(true),
+        });
+
+        FederatedSyncResponse {
+            status: "federated_node_synced".to_string(),
+            responder_node_id: self.node_id.clone(),
+            peer_registered: peer,
+            tracks_accepted: accepted,
+            tracks_rejected_invalid_seal: rejected,
+            federated_swarm_catalog: federated_catalog,
+            active_peers,
+        }
     }
 
     /// Builds the unified Internal P2P Data Broker Swarm Index, grouping all verified replicas by CAS fingerprint
