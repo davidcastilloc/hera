@@ -10,7 +10,7 @@
 use crate::forensics::audit_pcm_channels;
 use crate::p2p::{
     get_cloud_referral_catalog, ConnectDjDriveRequest, P2PMeshState, P2PSearchQuery,
-    P2PVerifiedTrack,
+    P2PVerifiedTrack, ScanLocalDirRequest,
 };
 use crate::router::current_runtime_target;
 use crate::synergy::{
@@ -394,6 +394,22 @@ fn execute_single_sdk_call(
             let profiles = state.list_dj_profiles();
             log.push(format!("hera.listDjs -> {} connected DJs", profiles.len()));
             serde_json::to_value(profiles).map_err(|e| e.to_string())
+        }
+        "hera.scanLocalFolder" | "scanLocalFolder" | "scan_local_folder" => {
+            let req: ScanLocalDirRequest = serde_json::from_value(args.clone())
+                .map_err(|e| format!("Invalid scanLocalFolder payload: {e}"))?;
+            let resp = state.scan_local_directory(req)?;
+            log.push(format!(
+                "hera.scanLocalFolder('{}') -> admitted {} local P2P tracks",
+                resp.scanned_directory,
+                resp.admitted_tracks.len()
+            ));
+            serde_json::to_value(resp).map_err(|e| e.to_string())
+        }
+        "hera.listPeers" | "listPeers" | "list_peers" => {
+            let peers = state.list_peers();
+            log.push(format!("hera.listPeers -> {} active P2P nodes", peers.len()));
+            serde_json::to_value(peers).map_err(|e| e.to_string())
         }
         "hera.filterTracks" | "filterTracks" => {
             let tracks: Vec<P2PVerifiedTrack> = args

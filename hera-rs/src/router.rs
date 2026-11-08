@@ -5,7 +5,8 @@ use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditRepo
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
     compute_hera_seal, get_cloud_referral_catalog, CloudReferralOption, ConnectDjDriveRequest,
-    P2PMeshState, P2PSearchQuery, P2PVerifiedTrack,
+    P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
+    UpgradeTierRequest,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
 use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
@@ -99,16 +100,99 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/mcp/code-mode", post(code_mode_exec_handler))
         .route("/mcp/code-mode.d.ts", get(code_mode_dts_handler))
         .route("/api/v1/node/manifest", get(manifest_handler))
+        .route("/api/v1/node/scan-local-dir", post(scan_local_dir_handler))
         .route("/api/v1/dj/connect-drive", post(connect_dj_drive_handler))
+        .route("/api/v1/dj/upgrade-tier", post(upgrade_dj_tier_handler))
         .route("/api/v1/dj/profiles", get(list_dj_profiles_handler))
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
         .route("/api/v1/crates/build", post(build_crate_handler))
         .route("/api/v1/p2p/search", get(p2p_search_handler))
         .route("/api/v1/p2p/announce", post(p2p_announce_handler))
+        .route("/api/v1/p2p/peers", get(p2p_list_peers_handler))
+        .route("/api/v1/p2p/peers/register", post(p2p_register_peer_handler))
         .route("/api/v1/p2p/stream/:track_id", get(p2p_stream_handler))
+        .route("/api/v1/p2p/download/:track_id", get(p2p_download_local_file_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
+}
+
+async fn scan_local_dir_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<ScanLocalDirRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match state.scan_local_directory(req) {
+        Ok(res) => Ok((
+            StatusCode::CREATED,
+            Json(serde_json::to_value(res).unwrap_or_default()),
+        )),
+        Err(e) => Err((
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+async fn upgrade_dj_tier_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<UpgradeTierRequest>,
+) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+    match state.upgrade_dj_tier(&req.dj_handle, &req.tier) {
+        Ok(profile) => Ok(Json(serde_json::json!({
+            "status": "tier_upgraded",
+            "profile": profile
+        }))),
+        Err(e) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+async fn p2p_list_peers_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
+    let peers = state.list_peers();
+    Json(serde_json::json!({
+        "node_id": state.node_id,
+        "active_peers_count": peers.len(),
+        "peers": peers
+    }))
+}
+
+async fn p2p_register_peer_handler(
+    State(state): State<P2PMeshState>,
+    Json(peer): Json<P2PPeerNode>,
+) -> impl IntoResponse {
+    let peers = state.register_peer_node(peer);
+    (
+        StatusCode::CREATED,
+        Json(serde_json::json!({
+            "status": "peer_registered",
+            "active_peers_count": peers.len(),
+            "peers": peers
+        })),
+    )
+}
+
+async fn p2p_download_local_file_handler(
+    State(state): State<P2PMeshState>,
+    Path(track_id): Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    match state.get_local_file_bytes(&track_id) {
+        Ok((path_str, bytes)) => {
+            let content_type = if path_str.ends_with(".flac") {
+                "audio/flac"
+            } else if path_str.ends_with(".mp3") {
+                "audio/mpeg"
+            } else {
+                "audio/wav"
+            };
+            Ok(([(http::header::CONTENT_TYPE, content_type)], bytes))
+        }
+        Err(e) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
 }
 
 async fn connect_dj_drive_handler(

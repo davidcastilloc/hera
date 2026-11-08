@@ -557,4 +557,165 @@ mod tests {
             "https://drive.google.com/uc?export=download&id=1DJFoo_Groove_125BPM_8A_Master"
         );
     }
+
+    #[tokio::test]
+    async fn test_multi_storage_r2_quota_zero_oauth_gdrive_and_local_p2p_seeder() {
+        use axum::body::to_bytes;
+
+        let state = P2PMeshState::new("hera-universal-storage-hub");
+        let mut app = build_hera_router(state);
+
+        // 1. Test Zero-OAuth Google Drive `/embeddedfolderview` HTML Auto-Parser
+        let fake_gdrive_html = r#"
+            <div class="flip-entries">
+                <div class="flip-entry" id="entry-1ZeroOAuth_File_ID_001">
+                    <div class="flip-entry-title">DJFoo - Midnight Caracas.flac</div>
+                </div>
+                <div class="flip-entry" id="entry-1ZeroOAuth_File_ID_002">
+                    <div class="flip-entry-title">DJFoo - Avila Sunrise.wav</div>
+                </div>
+            </div>
+        "#;
+        let zero_oauth_req = serde_json::json!({
+            "dj_handle": "DJZeroOAuth",
+            "gdrive_folder_link": "https://drive.google.com/drive/folders/1ZeroOAuthFolder",
+            "gdrive_embedded_html": fake_gdrive_html
+        });
+        let req1 = Request::builder()
+            .method("POST")
+            .uri("/api/v1/dj/connect-drive")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&zero_oauth_req).unwrap()))
+            .unwrap();
+        let resp1 = app.call(req1).await.unwrap();
+        assert_eq!(resp1.status(), StatusCode::CREATED);
+        let j1: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp1.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j1["admitted_tracks"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            j1["admitted_tracks"][0]["stream_url"],
+            "https://drive.google.com/uc?export=download&id=1ZeroOAuth_File_ID_001"
+        );
+
+        // 2. Test Cloudflare R2 Hard Quota (`free` = 100 MB limit vs 3 tracks of 45 MB = 135 MB)
+        let r2_quota_req = serde_json::json!({
+            "dj_handle": "DJR2FreeUser",
+            "r2_bucket_url": "https://r2.hera-davidj.workers.dev",
+            "subscription_tier": "free",
+            "tracks": [
+                { "title": "R2 Track 1", "artist": "DJR2", "r2_object_key": "r2/t1.flac", "file_size_mb": 45.0 },
+                { "title": "R2 Track 2", "artist": "DJR2", "r2_object_key": "r2/t2.flac", "file_size_mb": 45.0 },
+                { "title": "R2 Track 3 (Over 100MB Free Quota)", "artist": "DJR2", "r2_object_key": "r2/t3.flac", "file_size_mb": 45.0 }
+            ]
+        });
+        let req2 = Request::builder()
+            .method("POST")
+            .uri("/api/v1/dj/connect-drive")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&r2_quota_req).unwrap()))
+            .unwrap();
+        let resp2 = app.call(req2).await.unwrap();
+        let j2: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp2.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        // First 2 tracks (90 MB <= 100 MB) admitted; 3rd track rejected by R2_QUOTA_EXCEEDED!
+        assert_eq!(j2["admitted_tracks"].as_array().unwrap().len(), 2);
+        assert_eq!(j2["rejected_quarantine_tracks"].as_array().unwrap().len(), 1);
+        assert!(
+            j2["rejected_quarantine_tracks"][0]
+                .as_str()
+                .unwrap()
+                .contains("R2_QUOTA_EXCEEDED")
+        );
+
+        // Upgrade DJR2FreeUser to `pro_monthly` (50 GB = 51,200 MB R2 quota)
+        let req_up = Request::builder()
+            .method("POST")
+            .uri("/api/v1/dj/upgrade-tier")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "dj_handle": "DJR2FreeUser",
+                    "tier": "pro_monthly"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_up = app.call(req_up).await.unwrap();
+        assert_eq!(resp_up.status(), StatusCode::OK);
+        let j_up: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_up.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_up["profile"]["r2_quota_mb"], 51200.0);
+
+        // 3. Test Local Laptop / Server Direct Storage & P2P Seeder (`POST /api/v1/node/scan-local-dir` + `GET /api/v1/p2p/download/:track_id`)
+        let temp_dir = std::env::temp_dir().join("hera_local_p2p_test_dir");
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        // Create 1 real broadband club master WAV (passes Zero-Trust DSP) and 1 pure sine WAV (quarantined)
+        let sr = 44100u32;
+        let n = sr as usize * 6;
+        let mut left_good = Vec::with_capacity(n);
+        let mut right_good = Vec::with_capacity(n);
+        let mut rng: u64 = 123456789;
+        for i in 0..n {
+            let t = (i as f32) / (sr as f32);
+            rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let airy = (((rng >> 32) as u32 as f32) / (u32::MAX as f32) - 0.5) * 0.25;
+            let kick = (2.0 * std::f32::consts::PI * 60.0 * t).sin()
+                * ((1.0 - (t % 0.5) * 2.0).max(0.0))
+                * 0.55;
+            left_good.push(kick + airy);
+            right_good.push(kick + airy);
+        }
+        let good_wav = encode_stereo_wav(&left_good, &right_good, sr);
+        std::fs::write(temp_dir.join("DJLaptop - Local Seeder Master.wav"), &good_wav).unwrap();
+
+        let bad_sine: Vec<f32> = (0..sr as usize * 3)
+            .map(|i| (2.0 * std::f32::consts::PI * 440.0 * (i as f32 / sr as f32)).sin() * 0.8)
+            .collect();
+        let bad_wav = encode_stereo_wav(&bad_sine, &bad_sine, sr);
+        std::fs::write(temp_dir.join("Spammer - Fake Sine Test.wav"), &bad_wav).unwrap();
+
+        let req_scan = Request::builder()
+            .method("POST")
+            .uri("/api/v1/node/scan-local-dir")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "dj_handle": "DJLaptop",
+                    "directory_path": temp_dir.to_string_lossy(),
+                    "public_node_url": "http://192.168.1.50:8080",
+                    "bandwidth_mbps": 800
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_scan = app.call(req_scan).await.unwrap();
+        assert_eq!(resp_scan.status(), StatusCode::CREATED);
+        let j_scan: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_scan.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+
+        assert_eq!(j_scan["admitted_tracks"].as_array().unwrap().len(), 1);
+        assert_eq!(j_scan["rejected_quarantine_tracks"].as_array().unwrap().len(), 1);
+        let local_track_id = j_scan["admitted_tracks"][0]["track_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // Verify direct P2P binary audio streaming from the laptop's local disk!
+        let req_dl = Request::builder()
+            .uri(&format!("/api/v1/p2p/download/{}", local_track_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp_dl = app.call(req_dl).await.unwrap();
+        assert_eq!(resp_dl.status(), StatusCode::OK);
+        let dl_bytes = to_bytes(resp_dl.into_body(), 64 * 1024 * 1024).await.unwrap();
+        assert_eq!(dl_bytes.len(), good_wav.len());
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }
