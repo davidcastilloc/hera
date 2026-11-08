@@ -65,6 +65,12 @@
 - [x] **Idea 11 (Nuevas Funcionalidades Visuales Diferenciadoras en `HERA Desktop`):**
   1. **Barra de Progreso Superior con los 4 Pines de Hot Cues Clicables (`TrackProgress.tsx`):** Pines interactivos (`1:Intro`, `2:Breakdown`, `3:Drop`, `4:Outro`) que saltan al segundo exacto del tema con `PlayerAPI.jumpTo(cue.seconds)`.
   2. **ADN Musical & Exportación Directa 1-Clic (`HeraDjToolbar.tsx` + `bridge-hera.ts`):** Cálculo determinista de `DJ Style DNA` (`dominant_bpm_zone`, `dominant_camelot_keys`) y exportación instantánea a `VirtualDJ (.vdjfolder)`, `Rekordbox (.xml)` y `Traktor (.nml)`.
+- [x] **Idea 12 (Auditoría QA Visual en Vivo de `HERA Desktop` y Correcciones Críticas — `ADR-007`):**
+  - [x] **Corrección de `.gitignore` raíz (`/lib/`):** Evita que `hera-desktop/src/lib/` sea ignorado por Git; restaurados y versionados todos los módulos `hera-desktop/src/lib/*.ts` (`bridge-hera.ts`, `bridge-database.ts`, `bridge-config.ts`, `player.ts`, `store.ts`, `utils-library.ts`).
+  - [x] **Alineación `1:1` de Columnas (`TrackListHeader.tsx` ↔ `TrackRow.tsx`) y Contraste Camelot:** Unificado el orden de celdas (`Title | BPM | Key | 4 Hot Cues | Duration | Artist | Album | Genre`), los anchos fijos (`width`/`minWidth`/`flexShrink: 0`) y `camelotBadgeSelected` para mantener legibilidad al seleccionar una fila.
+  - [x] **Modo Oscuro de Cabina por Defecto + Rueda Camelot de 24 Llaves (`1A..12A` y `1B..12B`) + Barra Inferior Responsive (`900x550`):** Corregidos `SettingsAPI.ts`, `themes.ts`, `dna.tsx`, `Navigation.tsx` y `HeraDjToolbar.tsx`.
+  - [x] **Tríada ACL de Tauri v2 para `hera-dj`:** Registrados `compute_style_dna`, `export_crate`, `chat_copilot`, `list_ai_backends` y `resolve_harmonic_bridge` en `hera-desktop/src-tauri/build.rs` y `hera-desktop/src-tauri/capabilities/main.json`.
+  - [ ] **Siguiente Iteración UI (Para el próximo agente):** Auto-descartar o reposicionar los `Toasts` de error de reproducción en `hera-desktop/src/components/Toasts.tsx` para que no se superpongan con el botón `🤖 Consultar Copiloto` en `/bridge`, y sincronizar `useLibraryStore.setState({ tracks })` al cargar `library.tsx` para que `HeraDjToolbar` siempre lea el conteo real de pistas cargadas.
 
 ---
 
