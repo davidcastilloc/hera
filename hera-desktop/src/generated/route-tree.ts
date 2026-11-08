@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './../routes/__root'
+import { Route as DnaRouteImport } from './../routes/dna'
+import { Route as BridgeRouteImport } from './../routes/bridge'
 import { Route as SettingsRouteImport } from './../routes/settings'
 import { Route as PlaylistsRouteImport } from './../routes/playlists'
 import { Route as LibraryRouteImport } from './../routes/library'
@@ -22,6 +24,16 @@ import { Route as PlaylistsPlaylistIDRouteImport } from './../routes/playlists.$
 import { Route as ArtistsArtistIDRouteImport } from './../routes/artists.$artistID'
 import { Route as ArtistsPresetsCompilationsRouteImport } from './../routes/artists.presets.compilations'
 
+const DnaRoute = DnaRouteImport.update({
+  id: '/dna',
+  path: '/dna',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BridgeRoute = BridgeRouteImport.update({
+  id: '/bridge',
+  path: '/bridge',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -85,6 +97,8 @@ const ArtistsPresetsCompilationsRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/dna': typeof DnaRoute
+  '/bridge': typeof BridgeRoute
   '/artists': typeof ArtistsRouteWithChildren
   '/library': typeof LibraryRoute
   '/playlists': typeof PlaylistsRouteWithChildren
@@ -99,6 +113,8 @@ export interface FileRoutesByFullPath {
   '/artists/presets/compilations': typeof ArtistsPresetsCompilationsRoute
 }
 export interface FileRoutesByTo {
+  '/dna': typeof DnaRoute
+  '/bridge': typeof BridgeRoute
   '/artists': typeof ArtistsRouteWithChildren
   '/library': typeof LibraryRoute
   '/playlists': typeof PlaylistsRouteWithChildren
@@ -114,6 +130,8 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/dna': typeof DnaRoute
+  '/bridge': typeof BridgeRoute
   '/artists': typeof ArtistsRouteWithChildren
   '/library': typeof LibraryRoute
   '/playlists': typeof PlaylistsRouteWithChildren
@@ -130,6 +148,8 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/dna'
+    | '/bridge'
     | '/artists'
     | '/library'
     | '/playlists'
@@ -144,6 +164,8 @@ export interface FileRouteTypes {
     | '/artists/presets/compilations'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/dna'
+    | '/bridge'
     | '/artists'
     | '/library'
     | '/playlists'
@@ -158,6 +180,8 @@ export interface FileRouteTypes {
     | '/artists/presets/compilations'
   id:
     | '__root__'
+    | '/dna'
+    | '/bridge'
     | '/artists'
     | '/library'
     | '/playlists'
@@ -173,6 +197,8 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  DnaRoute: typeof DnaRoute
+  BridgeRoute: typeof BridgeRoute
   ArtistsRoute: typeof ArtistsRouteWithChildren
   LibraryRoute: typeof LibraryRoute
   PlaylistsRoute: typeof PlaylistsRouteWithChildren
@@ -182,6 +208,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/dna': {
+      id: '/dna'
+      path: '/dna'
+      fullPath: '/dna'
+      preLoaderRoute: typeof DnaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/bridge': {
+      id: '/bridge'
+      path: '/bridge'
+      fullPath: '/bridge'
+      preLoaderRoute: typeof BridgeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
       id: '/settings'
       path: '/settings'
@@ -313,6 +353,8 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
 )
 
 const rootRouteChildren: RootRouteChildren = {
+  DnaRoute: DnaRoute,
+  BridgeRoute: BridgeRoute,
   ArtistsRoute: ArtistsRouteWithChildren,
   LibraryRoute: LibraryRoute,
   PlaylistsRoute: PlaylistsRouteWithChildren,

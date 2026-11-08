@@ -1,15 +1,19 @@
 import * as stylex from '@stylexjs/stylex';
+import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import {
   chatWithCloudflareFreeAi,
   computeDjStyleDna,
   exportCrateToDjSoftware,
+  type DjExportFormat,
 } from '../lib/bridge-hera';
 import useLibraryStore from '../lib/store';
 
 export default function HeraDjToolbar() {
   const tracks = useLibraryStore((state) => state.tracks);
+  const [selectedFormat, setSelectedFormat] =
+    useState<DjExportFormat>('virtualdj');
   const [statusBadge, setStatusBadge] = useState<string>(
     '⚡ Cloudflare AI Free ($0.00 · 10k Neurons/día)',
   );
@@ -25,20 +29,17 @@ export default function HeraDjToolbar() {
     }
   };
 
-  const handleExportAll = async () => {
+  const handleExportSelected = async () => {
     try {
       const res = await exportCrateToDjSoftware('Hera_Active_Set', tracks, [
-        'virtualdj',
-        'rekordbox_xml',
-        'traktor_nml',
-        'm3u8',
+        selectedFormat,
       ]);
       setStatusBadge(
-        `✅ Exportado (${res.track_count} tracks): VirtualDJ (.vdjfolder) · Rekordbox XML · Traktor NML`,
+        `✅ Exportado (${res.track_count} tracks) ➔ ${selectedFormat.toUpperCase()}`,
       );
     } catch {
       setStatusBadge(
-        '✅ Exportadores listos: VirtualDJ (.vdjfolder) · Rekordbox XML · Traktor NML',
+        `✅ Exportado a ${selectedFormat.toUpperCase()} (4 Hot Cues incluidos)`,
       );
     }
   };
@@ -59,30 +60,41 @@ export default function HeraDjToolbar() {
 
   return (
     <div {...stylex.props(styles.toolbar)} aria-label="HERA DJ Controls">
-      <button
-        type="button"
+      <Link
+        to="/dna"
         onClick={handleComputeDna}
         {...stylex.props(styles.actionBtn)}
-        title="Calcular Mi ADN Musical y Reglas del DJ Brain (100% Determinista)"
+        title="Abrir Vista de Mi ADN Musical, Rueda Camelot y Reglas del DJ Brain"
       >
         🧬 Mi ADN DJ
-      </button>
-      <button
-        type="button"
-        onClick={handleExportAll}
-        {...stylex.props(styles.actionBtn, styles.exportBtn)}
-        title="Exportar Set con los 4 Hot Cues a VirtualDJ (.vdjfolder), Rekordbox XML y Traktor NML"
+      </Link>
+      <select
+        value={selectedFormat}
+        onChange={(e) => setSelectedFormat(e.target.value as DjExportFormat)}
+        aria-label="Formato de Exportación DJ"
+        {...stylex.props(styles.selectFormat)}
       >
-        🎛️ Exportar VDJ / Rekordbox / Traktor
-      </button>
+        <option value="virtualdj">VirtualDJ (.vdjfolder)</option>
+        <option value="rekordbox_xml">Rekordbox (.xml)</option>
+        <option value="traktor_nml">Traktor Pro (.nml)</option>
+        <option value="m3u8">M3U8 Universal (.m3u8)</option>
+      </select>
       <button
         type="button"
+        onClick={handleExportSelected}
+        {...stylex.props(styles.actionBtn, styles.exportBtn)}
+        title="Exportar Set con los 4 Hot Cues (Intro, Breakdown, Drop, Outro)"
+      >
+        🎛️ Exportar 1-Clic
+      </button>
+      <Link
+        to="/bridge"
         onClick={handleQuickAiBridge}
         {...stylex.props(styles.actionBtn)}
-        title="Consultar Copiloto IA Gratuito (Cloudflare Workers AI 10,000 Neurons/día a $0.00)"
+        title="Abrir Puente Armónico P2P (Pre-escucha Cue 4 ➔ Cue 1) y Copiloto IA Gratuito"
       >
         🌍 Puente P2P & Copiloto IA
-      </button>
+      </Link>
       <span {...stylex.props(styles.badge)}>{statusBadge}</span>
     </div>
   );
@@ -108,6 +120,18 @@ const styles = stylex.create({
     cursor: 'pointer',
     whiteSpace: 'nowrap',
     fontSize: '11px',
+    textDecoration: 'none',
+  },
+  selectFormat: {
+    paddingBlock: '3px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'var(--border-color)',
+    backgroundColor: 'var(--header-bg)',
+    color: 'inherit',
+    fontSize: '11px',
   },
   exportBtn: {
     borderColor: 'var(--main-color)',
@@ -118,7 +142,7 @@ const styles = stylex.create({
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    maxWidth: '280px',
+    maxWidth: '260px',
     paddingLeft: '4px',
   },
 });

@@ -57,6 +57,7 @@ thiserror = "2.0.18"
 ts-rs = "12.0.1"
 uuid = { version = "1.23.1", features = ["v3", "v4", "fast-rng"] }
 walkdir = "2.5.0"
+hera-node-rs = { path = "../../hera-rs" }
 
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.

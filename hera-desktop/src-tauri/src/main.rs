@@ -75,6 +75,7 @@ fn main() {
         .plugin(plugins::db::init())
         .plugin(plugins::debug::init())
         .plugin(plugins::default_view::init())
+        .plugin(plugins::hera_dj::init())
         .plugin(plugins::file_associations::init())
         .plugin(plugins::sleepblocker::init())
         // Tauri integrations with the Operating System
@@ -114,10 +115,10 @@ fn main() {
             // We intentionally create the window ourselves to set the window theme to the right value
             let window_builder =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                    .title("Museeks")
+                    .title("HERA Desktop")
                     .visible(false)
                     .theme(get_theme_from_name(&conf.theme))
-                    .inner_size(900.0, 550.0)
+                    .inner_size(1100.0, 680.0)
                     .min_inner_size(900.0, 550.0)
                     .fullscreen(false)
                     .resizable(true)
