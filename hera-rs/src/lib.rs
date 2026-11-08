@@ -936,4 +936,464 @@ mod tests {
         );
         assert!(j_exp["shared_tracks"].as_array().unwrap().len() >= 4);
     }
+
+    #[tokio::test]
+    async fn test_cloudflare_swarm_water_filling_p2c_tickets_custody_and_bait_switch() {
+        use crate::p2p::compute_hera_seal;
+        use axum::body::to_bytes;
+
+        let state = P2PMeshState::new("hera-edge-primary");
+        let mut app = build_hera_router(state);
+
+        // 1. Baseline Swarm Strength (N = 1 active healthy node: `hera-edge-primary`)
+        let req_s1 = Request::builder()
+            .uri("/api/v1/swarm/strength")
+            .body(Body::empty())
+            .unwrap();
+        let resp_s1 = app.call(req_s1).await.unwrap();
+        assert_eq!(resp_s1.status(), StatusCode::OK);
+        let j_s1: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_s1.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(
+            j_s1["motto"],
+            "Mientras más nodos de Hera, más fuerte es el sistema de enjambres"
+        );
+        assert_eq!(j_s1["active_healthy_nodes"], 1);
+        assert_eq!(j_s1["safe_daily_worker_requests_capacity"], 85_000);
+        assert_eq!(j_s1["base_replication_factor_k"], 1);
+        let strength_n1 = j_s1["swarm_strength_multiplier"].as_f64().unwrap();
+
+        // 2. Scale the Swarm: Add Node 2 (`DJFoo-Worker-EU`) via `POST /api/v1/swarm/heartbeat`
+        let req_hb2 = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/heartbeat")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "node_id": "hera-worker-djfoo-eu",
+                    "owner_dj": "DJFoo",
+                    "endpoint_url": "https://hera-djfoo.workers.dev",
+                    "behind_cgnat": false,
+                    "r2_used_mb": 400.0,
+                    "daily_worker_requests_used": 1200,
+                    "megabytes_served_delta": 20.0
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_hb2 = app.call(req_hb2).await.unwrap();
+        assert_eq!(resp_hb2.status(), StatusCode::OK);
+        let j_hb2: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_hb2.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_hb2["edge_guardian_active"], true);
+        assert_eq!(j_hb2["swarm_strength"]["active_healthy_nodes"], 2);
+        assert_eq!(
+            j_hb2["swarm_strength"]["safe_daily_worker_requests_capacity"],
+            170_000
+        );
+        assert_eq!(j_hb2["swarm_strength"]["base_replication_factor_k"], 2);
+        let strength_n2 = j_hb2["swarm_strength"]["swarm_strength_multiplier"]
+            .as_f64()
+            .unwrap();
+        assert!(strength_n2 > strength_n1);
+
+        // 3. Scale to N = 5 nodes (including a CGNAT node & a nearly-full free-tier Worker to test Water-Filling safety caps)
+        for (node_id, owner_dj, cgnat, r2_used, req_used) in [
+            ("hera-worker-davidj-us", "DaviDJ", false, 1200.0, 5000u64),
+            ("hera-worker-luna-latam", "DJLuna", true, 300.0, 800u64),
+            ("hera-worker-kai-apac", "DJKai", false, 8950.0, 84900u64),
+        ] {
+            let req_hb = Request::builder()
+                .method("POST")
+                .uri("/api/v1/swarm/heartbeat")
+                .header("content-type", "application/json")
+                .body(Body::from(
+                    serde_json::to_vec(&serde_json::json!({
+                        "node_id": node_id,
+                        "owner_dj": owner_dj,
+                        "endpoint_url": format!("https://{}.workers.dev", node_id),
+                        "behind_cgnat": cgnat,
+                        "r2_used_mb": r2_used,
+                        "daily_worker_requests_used": req_used
+                    }))
+                    .unwrap(),
+                ))
+                .unwrap();
+            let resp_hb = app.call(req_hb).await.unwrap();
+            assert_eq!(resp_hb.status(), StatusCode::OK);
+            let j_hb: serde_json::Value =
+                serde_json::from_slice(&to_bytes(resp_hb.into_body(), 1024 * 1024).await.unwrap())
+                    .unwrap();
+            if cgnat {
+                assert!(
+                    !j_hb["outbound_pull_tickets"]
+                        .as_array()
+                        .unwrap()
+                        .is_empty()
+                );
+            }
+            let alloc_mb = j_hb["water_filling_allocation"]["allocated_r2_mb"]
+                .as_f64()
+                .unwrap();
+            let safe_cap_mb = j_hb["water_filling_allocation"]["safe_r2_cap_mb"]
+                .as_f64()
+                .unwrap();
+            assert_eq!(safe_cap_mb, 9000.0);
+            assert!(alloc_mb <= safe_cap_mb + 1e-5);
+        }
+
+        let req_s5 = Request::builder()
+            .uri("/api/v1/swarm/strength")
+            .body(Body::empty())
+            .unwrap();
+        let resp_s5 = app.call(req_s5).await.unwrap();
+        let j_s5: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_s5.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_s5["active_healthy_nodes"], 5);
+        assert_eq!(j_s5["safe_daily_worker_requests_capacity"], 425_000);
+        assert_eq!(j_s5["base_replication_factor_k"], 2);
+        assert!(j_s5["max_thermal_replication_k"].as_u64().unwrap() >= 3);
+        let strength_n5 = j_s5["swarm_strength_multiplier"].as_f64().unwrap();
+        assert!(strength_n5 > strength_n2);
+
+        // 4. Power-of-Two-Choices (P2C) + Global Catalog Blinding (`shard-blobs/{hmac}.hbin`) + 60s Signed Ticket
+        let req_ticket = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/route-ticket")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "track_id_or_cas": "hera-seed-001",
+                    "requester_dj": "DJFoo",
+                    "block_index": 0
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_ticket = app.call(req_ticket).await.unwrap();
+        assert_eq!(resp_ticket.status(), StatusCode::OK);
+        let j_ticket: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_ticket.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_ticket["status"], "SWARM_TICKET_ISSUED");
+        assert_eq!(
+            j_ticket["access_mode"],
+            "EDGE_GUARDIAN_UNLIMITED_FAST_LANE"
+        );
+        assert_eq!(j_ticket["ticket"]["aligned_length_bytes"], 4_194_304);
+        let issued = j_ticket["ticket"]["issued_at_unix"].as_u64().unwrap();
+        let expires = j_ticket["ticket"]["expires_at_unix"].as_u64().unwrap();
+        assert_eq!(expires - issued, 60);
+
+        let opaque_blob_key = j_ticket["ticket"]["opaque_blob_key"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(opaque_blob_key.starts_with("shard-blobs/"));
+        assert!(opaque_blob_key.ends_with(".hbin"));
+        let blob_id = opaque_blob_key.trim_start_matches("shard-blobs/");
+        let signed_ticket_header = serde_json::to_string(&j_ticket["ticket"]).unwrap();
+
+        // 4a. Attempting to fetch the opaque shard WITHOUT `X-Hera-Swarm-Ticket` must be blocked (403 FORBIDDEN)
+        let req_no_ticket = Request::builder()
+            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .body(Body::empty())
+            .unwrap();
+        let resp_no_ticket = app.call(req_no_ticket).await.unwrap();
+        assert_eq!(resp_no_ticket.status(), StatusCode::FORBIDDEN);
+
+        // 4b. Attempting to fetch with a forged/tampered signature must be blocked (403 FORBIDDEN)
+        let mut tampered_ticket = j_ticket["ticket"].clone();
+        tampered_ticket["hmac_signature"] = serde_json::Value::String("0000deadbeef".to_string());
+        let req_bad_ticket = Request::builder()
+            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .header(
+                "x-hera-swarm-ticket",
+                serde_json::to_string(&tampered_ticket).unwrap(),
+            )
+            .body(Body::empty())
+            .unwrap();
+        let resp_bad_ticket = app.call(req_bad_ticket).await.unwrap();
+        assert_eq!(resp_bad_ticket.status(), StatusCode::FORBIDDEN);
+
+        // 4c. Valid 60s ticket succeeds, sets `Cache-Control: public, max-age=31536000, immutable`, and mints 1 : 1.5 Turbo credits!
+        let req_good_shard = Request::builder()
+            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .header("x-hera-swarm-ticket", &signed_ticket_header)
+            .body(Body::empty())
+            .unwrap();
+        let resp_good_shard = app.call(req_good_shard).await.unwrap();
+        assert_eq!(resp_good_shard.status(), StatusCode::OK);
+        assert_eq!(
+            resp_good_shard
+                .headers()
+                .get("cache-control")
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "public, max-age=31536000, immutable"
+        );
+        let receipt_hdr = resp_good_shard
+            .headers()
+            .get("x-hera-proof-of-delivery-receipt")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let j_delivery: serde_json::Value = serde_json::from_str(receipt_hdr).unwrap();
+        assert_eq!(j_delivery["megabytes_delivered"], 4.0);
+        assert_eq!(j_delivery["credits_earned_mb"], 6.0);
+        assert_eq!(j_delivery["credit_multiplier"], 1.5);
+
+        // 5. Meritocratic Autopilot (`Edge Guardian`) + 64-Byte `Proof-of-Custody` Challenge/Probe/Audit
+        let req_chal = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/custody-challenge")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "node_id": "hera-worker-djfoo-eu",
+                    "cas_fingerprint_or_blob": "hera-seed-001",
+                    "seed_nonce": 20261108
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_chal = app.call(req_chal).await.unwrap();
+        assert_eq!(resp_chal.status(), StatusCode::OK);
+        let j_chal: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_chal.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_chal["slice_length"], 64);
+        let range_header = j_chal["range_header"].as_str().unwrap().to_string();
+        let expected_slice_sha256 = j_chal["expected_slice_sha256"]
+            .as_str()
+            .unwrap()
+            .to_string();
+
+        // 5a. Probe the Worker's 64-byte slice endpoint with the `Range` header
+        let req_probe = Request::builder()
+            .uri(&format!("/api/v1/swarm/custody-probe/{}", blob_id))
+            .header("range", &range_header)
+            .body(Body::empty())
+            .unwrap();
+        let resp_probe = app.call(req_probe).await.unwrap();
+        assert_eq!(resp_probe.status(), StatusCode::PARTIAL_CONTENT);
+        let probe_slice_hash = resp_probe
+            .headers()
+            .get("x-hera-custody-slice-sha256")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        let probe_bytes = to_bytes(resp_probe.into_body(), 1024).await.unwrap();
+        assert_eq!(probe_bytes.len(), 64);
+        assert_eq!(probe_slice_hash, expected_slice_sha256);
+
+        // 5b. Submit passing custody audit -> `Edge Guardian` remains active (`ONLINE_HEALTHY`)
+        let req_audit_ok = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/custody-audit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "challenge_id": j_chal["challenge_id"],
+                    "node_id": "hera-worker-djfoo-eu",
+                    "opaque_blob_key": &opaque_blob_key,
+                    "byte_offset": j_chal["byte_offset"],
+                    "http_status": 206,
+                    "returned_slice_sha256": probe_slice_hash
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_audit_ok = app.call(req_audit_ok).await.unwrap();
+        assert_eq!(resp_audit_ok.status(), StatusCode::OK);
+        let j_audit_ok: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_audit_ok.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_audit_ok["passed"], true);
+        assert_eq!(j_audit_ok["edge_guardian_active"], true);
+        assert_eq!(j_audit_ok["custody_status"], "ONLINE_HEALTHY");
+
+        // 5c. Submit failing custody audit (node deleted the file and returned 404) -> loses `Edge Guardian` immediately!
+        let req_audit_fail = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/custody-audit")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "challenge_id": j_chal["challenge_id"],
+                    "node_id": "hera-worker-djfoo-eu",
+                    "opaque_blob_key": &opaque_blob_key,
+                    "byte_offset": j_chal["byte_offset"],
+                    "http_status": 404,
+                    "returned_slice_sha256": ""
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_audit_fail = app.call(req_audit_fail).await.unwrap();
+        assert_eq!(resp_audit_fail.status(), StatusCode::FORBIDDEN);
+        let j_audit_fail: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_audit_fail.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_audit_fail["passed"], false);
+        assert_eq!(j_audit_fail["edge_guardian_active"], false);
+        assert_eq!(
+            j_audit_fail["custody_status"],
+            "GUARDIAN_REVOKED_SHARD_MISSING_404"
+        );
+
+        // 5d. When DJFoo's node is offline/revoked, DJFoo automatically spends their earned 1:1.5 Turbo Credits!
+        let req_ticket_offline = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/route-ticket")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "track_id_or_cas": "hera-seed-001",
+                    "requester_dj": "DJFoo",
+                    "block_index": 1
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_ticket_offline = app.call(req_ticket_offline).await.unwrap();
+        assert_eq!(resp_ticket_offline.status(), StatusCode::OK);
+        let j_ticket_offline: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_ticket_offline.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            j_ticket_offline["access_mode"],
+            "TURBO_CREDIT_REDEMPTION_FAST_LANE"
+        );
+
+        // 6. Anti-Bait-and-Switch Double Cryptographic Seal (`audio_sha256` + `hera_seal`) & Quarantine Blacklist
+        let valid_seal = compute_hera_seal(
+            "hera-bait-001",
+            122.0,
+            "8A",
+            98.5,
+            "VERIFIED_STUDIO_MASTER",
+        );
+        let req_bait = Request::builder()
+            .method("POST")
+            .uri("/api/v1/p2p/federate-sync")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "peer": {
+                        "node_id": "hera-node-bait-attacker",
+                        "dj_handle": "MaliciousBaitNode",
+                        "endpoint_url": "https://malicious-bait.workers.dev",
+                        "runtime_target": "cloudflare-workers-wasm32",
+                        "storage_mode": "r2_edge_guardian",
+                        "verified_tracks_count": 1,
+                        "bandwidth_mbps": 1000
+                    },
+                    "shared_tracks": [
+                        {
+                            "track_id": "hera-bait-001",
+                            "title": "Ritual Del Sol (DaviDJ Original Club Master)",
+                            "artist": "DaviDJ",
+                            "owner_dj": "MaliciousBaitNode",
+                            "bpm": 122.0,
+                            "camelot_key": "8A",
+                            "top_subgenre": "Afro House / Deep Tech",
+                            "duration_seconds": 342.0,
+                            "format": "flac",
+                            "effective_bandwidth_hz": 21850.0,
+                            "sub_bass_phase_correlation": 0.96,
+                            "mono_compatible_sub": true,
+                            "quality_score": 98.5,
+                            "forensic_verdict": "VERIFIED_STUDIO_MASTER",
+                            "hot_cues": [],
+                            "storage_provider": "r2",
+                            "gdrive_file_id": None::<String>,
+                            "r2_object_key": Some("masters/fake.flac"),
+                            "stream_url": Some("https://malicious-bait.workers.dev/fake.flac"),
+                            "share_on_p2p": true,
+                            "node_id": "hera-node-bait-attacker",
+                            "hera_seal": valid_seal
+                        }
+                    ],
+                    "track_audio_sha256": {
+                        "hera-bait-001": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+                    }
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_bait = app.call(req_bait).await.unwrap();
+        assert_eq!(resp_bait.status(), StatusCode::OK);
+        let j_bait: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_bait.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_bait["status"], "QUARANTINED_BAIT_AND_SWITCH_ATTACK");
+        assert_eq!(j_bait["tracks_accepted"], 0);
+        assert_eq!(j_bait["tracks_rejected_invalid_seal"], 1);
+        assert_eq!(j_bait["node_quarantined_for_bait_and_switch"], true);
+
+        let req_q = Request::builder()
+            .uri("/api/v1/swarm/quarantine")
+            .body(Body::empty())
+            .unwrap();
+        let resp_q = app.call(req_q).await.unwrap();
+        assert_eq!(resp_q.status(), StatusCode::OK);
+        let j_q: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_q.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
+        assert_eq!(j_q["quarantined_nodes_count"], 1);
+        assert_eq!(
+            j_q["quarantined_nodes"][0]["node_id"],
+            "hera-node-bait-attacker"
+        );
+        assert_eq!(
+            j_q["quarantined_nodes"][0]["reason"],
+            "BAIT_AND_SWITCH_AUDIO_SHA256_MISMATCH"
+        );
+
+        // 7. Verify Google Drive >25 MB bypass (`&confirm=t`) and 4 MB aligned block metadata in `/api/v1/p2p/stream/hera-seed-001`
+        let req_stream = Request::builder()
+            .uri("/api/v1/p2p/stream/hera-seed-001")
+            .body(Body::empty())
+            .unwrap();
+        let resp_stream = app.call(req_stream).await.unwrap();
+        assert_eq!(resp_stream.status(), StatusCode::OK);
+        let j_stream: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_stream.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(
+            j_stream["gdrive_large_file_bypass_url"]
+                .as_str()
+                .unwrap()
+                .contains("&confirm=t")
+        );
+        assert_eq!(j_stream["aligned_block_size_bytes"], 4_194_304);
+        assert!(
+            j_stream["opaque_blob_key"]
+                .as_str()
+                .unwrap()
+                .starts_with("shard-blobs/")
+        );
+    }
 }
+

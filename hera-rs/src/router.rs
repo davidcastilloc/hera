@@ -4,16 +4,19 @@ use crate::code_mode::{
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditReport};
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
-    compute_hera_seal, get_cloud_referral_catalog, BrokerBatchLookupRequest, BrokerBridgeRequest,
-    BrokerSimilarQuery, CloudReferralOption, ConnectDjDriveRequest, FederatedSyncRequest,
+    build_gdrive_large_file_bypass_url, compute_canonical_audio_sha256, compute_cas_fingerprint,
+    compute_hera_seal, compute_opaque_shard_blob_key, get_cloud_referral_catalog,
+    BrokerBatchLookupRequest, BrokerBridgeRequest, BrokerSimilarQuery, CloudReferralOption,
+    ConnectDjDriveRequest, CustodyAuditSubmission, CustodyChallengeRequest, FederatedSyncRequest,
     P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
+    SwarmHeartbeatRequest, SwarmRouteRequest, SWARM_ALIGNED_BLOCK_BYTES,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
 use crate::synergy::{optimize_crate_2opt, CrateTrackCandidate, OptimizedCrateResult};
 use axum::{
     body::Bytes,
     extract::{DefaultBodyLimit, Path, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
@@ -118,6 +121,14 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/p2p/export-federation", get(p2p_export_federation_handler))
         .route("/api/v1/p2p/stream/:track_id", get(p2p_stream_handler))
         .route("/api/v1/p2p/download/:track_id", get(p2p_download_local_file_handler))
+        .route("/api/v1/swarm/strength", get(swarm_strength_handler))
+        .route("/api/v1/swarm/heartbeat", post(swarm_heartbeat_handler))
+        .route("/api/v1/swarm/route-ticket", post(swarm_route_ticket_handler))
+        .route("/api/v1/swarm/shard/:blob_id", get(swarm_shard_delivery_handler))
+        .route("/api/v1/swarm/custody-challenge", post(swarm_custody_challenge_handler))
+        .route("/api/v1/swarm/custody-probe/:blob_id", get(swarm_custody_probe_handler))
+        .route("/api/v1/swarm/custody-audit", post(swarm_custody_audit_handler))
+        .route("/api/v1/swarm/quarantine", get(swarm_quarantine_list_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
 }
@@ -267,6 +278,19 @@ async fn p2p_stream_handler(
     Path(track_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
     if let Some(track) = state.find_track_by_id(&track_id) {
+        let cas = compute_cas_fingerprint(&track.artist, &track.title, track.bpm);
+        let audio_sha256 = state
+            .cas_audio_sha256
+            .read()
+            .ok()
+            .and_then(|g| g.get(&cas).cloned())
+            .unwrap_or_else(|| compute_canonical_audio_sha256(&cas, &track.hera_seal, 38.0));
+        let opaque_blob_key = compute_opaque_shard_blob_key(&cas, &audio_sha256);
+        let gdrive_bypass_url = track
+            .gdrive_file_id
+            .as_deref()
+            .map(|fid| build_gdrive_large_file_bypass_url(fid, 38.0));
+
         Ok(Json(serde_json::json!({
             "track_id": track.track_id,
             "title": track.title,
@@ -276,6 +300,10 @@ async fn p2p_stream_handler(
             "gdrive_file_id": track.gdrive_file_id,
             "r2_object_key": track.r2_object_key,
             "direct_download_url": track.stream_url,
+            "gdrive_large_file_bypass_url": gdrive_bypass_url,
+            "aligned_block_size_bytes": SWARM_ALIGNED_BLOCK_BYTES,
+            "opaque_blob_key": opaque_blob_key,
+            "audio_sha256": audio_sha256,
             "hera_seal": track.hera_seal,
             "hot_cues": track.hot_cues
         })))
@@ -285,6 +313,154 @@ async fn p2p_stream_handler(
             Json(serde_json::json!({ "error": format!("Track `{track_id}` not found in P2P catalog") })),
         ))
     }
+}
+
+async fn swarm_strength_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
+    Json(state.compute_swarm_strength())
+}
+
+async fn swarm_heartbeat_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<SwarmHeartbeatRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match state.process_swarm_heartbeat(req) {
+        Ok(res) => Ok((
+            StatusCode::OK,
+            Json(serde_json::to_value(res).unwrap_or_default()),
+        )),
+        Err(e) => Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+async fn swarm_route_ticket_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<SwarmRouteRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match state.issue_route_ticket(req) {
+        Ok(res) => Ok((
+            StatusCode::OK,
+            Json(serde_json::to_value(res).unwrap_or_default()),
+        )),
+        Err(e) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShardDeliveryQuery {
+    pub now_unix: Option<u64>,
+}
+
+async fn swarm_shard_delivery_handler(
+    State(state): State<P2PMeshState>,
+    Path(blob_id): Path<String>,
+    Query(q): Query<ShardDeliveryQuery>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let ticket_header = headers
+        .get("x-hera-swarm-ticket")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+    match state.redeem_swarm_shard_delivery(&blob_id, ticket_header, q.now_unix) {
+        Ok((bytes, receipt)) => {
+            let receipt_json = serde_json::to_string(&receipt).unwrap_or_default();
+            Ok((
+                StatusCode::OK,
+                [
+                    (http::header::CONTENT_TYPE, "application/octet-stream".to_string()),
+                    (
+                        http::header::CACHE_CONTROL,
+                        "public, max-age=31536000, immutable".to_string(),
+                    ),
+                    (
+                        http::header::HeaderName::from_static("x-hera-block-align-bytes"),
+                        SWARM_ALIGNED_BLOCK_BYTES.to_string(),
+                    ),
+                    (
+                        http::header::HeaderName::from_static("x-hera-proof-of-delivery-receipt"),
+                        receipt_json,
+                    ),
+                ],
+                bytes,
+            ))
+        }
+        Err(e) => Err((
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+async fn swarm_custody_challenge_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<CustodyChallengeRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+    match state.generate_custody_challenge(req) {
+        Ok(res) => Ok((
+            StatusCode::OK,
+            Json(serde_json::to_value(res).unwrap_or_default()),
+        )),
+        Err(e) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+async fn swarm_custody_probe_handler(
+    State(state): State<P2PMeshState>,
+    Path(blob_id): Path<String>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+    let range_hdr = headers.get(http::header::RANGE).and_then(|v| v.to_str().ok());
+    match state.probe_custody_64_bytes(&blob_id, range_hdr) {
+        Ok((offset, slice, sha256)) => Ok((
+            StatusCode::PARTIAL_CONTENT,
+            [
+                (http::header::CONTENT_TYPE, "application/octet-stream".to_string()),
+                (
+                    http::header::CONTENT_RANGE,
+                    format!("bytes {}..{}/{}", offset, offset + 63, SWARM_ALIGNED_BLOCK_BYTES),
+                ),
+                (
+                    http::header::HeaderName::from_static("x-hera-custody-slice-sha256"),
+                    sha256,
+                ),
+            ],
+            slice,
+        )),
+        Err(e) => Err((
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": e })),
+        )),
+    }
+}
+
+async fn swarm_custody_audit_handler(
+    State(state): State<P2PMeshState>,
+    Json(sub): Json<CustodyAuditSubmission>,
+) -> impl IntoResponse {
+    let res = state.verify_custody_audit(sub);
+    let code = if res.passed {
+        StatusCode::OK
+    } else {
+        StatusCode::FORBIDDEN
+    };
+    (code, Json(res))
+}
+
+async fn swarm_quarantine_list_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
+    let list = state.list_quarantined_nodes();
+    Json(serde_json::json!({
+        "node_id": state.node_id,
+        "quarantined_nodes_count": list.len(),
+        "quarantined_nodes": list
+    }))
 }
 
 async fn openapi_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
