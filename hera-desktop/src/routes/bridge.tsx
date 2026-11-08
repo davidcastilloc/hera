@@ -17,9 +17,9 @@ export const Route = createFileRoute('/bridge')({
   component: ViewHarmonicBridgeP2P,
 });
 
-type AresSuperFilter = 'all' | 'harmonic' | 'boost' | 'promo';
+type SwarmSuperFilter = 'all' | 'harmonic' | 'boost' | 'promo';
 
-type AresActiveTransfer = {
+type SwarmActiveTransfer = {
   id: string;
   artist: string;
   title: string;
@@ -34,9 +34,9 @@ type AresActiveTransfer = {
 function ViewHarmonicBridgeP2P() {
   const localTracks = useLibraryStore((state) => state.tracks);
   const [swarmFilter, setSwarmFilter] = useState('');
-  const [superFilter, setSuperFilter] = useState<AresSuperFilter>('all');
+  const [superFilter, setSuperFilter] = useState<SwarmSuperFilter>('all');
   const [activeTransfers, setActiveTransfers] = useState<
-    Array<AresActiveTransfer>
+    Array<SwarmActiveTransfer>
   >([]);
   const [originTitle, setOriginTitle] = useState('Baiana (Club Mix)');
   const [originArtist, setOriginArtist] = useState('Barbatuques');
@@ -130,7 +130,7 @@ function ViewHarmonicBridgeP2P() {
     setAiResponse(res);
   };
 
-  const enqueueAresTransfer = (entry: AresActiveTransfer, banner: string) => {
+  const enqueueSwarmTransfer = (entry: SwarmActiveTransfer, banner: string) => {
     setActiveTransfers((prev) => [
       entry,
       ...prev.filter((t) => t.id !== entry.id),
@@ -144,13 +144,12 @@ function ViewHarmonicBridgeP2P() {
         <div {...stylex.props(styles.headerRow)}>
           <div>
             <h2 {...stylex.props(styles.title)}>
-              ⚡ HERA Galaxy P2P — Modo Ares con Súper Poderes (Búsqueda
-              Forense, Puente Armónico &amp; IA)
+              🌐 Enjambre Híbrido P2P de HERA, Puente Armónico &amp; Copiloto IA
             </h2>
             <p {...stylex.props(styles.subtitle)}>
-              Como el clásico Ares, pero con Escudo Forense Anti-Fakes (≥20
-              kHz), filtro armónico Camelot en vivo, 4 Hot Cues listos y
-              descarga P2P Gratis o ⚡ P2P Boost Zero-Knowledge
+              Arquitectura Híbrida Post-P2P (Supernodos Edge Guardian ·
+              Delta-CRDT · SimHash 64-bit · Árboles Merkle BEP 52 / Iroh de 256
+              KiB · P2P Boost Zero-Knowledge)
             </p>
           </div>
           <div {...stylex.props(styles.bridgeActions)}>
@@ -163,7 +162,7 @@ function ViewHarmonicBridgeP2P() {
               onClick={handleCalculateBridge}
               {...stylex.props(styles.primaryBtn)}
             >
-              🔍 Recalcular Puente &amp; Radar P2P
+              🔍 Recalcular Puente &amp; Índice CRDT
             </button>
           </div>
         </div>
@@ -273,7 +272,7 @@ function ViewHarmonicBridgeP2P() {
                   <button
                     type="button"
                     onClick={() =>
-                      enqueueAresTransfer(
+                      enqueueSwarmTransfer(
                         {
                           id: step.track_id,
                           artist: step.artist,
@@ -281,7 +280,7 @@ function ViewHarmonicBridgeP2P() {
                           bpm: step.bpm,
                           camelot: step.camelot,
                           mode: '📥 P2P Directo ($0.00)',
-                          speed: '3.6 MB/s',
+                          speed: '3.6 MB/s (QUIC P2C)',
                           peers: step.owner_dj,
                           seal: step.hera_seal,
                         },
@@ -301,7 +300,7 @@ function ViewHarmonicBridgeP2P() {
                       if (cost > 0 && turboCreditsMb >= cost) {
                         setTurboCreditsMb((prev) => prev - cost);
                       }
-                      enqueueAresTransfer(
+                      enqueueSwarmTransfer(
                         {
                           id: step.track_id,
                           artist: step.artist,
@@ -341,11 +340,12 @@ function ViewHarmonicBridgeP2P() {
             <div {...stylex.props(styles.copilotBox)}>
               <div {...stylex.props(styles.bridgeHeader)}>
                 <strong>
-                  🔍 Buscador del Enjambre P2P (Estilo Ares + Súper Poderes DJ ·{' '}
-                  {bridgeResult.swarm_catalog.length} Studio Masters Online)
+                  📡 Índice Híbrido del Enjambre P2P (Delta-CRDT + SimHash
+                  64-bit · {bridgeResult.swarm_catalog.length} Studio Masters
+                  Online)
                 </strong>
                 <span {...stylex.props(styles.subtitle)}>
-                  ★★★★★ 100% Verificados (Sin virus ni falsos 320k) · Cruce
+                  ★★★★★ 100% Verificados (Merkle 256 KiB + Sello HERA) · Cruce
                   automático contra tus {localTracks.length} pistas locales
                 </span>
               </div>
@@ -354,7 +354,7 @@ function ViewHarmonicBridgeP2P() {
                   type="text"
                   value={swarmFilter}
                   onChange={(e) => setSwarmFilter(e.target.value)}
-                  placeholder="🔍 Buscar en el enjambre P2P como en Ares: artista, canción, remix, llave Camelot (8A, 9A) o subgénero..."
+                  placeholder="🔍 Buscar en el índice híbrido P2P por artista, canción, remix, llave Camelot (8A, 9A) o subgénero..."
                   {...stylex.props(styles.input)}
                 />
               </div>
@@ -379,8 +379,7 @@ function ViewHarmonicBridgeP2P() {
                       : styles.secondaryBtn,
                   )}
                 >
-                  🎯 Súper Poder 1: Armónicos con mi Set ({originCamelot}/9A/
-                  {targetCamelot})
+                  🎯 Compatibles en Camelot ({originCamelot}/9A/{targetCamelot})
                 </button>
                 <button
                   type="button"
@@ -391,7 +390,7 @@ function ViewHarmonicBridgeP2P() {
                       : styles.secondaryBtn,
                   )}
                 >
-                  ⚡ Súper Poder 2: Con P2P Boost Instantáneo
+                  ⚡ Con P2P Boost (R2 Zero-Knowledge)
                 </button>
                 <button
                   type="button"
@@ -402,7 +401,7 @@ function ViewHarmonicBridgeP2P() {
                       : styles.secondaryBtn,
                   )}
                 >
-                  🚀 Súper Poder 3: Promo Pool (0 MB Créditos)
+                  🚀 Promo Pool (0 MB Créditos)
                 </button>
               </div>
               <div {...stylex.props(styles.bridgeChain)}>
@@ -472,7 +471,7 @@ function ViewHarmonicBridgeP2P() {
                               <button
                                 type="button"
                                 onClick={() =>
-                                  enqueueAresTransfer(
+                                  enqueueSwarmTransfer(
                                     {
                                       id: item.cas_fingerprint,
                                       artist: item.artist,
@@ -480,7 +479,7 @@ function ViewHarmonicBridgeP2P() {
                                       bpm: item.bpm,
                                       camelot: item.camelot,
                                       mode: '📥 P2P Directo ($0.00)',
-                                      speed: '3.8 MB/s',
+                                      speed: '3.8 MB/s (QUIC P2C)',
                                       peers: item.seeders.join(', '),
                                       seal: item.hera_seal,
                                     },
@@ -501,7 +500,7 @@ function ViewHarmonicBridgeP2P() {
                                     if (cost > 0 && turboCreditsMb >= cost) {
                                       setTurboCreditsMb((prev) => prev - cost);
                                     }
-                                    enqueueAresTransfer(
+                                    enqueueSwarmTransfer(
                                       {
                                         id: item.cas_fingerprint,
                                         artist: item.artist,
@@ -552,7 +551,7 @@ function ViewHarmonicBridgeP2P() {
           <div {...stylex.props(styles.copilotBox)}>
             <div {...stylex.props(styles.bridgeHeader)}>
               <strong>
-                📥 Transferencias P2P Activas (Cola Estilo Ares Galaxy ·{' '}
+                📥 Transferencias Activas del Enjambre (Merkle 16x256 KiB ·{' '}
                 {activeTransfers.length} Archivos con 4 Hot Cues)
               </strong>
               <span {...stylex.props(styles.badgeOrigin)}>
@@ -571,9 +570,9 @@ function ViewHarmonicBridgeP2P() {
                   </span>
                 </div>
                 <small {...stylex.props(styles.subtitle)}>
-                  Progreso: ██████████ 100% · Fuentes: {tr.peers} · Sello:{' '}
-                  {tr.seal} · 4 Hot Cues inyectados (1:Intro, 2:Break, 3:Drop,
-                  4:Outro) ➔ Listo en tu Biblioteca
+                  Progreso: ██████████ 100% (16/16 Hojas Merkle OK) · Fuentes:{' '}
+                  {tr.peers} · Sello: {tr.seal} · 4 Hot Cues inyectados
+                  (1:Intro, 2:Break, 3:Drop, 4:Outro) ➔ Listo en tu Biblioteca
                 </small>
               </div>
             ))}

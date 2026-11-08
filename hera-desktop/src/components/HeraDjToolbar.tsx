@@ -99,9 +99,9 @@ export default function HeraDjToolbar() {
         to="/bridge"
         onClick={handleQuickAiBridge}
         {...stylex.props(styles.actionBtn)}
-        title="Buscador y Descargas del Enjambre P2P (Modo Ares con Súper Poderes: Filtro Camelot, Escudo Anti-Fakes, 4 Hot Cues y Copiloto IA)"
+        title="Abrir Buscador del Enjambre Híbrido P2P (SimHash + Delta-CRDT + Merkle Streaming), Puente Armónico y Copiloto IA"
       >
-        🔍 Buscar &amp; Descargar P2P (Modo Ares + IA)
+        🌐 Enjambre P2P &amp; Copiloto IA
       </Link>
       <button
         type="button"
