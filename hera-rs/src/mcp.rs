@@ -317,6 +317,53 @@ pub fn list_mcp_tools() -> Value {
                     },
                     "required": ["subscriber_node_id", "subscriber_dj", "camelot_key"]
                 }
+            },
+            {
+                "name": "export_dj_crate",
+                "description": "Pure-Rust native exporter for VirtualDJ (.vdjfolder + _vdj_database.xml with 4 <Poi> Hot Cues), Pioneer Rekordbox XML, Native Instruments Traktor Pro (.nml with <CUE_V2>), and M3U8.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "crate_name": { "type": "string" },
+                        "tracks": { "type": "array", "items": { "type": "object" } },
+                        "formats": {
+                            "type": "array",
+                            "items": { "type": "string", "enum": ["virtualdj", "rekordbox", "traktor", "m3u8"] }
+                        },
+                        "output_dir": { "type": "string" }
+                    },
+                    "required": ["crate_name", "tracks"]
+                }
+            },
+            {
+                "name": "compute_dj_style_dna",
+                "description": "Zero-Typing DJ Style DNA Auto-Profiler & Persistent DJ Brain generator in Pure Rust (computes BPM zones, dominant Camelot keys, minor key ratio, top artists, and ~250-token DJ Brain prompt block).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "dj_handle": { "type": "string" },
+                        "preferred_software": { "type": "string", "default": "virtualdj" },
+                        "preferred_transition_style": { "type": "string", "default": "open_format_4_hotcues" },
+                        "golden_rules": { "type": "array", "items": { "type": "string" } },
+                        "tracks": { "type": "array", "items": { "type": "object" } }
+                    },
+                    "required": ["dj_handle", "tracks"]
+                }
+            },
+            {
+                "name": "chat_with_dj_copilot",
+                "description": "Evaluate a DJ Copilot conversational turn using Cloudflare Workers AI Free Tier (@cf/meta/llama-3.1-8b-instruct-fp8-fast, 10,000 Neurons/day free at $0.00, 6.6 Neurons/turn, AI Gateway cache & :free fallback).",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "dj_handle": { "type": "string" },
+                        "message": { "type": "string" },
+                        "backend": { "type": "string", "default": "cloudflare_free" },
+                        "model": { "type": "string" },
+                        "daily_neurons_used_so_far": { "type": "number", "default": 0.0 }
+                    },
+                    "required": ["dj_handle", "message"]
+                }
             }
         ]
     })
@@ -698,6 +745,24 @@ fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Result<V
             let req: crate::p2p::SwarmSubscribeRequest = serde_json::from_value(args)
                 .map_err(|e| format!("Invalid `swarm_subscribe` payload: {e}"))?;
             let resp = state.subscribe_semantic_topic(req);
+            Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
+        }
+        "export_dj_crate" => {
+            let req: crate::export::ExportCrateRequest = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `export_dj_crate` payload: {e}"))?;
+            let resp = crate::export::export_crate_bundle(&req);
+            Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
+        }
+        "compute_dj_style_dna" => {
+            let req: crate::dj_brain::DjStyleDnaRequest = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `compute_dj_style_dna` payload: {e}"))?;
+            let resp = crate::dj_brain::compute_dj_style_dna(&req);
+            Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
+        }
+        "chat_with_dj_copilot" => {
+            let req: crate::dj_brain::CloudflareFreeAiTurnRequest = serde_json::from_value(args)
+                .map_err(|e| format!("Invalid `chat_with_dj_copilot` payload: {e}"))?;
+            let resp = crate::dj_brain::evaluate_cloudflare_free_ai_turn(&req);
             Ok(serde_json::to_value(resp).map_err(|e| e.to_string())?)
         }
         _ => Err(format!("Unknown MCP tool `{name}`")),
