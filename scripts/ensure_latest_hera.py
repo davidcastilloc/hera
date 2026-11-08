@@ -114,17 +114,30 @@ def ensure_git_repo_updated(hera_dir: Path, pull_remote: bool = True) -> dict[st
     if rc_rem == 0 and remote_full:
         info["remote_commit"] = remote_full[:7]
 
-    # Ensure Multi-Instance ODD Git conventions (author 'David Castillo <vikruzdavid@gmail.com>' + local hooks)
-    _run_cmd(["git", "config", "user.name", "David Castillo"], cwd=hera_dir, timeout=10)
-    _run_cmd(["git", "config", "user.email", "vikruzdavid@gmail.com"], cwd=hera_dir, timeout=10)
+    # Configure local Git hooks (.githooks) for all contributors
     if (hera_dir / ".githooks").exists():
         _run_cmd(["git", "config", "core.hooksPath", ".githooks"], cwd=hera_dir, timeout=10)
 
-    # Also sync companion repo ../hera-cloud if cloned alongside hera
+    # Check if this machine is a maintainer instance (companion ../hera-cloud present or author is unset/david)
     companion_cloud = hera_dir.parent / "hera-cloud"
+    _, current_git_user, _ = _run_cmd(["git", "config", "user.name"], cwd=hera_dir, timeout=10)
+    is_maintainer_instance = (companion_cloud / ".git").exists() or current_git_user.strip().lower() in (
+        "",
+        "david",
+        "david castillo",
+        "davidcastilloc",
+        "antigravity",
+    )
+    if is_maintainer_instance:
+        _run_cmd(["git", "config", "user.name", "David Castillo"], cwd=hera_dir, timeout=10)
+        _run_cmd(["git", "config", "user.email", "vikruzdavid@gmail.com"], cwd=hera_dir, timeout=10)
+
+    # Also sync companion private repo ../hera-cloud if cloned alongside hera
     if (companion_cloud / ".git").exists():
-        _run_cmd(["git", "config", "user.name", "David Castillo"], cwd=companion_cloud, timeout=10)
-        _run_cmd(["git", "config", "user.email", "vikruzdavid@gmail.com"], cwd=companion_cloud, timeout=10)
+        _, cloud_git_user, _ = _run_cmd(["git", "config", "user.name"], cwd=companion_cloud, timeout=10)
+        if cloud_git_user.strip().lower() in ("", "david", "david castillo", "davidcastilloc", "antigravity"):
+            _run_cmd(["git", "config", "user.name", "David Castillo"], cwd=companion_cloud, timeout=10)
+            _run_cmd(["git", "config", "user.email", "vikruzdavid@gmail.com"], cwd=companion_cloud, timeout=10)
         if pull_remote:
             _run_cmd(["git", "pull", "--rebase", "origin", "main", "--quiet"], cwd=companion_cloud, timeout=60)
 

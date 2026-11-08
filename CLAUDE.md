@@ -54,7 +54,10 @@ Skills are physically vendored (zero OS symlinks) inside `.claude/skills/` and `
      - `docs/superpowers/specs/` — Design specs
      - `docs/superpowers/plans/` — Step-by-step plans with `- [ ]` / `- [x]` checkboxes
      - `docs/superpowers/DECISIONS.md` — Distilled architectural memory & critical bug log
-   - **Atomic Handoff:** At the end of every subtask in `docs/superpowers/plans/`, mark `[x]`, update `docs/superpowers/DECISIONS.md` only if a critical technical finding occurred, verify `git config user.name` is `"David Castillo"` and `git config user.email` is `"vikruzdavid@gmail.com"`, and create an atomic commit so any other machine can resume via `git pull`.
+   - **Atomic Handoff & Community PR Governance:**
+     - **Core Maintainer (`@davidcastilloc`):** Commits under `David Castillo <vikruzdavid@gmail.com>` (`git config user.name "David Castillo"`, `git config user.email "vikruzdavid@gmail.com"`).
+     - **Community Contributors:** Preserve your own `user.name` / `user.email`, work on a feature branch (`feat/*`, `fix/*`), and open a Pull Request via `.github/PULL_REQUEST_TEMPLATE.md` (reviewed via `.github/CODEOWNERS` by `@davidcastilloc`).
+     - At the end of every subtask in `docs/superpowers/plans/`, mark `[x]`, update `docs/superpowers/DECISIONS.md` only if a critical technical finding occurred, and create an atomic Conventional Commit.
 2. **ODD Ceremony Scaling:**
    - **Changes `< 30` lines:** Skip spec/plan ceremony -> failing test -> minimal code -> terminal verification receipt -> atomic commit.
    - **Changes `>= 30` lines:** `brainstorming` (`docs/superpowers/specs/`) -> `writing-plans` (`docs/superpowers/plans/`) -> `subagent-driven-development` (`50–200` LOC max per ephemeral subagent, zero context rot) -> `verification-before-completion`.

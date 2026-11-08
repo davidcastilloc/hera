@@ -103,23 +103,37 @@ uv run ruff format .
 uv run ruff check .
 ```
 
-### Type Checking
+### Type Checking & Rust Engine Verification
 ```bash
 uv run mypy src/
+cargo check --manifest-path hera-rs/Cargo.toml
+cargo test --manifest-path hera-rs/Cargo.toml
 ```
+
+---
+
+## 🤖 Contributing with AI Agents (`superpowers-odd` Protocol)
+
+Hera ships with pre-configured, zero-symlink AI engineering skills in `.agent/skills/` and `.claude/skills/` (compatible out-of-the-box with **Windows**, **macOS**, and **Linux** in Claude Code, Cursor, Antigravity, and Gemini CLI):
+
+- **Organic-Driven Development (ODD):**
+  - **Bugfixes / Micro-changes (`< 30` lines):** Write a failing test -> implement the minimal fix -> attach real terminal verification output.
+  - **New Features (`>= 30` lines):** Document the design in `docs/superpowers/specs/`, create a step-by-step plan in `docs/superpowers/plans/`, and record any critical architectural findings in `docs/superpowers/DECISIONS.md`.
+- **Receipt-Driven Development (RDD):** Every Pull Request must paste the real terminal output (`exit code 0`) of `uv run ruff check .`, `uv run pytest`, and `cargo test --manifest-path hera-rs/Cargo.toml`.
+- **Git Identity Preservation:** Running `python scripts/ensure_latest_hera.py` automatically preserves your personal Git `user.name` and `user.email` while syncing the local `.githooks` and agent skills.
 
 ---
 
 ## 🔄 Pull Request Workflow
 
-1. **Fork the Repository:** Create a personal fork on GitHub.
+1. **Fork the Repository:** Create a personal fork of `davidcastilloc/hera` on GitHub.
 2. **Create a Feature Branch:**
    ```bash
    git checkout -b feat/your-feature-name
    # or
    git checkout -b fix/your-bugfix-name
    ```
-3. **Commit Your Changes:** Follow conventional commit guidelines:
+3. **Commit Your Changes:** Follow Conventional Commits / Semantic Release guidelines:
    - `feat: add automatic DJ cue sheet generator`
    - `fix: resolve permission issue during active Soulseek download`
    - `docs: update cloud sync guide in README`
@@ -128,7 +142,7 @@ uv run mypy src/
    ```bash
    git push origin feat/your-feature-name
    ```
-5. **Open a Pull Request:** Submit a PR against the `main` branch of `davidcastilloc/hera`. Provide a clear description of the problem solved, testing steps taken, and any relevant issue numbers.
+5. **Open a Pull Request:** Submit a PR against the `main` branch of `davidcastilloc/hera` using `.github/PULL_REQUEST_TEMPLATE.md` (automatically reviewed by `@davidcastilloc`). Include your real terminal test receipts and any relevant issue numbers.
 
 ---
 

@@ -1,0 +1,57 @@
+name: HERA Community CI (Python + Rust ODD Verification)
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  python-and-odd-hygiene:
+    name: Python (Ruff + Pytest) & Multi-OS Path Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python 3.11
+        run: uv python install 3.11
+
+      - name: Install dependencies (with dev & analysis extras)
+        run: uv sync --all-extras
+
+      - name: Verify Zero OS Symlinks in .agent/skills and .claude/skills
+        run: |
+          SYMLINKS=$(find .agent/skills .claude/skills -type l)
+          if [ -n "$SYMLINKS" ]; then
+            echo "Error: OS symlinks detected in skills directories: $SYMLINKS"
+            exit 1
+          fi
+
+      - name: Run Ruff Linter
+        run: uv run ruff check .
+
+      - name: Run Pytest Suite
+        env:
+          PYSTRAY_BACKEND: dummy
+          NO_PROXY: "localhost,127.0.0.1"
+          no_proxy: "localhost,127.0.0.1"
+        run: uv run pytest -v
+
+  rust-dsp-node:
+    name: Rust DSP & P2P Node (hera-rs)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cargo Check & Test (hera-rs)
+        run: |
+          cargo check --manifest-path hera-rs/Cargo.toml
+          cargo test --manifest-path hera-rs/Cargo.toml
