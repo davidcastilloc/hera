@@ -26,7 +26,7 @@ export const Route = createFileRoute('/artists/$artistID')({
   validateSearch: validateFocusedAlbumSearch,
 });
 
-export default function ViewArtistDetails() {
+function ViewArtistDetails() {
   const { albums, playlists } = Route.useLoaderData();
   const config = useSuspenseQuery(configQuery).data;
   const { artistID } = Route.useParams();
