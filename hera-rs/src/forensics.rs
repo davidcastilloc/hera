@@ -38,8 +38,9 @@ pub struct DecodedAudio {
     pub duration_seconds: f32,
 }
 
-/// Decode encoded audio bytes (WAV, FLAC, MP3, OGG) into mono + stereo channels using pure-Rust Symphonia.
-/// Caps decoded samples to `max_seconds` (default 45s) so memory stays well inside Cloudflare Workers' 128 MB limit.
+/// Decode encoded audio bytes (WAV, FLAC, MP3, M4A/AAC, ALAC, OGG/Vorbis) into mono + stereo channels
+/// using pure-Rust Symphonia. Caps decoded samples to `max_seconds` (default 45s) so memory stays
+/// well inside Cloudflare Workers' 128 MB limit.
 pub fn decode_audio_bytes(
     bytes: &[u8],
     ext_hint: Option<&str>,
@@ -48,6 +49,31 @@ pub fn decode_audio_bytes(
     let owned = bytes.to_vec();
     let cursor = Cursor::new(owned);
     let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
+    decode_media_source(mss, ext_hint, max_seconds)
+}
+
+/// Stream-decode only the first `max_seconds` of an audio file (`.flac`, `.mp3`, `.m4a`, `.aac`,
+/// `.ogg`, `.wav`) directly from disk via `MediaSourceStream` without reading the full file into RAM.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn decode_audio_file_partial(
+    path: &std::path::Path,
+    max_seconds: f32,
+) -> Result<DecodedAudio, String> {
+    let file = std::fs::File::open(path)
+        .map_err(|e| format!("Failed to open audio file {}: {e}", path.display()))?;
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_lowercase());
+    let mss = MediaSourceStream::new(Box::new(file), Default::default());
+    decode_media_source(mss, ext.as_deref(), max_seconds)
+}
+
+fn decode_media_source(
+    mss: MediaSourceStream,
+    ext_hint: Option<&str>,
+    max_seconds: f32,
+) -> Result<DecodedAudio, String> {
 
     let mut hint = Hint::new();
     if let Some(ext) = ext_hint {

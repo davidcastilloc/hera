@@ -101,48 +101,47 @@ fn enrich_track_with_hera_dsp(
         .unwrap_or("flac")
         .to_lowercase();
 
-    if let Ok(bytes) = std::fs::read(path) {
-        if !bytes.is_empty() && bytes.len() <= 64 * 1024 * 1024 {
-            if let Ok(decoded) =
-                hera_node_rs::forensics::decode_audio_bytes(&bytes, Some(&ext), 45.0)
-            {
-                let forensics = hera_node_rs::forensics::audit_pcm_channels(
-                    &decoded.left,
-                    decoded.right.as_deref(),
-                    decoded.sample_rate,
-                    &ext,
-                );
-                let structure = hera_node_rs::structure::analyze_structure_and_style(
-                    &decoded.mono,
-                    decoded.sample_rate,
-                    Some(decoded.duration_seconds),
-                    tag_bpm.map(|b| b as f32),
-                );
-                let final_bpm = tag_bpm.unwrap_or(structure.bpm as f64);
-                let final_camelot = tag_camelot.unwrap_or_else(|| structure.camelot_key.clone());
-                let final_energy = (structure.energy_score as f64).clamp(0.35, 0.99);
-                let seal = hera_node_rs::p2p::compute_hera_seal(
-                    track_id,
-                    final_bpm as f32,
-                    &final_camelot,
-                    forensics.quality_score,
-                    &forensics.forensic_verdict,
-                );
-                let pins = structure
-                    .hot_cues
-                    .into_iter()
-                    .take(4)
-                    .map(|c| HotCuePin {
-                        num: c.num,
-                        name: c.name,
-                        seconds: ((c.seconds as f64) * 10.0).round() / 10.0,
-                        color: cue_color_for_slot(c.num).to_string(),
-                        role: c.role,
-                    })
-                    .collect();
-                return (final_bpm, final_camelot, final_energy, seal, pins);
-            }
-        }
+    if let Ok(decoded) = hera_node_rs::forensics::decode_audio_file_partial(path, 45.0) {
+        let forensics = hera_node_rs::forensics::audit_pcm_channels(
+            &decoded.left,
+            decoded.right.as_deref(),
+            decoded.sample_rate,
+            &ext,
+        );
+        let total_dur = if duration_secs > 0 {
+            duration_secs as f32
+        } else {
+            decoded.duration_seconds
+        };
+        let structure = hera_node_rs::structure::analyze_structure_and_style(
+            &decoded.mono,
+            decoded.sample_rate,
+            Some(total_dur),
+            tag_bpm.map(|b| b as f32),
+        );
+        let final_bpm = tag_bpm.unwrap_or(structure.bpm as f64);
+        let final_camelot = tag_camelot.unwrap_or_else(|| structure.camelot_key.clone());
+        let final_energy = (structure.energy_score as f64).clamp(0.35, 0.99);
+        let seal = hera_node_rs::p2p::compute_hera_seal(
+            track_id,
+            final_bpm as f32,
+            &final_camelot,
+            forensics.quality_score,
+            &forensics.forensic_verdict,
+        );
+        let pins = structure
+            .hot_cues
+            .into_iter()
+            .take(4)
+            .map(|c| HotCuePin {
+                num: c.num,
+                name: c.name,
+                seconds: ((c.seconds as f64) * 10.0).round() / 10.0,
+                color: cue_color_for_slot(c.num).to_string(),
+                role: c.role,
+            })
+            .collect();
+        return (final_bpm, final_camelot, final_energy, seal, pins);
     }
 
     let hash_seed: u32 = title
