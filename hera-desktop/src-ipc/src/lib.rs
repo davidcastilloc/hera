@@ -4,6 +4,8 @@
 //! platform WebView headers (`webkit2gtk-4.1` / `WebView2`) so verification runs in seconds
 //! across Windows, macOS, and headless Linux environments.
 
+pub mod acl_guard;
+
 /// Canonical workspace crate version exposed by `hera-ipc`.
 pub const HERA_IPC_VERSION: &str = env!("CARGO_PKG_VERSION");
 

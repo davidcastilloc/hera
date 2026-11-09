@@ -71,16 +71,16 @@
 **Interfaces:**
 - Produces: `hera_ipc::acl_guard::{AclParityReport, verify_tauri_v2_acl_triad}` scanning both single-file (`plugins/<name>.rs`) and directory-module (`plugins/<name>/**/*.rs`) Tauri plugins against `src/main.rs`, `build.rs`, and `capabilities/main.json`.
 
-- [ ] **Step 1: Write failing unit tests in `hera-desktop/src-ipc/src/acl_guard.rs`**
+- [x] **Step 1: Write failing unit tests in `hera-desktop/src-ipc/src/acl_guard.rs`**
   Include:
   1. `test_tauri_v2_acl_triad_parity`: runs `verify_tauri_v2_acl_triad` on `../src-tauri` and asserts all 8 inlined plugins (`app-menu`, `config`, `cover`, `database`, `default-view`, `hera-dj` [13 cmds], `hera-agent` [9 cmds], `sleepblocker`) match across `plugins/**/*.rs`, `main.rs`, `build.rs`, and `capabilities/main.json`.
   2. `test_acl_guard_detects_missing_build_rs_and_capability_and_nested_mod_files`: creates a temp fixture with `plugins/hera_dj/submod.rs` containing an unregistered `#[tauri::command] pub async fn orphan_cmd()` and asserts the error explicitly names `build.rs` and `capabilities/main.json`.
-- [ ] **Step 2: Implement `verify_tauri_v2_acl_triad` in `hera-desktop/src-ipc/src/acl_guard.rs` and wire re-test in `hera_dj.rs`**
+- [x] **Step 2: Implement `verify_tauri_v2_acl_triad` in `hera-desktop/src-ipc/src/acl_guard.rs` and wire re-test in `hera_dj.rs`**
   Keep `acl_guard.rs` `< 300` LOC with zero external regex dependencies. Also reference `hera_ipc::acl_guard::verify_tauri_v2_acl_triad` inside `hera_dj`'s `#[cfg(test)]` module.
-- [ ] **Step 3: Run `cargo test -p hera-ipc` and capture green receipt**
+- [x] **Step 3: Run `cargo test -p hera-ipc` and capture green receipt**
   Run: `cargo test -p hera-ipc`
   Expected: `test_tauri_v2_acl_triad_parity` and negative drift tests pass (`exit code 0`).
-- [ ] **Step 4: Mark `[x]` and create atomic commit**
+- [x] **Step 4: Mark `[x]` and create atomic commit**
   Commit `test(ipc): add automated Tauri v2 ACL triad parity guardian across all plugins`.
 
 ---

@@ -1273,4 +1273,13 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_tauri_v2_acl_triad_parity() {
+        let report = hera_ipc::acl_guard::verify_tauri_v2_acl_triad(std::path::Path::new(env!(
+            "CARGO_MANIFEST_DIR"
+        )))
+        .unwrap();
+        assert!(report.commands_checked >= 45);
+    }
 }
