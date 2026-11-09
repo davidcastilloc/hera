@@ -57,6 +57,7 @@ fn main() {
                     "probe_ai_backend",
                     "list_ai_backends",
                     "resolve_harmonic_bridge",
+                    "download_p2p_track",
                 ]),
             )
             .plugin(

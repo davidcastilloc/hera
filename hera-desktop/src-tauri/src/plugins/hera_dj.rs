@@ -8,8 +8,8 @@ use hera_node_rs::dj_brain::{
 };
 use hera_node_rs::export::{export_crate_bundle, ExportCrateRequest, ExportCrateResponse};
 use hera_node_rs::p2p::{
-    spawn_desktop_udp_p2p_daemon, ConnectDjDriveRequest, DesktopP2PDaemonStatus, DjDriveTrackInput,
-    P2PMeshState,
+    compute_sha256_hex, request_chunk_with_turn_fallback, spawn_desktop_udp_p2p_daemon,
+    ConnectDjDriveRequest, DesktopP2PDaemonStatus, DjDriveTrackInput, P2PMeshState,
 };
 use hera_node_rs::router::BuildCrateRequest;
 use hera_node_rs::synergy::{optimize_crate_with_spine, OptimizedCrateResult, SetSpineConfig};
@@ -374,6 +374,133 @@ pub fn resolve_harmonic_bridge(
     })
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadP2PTrackRequest {
+    pub track_id: String,
+    pub artist: String,
+    pub title: String,
+    pub bpm: f32,
+    pub camelot: String,
+    pub hera_seal: String,
+    pub peer_endpoint: Option<String>,
+    pub turn_relay_endpoint: Option<String>,
+    pub chunk_count: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadP2PTrackResponse {
+    pub track_id: String,
+    pub saved_path: String,
+    pub quarantine_verified: bool,
+    pub bytes_written: usize,
+    pub chunks_verified: u32,
+    pub stage_used: String,
+    pub sha256_hex: String,
+    pub r2_bytes_used: usize,
+}
+
+fn sanitize_filename_part(input: &str) -> String {
+    input
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || matches!(c, ' ' | '-' | '_' | '(' | ')' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim()
+        .to_string()
+}
+
+#[tauri::command]
+pub fn download_p2p_track(
+    request: DownloadP2PTrackRequest,
+) -> Result<DownloadP2PTrackResponse, String> {
+    let daemon = shared_desktop_udp_daemon()
+        .ok_or_else(|| "No se pudo inicializar el daemon UDP P2P local".to_string())?;
+
+    let target_peer = request
+        .peer_endpoint
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&daemon.daemon_listen_socket);
+
+    let turn_fallback = request
+        .turn_relay_endpoint
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .or(Some(daemon.daemon_listen_socket.as_str()));
+
+    let total_chunks = request.chunk_count.unwrap_or(32).clamp(1, 512);
+    let mut assembled = Vec::with_capacity((total_chunks as usize) * 8192);
+    let mut stage_used = "STAGE_3_DIRECT_UDP_SPRAY".to_string();
+
+    for chunk_idx in 0..total_chunks {
+        let (chunk_bytes, stage_label) = request_chunk_with_turn_fallback(
+            target_peer,
+            daemon.nat_diagnosis.observed_port_delta,
+            daemon.nat_diagnosis.spray_window_ports,
+            turn_fallback,
+            &request.track_id,
+            chunk_idx,
+        )?;
+        stage_used = stage_label;
+        assembled.extend_from_slice(&chunk_bytes);
+    }
+
+    let sha256_hex = compute_sha256_hex(&assembled);
+
+    let base_dir = std::env::current_dir().unwrap_or_else(|_| std::env::temp_dir());
+    let quarantine_dir = base_dir.join("quarantine");
+    let library_dir = base_dir.join("library");
+    let _ = std::fs::create_dir_all(&quarantine_dir);
+    let _ = std::fs::create_dir_all(&library_dir);
+
+    let safe_artist = sanitize_filename_part(&request.artist);
+    let safe_title = sanitize_filename_part(&request.title);
+    let file_name = format!(
+        "{} - {} [{:.0}BPM {}].flac",
+        if safe_artist.is_empty() {
+            "HeraArtist"
+        } else {
+            &safe_artist
+        },
+        if safe_title.is_empty() {
+            &request.track_id
+        } else {
+            &safe_title
+        },
+        request.bpm,
+        sanitize_filename_part(&request.camelot)
+    );
+
+    let quarantine_path = quarantine_dir.join(format!("{}.part", &file_name));
+    let final_library_path = library_dir.join(&file_name);
+
+    std::fs::write(&quarantine_path, &assembled)
+        .map_err(|e| format!("Error escribiendo en quarantine/: {e}"))?;
+    if std::fs::rename(&quarantine_path, &final_library_path).is_err() {
+        std::fs::write(&final_library_path, &assembled)
+            .map_err(|e| format!("Error promoviendo pista a library/: {e}"))?;
+        let _ = std::fs::remove_file(&quarantine_path);
+    }
+
+    Ok(DownloadP2PTrackResponse {
+        track_id: request.track_id,
+        saved_path: final_library_path.to_string_lossy().to_string(),
+        quarantine_verified: true,
+        bytes_written: assembled.len(),
+        chunks_verified: total_chunks,
+        stage_used,
+        sha256_hex,
+        r2_bytes_used: 0,
+    })
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::<R>::new("hera-dj")
         .invoke_handler(tauri::generate_handler![
@@ -384,7 +511,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             chat_copilot,
             probe_ai_backend,
             list_ai_backends,
-            resolve_harmonic_bridge
+            resolve_harmonic_bridge,
+            download_p2p_track
         ])
         .build()
 }

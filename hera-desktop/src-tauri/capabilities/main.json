@@ -60,6 +60,7 @@
     "hera-dj:allow-probe-ai-backend",
     "hera-dj:allow-list-ai-backends",
     "hera-dj:allow-resolve-harmonic-bridge",
+    "hera-dj:allow-download-p2p-track",
     "sleepblocker:allow-enable",
     "sleepblocker:allow-disable"
   ],

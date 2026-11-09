@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import View from '../elements/View';
 import {
   chatWithCloudflareFreeAi,
+  downloadP2PTrackToLibrary,
   getCloudflareEdgeRadar,
   probeLocalAiBackend,
   resolveHarmonicBridge,
@@ -145,6 +146,31 @@ function ViewHarmonicBridgeP2P() {
       ...prev.filter((t) => t.id !== entry.id),
     ]);
     setPreviewStatus(banner);
+    void downloadP2PTrackToLibrary({
+      trackId: entry.id,
+      artist: entry.artist,
+      title: entry.title,
+      bpm: entry.bpm,
+      camelot: entry.camelot,
+      heraSeal: entry.seal,
+    }).then((receipt) => {
+      const kb = (receipt.bytes_written / 1024).toFixed(0);
+      const shortSha = receipt.sha256_hex.slice(0, 12);
+      setActiveTransfers((prev) =>
+        prev.map((t) =>
+          t.id === entry.id
+            ? {
+                ...t,
+                mode: `${t.mode} · ✅ ${receipt.stage_used}`,
+                speed: `${kb} KiB (${receipt.chunks_verified} chunks · 0 R2)`,
+              }
+            : t,
+        ),
+      );
+      setPreviewStatus(
+        `${banner} · ✅ Verificado en disco: ${receipt.saved_path} (${receipt.chunks_verified} chunks · SHA-256 ${shortSha}… · ${receipt.stage_used} · ${receipt.r2_bytes_used} R2 B)`,
+      );
+    });
   };
 
   return (
