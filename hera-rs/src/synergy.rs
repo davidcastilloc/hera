@@ -375,11 +375,13 @@ pub fn optimize_crate_with_spine(
     }
 
     let n_all = candidates.len();
-    let mut matrix = vec![vec![0.0_f32; n_all]; n_all];
+    let mut matrix = vec![0.0_f32; n_all * n_all];
     for i in 0..n_all {
+        let row_offset = i * n_all;
         for j in 0..n_all {
             if i != j {
-                matrix[i][j] = evaluate_transition(&candidates[i], &candidates[j]).total_synergy;
+                matrix[row_offset + j] =
+                    evaluate_transition(&candidates[i], &candidates[j]).total_synergy;
             }
         }
     }
@@ -467,12 +469,12 @@ pub fn optimize_crate_with_spine(
                 e_fit - candidates[cand].bpm * 0.0005
             } else {
                 let prev = order[slot - 1];
-                matrix[prev][cand] * syn_w + e_fit * ene_w
+                matrix[prev * n_all + cand] * syn_w + e_fit * ene_w
             };
             if let Some((anchor_slot, anchor_cand)) = next_anchor {
                 let dist = (anchor_slot - slot) as f32;
                 let pull_weight = if dist <= 1.0 { syn_w } else { 0.40 / dist };
-                val += matrix[cand][anchor_cand] * pull_weight;
+                val += matrix[cand * n_all + anchor_cand] * pull_weight;
             }
             if val > best_val {
                 best_val = val;
@@ -483,7 +485,7 @@ pub fn optimize_crate_with_spine(
         order[slot] = best_next;
     }
 
-    // 2. Constrained 2-Opt + Cross-Anchor Unpinned Swap + Pool Bridge Replacement
+    // 2. Constrained 2-Opt + Cross-Anchor Unpinned Swap + Pool Bridge Replacement (Zero-Allocation In-Place)
     let route_score = |seq: &[usize]| -> f32 {
         if seq.is_empty() {
             return 0.0;
@@ -494,7 +496,7 @@ pub fn optimize_crate_with_spine(
             return mean_e;
         }
         let syn_sum: f32 = (0..(seq.len() - 1))
-            .map(|k| matrix[seq[k]][seq[k + 1]])
+            .map(|k| matrix[seq[k] * n_all + seq[k + 1]])
             .sum();
         let mean_s = syn_sum / ((seq.len() - 1) as f32);
         mean_s * syn_w + mean_e * ene_w
@@ -505,7 +507,7 @@ pub fn optimize_crate_with_spine(
         for _pass in 0..35 {
             let mut improved = false;
 
-            // Move A: Constrained 2-Opt segment reversal (only when pinned slots stay fixed)
+            // Move A: Constrained 2-Opt segment reversal in-place (zero Vec clones)
             if order.len() >= 4 {
                 for i in 0..(order.len() - 2) {
                     for k in (i + 2)..order.len() {
@@ -514,19 +516,19 @@ pub fn optimize_crate_with_spine(
                         if !valid_rev {
                             continue;
                         }
-                        let mut trial = order.clone();
-                        trial[i..=k].reverse();
-                        let sc = route_score(&trial);
+                        order[i..=k].reverse();
+                        let sc = route_score(&order);
                         if sc > current_best + 1e-4 {
-                            order = trial;
                             current_best = sc;
                             improved = true;
+                        } else {
+                            order[i..=k].reverse();
                         }
                     }
                 }
             }
 
-            // Move B: Pairwise swap of unpinned slots (jumps across locked intermediate anchors)
+            // Move B: Pairwise swap of unpinned slots in-place (zero Vec clones)
             for i in 0..order.len() {
                 if pinned[i].is_some() {
                     continue;
@@ -535,18 +537,18 @@ pub fn optimize_crate_with_spine(
                     if pinned[k].is_some() {
                         continue;
                     }
-                    let mut trial = order.clone();
-                    trial.swap(i, k);
-                    let sc = route_score(&trial);
+                    order.swap(i, k);
+                    let sc = route_score(&order);
                     if sc > current_best + 1e-4 {
-                        order = trial;
                         current_best = sc;
                         improved = true;
+                    } else {
+                        order.swap(i, k);
                     }
                 }
             }
 
-            // Move C: Candidate pool bridge replacement when max_tracks < candidates.len()
+            // Move C: Candidate pool bridge replacement in-place when max_tracks < candidates.len()
             if limit < n_all {
                 for slot in 0..order.len() {
                     if pinned[slot].is_some() {
@@ -556,13 +558,14 @@ pub fn optimize_crate_with_spine(
                         if order.contains(&cand) {
                             continue;
                         }
-                        let mut trial = order.clone();
-                        trial[slot] = cand;
-                        let sc = route_score(&trial);
+                        let old_cand = order[slot];
+                        order[slot] = cand;
+                        let sc = route_score(&order);
                         if sc > current_best + 1e-4 {
-                            order = trial;
                             current_best = sc;
                             improved = true;
+                        } else {
+                            order[slot] = old_cand;
                         }
                     }
                 }
