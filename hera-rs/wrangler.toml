@@ -17,27 +17,22 @@ HERA_BETA_R2_QUOTA_MB = "5120" # 5 GB (5,120 MB) per selected Founding Beta MVP 
 [build]
 command = "cargo install -q worker-build --version 0.1.3 && worker-build --release -- --features cloudflare --no-default-features"
 
-# Full Cloudflare Stack Bindings (D1 + R2 + Vectorize 64D + Workers AI + KV + Queues):
-# [[d1_databases]]
-# binding = "HERA_DB"
-# database_name = "hera-p2p-catalog"
-# database_id = "YOUR-D1-DATABASE-ID"
-#
-# [[r2_buckets]]
-# binding = "HERA_LIBRARY_BUCKET"
-# bucket_name = "hera-verified-masters"
-#
-# [[vectorize]]
-# binding = "HERA_VECTOR_INDEX"
-# index_name = "hera-64d-style-embeddings"
-#
-# [ai]
-# binding = "AI"
-#
-# [[kv_namespaces]]
-# binding = "HERA_KV_CACHE"
-# id = "YOUR-KV-NAMESPACE-ID"
-#
-# [[queues.producers]]
-# binding = "HERA_SCAN_QUEUE"
-# queue = "hera-gdrive-folder-scan"
+[[d1_databases]]
+binding = "HERA_DB"
+database_name = "hera-p2p-catalog"
+database_id = "fa584f5e-e59d-417a-aef6-23053b849c69"
+
+[[r2_buckets]]
+binding = "HERA_LIBRARY_BUCKET"
+bucket_name = "hera-verified-masters"
+
+[[kv_namespaces]]
+binding = "HERA_KV_CACHE"
+id = "5a943afd2f7b4476bd79652da0a5679a"
+
+[[vectorize]]
+binding = "HERA_VECTOR_INDEX"
+index_name = "hera-64d-style-embeddings"
+
+[ai]
+binding = "AI"
