@@ -37,6 +37,7 @@
     "database:allow-scan-library",
     "database:allow-get-all-tracks",
     "database:allow-get-tracks",
+    "database:allow-get-track",
     "database:allow-update-track",
     "database:allow-remove-tracks",
     "database:allow-get-artists",

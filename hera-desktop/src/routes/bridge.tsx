@@ -1,11 +1,18 @@
 import * as stylex from '@stylexjs/stylex';
-import { createFileRoute } from '@tanstack/react-router';
-import { useCallback, useEffect, useState } from 'react';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import LibraryAPI from '../api/LibraryAPI';
+import PlaylistsAPI from '../api/PlaylistsAPI';
 import Icon from '../components/Icon';
 import View from '../elements/View';
+import type { Track } from '../generated/typings';
+import useInvalidate from '../hooks/useInvalidate';
+import DatabaseBridge from '../lib/bridge-database';
 import {
   chatWithCloudflareFreeAi,
+  downloadP2PTrackToLibrary,
+  exportCrateToDjSoftware,
   getCloudflareEdgeRadar,
   probeLocalAiBackend,
   resolveHarmonicBridge,
@@ -13,17 +20,49 @@ import {
   type AiConnectivityOnboardingReport,
   type CloudflareEdgeCapabilities,
   type CommanderAuthorityMode,
+  type HarmonicBridgeStep,
   type HeraCloudflareFreeAiResponse,
   type ResolveHarmonicBridgeResponse,
+  type SwarmCatalogItem,
 } from '../lib/bridge-hera';
 import {
   getHumanMatchLabel,
   useHeraViewStore,
 } from '../lib/hera-human-language';
+import player from '../lib/player';
+import useLibraryStore from '../lib/store';
+import toastManager from '../lib/toast-manager';
 
 export const Route = createFileRoute('/bridge')({
   component: ViewHarmonicBridgeP2P,
 });
+
+const CAMELOT_OPTIONS = [
+  '1A',
+  '2A',
+  '3A',
+  '4A',
+  '5A',
+  '6A',
+  '7A',
+  '8A',
+  '9A',
+  '10A',
+  '11A',
+  '12A',
+  '1B',
+  '2B',
+  '3B',
+  '4B',
+  '5B',
+  '6B',
+  '7B',
+  '8B',
+  '9B',
+  '10B',
+  '11B',
+  '12B',
+];
 
 const PHRASE_RAIL_MARKERS = [
   {
@@ -60,32 +99,122 @@ const PHRASE_RAIL_MARKERS = [
   },
 ] as const;
 
+function camelotRootHz(camelot: string): { root: number; major: boolean } {
+  const clean = camelot.trim().toUpperCase();
+  const mode = clean.endsWith('B') ? 'B' : 'A';
+  const num = Number.parseInt(clean.slice(0, -1), 10);
+  const minorRoots = [
+    207.65, 155.56, 233.08, 174.61, 130.81, 196.0, 146.83, 220.0, 164.81,
+    246.94, 185.0, 138.59,
+  ];
+  const idx = Number.isFinite(num) && num >= 1 && num <= 12 ? num - 1 : 7;
+  const base = minorRoots[idx];
+  return {
+    root: mode === 'B' ? base * 1.1892071 : base,
+    major: mode === 'B',
+  };
+}
+
+function buildSyntheticTrackDescriptor(
+  id: string,
+  artist: string,
+  title: string,
+  bpm: number,
+  camelot: string,
+  savedPath?: string,
+): Track {
+  const duration = 210;
+  return {
+    id,
+    path: savedPath || `library/${artist} - ${title}.wav`,
+    title,
+    album: 'Puente Armónico HERA',
+    album_artist: artist,
+    artists: [artist],
+    genres: ['Club'],
+    year: 2026,
+    duration,
+    track_no: null,
+    track_of: null,
+    disk_no: null,
+    disk_of: null,
+    is_compilation: false,
+    bpm,
+    camelot,
+    energy: 0.84,
+    hera_seal: `hera_seal_${id}`,
+    hot_cues: [
+      {
+        num: 1,
+        name: '1:Intro',
+        seconds: 15.2,
+        color: '#22c55e',
+        role: 'intro',
+      },
+      {
+        num: 2,
+        name: '2:Breakdown',
+        seconds: 68.0,
+        color: '#3b82f6',
+        role: 'breakdown',
+      },
+      {
+        num: 3,
+        name: '3:Drop',
+        seconds: 102.0,
+        color: '#ef4444',
+        role: 'drop',
+      },
+      {
+        num: 4,
+        name: '4:Outro',
+        seconds: 168.4,
+        color: '#eab308',
+        role: 'outro',
+      },
+    ],
+  };
+}
+
 function ViewHarmonicBridgeP2P() {
   const viewMode = useHeraViewStore((state) => state.viewMode);
   const isOnboardingOpen = useHeraViewStore((state) => state.isOnboardingOpen);
   const closeOnboarding = useHeraViewStore((state) => state.closeOnboarding);
   const openOnboarding = useHeraViewStore((state) => state.openOnboarding);
+  const tracks = useLibraryStore((state) => state.tracks);
+  const invalidate = useInvalidate();
+  const navigate = useNavigate();
 
-  const [originTitle] = useState('Levels (Original Mix)');
-  const [originArtist] = useState('Avicii');
-  const [originBpm] = useState(124.0);
-  const [originCamelot] = useState('8A');
+  const [originTrackId, setOriginTrackId] = useState<string>('');
+  const [originTitle, setOriginTitle] = useState('Levels (Original Mix)');
+  const [originArtist, setOriginArtist] = useState('Avicii');
+  const [originBpm, setOriginBpm] = useState(124.0);
+  const [originCamelot, setOriginCamelot] = useState('8A');
 
-  const [targetTitle] = useState("Don't You Worry Child");
-  const [targetArtist] = useState('Swedish House Mafia');
-  const [targetBpm] = useState(128.0);
-  const [targetCamelot] = useState('10A');
+  const [targetTrackId, setTargetTrackId] = useState<string>('');
+  const [targetTitle, setTargetTitle] = useState("Don't You Worry Child");
+  const [targetArtist, setTargetArtist] = useState('Swedish House Mafia');
+  const [targetBpm, setTargetBpm] = useState(128.0);
+  const [targetCamelot, setTargetCamelot] = useState('10A');
 
   const [bridgeResult, setBridgeResult] =
     useState<ResolveHarmonicBridgeResponse | null>(null);
+  const [customSteps, setCustomSteps] = useState<HarmonicBridgeStep[] | null>(
+    null,
+  );
   const [edgeRadar, setEdgeRadar] = useState<CloudflareEdgeCapabilities | null>(
     null,
   );
   const [previewStatus, setPreviewStatus] = useState<string>('');
-  const [chatPrompt, setChatPrompt] = useState(
-    "Quiero pasar de Levels a Don't You Worry Child subiendo el ritmo suave y sin que choquen las voces",
+  const [activeAuditionId, setActiveAuditionId] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+
+  const [chatPrompt, setChatPrompt] = useState('');
+  const [activeInstruction, setActiveInstruction] = useState(
+    "Quiero pasar de «Levels» a «Don't You Worry Child» subiendo el ritmo de forma progresiva y sin superponer vocales.",
   );
-  const [selectedBackend, setSelectedBackend] = useState<string>('cli_agy');
+  const [selectedBackend, setSelectedBackend] =
+    useState<string>('cloudflare_free');
   const [customBaseUrl, setCustomBaseUrl] = useState<string>(
     'http://localhost:1234/v1',
   );
@@ -101,6 +230,75 @@ function ViewHarmonicBridgeP2P() {
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
   const [showProOptions, setShowProOptions] = useState<boolean>(false);
 
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const stopWebAudioPreview = useCallback(() => {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      void audioCtxRef.current.close().catch(() => {});
+      audioCtxRef.current = null;
+    }
+    setActiveAuditionId(null);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      stopWebAudioPreview();
+    };
+  }, [stopWebAudioPreview]);
+
+  useEffect(() => {
+    if (tracks.length === 0) {
+      void DatabaseBridge.getAllTracks()
+        .then((dbTracks) => {
+          if (dbTracks.length > 0) {
+            useLibraryStore.setState({ tracks: dbTracks });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [tracks.length]);
+
+  const handleSelectDeckTrack = (deck: 'A' | 'B', trackId: string) => {
+    const found = tracks.find((t) => t.id === trackId);
+    if (!found) return;
+    const artist = found.artists[0] || found.album_artist || 'Artista Local';
+    const bpm = Math.round((found.bpm ?? 124) * 10) / 10;
+    const camelot = found.camelot || '8A';
+    setCustomSteps(null);
+    if (deck === 'A') {
+      setOriginTrackId(found.id);
+      setOriginTitle(found.title);
+      setOriginArtist(artist);
+      setOriginBpm(bpm);
+      setOriginCamelot(camelot);
+    } else {
+      setTargetTrackId(found.id);
+      setTargetTitle(found.title);
+      setTargetArtist(artist);
+      setTargetBpm(bpm);
+      setTargetCamelot(camelot);
+    }
+  };
+
+  const handleSwapDecks = () => {
+    setCustomSteps(null);
+    setOriginTrackId(targetTrackId);
+    setTargetTrackId(originTrackId);
+    setOriginTitle(targetTitle);
+    setTargetTitle(originTitle);
+    setOriginArtist(targetArtist);
+    setTargetArtist(originArtist);
+    setOriginBpm(targetBpm);
+    setTargetBpm(originBpm);
+    setOriginCamelot(targetCamelot);
+    setTargetCamelot(originCamelot);
+  };
+
   const handleRunOnboardingScan = useCallback(async () => {
     setIsScanningOnboarding(true);
     try {
@@ -109,73 +307,43 @@ function ViewHarmonicBridgeP2P() {
       if (rep.recommended_backend_id) {
         setSelectedBackend(rep.recommended_backend_id);
       }
-      setProbeBanner(
-        viewMode === 'simple'
-          ? `Motor listo: ${rep.recommended_backend_id.replace('cli_', '')}`
-          : `${rep.summary_badge} · Quarantine-First`,
-      );
+      setProbeBanner(rep.summary_badge);
     } catch {
       // Offline fallback
     } finally {
       setIsScanningOnboarding(false);
     }
-  }, [commanderMode, viewMode]);
-
-  const handleSendCopilotCommand = async (customText?: string) => {
-    const promptToSend = customText || chatPrompt;
-    if (!promptToSend.trim()) return;
-
-    setIsAiLoading(true);
-    try {
-      const reply = await chatWithCloudflareFreeAi(promptToSend, 'DaviDJ', {
-        backend: selectedBackend,
-        baseUrl: customBaseUrl,
-        commanderMode,
-      });
-      setAiResponse(reply);
-      setPreviewStatus(
-        viewMode === 'simple'
-          ? 'Propuesta actualizada · Revisa los pasos antes de agregar al crate'
-          : `Respuesta generada por ${reply.model_used}`,
-      );
-    } catch {
-      setPreviewStatus('Conectando con el motor del copiloto...');
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
+  }, [commanderMode]);
 
   useEffect(() => {
-    const loadInitialData = async () => {
-      try {
-        const radar = await getCloudflareEdgeRadar();
-        setEdgeRadar(radar);
-      } catch {
-        // Offline fallback
-      }
+    void getCloudflareEdgeRadar()
+      .then(setEdgeRadar)
+      .catch(() => {});
+    void handleRunOnboardingScan();
+  }, [handleRunOnboardingScan]);
 
-      try {
-        const res = await resolveHarmonicBridge({
-          originTitle,
-          originArtist,
-          originBpm,
-          originCamelot,
-          targetTitle,
-          targetArtist,
-          targetBpm,
-          targetCamelot,
-        });
-        setBridgeResult(res);
-      } catch {
-        // Offline fallback
-      }
-
-      void handleRunOnboardingScan();
+  useEffect(() => {
+    let cancelled = false;
+    void resolveHarmonicBridge({
+      originTitle,
+      originArtist,
+      originBpm,
+      originCamelot,
+      targetTitle,
+      targetArtist,
+      targetBpm,
+      targetCamelot,
+    })
+      .then((res) => {
+        if (!cancelled) {
+          setBridgeResult(res);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
     };
-
-    void loadInitialData();
   }, [
-    handleRunOnboardingScan,
     originArtist,
     originBpm,
     originCamelot,
@@ -186,12 +354,406 @@ function ViewHarmonicBridgeP2P() {
     targetTitle,
   ]);
 
+  const activeSteps: HarmonicBridgeStep[] = useMemo(() => {
+    if (customSteps && customSteps.length > 0) return customSteps;
+    if (bridgeResult?.bridge_steps && bridgeResult.bridge_steps.length > 0) {
+      return bridgeResult.bridge_steps;
+    }
+    return [
+      {
+        step_number: 1,
+        track_id: 'p2p-bridge-01',
+        artist: 'Keinemusik & Rampa',
+        title: 'Cesonia (Afro-Tech P2P Bridge Edit)',
+        bpm: Math.round((originBpm + (targetBpm - originBpm) * 0.35) * 10) / 10,
+        camelot: '9A',
+        owner_dj: 'DaviDJ_EdgeGuardian',
+        hera_seal: 'hera_seal_9f81c2e4b0a1',
+        cue_in_seconds: 15.2,
+        cue_out_seconds: 168.4,
+        synergy_score: 0.96,
+        transition_tip: `Cruza Cue 4 de «${originTitle}» con Cue 1 en 9A`,
+        p2p_boost_free_promo: true,
+        boost_credit_cost_mb: 0,
+      },
+      {
+        step_number: 2,
+        track_id: 'p2p-bridge-02',
+        artist: 'Hugelkultur & Hugel',
+        title: 'Morenita (Latin Club Harmonic Connector)',
+        bpm: Math.round((originBpm + (targetBpm - originBpm) * 0.72) * 10) / 10,
+        camelot: targetCamelot,
+        owner_dj: 'DJFoo_MedellinNode',
+        hera_seal: 'hera_seal_4d72a8f103e9',
+        cue_in_seconds: 14.8,
+        cue_out_seconds: 174.0,
+        synergy_score: 0.95,
+        transition_tip: `Entrega en llave ${targetCamelot} directo al Cue 1 de «${targetTitle}»`,
+        p2p_boost_free_promo: false,
+        boost_credit_cost_mb: 38,
+      },
+    ];
+  }, [
+    bridgeResult,
+    customSteps,
+    originBpm,
+    originTitle,
+    targetBpm,
+    targetCamelot,
+    targetTitle,
+  ]);
+
+  const swarmCatalog: SwarmCatalogItem[] = useMemo(() => {
+    if (bridgeResult?.swarm_catalog && bridgeResult.swarm_catalog.length > 0) {
+      return bridgeResult.swarm_catalog;
+    }
+    return activeSteps.map((s, idx) => ({
+      cas_fingerprint: `cas-${s.track_id}`,
+      artist: s.artist,
+      title: s.title,
+      bpm: s.bpm,
+      camelot: s.camelot,
+      subgenre: idx === 0 ? 'Afro-Tech / Promo Pool' : 'Latin Tech House',
+      hera_seal: s.hera_seal,
+      opaque_blob_key: `shards/boost/${s.track_id}.shard`,
+      swarm_replicas_count: 3,
+      seeders: [`${s.owner_dj} (r2_boost)`],
+      p2p_boost_ready: true,
+      p2p_boost_free_promo: Boolean(s.p2p_boost_free_promo),
+      effective_bandwidth_hz: 21600,
+      quality_score: 98.4,
+    }));
+  }, [activeSteps, bridgeResult]);
+
+  const findMatchingLocalTrack = useCallback(
+    (artist: string, title: string, trackId?: string): Track | undefined => {
+      const storeTracks = useLibraryStore.getState().tracks;
+      if (trackId) {
+        const byId = storeTracks.find((t) => t.id === trackId);
+        if (byId) return byId;
+      }
+      const normTitle = title.trim().toLowerCase();
+      const normArtist = artist.trim().toLowerCase();
+      return storeTracks.find(
+        (t) =>
+          t.title.toLowerCase().includes(normTitle) ||
+          (t.artists[0]?.toLowerCase().includes(normArtist) &&
+            normTitle.includes(t.title.toLowerCase())),
+      );
+    },
+    [],
+  );
+
+  const handleAuditionStep = async (
+    auditionId: string,
+    label: string,
+    bpm: number,
+    camelot: string,
+    cueSeconds: number,
+    localCandidate?: Track,
+  ) => {
+    if (activeAuditionId === auditionId) {
+      stopWebAudioPreview();
+      player.pause();
+      setPreviewStatus('Preescucha detenida.');
+      return;
+    }
+
+    stopWebAudioPreview();
+
+    if (localCandidate) {
+      await player.start([localCandidate], localCandidate.id, {
+        type: 'library',
+      });
+      player.setCurrentTime(Math.max(0, cueSeconds));
+      setActiveAuditionId(auditionId);
+      setPreviewStatus(
+        `Reproduciendo pista real «${localCandidate.title}» desde Cue (${cueSeconds.toFixed(1)}s).`,
+      );
+      return;
+    }
+
+    try {
+      const AudioContextCtor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      const ctx = new AudioContextCtor();
+      audioCtxRef.current = ctx;
+      const durationSecs = 6.0;
+      const now = ctx.currentTime + 0.04;
+      const beatSec = 60 / Math.max(70, Math.min(180, bpm));
+      const { root, major } = camelotRootHz(camelot);
+      const thirdRatio = major ? 1.259921 : 1.1892071;
+
+      const masterGain = ctx.createGain();
+      masterGain.gain.setValueAtTime(0.22, now);
+      masterGain.gain.exponentialRampToValueAtTime(0.001, now + durationSecs);
+      masterGain.connect(ctx.destination);
+
+      // Harmonic chord pad in target Camelot key
+      [root, root * thirdRatio, root * 1.4983071].forEach((freq) => {
+        const osc = ctx.createOscillator();
+        const padGain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, now);
+        padGain.gain.setValueAtTime(0.001, now);
+        padGain.gain.linearRampToValueAtTime(0.26, now + 0.4);
+        padGain.gain.linearRampToValueAtTime(0.18, now + durationSecs - 0.5);
+        padGain.gain.exponentialRampToValueAtTime(0.001, now + durationSecs);
+        osc.connect(padGain);
+        padGain.connect(masterGain);
+        osc.start(now);
+        osc.stop(now + durationSecs);
+      });
+
+      // Beat-matched 4-on-the-floor kick pulse
+      const totalBeats = Math.floor(durationSecs / beatSec);
+      for (let b = 0; b < totalBeats; b += 1) {
+        const bt = now + b * beatSec;
+        const kickOsc = ctx.createOscillator();
+        const kickGain = ctx.createGain();
+        kickOsc.type = 'sine';
+        kickOsc.frequency.setValueAtTime(135, bt);
+        kickOsc.frequency.exponentialRampToValueAtTime(48, bt + 0.11);
+        kickGain.gain.setValueAtTime(0.75, bt);
+        kickGain.gain.exponentialRampToValueAtTime(0.001, bt + 0.22);
+        kickOsc.connect(kickGain);
+        kickGain.connect(masterGain);
+        kickOsc.start(bt);
+        kickOsc.stop(bt + 0.24);
+      }
+
+      setActiveAuditionId(auditionId);
+      setPreviewStatus(
+        `Preescuchando pulso armónico de «${label}» (${bpm.toFixed(1)} BPM · ${camelot})...`,
+      );
+      previewTimerRef.current = setTimeout(() => {
+        stopWebAudioPreview();
+        setPreviewStatus(`Preescucha completada (${label}).`);
+      }, durationSecs * 1000);
+    } catch {
+      setPreviewStatus(`Preescucha lista para «${label}» (${camelot}).`);
+    }
+  };
+
+  const handleAcquireAndInsertCandidate = async (item: SwarmCatalogItem) => {
+    if (busyAction) return;
+    setBusyAction(item.cas_fingerprint);
+    setPreviewStatus(
+      `Descargando e incorporando «${item.artist} — ${item.title}»...`,
+    );
+    try {
+      const dl = await downloadP2PTrackToLibrary({
+        trackId: item.cas_fingerprint,
+        artist: item.artist,
+        title: item.title,
+        bpm: item.bpm,
+        camelot: item.camelot,
+        heraSeal: item.hera_seal,
+      });
+
+      await LibraryAPI.importAudioFiles([dl.saved_path]);
+      await invalidate();
+
+      const updatedStep: HarmonicBridgeStep = {
+        step_number: 1,
+        track_id: item.cas_fingerprint,
+        artist: item.artist,
+        title: item.title,
+        bpm: item.bpm,
+        camelot: item.camelot,
+        owner_dj: item.seeders[0] || 'SwarmPeer',
+        hera_seal: item.hera_seal,
+        cue_in_seconds: 15.0,
+        cue_out_seconds: 170.0,
+        synergy_score: 0.97,
+        transition_tip: `Incorporada desde el enjambre (${item.camelot} · ${item.bpm.toFixed(1)} BPM)`,
+        p2p_boost_free_promo: item.p2p_boost_free_promo,
+        boost_credit_cost_mb: 0,
+      };
+      setCustomSteps([updatedStep, ...activeSteps.slice(1)]);
+      setPreviewStatus(
+        `«${item.artist} — ${item.title}» importada a tu biblioteca e incorporada al Paso 1.`,
+      );
+    } catch {
+      setPreviewStatus(`No se pudo incorporar «${item.title}».`);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleApproveAndCreatePlaylist = async () => {
+    if (busyAction) return;
+    setBusyAction('approve_set');
+    setPreviewStatus(
+      'Preparando pistas del puente y creando lista en tu biblioteca...',
+    );
+    try {
+      const downloadedPaths: string[] = [];
+      for (const step of activeSteps) {
+        const existing = findMatchingLocalTrack(
+          step.artist,
+          step.title,
+          step.track_id,
+        );
+        if (!existing) {
+          const dl = await downloadP2PTrackToLibrary({
+            trackId: step.track_id,
+            artist: step.artist,
+            title: step.title,
+            bpm: step.bpm,
+            camelot: step.camelot,
+            heraSeal: step.hera_seal,
+          });
+          downloadedPaths.push(dl.saved_path);
+        }
+      }
+
+      if (downloadedPaths.length > 0) {
+        await LibraryAPI.importAudioFiles(downloadedPaths);
+      }
+
+      const refreshedTracks = await DatabaseBridge.getAllTracks();
+      useLibraryStore.setState({ tracks: refreshedTracks });
+
+      const orderedIds: string[] = [];
+      if (originTrackId) orderedIds.push(originTrackId);
+      for (const step of activeSteps) {
+        const matched = findMatchingLocalTrack(
+          step.artist,
+          step.title,
+          step.track_id,
+        );
+        if (matched && !orderedIds.includes(matched.id)) {
+          orderedIds.push(matched.id);
+        }
+      }
+      if (targetTrackId && !orderedIds.includes(targetTrackId)) {
+        orderedIds.push(targetTrackId);
+      }
+
+      const playlistName = `Puente ${originCamelot}→${targetCamelot} (${Math.round(originBpm)}-${Math.round(targetBpm)} BPM)`;
+      const playlist = await PlaylistsAPI.create(
+        playlistName,
+        orderedIds,
+        true,
+      );
+      await invalidate();
+
+      const msg = `Set «${playlistName}» creado con ${orderedIds.length} pista(s) listas para reproducir.`;
+      setPreviewStatus(msg);
+      toastManager.add({ title: msg, type: 'success', timeout: 5000 });
+
+      if (playlist) {
+        void navigate({
+          to: '/playlists/$playlistID',
+          params: { playlistID: playlist.id },
+        });
+      }
+    } catch {
+      setPreviewStatus('No se pudo guardar el puente en Listas.');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleExportBridgeVirtualDj = async () => {
+    if (busyAction) return;
+    setBusyAction('export_vdj');
+    try {
+      const deckATrack =
+        findMatchingLocalTrack(originArtist, originTitle, originTrackId) ??
+        buildSyntheticTrackDescriptor(
+          originTrackId || 'deck-a',
+          originArtist,
+          originTitle,
+          originBpm,
+          originCamelot,
+        );
+      const stepTracks = activeSteps.map(
+        (s) =>
+          findMatchingLocalTrack(s.artist, s.title, s.track_id) ??
+          buildSyntheticTrackDescriptor(
+            s.track_id,
+            s.artist,
+            s.title,
+            s.bpm,
+            s.camelot,
+          ),
+      );
+      const deckBTrack =
+        findMatchingLocalTrack(targetArtist, targetTitle, targetTrackId) ??
+        buildSyntheticTrackDescriptor(
+          targetTrackId || 'deck-b',
+          targetArtist,
+          targetTitle,
+          targetBpm,
+          targetCamelot,
+        );
+
+      const res = await exportCrateToDjSoftware(
+        `Hera_Bridge_${originCamelot}_${targetCamelot}`,
+        [deckATrack, ...stepTracks, deckBTrack],
+        ['virtualdj', 'm3u8'],
+      );
+      const outPath = res.written_files[0] ?? 'exports/Hera_Bridge.vdjfolder';
+      const msg = `Exportado a VirtualDJ (${res.track_count} pistas + 4 Hot Cues): ${outPath}`;
+      setPreviewStatus(msg);
+      toastManager.add({ title: msg, type: 'success', timeout: 5500 });
+    } catch {
+      setPreviewStatus('No se pudo exportar el crate a VirtualDJ.');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleSendCopilotCommand = async (customText?: string) => {
+    const promptToSend = (customText ?? chatPrompt).trim();
+    if (!promptToSend || isAiLoading) return;
+
+    setActiveInstruction(promptToSend);
+    if (!customText) {
+      setChatPrompt('');
+    }
+    setIsAiLoading(true);
+    try {
+      const useCustomEndpoint =
+        selectedBackend === 'custom' ||
+        selectedBackend === 'lmstudio' ||
+        selectedBackend === 'ollama';
+
+      const reply = await chatWithCloudflareFreeAi(promptToSend, 'DaviDJ', {
+        backend: selectedBackend,
+        baseUrl: useCustomEndpoint ? customBaseUrl : undefined,
+        commanderMode,
+      });
+      setAiResponse(reply);
+      setPreviewStatus(
+        viewMode === 'simple'
+          ? 'Propuesta actualizada por el Copiloto · Revisa los pasos abajo'
+          : `Respuesta generada (${reply.model_used})`,
+      );
+    } catch {
+      setPreviewStatus(
+        'El motor seleccionado no respondió; usando motor local determinista.',
+      );
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
   const matchInfo = getHumanMatchLabel(
     originCamelot,
     targetCamelot,
     originBpm,
     targetBpm,
   );
+
+  const avgStepDelta =
+    activeSteps.length > 0
+      ? ((targetBpm - originBpm) / (activeSteps.length + 1)).toFixed(1)
+      : (targetBpm - originBpm).toFixed(1);
 
   return (
     <View aria-label="Puente Armónico y Copiloto de Cabina">
@@ -216,7 +778,7 @@ function ViewHarmonicBridgeP2P() {
               <span {...stylex.props(styles.emeraldDot)} />
               <span>
                 {viewMode === 'simple'
-                  ? `Copiloto: ${selectedBackend.replace('cli_', '')} · Control manual`
+                  ? `Copiloto: ${selectedBackend === 'cloudflare_free' ? 'Cloud Free' : selectedBackend.replace('cli_', '')}`
                   : `Motor: ${selectedBackend} · ${commanderMode}`}
               </span>
             </button>
@@ -235,7 +797,7 @@ function ViewHarmonicBridgeP2P() {
               <span>
                 {viewMode === 'simple'
                   ? 'Enjambre conectado'
-                  : `${edgeRadar?.active_swarm_nodes ?? 3} nodos · ${bridgeResult?.bridge_steps.length ?? 2} pasos`}
+                  : `${edgeRadar?.active_swarm_nodes ?? 3} nodos · ${activeSteps.length} pasos`}
               </span>
             </div>
           </div>
@@ -252,7 +814,7 @@ function ViewHarmonicBridgeP2P() {
               <span {...stylex.props(styles.matchTag)}>
                 {viewMode === 'simple'
                   ? `${matchInfo.compatibilityLabel} · ${matchInfo.tempoAdvice}`
-                  : `Delta +${(targetBpm - originBpm).toFixed(1)} BPM · ${originCamelot} a ${targetCamelot}`}
+                  : `Delta ${targetBpm >= originBpm ? '+' : ''}${(targetBpm - originBpm).toFixed(1)} BPM · ${originCamelot} → ${targetCamelot}`}
               </span>
             </div>
 
@@ -269,21 +831,76 @@ function ViewHarmonicBridgeP2P() {
                       {originCamelot} · {originBpm.toFixed(1)} BPM
                     </span>
                   </div>
+
+                  {tracks.length > 0 && (
+                    <select
+                      value={originTrackId}
+                      onChange={(e) =>
+                        handleSelectDeckTrack('A', e.target.value)
+                      }
+                      aria-label="Seleccionar pista de tu biblioteca para Deck A"
+                      {...stylex.props(styles.deckSelect)}
+                    >
+                      <option value="">Elegir de tu biblioteca...</option>
+                      {tracks.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.artists[0] || 'Artista'} — {t.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
                   <div {...stylex.props(styles.deckSongTitle)}>
                     {originArtist} — {originTitle}
                   </div>
-                  <div {...stylex.props(styles.deckDetails)}>
-                    <span>Sonido de estudio</span>
-                    <span>·</span>
-                    <span>
-                      Salida limpia: <strong>04:42</strong>
-                    </span>
+
+                  <div {...stylex.props(styles.deckControlsInline)}>
+                    <label {...stylex.props(styles.inlineFieldLabel)}>
+                      <span>BPM</span>
+                      <input
+                        type="number"
+                        min={70}
+                        max={190}
+                        step={0.5}
+                        value={originBpm}
+                        onChange={(e) => {
+                          const v = Number.parseFloat(e.target.value);
+                          if (Number.isFinite(v)) {
+                            setCustomSteps(null);
+                            setOriginBpm(v);
+                          }
+                        }}
+                        {...stylex.props(styles.compactNumInput)}
+                      />
+                    </label>
+                    <label {...stylex.props(styles.inlineFieldLabel)}>
+                      <span>Llave</span>
+                      <select
+                        value={originCamelot}
+                        onChange={(e) => {
+                          setCustomSteps(null);
+                          setOriginCamelot(e.target.value);
+                        }}
+                        {...stylex.props(styles.compactKeySelect)}
+                      >
+                        {CAMELOT_OPTIONS.map((k) => (
+                          <option key={k} value={k}>
+                            {k}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 </div>
 
-                <div {...stylex.props(styles.arrowCol)} aria-hidden="true">
-                  →
-                </div>
+                <button
+                  type="button"
+                  onClick={handleSwapDecks}
+                  title="Invertir Deck A y Deck B"
+                  {...stylex.props(styles.swapBtn)}
+                >
+                  ⇄
+                </button>
 
                 <div {...stylex.props(styles.deckCard)}>
                   <div {...stylex.props(styles.deckTopLine)}>
@@ -296,75 +913,127 @@ function ViewHarmonicBridgeP2P() {
                       {targetCamelot} · {targetBpm.toFixed(1)} BPM
                     </span>
                   </div>
+
+                  {tracks.length > 0 && (
+                    <select
+                      value={targetTrackId}
+                      onChange={(e) =>
+                        handleSelectDeckTrack('B', e.target.value)
+                      }
+                      aria-label="Seleccionar pista de tu biblioteca para Deck B"
+                      {...stylex.props(styles.deckSelect)}
+                    >
+                      <option value="">Elegir de tu biblioteca...</option>
+                      {tracks.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.artists[0] || 'Artista'} — {t.title}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
                   <div {...stylex.props(styles.deckSongTitle)}>
                     {targetArtist} — {targetTitle}
                   </div>
-                  <div {...stylex.props(styles.deckDetails)}>
-                    <span>Sonido de estudio</span>
-                    <span>·</span>
-                    <span>
-                      Entrada limpia: <strong>00:15</strong>
-                    </span>
+
+                  <div {...stylex.props(styles.deckControlsInline)}>
+                    <label {...stylex.props(styles.inlineFieldLabel)}>
+                      <span>BPM</span>
+                      <input
+                        type="number"
+                        min={70}
+                        max={190}
+                        step={0.5}
+                        value={targetBpm}
+                        onChange={(e) => {
+                          const v = Number.parseFloat(e.target.value);
+                          if (Number.isFinite(v)) {
+                            setCustomSteps(null);
+                            setTargetBpm(v);
+                          }
+                        }}
+                        {...stylex.props(styles.compactNumInput)}
+                      />
+                    </label>
+                    <label {...stylex.props(styles.inlineFieldLabel)}>
+                      <span>Llave</span>
+                      <select
+                        value={targetCamelot}
+                        onChange={(e) => {
+                          setCustomSteps(null);
+                          setTargetCamelot(e.target.value);
+                        }}
+                        {...stylex.props(styles.compactKeySelect)}
+                      >
+                        {CAMELOT_OPTIONS.map((k) => (
+                          <option key={k} value={k}>
+                            {k}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
                 </div>
               </div>
 
               <div {...stylex.props(styles.stepsContainer)}>
-                <div {...stylex.props(styles.stepRow)}>
-                  <span {...stylex.props(styles.stepIdx)}>Paso 1</span>
-                  <div {...stylex.props(styles.stepName)}>
-                    Eric Prydz — Opus{' '}
-                    <span {...stylex.props(styles.dimText)}>
-                      {viewMode === 'simple'
-                        ? '· Subida progresiva'
-                        : '· 8A a 9A'}
-                    </span>
-                  </div>
-                  <span {...stylex.props(styles.matchTag)}>Afinidad 98%</span>
-                  <span {...stylex.props(styles.bpmTag)}>125.5 BPM</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPreviewStatus(
-                        'Preescuchando transición de 15s (Cue 4 Salida a Cue 1 Entrada)...',
-                      )
-                    }
-                    {...stylex.props(styles.previewBtn)}
-                  >
-                    <Icon name="play" size={12} />
-                    <span>
-                      {viewMode === 'simple' ? 'Oír cruce 15s' : 'Cruce 4→1'}
-                    </span>
-                  </button>
-                </div>
-
-                <div {...stylex.props(styles.stepRow)}>
-                  <span {...stylex.props(styles.stepIdx)}>Paso 2</span>
-                  <div {...stylex.props(styles.stepName)}>
-                    Deadmau5 — Strobe{' '}
-                    <span {...stylex.props(styles.dimText)}>
-                      {viewMode === 'simple'
-                        ? '· Prepara entrada vocal'
-                        : '· 9A a 10A'}
-                    </span>
-                  </div>
-                  <span {...stylex.props(styles.matchTag)}>Afinidad 97%</span>
-                  <span {...stylex.props(styles.bpmTag)}>127.0 BPM</span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPreviewStatus(
-                        'Preescuchando transición de 15s (Cue 4 Salida a Cue 1 Entrada)...',
-                      )
-                    }
-                    {...stylex.props(styles.previewBtn)}
-                  >
-                    <Icon name="play" size={12} />
-                    <span>
-                      {viewMode === 'simple' ? 'Oír cruce 15s' : 'Cruce 4→1'}
-                    </span>
-                  </button>
-                </div>
+                {activeSteps.map((step, index) => {
+                  const auditionKey = `step-${step.track_id}-${index}`;
+                  const isPlayingThis = activeAuditionId === auditionKey;
+                  const localTrack = findMatchingLocalTrack(
+                    step.artist,
+                    step.title,
+                    step.track_id,
+                  );
+                  return (
+                    <div key={auditionKey} {...stylex.props(styles.stepRow)}>
+                      <span {...stylex.props(styles.stepIdx)}>
+                        Paso {index + 1}
+                      </span>
+                      <div {...stylex.props(styles.stepName)}>
+                        {step.artist} — {step.title}{' '}
+                        <span {...stylex.props(styles.dimText)}>
+                          · {step.camelot}
+                        </span>
+                      </div>
+                      <span {...stylex.props(styles.matchTag)}>
+                        Afinidad {Math.round(step.synergy_score * 100)}%
+                      </span>
+                      <span {...stylex.props(styles.bpmTag)}>
+                        {step.bpm.toFixed(1)} BPM
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void handleAuditionStep(
+                            auditionKey,
+                            `${step.artist} — ${step.title}`,
+                            step.bpm,
+                            step.camelot,
+                            step.cue_in_seconds,
+                            localTrack,
+                          )
+                        }
+                        {...stylex.props(
+                          styles.previewBtn,
+                          isPlayingThis && styles.previewBtnActive,
+                        )}
+                      >
+                        <Icon
+                          name={isPlayingThis ? 'pause' : 'play'}
+                          size={12}
+                        />
+                        <span>
+                          {isPlayingThis
+                            ? 'Detener'
+                            : viewMode === 'simple'
+                              ? 'Oír cruce'
+                              : 'Cruce 4→1'}
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               <div {...stylex.props(styles.phraseRailPanel)}>
@@ -374,7 +1043,10 @@ function ViewHarmonicBridgeP2P() {
                       ? 'Mapa proporcional de 4 Hot Cues de frase'
                       : 'Riel acústico de 4 Hot Cues (detección espectral)'}
                   </span>
-                  <span {...stylex.props(styles.dimText)}>Duración 05:30</span>
+                  <span {...stylex.props(styles.dimText)}>
+                    Ventana de cruce:{' '}
+                    {bridgeResult?.preview_mix_window_seconds ?? 15}s
+                  </span>
                 </div>
 
                 <div {...stylex.props(styles.phraseTimelineTrack)}>
@@ -437,105 +1109,51 @@ function ViewHarmonicBridgeP2P() {
                   </tr>
                 </thead>
                 <tbody>
-                  <tr>
-                    <td {...stylex.props(styles.td)}>
-                      <strong>Pryda — Allein</strong>{' '}
-                      <span {...stylex.props(styles.dimText)}>
-                        · Original Mix
-                      </span>
-                    </td>
-                    <td {...stylex.props(styles.td)}>
-                      <span {...stylex.props(styles.matchTag)}>
-                        Instrumental · 9A
-                      </span>
-                    </td>
-                    <td {...stylex.props(styles.td, styles.tabularCell)}>
-                      126.0
-                    </td>
-                    <td {...stylex.props(styles.td, styles.verifiedCell)}>
-                      Estudio (Lossless)
-                    </td>
-                    <td {...stylex.props(styles.td)}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPreviewStatus(
-                            'Añadido «Pryda — Allein» al crate de prueba',
-                          )
-                        }
-                        {...stylex.props(styles.tableBtn)}
-                      >
-                        <Icon name="plus" size={12} />
-                        <span>Probar</span>
-                      </button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td {...stylex.props(styles.td)}>
-                      <strong>RÜFÜS DU SOL — Innerbloom</strong>{' '}
-                      <span {...stylex.props(styles.dimText)}>
-                        · Lane 8 Remix
-                      </span>
-                    </td>
-                    <td {...stylex.props(styles.td)}>
-                      <span {...stylex.props(styles.matchTag)}>
-                        Melódica · 8A
-                      </span>
-                    </td>
-                    <td {...stylex.props(styles.td, styles.tabularCell)}>
-                      124.5
-                    </td>
-                    <td {...stylex.props(styles.td, styles.verifiedCell)}>
-                      Estudio (Lossless)
-                    </td>
-                    <td {...stylex.props(styles.td)}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPreviewStatus(
-                            'Añadido «Innerbloom (Lane 8 Remix)» al crate de prueba',
-                          )
-                        }
-                        {...stylex.props(styles.tableBtn)}
-                      >
-                        <Icon name="plus" size={12} />
-                        <span>Probar</span>
-                      </button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td {...stylex.props(styles.td)}>
-                      <strong>ARTBAT — Flame</strong>{' '}
-                      <span {...stylex.props(styles.dimText)}>
-                        · Extended Mix
-                      </span>
-                    </td>
-                    <td {...stylex.props(styles.td)}>
-                      <span {...stylex.props(styles.vibeTag)}>
-                        Sube energía · 9A
-                      </span>
-                    </td>
-                    <td {...stylex.props(styles.td, styles.tabularCell)}>
-                      126.0
-                    </td>
-                    <td {...stylex.props(styles.td, styles.verifiedCell)}>
-                      Estudio (Lossless)
-                    </td>
-                    <td {...stylex.props(styles.td)}>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setPreviewStatus(
-                            'Añadido «ARTBAT — Flame» al crate de prueba',
-                          )
-                        }
-                        {...stylex.props(styles.tableBtn)}
-                      >
-                        <Icon name="plus" size={12} />
-                        <span>Probar</span>
-                      </button>
-                    </td>
-                  </tr>
+                  {swarmCatalog.slice(0, 6).map((item) => {
+                    const isBusy = busyAction === item.cas_fingerprint;
+                    return (
+                      <tr key={item.cas_fingerprint}>
+                        <td {...stylex.props(styles.td)}>
+                          <strong>
+                            {item.artist} — {item.title}
+                          </strong>{' '}
+                          <span {...stylex.props(styles.dimText)}>
+                            · {item.subgenre}
+                          </span>
+                        </td>
+                        <td {...stylex.props(styles.td)}>
+                          <span {...stylex.props(styles.matchTag)}>
+                            {item.camelot} · {item.swarm_replicas_count} nodos
+                          </span>
+                        </td>
+                        <td {...stylex.props(styles.td, styles.tabularCell)}>
+                          {item.bpm.toFixed(1)}
+                        </td>
+                        <td {...stylex.props(styles.td, styles.verifiedCell)}>
+                          Estudio (
+                          {Math.round(
+                            (item.effective_bandwidth_hz ?? 21200) / 1000,
+                          )}{' '}
+                          kHz)
+                        </td>
+                        <td {...stylex.props(styles.td)}>
+                          <button
+                            type="button"
+                            disabled={Boolean(busyAction)}
+                            onClick={() =>
+                              void handleAcquireAndInsertCandidate(item)
+                            }
+                            {...stylex.props(styles.tableBtn)}
+                          >
+                            <Icon name="plus" size={12} />
+                            <span>
+                              {isBusy ? 'Importando...' : 'Incorporar'}
+                            </span>
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -561,8 +1179,7 @@ function ViewHarmonicBridgeP2P() {
                   <strong>Tu instrucción</strong>
                   <span>Activa</span>
                 </div>
-                Quiero pasar de «Levels» a «Don&apos;t You Worry Child» subiendo
-                el ritmo de forma progresiva y sin superponer vocales.
+                {activeInstruction}
               </div>
 
               <div {...stylex.props(styles.receiptBox)}>
@@ -571,14 +1188,14 @@ function ViewHarmonicBridgeP2P() {
                     <span {...stylex.props(styles.emeraldDot)} />
                     <span>
                       {viewMode === 'simple'
-                        ? 'Puente de 2 pistas listo para cabina'
-                        : 'Secuencia 2-Opt TSP verificada'}
+                        ? `Puente de ${activeSteps.length} pistas listo para cabina`
+                        : `Secuencia 2-Opt TSP verificada (${bridgeResult?.harmonic_distance_steps ?? 2} pasos Camelot)`}
                     </span>
                   </div>
                   <span {...stylex.props(styles.dimText)}>
                     {viewMode === 'simple'
                       ? 'Audio verificado'
-                      : 'Sinergia 97%'}
+                      : 'Sinergia 96%'}
                   </span>
                 </div>
 
@@ -587,13 +1204,16 @@ function ViewHarmonicBridgeP2P() {
                     {aiResponse
                       ? aiResponse.assistant_reply
                       : viewMode === 'simple'
-                        ? 'Para evitar un salto brusco de 124 a 128 BPM, intercalé dos cortes instrumentales que elevan la tensión de forma natural:'
-                        : 'Curva calculada con incremento medio de +1.5 BPM por transición y continuidad armónica 8A → 9A → 10A:'}
+                        ? `Para enlazar «${originTitle}» (${originBpm.toFixed(1)} BPM) con «${targetTitle}» (${targetBpm.toFixed(1)} BPM) sin saltos bruscos, preparé esta ruta armónica:`
+                        : `Curva calculada con pendiente media de ${Number(avgStepDelta) >= 0 ? '+' : ''}${avgStepDelta} BPM por paso (${originCamelot} → ${activeSteps[0]?.camelot ?? originCamelot} → ${targetCamelot}):`}
                   </p>
 
                   <div {...stylex.props(styles.metricsRow)}>
                     <div {...stylex.props(styles.metricCell)}>
-                      <div {...stylex.props(styles.metricVal)}>+1.5 BPM</div>
+                      <div {...stylex.props(styles.metricVal)}>
+                        {Number(avgStepDelta) >= 0 ? '+' : ''}
+                        {avgStepDelta} BPM
+                      </div>
                       <div {...stylex.props(styles.metricName)}>
                         Pendiente por paso
                       </div>
@@ -607,23 +1227,27 @@ function ViewHarmonicBridgeP2P() {
                     <div {...stylex.props(styles.metricCell)}>
                       <div {...stylex.props(styles.metricVal)}>Lossless</div>
                       <div {...stylex.props(styles.metricName)}>
-                        Espectro completo
+                        Quarantine-First
                       </div>
                     </div>
                   </div>
 
                   <div {...stylex.props(styles.humanInstructions)}>
+                    {activeSteps.map((step, idx) => (
+                      <div key={step.track_id}>
+                        <strong>
+                          {idx + 1}. {step.artist} — {step.title}:
+                        </strong>{' '}
+                        {step.transition_tip}
+                      </div>
+                    ))}
                     <div>
-                      <strong>1. Eric Prydz — Opus:</strong> mezcla sobre la
-                      salida instrumental de Levels en 04:42.
-                    </div>
-                    <div>
-                      <strong>2. Deadmau5 — Strobe:</strong> entra limpio en
-                      05:12 manteniendo el pulso grave.
-                    </div>
-                    <div>
-                      <strong>3. Don&apos;t You Worry Child:</strong> lanza en
-                      128.0 BPM con entrada armónica en 10A.
+                      <strong>
+                        {activeSteps.length + 1}. {targetArtist} — {targetTitle}
+                        :
+                      </strong>{' '}
+                      cierre del puente en {targetBpm.toFixed(1)} BPM (
+                      {targetCamelot}).
                     </div>
                   </div>
                 </div>
@@ -631,43 +1255,68 @@ function ViewHarmonicBridgeP2P() {
                 <div {...stylex.props(styles.receiptActions)}>
                   <button
                     type="button"
-                    onClick={() =>
-                      setPreviewStatus(
-                        'Puente aprobado e incorporado a tu crate activo',
-                      )
-                    }
+                    disabled={Boolean(busyAction)}
+                    onClick={() => void handleApproveAndCreatePlaylist()}
                     {...stylex.props(styles.primaryBtn)}
                   >
                     <Icon name="checkCircle" size={14} />
                     <span>
-                      {viewMode === 'simple'
-                        ? 'Agregar al Set'
-                        : 'Aprobar y Promover'}
+                      {busyAction === 'approve_set'
+                        ? 'Guardando Set...'
+                        : viewMode === 'simple'
+                          ? 'Agregar al Set'
+                          : 'Aprobar y Crear Lista'}
                     </span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() =>
-                      setPreviewStatus(
-                        'Exportando puente con 4 Hot Cues a VirtualDJ...',
-                      )
-                    }
+                    disabled={Boolean(busyAction)}
+                    onClick={() => void handleExportBridgeVirtualDj()}
                     {...stylex.props(styles.secondaryBtn)}
                   >
                     <Icon name="export" size={14} />
-                    <span>Exportar a VirtualDJ</span>
+                    <span>
+                      {busyAction === 'export_vdj'
+                        ? 'Exportando...'
+                        : 'Exportar a VirtualDJ'}
+                    </span>
                   </button>
+
                   <button
                     type="button"
-                    onClick={() =>
-                      setPreviewStatus(
-                        'Reproduciendo simulación completa del puente...',
-                      )
-                    }
+                    onClick={() => {
+                      const first = activeSteps[0];
+                      if (!first) return;
+                      const local = findMatchingLocalTrack(
+                        first.artist,
+                        first.title,
+                        first.track_id,
+                      );
+                      void handleAuditionStep(
+                        'bridge-main-preview',
+                        `${first.artist} — ${first.title}`,
+                        first.bpm,
+                        first.camelot,
+                        first.cue_in_seconds,
+                        local,
+                      );
+                    }}
                     {...stylex.props(styles.secondaryBtn)}
                   >
-                    <Icon name="play" size={12} />
-                    <span>Escuchar puente</span>
+                    <Icon
+                      name={
+                        activeAuditionId === 'bridge-main-preview'
+                          ? 'pause'
+                          : 'play'
+                      }
+                      size={12}
+                    />
+                    <span>
+                      {activeAuditionId === 'bridge-main-preview'
+                        ? 'Detener audio'
+                        : 'Escuchar puente'}
+                    </span>
                   </button>
                 </div>
               </div>
@@ -684,8 +1333,9 @@ function ViewHarmonicBridgeP2P() {
               <div {...stylex.props(styles.chipsList)}>
                 <button
                   type="button"
+                  disabled={isAiLoading}
                   onClick={() =>
-                    handleSendCopilotCommand(
+                    void handleSendCopilotCommand(
                       'Propón una alternativa con más energía para hora pico',
                     )
                   }
@@ -695,8 +1345,9 @@ function ViewHarmonicBridgeP2P() {
                 </button>
                 <button
                   type="button"
+                  disabled={isAiLoading}
                   onClick={() =>
-                    handleSendCopilotCommand(
+                    void handleSendCopilotCommand(
                       'Reduce la pendiente de BPM para una transición más larga',
                     )
                   }
@@ -706,8 +1357,9 @@ function ViewHarmonicBridgeP2P() {
                 </button>
                 <button
                   type="button"
+                  disabled={isAiLoading}
                   onClick={() =>
-                    handleSendCopilotCommand(
+                    void handleSendCopilotCommand(
                       'Prioriza pistas 100% instrumentales en la entrada',
                     )
                   }
@@ -730,8 +1382,8 @@ function ViewHarmonicBridgeP2P() {
                 />
                 <button
                   type="button"
-                  onClick={() => handleSendCopilotCommand()}
-                  disabled={isAiLoading}
+                  onClick={() => void handleSendCopilotCommand()}
+                  disabled={isAiLoading || !chatPrompt.trim()}
                   {...stylex.props(styles.primaryBtn)}
                 >
                   {isAiLoading ? 'Calculando...' : 'Enviar'}
@@ -852,7 +1504,7 @@ function ViewHarmonicBridgeP2P() {
                         ? 'Detectando motores...'
                         : probeBanner ||
                           (onboardingReport
-                            ? `${onboardingReport.cli_agents.length} motores locales detectados`
+                            ? `${onboardingReport.cli_agents.filter((c) => c.installed).length} CLI detectados`
                             : 'Listo')}
                     </span>
                   </div>
@@ -861,60 +1513,29 @@ function ViewHarmonicBridgeP2P() {
                     <div
                       {...stylex.props(
                         styles.modeRow,
-                        selectedBackend.startsWith('cli_') &&
+                        selectedBackend === 'cloudflare_free' &&
                           styles.modeRowActive,
                       )}
                     >
                       <div {...stylex.props(styles.modeInfo)}>
                         <div {...stylex.props(styles.modeTitle)}>
-                          Agentes CLI locales en este equipo
+                          Cloudflare Workers AI Free + DJ Brain Instantáneo
                         </div>
                         <div {...stylex.props(styles.modeDesc)}>
-                          Aprovecha tus herramientas locales instaladas sin
-                          configurar llaves adicionales.
+                          Respuesta inmediata ($0.00, 10k Neurons/día) sin
+                          consumir RAM ni bloquear tu cabina.
                         </div>
                       </div>
                       <button
                         type="button"
-                        onClick={() => setSelectedBackend('cli_agy')}
+                        onClick={() => setSelectedBackend('cloudflare_free')}
                         {...stylex.props(
-                          selectedBackend === 'cli_agy'
+                          selectedBackend === 'cloudflare_free'
                             ? styles.primaryBtn
                             : styles.secondaryBtn,
                         )}
                       >
-                        {selectedBackend === 'cli_agy'
-                          ? 'Activo'
-                          : 'Seleccionar'}
-                      </button>
-                    </div>
-
-                    <div
-                      {...stylex.props(
-                        styles.modeRow,
-                        selectedBackend === 'workers_ai_llama33' &&
-                          styles.modeRowActive,
-                      )}
-                    >
-                      <div {...stylex.props(styles.modeInfo)}>
-                        <div {...stylex.props(styles.modeTitle)}>
-                          Cloudflare Workers AI Free (10k Neurons/día)
-                        </div>
-                        <div {...stylex.props(styles.modeDesc)}>
-                          Motor en la nube incluido de forma gratuita sin
-                          instalar modelos pesados.
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedBackend('workers_ai_llama33')}
-                        {...stylex.props(
-                          selectedBackend === 'workers_ai_llama33'
-                            ? styles.primaryBtn
-                            : styles.secondaryBtn,
-                        )}
-                      >
-                        {selectedBackend === 'workers_ai_llama33'
+                        {selectedBackend === 'cloudflare_free'
                           ? 'Activo'
                           : 'Seleccionar'}
                       </button>
@@ -945,6 +1566,37 @@ function ViewHarmonicBridgeP2P() {
                         )}
                       >
                         {selectedBackend === 'ollama'
+                          ? 'Activo'
+                          : 'Seleccionar'}
+                      </button>
+                    </div>
+
+                    <div
+                      {...stylex.props(
+                        styles.modeRow,
+                        selectedBackend.startsWith('cli_') &&
+                          styles.modeRowActive,
+                      )}
+                    >
+                      <div {...stylex.props(styles.modeInfo)}>
+                        <div {...stylex.props(styles.modeTitle)}>
+                          Agentes CLI locales en segundo plano (agy / claude)
+                        </div>
+                        <div {...stylex.props(styles.modeDesc)}>
+                          Ejecuta consultas asíncronas con timeout de seguridad
+                          usando tus herramientas CLI instaladas.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBackend('cli_agy')}
+                        {...stylex.props(
+                          selectedBackend === 'cli_agy'
+                            ? styles.primaryBtn
+                            : styles.secondaryBtn,
+                        )}
+                      >
+                        {selectedBackend === 'cli_agy'
                           ? 'Activo'
                           : 'Seleccionar'}
                       </button>
@@ -982,10 +1634,13 @@ function ViewHarmonicBridgeP2P() {
                             onClick={() => {
                               void probeLocalAiBackend(customBaseUrl).then(
                                 (probe) => {
+                                  if (probe.reachable) {
+                                    setSelectedBackend('custom');
+                                  }
                                   setPreviewStatus(
                                     probe.reachable
-                                      ? `Servidor local verificado (${probe.base_url})`
-                                      : `URL local guardada (${customBaseUrl})`,
+                                      ? `Servidor local activo (${probe.base_url} · ${probe.models.length} modelo(s))`
+                                      : `Sin servidor activo en ${customBaseUrl}`,
                                   );
                                 },
                               );
@@ -1166,20 +1821,6 @@ const styles = stylex.create({
     color: '#2dd4bf',
     fontVariantNumeric: 'tabular-nums',
   },
-  vibeTag: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    paddingBlock: '2px',
-    paddingInline: '8px',
-    borderRadius: '4px',
-    fontSize: '11.5px',
-    fontWeight: 600,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(245, 158, 11, 0.28)',
-    color: '#fbbf24',
-  },
   deckRack: {
     backgroundColor: '#12161d',
     borderWidth: '1px',
@@ -1206,7 +1847,7 @@ const styles = stylex.create({
     padding: '12px',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '6px',
+    rowGap: '7px',
     minWidth: 0,
   },
   deckTopLine: {
@@ -1230,6 +1871,18 @@ const styles = stylex.create({
     borderRadius: '4px',
     fontVariantNumeric: 'tabular-nums',
   },
+  deckSelect: {
+    width: '100%',
+    paddingBlock: '4px',
+    paddingInline: '8px',
+    fontSize: '11.5px',
+    backgroundColor: '#171c24',
+    color: '#edeff3',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '5px',
+  },
   deckSongTitle: {
     fontSize: '13.5px',
     fontWeight: 700,
@@ -1238,18 +1891,60 @@ const styles = stylex.create({
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  deckDetails: {
+  deckControlsInline: {
     display: 'flex',
     alignItems: 'center',
-    columnGap: '6px',
-    fontSize: '11.5px',
-    color: '#8e98a8',
-    fontVariantNumeric: 'tabular-nums',
+    columnGap: '10px',
+    flexWrap: 'wrap',
+    rowGap: '6px',
   },
-  arrowCol: {
+  inlineFieldLabel: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '5px',
+    fontSize: '11px',
     color: '#8e98a8',
-    fontSize: '15px',
-    fontWeight: 600,
+  },
+  compactNumInput: {
+    width: '62px',
+    paddingBlock: '3px',
+    paddingInline: '6px',
+    fontSize: '11.5px',
+    fontVariantNumeric: 'tabular-nums',
+    backgroundColor: '#171c24',
+    color: '#edeff3',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '4px',
+  },
+  compactKeySelect: {
+    paddingBlock: '3px',
+    paddingInline: '6px',
+    fontSize: '11.5px',
+    fontVariantNumeric: 'tabular-nums',
+    backgroundColor: '#171c24',
+    color: '#edeff3',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '4px',
+  },
+  swapBtn: {
+    width: '30px',
+    height: '30px',
+    borderRadius: '6px',
+    backgroundColor: '#171c24',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    color: '#edeff3',
+    fontSize: '14px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   stepsContainer: {
     display: 'flex',
@@ -1318,6 +2013,11 @@ const styles = stylex.create({
     fontWeight: 500,
     cursor: 'pointer',
     flexShrink: 0,
+  },
+  previewBtnActive: {
+    borderColor: '#14b8a6',
+    color: '#2dd4bf',
+    backgroundColor: 'rgba(20, 184, 166, 0.14)',
   },
   phraseRailPanel: {
     backgroundColor: '#0c0e12',

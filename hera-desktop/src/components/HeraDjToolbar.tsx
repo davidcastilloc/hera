@@ -1,8 +1,12 @@
 import * as stylex from '@stylexjs/stylex';
+import { isTauri } from '@tauri-apps/api/core';
+import { open } from '@tauri-apps/plugin-dialog';
 import { useMemo, useState } from 'react';
 
+import LibraryAPI from '../api/LibraryAPI';
 import type { Track } from '../generated/typings';
 import useFormattedDuration from '../hooks/useFormattedDuration';
+import useInvalidate from '../hooks/useInvalidate';
 import {
   buildSetSpineForLibrary,
   exportCrateToDjSoftware,
@@ -10,6 +14,7 @@ import {
 } from '../lib/bridge-hera';
 import { useHeraViewStore } from '../lib/hera-human-language';
 import useLibraryStore from '../lib/store';
+import toastManager from '../lib/toast-manager';
 import Icon from './Icon';
 
 type Props = {
@@ -24,19 +29,41 @@ export default function HeraDjToolbar({
   crateName = 'Hera_Active_Set',
 }: Props) {
   const storeTracks = useLibraryStore((state) => state.tracks);
+  const refreshing = useLibraryStore((state) => state.refreshing);
   const tracks = tracksOverride ?? storeTracks;
   const viewMode = useHeraViewStore((state) => state.viewMode);
+  const invalidate = useInvalidate();
 
   const [selectedFormat, setSelectedFormat] =
     useState<DjExportFormat>('virtualdj');
   const [feedback, setFeedback] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<'sort' | 'export' | null>(null);
+  const [busyAction, setBusyAction] = useState<
+    'import' | 'sort' | 'export' | null
+  >(null);
 
   const totalDurationSeconds = useMemo(
     () => tracks.reduce((sum, track) => sum + (track.duration || 0), 0),
     [tracks],
   );
   const formattedDuration = useFormattedDuration(totalDurationSeconds);
+
+  const handleQuickImportFolder = async () => {
+    if (!isTauri() || busyAction !== null || refreshing) return;
+    setBusyAction('import');
+    try {
+      const selected = await open({
+        directory: true,
+        multiple: true,
+      });
+      if (selected != null) {
+        await LibraryAPI.addLibraryFolders(selected);
+        await LibraryAPI.scan();
+        await invalidate();
+      }
+    } finally {
+      setBusyAction(null);
+    }
+  };
 
   const handleOptimizeSetSpine = async () => {
     if (tracks.length === 0 || busyAction !== null) return;
@@ -48,11 +75,12 @@ export default function HeraDjToolbar({
           setSpineOrderedIds: spine.orderedTrackIds,
         });
       }
-      setFeedback(
+      const msg =
         viewMode === 'simple'
           ? `Set ordenado (${spine.averageTransitionSynergy}% fluidez)`
-          : `Set Spine 2-Opt · ${spine.averageTransitionSynergy}% sinergia`,
-      );
+          : `Set Spine 2-Opt · ${spine.averageTransitionSynergy}% sinergia`;
+      setFeedback(msg);
+      toastManager.add({ title: msg, type: 'success', timeout: 4000 });
     } catch {
       setFeedback(
         viewMode === 'simple'
@@ -65,17 +93,23 @@ export default function HeraDjToolbar({
   };
 
   const handleExportSelected = async () => {
-    if (busyAction !== null) return;
+    if (tracks.length === 0 || busyAction !== null) return;
     setBusyAction('export');
     try {
       const res = await exportCrateToDjSoftware(crateName, tracks, [
         selectedFormat,
       ]);
-      setFeedback(
+      const firstFile = res.written_files[0] ?? 'exports/';
+      const msg =
         viewMode === 'simple'
           ? `Exportado a ${selectedFormat.toUpperCase()} (${res.track_count} pistas)`
-          : `${res.track_count} pistas + 4 Hot Cues exportados a ${selectedFormat.toUpperCase()}`,
-      );
+          : `${res.track_count} pistas + 4 Hot Cues exportados (${firstFile})`;
+      setFeedback(msg);
+      toastManager.add({
+        title: `Crate exportado: ${firstFile}`,
+        type: 'success',
+        timeout: 5500,
+      });
     } catch {
       setFeedback(
         `Crate preparado para ${selectedFormat.toUpperCase()} (4 Hot Cues)`,
@@ -107,6 +141,17 @@ export default function HeraDjToolbar({
       </div>
 
       <div {...stylex.props(styles.rightActions)}>
+        <button
+          type="button"
+          onClick={handleQuickImportFolder}
+          disabled={busyAction !== null || refreshing}
+          {...stylex.props(styles.secondaryBtn)}
+          title="Añadir carpeta local de música a la biblioteca"
+        >
+          <Icon name="folderPlus" size={14} />
+          <span>Importar</span>
+        </button>
+
         <button
           type="button"
           onClick={handleOptimizeSetSpine}

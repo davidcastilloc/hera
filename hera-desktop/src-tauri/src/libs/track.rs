@@ -205,76 +205,137 @@ fn enrich_track_with_hera_dsp(
     (final_bpm, final_camelot, final_energy, seal, pins)
 }
 
+fn parse_filename_metadata(path: &PathBuf) -> (Option<String>, String, Option<f64>, Option<String>) {
+    let raw_stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("Unknown");
+
+    let mut clean_stem = raw_stem.to_string();
+    let mut hint_bpm: Option<f64> = None;
+    let mut hint_camelot: Option<String> = None;
+
+    // Extract optional bracketed DJ metadata suffix like `[124BPM 9A]`
+    if let (Some(open_idx), Some(close_idx)) = (raw_stem.rfind('['), raw_stem.rfind(']')) {
+        if close_idx > open_idx {
+            let inside = raw_stem[open_idx + 1..close_idx].trim();
+            for token in inside.split_whitespace() {
+                let upper = token.to_ascii_uppercase();
+                if let Some(bpm_str) = upper.strip_suffix("BPM") {
+                    if let Ok(val) = bpm_str.trim().parse::<f64>() {
+                        if (40.0..=240.0).contains(&val) {
+                            hint_bpm = Some(val);
+                        }
+                    }
+                } else if (upper.ends_with('A') || upper.ends_with('B')) && upper.len() >= 2 {
+                    if let Ok(num) = upper[..upper.len() - 1].parse::<u8>() {
+                        if (1..=12).contains(&num) {
+                            hint_camelot = Some(upper);
+                        }
+                    }
+                }
+            }
+            let prefix = raw_stem[..open_idx].trim();
+            if !prefix.is_empty() {
+                clean_stem = prefix.to_string();
+            }
+        }
+    }
+
+    if let Some((artist_part, title_part)) = clean_stem.split_once(" - ") {
+        let artist_trimmed = artist_part.trim();
+        let title_trimmed = title_part.trim();
+        if !artist_trimmed.is_empty() && !title_trimmed.is_empty() {
+            return (
+                Some(artist_trimmed.to_string()),
+                title_trimmed.to_string(),
+                hint_bpm,
+                hint_camelot,
+            );
+        }
+    }
+
+    (None, clean_stem, hint_bpm, hint_camelot)
+}
+
 /**
- * Generate a Track struct from a Path, or nothing if it is not a valid audio
- * file
+ * Generate a Track struct from a Path, including tagless WAV/FLAC/AIFF/MP3
+ * studio masters via filename stem + HERA DSP enrichment.
  */
 pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
+    let id = get_track_id_for_path(path)?;
+    let (stem_artist, stem_title, stem_bpm, stem_camelot) = parse_filename_metadata(path);
+
     match Probe::open(path)
         .map_err(lofty::error::LoftyError::from)
         .and_then(|p| p.options(ParseOptions::new().read_cover_art(false)).read())
     {
         Ok(tagged_file) => {
-            let tag = tagged_file.primary_tag().ok_or_else(|| {
-                warn!("No tags found for file {:?}", path);
-                MuseeksError::ID3NoTags(path.clone())
-            })?;
+            let tag = tagged_file
+                .primary_tag()
+                .or_else(|| tagged_file.first_tag());
 
-            // Lots of tags are missing eaither TrackArtist or AlbumArtist, so instead
-            // of being correct, we'll swap them if needed.
-            // IMPROVE ME: Is there a more idiomatic way of doing the following?
             let mut artists: Vec<String> = tag
-                .get_strings(ItemKey::TrackArtist)
-                .map(ToString::to_string)
-                .filter(|s| !s.is_empty())
-                .collect();
+                .map(|t| {
+                    t.get_strings(ItemKey::TrackArtist)
+                        .map(ToString::to_string)
+                        .filter(|s| !s.is_empty())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default();
 
             if artists.is_empty() {
                 artists = tag
-                    .get_strings(ItemKey::AlbumArtist)
-                    .map(ToString::to_string)
-                    .filter(|s| !s.is_empty())
-                    .collect();
+                    .map(|t| {
+                        t.get_strings(ItemKey::AlbumArtist)
+                            .map(ToString::to_string)
+                            .filter(|s| !s.is_empty())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
             }
 
             if artists.is_empty() {
-                artists = vec!["Unknown Artist".into()];
+                if let Some(ref parsed_artist) = stem_artist {
+                    artists = vec![parsed_artist.clone()];
+                } else {
+                    artists = vec!["Unknown Artist".into()];
+                }
             }
 
-            // Try AlbumArtist, fallback to first artist, then to "Unknown Artist"
             let album_artist = tag
-                .get_string(ItemKey::AlbumArtist)
+                .and_then(|t| t.get_string(ItemKey::AlbumArtist))
                 .map(ToString::to_string)
                 .or_else(|| artists.first().cloned())
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "Unknown Artist".to_string());
 
-            let id = get_track_id_for_path(path)?;
-
             let is_compilation = tag
-                .get_string(ItemKey::FlagCompilation)
-                .map_or(false, |v| v == "1" || v.eq_ignore_ascii_case("true"));
+                .and_then(|t| t.get_string(ItemKey::FlagCompilation))
+                .is_some_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
 
             let tag_bpm = tag
-                .get_string(ItemKey::Bpm)
-                .or_else(|| tag.get_string(ItemKey::IntegerBpm))
-                .and_then(|s| s.trim().parse::<f64>().ok());
+                .and_then(|t| {
+                    t.get_string(ItemKey::Bpm)
+                        .or_else(|| t.get_string(ItemKey::IntegerBpm))
+                })
+                .and_then(|s| s.trim().parse::<f64>().ok())
+                .or(stem_bpm);
 
             let tag_camelot = tag
-                .get_string(ItemKey::InitialKey)
-                .filter(|s| !s.is_empty())
-                .map(ToString::to_string);
-
-            let title = tag
-                .get_string(ItemKey::TrackTitle)
+                .and_then(|t| t.get_string(ItemKey::InitialKey))
                 .filter(|s| !s.is_empty())
                 .map(ToString::to_string)
-                .unwrap_or_else(|| {
-                    path.file_name()
-                        .and_then(|f| f.to_str())
-                        .unwrap_or("Unknown")
-                        .to_string()
-                });
+                .or(stem_camelot);
+
+            let title = tag
+                .and_then(|t| t.get_string(ItemKey::TrackTitle))
+                .filter(|s| !s.is_empty())
+                .map(ToString::to_string)
+                .unwrap_or(stem_title);
+
             let duration =
                 u32::try_from(tagged_file.properties().duration().as_secs()).unwrap_or(0);
             let (bpm, camelot, energy, hera_seal, hot_cues) =
@@ -285,23 +346,26 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                 path: path.to_string_lossy().into_owned(),
                 title,
                 album: tag
-                    .get_string(ItemKey::AlbumTitle)
+                    .and_then(|t| t.get_string(ItemKey::AlbumTitle))
                     .filter(|s| !s.is_empty())
                     .map(ToString::to_string)
-                    .unwrap_or_else(|| "Unknown".to_string()),
+                    .unwrap_or_else(|| "Single / Cabina".to_string()),
                 album_artist,
                 artists,
                 genres: tag
-                    .get_strings(ItemKey::Genre)
-                    .map(ToString::to_string)
-                    .filter(|s| !s.is_empty())
-                    .collect(),
-                year: tag.date().map(|d| d.year),
+                    .map(|t| {
+                        t.get_strings(ItemKey::Genre)
+                            .map(ToString::to_string)
+                            .filter(|s| !s.is_empty())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default(),
+                year: tag.and_then(|t| t.date().map(|d| d.year)),
                 duration,
-                track_no: tag.track(),
-                track_of: tag.track_total(),
-                disk_no: tag.disk(),
-                disk_of: tag.disk_total(),
+                track_no: tag.and_then(Accessor::track),
+                track_of: tag.and_then(Accessor::track_total),
+                disk_no: tag.and_then(Accessor::disk),
+                disk_of: tag.and_then(Accessor::disk_total),
                 is_compilation,
                 bpm: Some(bpm),
                 camelot: Some(camelot),
@@ -311,7 +375,40 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
             })
         }
         Err(err) => {
-            warn!("Failed to get ID3 tags: \"{}\". File {:?}", err, path);
+            if let Ok(decoded) = hera_node_rs::forensics::decode_audio_file_partial(path, 45.0) {
+                let duration = decoded.duration_seconds.round().max(1.0) as u32;
+                let artist = stem_artist.unwrap_or_else(|| "Unknown Artist".to_string());
+                let (bpm, camelot, energy, hera_seal, hot_cues) = enrich_track_with_hera_dsp(
+                    path,
+                    &id,
+                    &stem_title,
+                    duration,
+                    stem_bpm,
+                    stem_camelot,
+                );
+                return Ok(Track {
+                    id,
+                    path: path.to_string_lossy().into_owned(),
+                    title: stem_title,
+                    album: "Single / Cabina".to_string(),
+                    album_artist: artist.clone(),
+                    artists: vec![artist],
+                    genres: Vec::new(),
+                    year: None,
+                    duration,
+                    track_no: None,
+                    track_of: None,
+                    disk_no: None,
+                    disk_of: None,
+                    is_compilation: false,
+                    bpm: Some(bpm),
+                    camelot: Some(camelot),
+                    energy: Some(energy),
+                    hera_seal: Some(hera_seal),
+                    hot_cues: Some(hot_cues),
+                });
+            }
+            warn!("Failed to read audio file: \"{}\". File {:?}", err, path);
             Err(MuseeksError::Lofty(err))
         }
     }
@@ -348,4 +445,59 @@ pub fn get_tracks_from_paths(mut files: Vec<PathBuf>) -> Vec<AnyResult<Track>> {
         .par_iter()
         .map(get_track_from_file)
         .collect::<Vec<_>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn build_minimal_stereo_wav(duration_secs: f32) -> Vec<u8> {
+        let sample_rate: u32 = 44_100;
+        let channels: u16 = 2;
+        let frames = (sample_rate as f32 * duration_secs) as usize;
+        let data_bytes = (frames * (channels as usize) * 2) as u32;
+        let mut out = Vec::with_capacity(44 + data_bytes as usize);
+        out.extend_from_slice(b"RIFF");
+        out.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+        out.extend_from_slice(b"WAVEfmt ");
+        out.extend_from_slice(&16_u32.to_le_bytes());
+        out.extend_from_slice(&1_u16.to_le_bytes());
+        out.extend_from_slice(&channels.to_le_bytes());
+        out.extend_from_slice(&sample_rate.to_le_bytes());
+        out.extend_from_slice(&(sample_rate * 4).to_le_bytes());
+        out.extend_from_slice(&4_u16.to_le_bytes());
+        out.extend_from_slice(&16_u16.to_le_bytes());
+        out.extend_from_slice(b"data");
+        out.extend_from_slice(&data_bytes.to_le_bytes());
+
+        let tau = std::f32::consts::TAU;
+        for i in 0..frames {
+            let t = i as f32 / sample_rate as f32;
+            let sample = ((tau * 220.0 * t).sin() * 0.45 * 32767.0) as i16;
+            out.extend_from_slice(&sample.to_le_bytes());
+            out.extend_from_slice(&sample.to_le_bytes());
+        }
+        out
+    }
+
+    #[test]
+    fn test_tagless_uppercase_wav_imports_with_metadata_and_hot_cues() {
+        let temp_dir = std::env::temp_dir().join(format!("hera_track_test_{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let wav_path = temp_dir.join("DaviDJ - Noche De Cabina [125BPM 8A].WAV");
+        std::fs::write(&wav_path, build_minimal_stereo_wav(4.0)).unwrap();
+
+        assert!(is_file_valid(&wav_path, &SUPPORTED_TRACKS_EXTENSIONS));
+
+        let track = get_track_from_file(&wav_path).expect("tagless WAV must import cleanly");
+        assert_eq!(track.artists, vec!["DaviDJ".to_string()]);
+        assert_eq!(track.title, "Noche De Cabina");
+        assert!(track.duration >= 3);
+        assert_eq!(track.bpm, Some(125.0));
+        assert_eq!(track.camelot.as_deref(), Some("8A"));
+        assert!(track.hera_seal.is_some());
+        assert_eq!(track.hot_cues.as_ref().map(Vec::len), Some(4));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }

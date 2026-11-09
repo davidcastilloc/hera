@@ -50,6 +50,42 @@ export default function TrackListStates(props: Props) {
     await invalidate();
   }, [invalidate, navigate]);
 
+  const handleImportAudioFiles = useCallback(async () => {
+    if (!isTauri()) {
+      void navigate({ to: '/settings/library' });
+      return;
+    }
+
+    const selected = await open({
+      directory: false,
+      multiple: true,
+      filters: [
+        {
+          name: 'Audio DJ (MP3, WAV, FLAC, AIFF, M4A, OGG, OPUS)',
+          extensions: [
+            'mp3',
+            'wav',
+            'flac',
+            'aiff',
+            'aif',
+            'm4a',
+            'aac',
+            'ogg',
+            'opus',
+            'weba',
+          ],
+        },
+      ],
+    });
+
+    if (selected == null) {
+      return;
+    }
+
+    await LibraryAPI.importAudioFiles(selected);
+    await invalidate();
+  }, [invalidate, navigate]);
+
   if (isLoading) {
     return (
       <ViewMessage.Notice>
@@ -82,9 +118,9 @@ export default function TrackListStates(props: Props) {
           </h2>
 
           <p {...stylex.props(styles.emptyBody)}>
-            Añade tus carpetas locales de audio (FLAC, WAV, AIFF o MP3) para
-            detectar BPM, tono armónico, 4 Hot Cues de frase y preparar tus
-            crates para VirtualDJ, Rekordbox o Traktor.
+            Añade tus carpetas o pistas sueltas de audio (FLAC, WAV, AIFF o MP3,
+            incluso sin etiquetas ID3) para detectar BPM, tono armónico, 4 Hot
+            Cues de frase y preparar crates para VirtualDJ, Rekordbox o Traktor.
           </p>
 
           <div {...stylex.props(styles.emptyActions)}>
@@ -94,7 +130,16 @@ export default function TrackListStates(props: Props) {
               {...stylex.props(styles.primaryImportBtn)}
             >
               <Icon name="folderPlus" size={16} />
-              <span>Importar carpeta de música</span>
+              <span>Importar carpeta</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleImportAudioFiles}
+              {...stylex.props(styles.secondaryActionBtn)}
+            >
+              <Icon name="plus" size={16} />
+              <span>Importar pistas sueltas</span>
             </button>
 
             <Link
@@ -108,8 +153,8 @@ export default function TrackListStates(props: Props) {
           </div>
 
           <p {...stylex.props(styles.dropHint)}>
-            También puedes arrastrar archivos o carpetas directamente sobre esta
-            ventana, o gestionar rutas en{' '}
+            ¿Tus pistas están en Descargas o en un USB externo? Usa{' '}
+            <strong>Importar pistas sueltas</strong> o administra tus rutas en{' '}
             <Link to="/settings/library" {...stylex.props(styles.inlineLink)}>
               Ajustes de biblioteca
             </Link>
@@ -147,7 +192,7 @@ const styles = stylex.create({
     backgroundColor: '#0c0e12',
   },
   emptyCard: {
-    maxWidth: '500px',
+    maxWidth: '540px',
     width: '100%',
     paddingBlock: '32px',
     paddingInline: '32px',
@@ -211,6 +256,24 @@ const styles = stylex.create({
     lineHeight: 1.2,
     cursor: 'pointer',
     transition: 'opacity 0.14s ease',
+  },
+  secondaryActionBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '8px',
+    paddingBlock: '9px',
+    paddingInline: '14px',
+    borderRadius: '6px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    backgroundColor: '#171c24',
+    color: '#edeff3',
+    fontSize: '12.5px',
+    fontWeight: 600,
+    lineHeight: 1.2,
+    cursor: 'pointer',
+    transition: 'border-color 0.14s ease, background-color 0.14s ease',
   },
   secondaryBridgeLink: {
     display: 'inline-flex',

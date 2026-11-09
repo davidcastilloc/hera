@@ -38,6 +38,7 @@ function ViewSettingsLibrary() {
     }
 
     await LibraryAPI.addLibraryFolders(paths);
+    await LibraryAPI.scan();
     await invalidate();
   }, [invalidate]);
 

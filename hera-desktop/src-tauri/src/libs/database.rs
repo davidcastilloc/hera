@@ -10,12 +10,14 @@ use super::track::{Track, TrackGroup};
 
 // Single source of truth for supported audio formats (extension, MIME type).
 // KEEP IN SYNC with Tauri's file associations in tauri.conf.json
-pub const SUPPORTED_AUDIO_FORMATS: [(&str, &str); 9] = [
+pub const SUPPORTED_AUDIO_FORMATS: [(&str, &str); 11] = [
     ("mp3", "audio/mpeg"), /* mp3 / mp4 */
     ("aac", "audio/aac"),
     ("m4a", "audio/mp4"),
     ("3gp", "audio/3gpp"),
     ("wav", "audio/wav"),
+    ("aiff", "audio/aiff"),
+    ("aif", "audio/aiff"),
     ("ogg", "audio/ogg"), /* Opus */
     ("opus", "audio/opus"),
     ("flac", "audio/flac"), /* Flac */
@@ -23,23 +25,23 @@ pub const SUPPORTED_AUDIO_FORMATS: [(&str, &str); 9] = [
 ];
 
 // Derived at compile time from SUPPORTED_AUDIO_FORMATS
-pub const SUPPORTED_TRACKS_EXTENSIONS: [&str; 9] = {
-    let mut exts = [""; 9];
+pub const SUPPORTED_TRACKS_EXTENSIONS: [&str; 11] = {
+    let mut exts = [""; 11];
     let mut i = 0;
-    while i < 9 {
+    while i < 11 {
         exts[i] = SUPPORTED_AUDIO_FORMATS[i].0;
         i += 1;
     }
     exts
 };
 
-pub const SUPPORTED_PLAYLISTS_EXTENSIONS: [&str; 1] = ["m3u"];
+pub const SUPPORTED_PLAYLISTS_EXTENSIONS: [&str; 2] = ["m3u", "m3u8"];
 
 /// Get the MIME content type for a supported audio file extension.
 pub fn content_type_for_extension(ext: &str) -> Option<&'static str> {
     SUPPORTED_AUDIO_FORMATS
         .iter()
-        .find(|(e, _)| *e == ext)
+        .find(|(e, _)| e.eq_ignore_ascii_case(ext))
         .map(|(_, ct)| *ct)
 }
 

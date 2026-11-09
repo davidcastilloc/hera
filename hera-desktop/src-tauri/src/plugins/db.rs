@@ -99,9 +99,7 @@ async fn scan_library<R: Runtime>(
     import_paths: Vec<PathBuf>,
     refresh: bool,
 ) -> AnyResult<ScanResult> {
-    let mut db = db_state.get_lock().await;
-
-    let webview_window = window.get_webview_window("main").unwrap();
+    let webview_window = window.get_webview_window("main");
 
     info!("Importing paths to library:");
     for path in &import_paths {
@@ -110,80 +108,91 @@ async fn scan_library<R: Runtime>(
 
     let mut scan_result = ScanResult::default();
 
-    // Scan all directories for valid files to be scanned and imported
-    let mut track_paths = scan_dirs(&import_paths, &SUPPORTED_TRACKS_EXTENSIONS);
-    let scanned_paths_count = track_paths.len();
-
-    // Remove files that are already in the DB (speedup scan + prevent duplicate errors)
-    if !refresh {
-        let existing_paths = db
-            .get_all_track_paths()
+    let existing_paths = if !refresh {
+        let mut db = db_state.get_lock().await;
+        db.get_all_track_paths()
             .await?
             .into_iter()
             .map(PathBuf::from)
-            .collect::<HashSet<_>>();
+            .collect::<HashSet<_>>()
+    } else {
+        HashSet::new()
+    };
 
-        info!(
-            "Skipping {} files that are already in the library",
-            existing_paths.len()
-        );
-        track_paths.retain(|path| !existing_paths.contains(path));
-    }
+    let import_paths_for_scan = import_paths.clone();
+    let webview_for_scan = webview_window.clone();
+    let (tracks, track_failures, playlist_paths) = tauri::async_runtime::spawn_blocking(
+        move || -> AnyResult<(Vec<Track>, usize, Vec<PathBuf>)> {
+            let mut track_paths = scan_dirs(&import_paths_for_scan, &SUPPORTED_TRACKS_EXTENSIONS);
+            let scanned_paths_count = track_paths.len();
 
-    info!("Found {} files to import", track_paths.len());
-    info!(
-        "{} tracks already imported (they will be skipped)",
-        scanned_paths_count - track_paths.len()
-    );
-
-    // Setup progress tracking for the UI
-    let progress = Arc::new(AtomicUsize::new(1));
-    let total = track_paths.len();
-
-    webview_window
-        .emit(
-            IPCEvent::LibraryScanProgress.as_ref(),
-            ScanProgress { current: 0, total },
-        )
-        .unwrap();
-
-    // Let's get all tracks ID3
-    info!("Importing ID3 tags from {} files", total);
-    let scan_logger = TimeLogger::new("Scanned all id3 tags".into());
-
-    let tracks = track_paths
-        .par_iter()
-        .map(|path| -> AnyResult<Track> {
-            let p_current = progress.fetch_add(1, Ordering::SeqCst);
-
-            if p_current % 200 == 0 || p_current == total {
-                info!("Processing tracks {:?}/{:?}", p_current, total);
-                webview_window
-                    .emit(
-                        IPCEvent::LibraryScanProgress.as_ref(),
-                        ScanProgress {
-                            current: p_current,
-                            total,
-                        },
-                    )
-                    .unwrap();
+            if !refresh {
+                info!(
+                    "Skipping {} files that are already in the library",
+                    existing_paths.len()
+                );
+                track_paths.retain(|path| !existing_paths.contains(path));
             }
 
-            get_track_from_file(path)
-        })
-        .filter_map(Result::ok)
-        .collect::<Vec<Track>>();
+            info!("Found {} files to import", track_paths.len());
+            info!(
+                "{} tracks already imported (they will be skipped)",
+                scanned_paths_count.saturating_sub(track_paths.len())
+            );
 
-    let track_failures = track_paths.len() - tracks.len();
+            let progress = Arc::new(AtomicUsize::new(1));
+            let total = track_paths.len();
+
+            if let Some(ref w) = webview_for_scan {
+                let _ = w.emit(
+                    IPCEvent::LibraryScanProgress.as_ref(),
+                    ScanProgress { current: 0, total },
+                );
+            }
+
+            info!("Importing audio metadata and DSP cues from {} files", total);
+            let scan_logger = TimeLogger::new("Scanned all audio tracks".into());
+
+            let scanned_tracks = track_paths
+                .par_iter()
+                .map(|path| -> AnyResult<Track> {
+                    let p_current = progress.fetch_add(1, Ordering::SeqCst);
+
+                    if p_current % 25 == 0 || p_current == total {
+                        info!("Processing tracks {:?}/{:?}", p_current, total);
+                        if let Some(ref w) = webview_for_scan {
+                            let _ = w.emit(
+                                IPCEvent::LibraryScanProgress.as_ref(),
+                                ScanProgress {
+                                    current: p_current,
+                                    total,
+                                },
+                            );
+                        }
+                    }
+
+                    get_track_from_file(path)
+                })
+                .filter_map(Result::ok)
+                .collect::<Vec<Track>>();
+
+            let failures = track_paths.len().saturating_sub(scanned_tracks.len());
+            scan_logger.complete();
+
+            let found_playlists =
+                scan_dirs(&import_paths_for_scan, &SUPPORTED_PLAYLISTS_EXTENSIONS);
+            Ok((scanned_tracks, failures, found_playlists))
+        },
+    )
+    .await
+    .map_err(|e| MuseeksError::Unknown(anyhow::anyhow!("Scan worker join error: {e}")))??;
+
     scan_result.track_count = tracks.len();
     scan_result.track_failures = track_failures;
     info!("{} tracks successfully scanned", tracks.len());
     info!("{} tracks failed to be scanned", track_failures);
 
-    scan_logger.complete();
-
-    // Insert all tracks in the DB, we'are kind of assuming it cannot fail
-    // (regarding scan progress information), but it technically could.
+    let mut db = db_state.get_lock().await;
     let db_insert_logger: TimeLogger = TimeLogger::new("Inserted tracks".into());
 
     if refresh {
@@ -194,10 +203,7 @@ async fn scan_library<R: Runtime>(
 
     db_insert_logger.complete();
 
-    // Now that all tracks are inserted, let's scan for playlists, and import them
-    let mut playlist_paths = scan_dirs(&import_paths, &SUPPORTED_PLAYLISTS_EXTENSIONS);
-
-    // Ignore playlists that are already in the DB (speedup scan + prevent duplicate errors)
+    let mut playlist_paths = playlist_paths;
     let existing_playlists_paths = db
         .get_all_playlists()
         .await?
@@ -210,11 +216,13 @@ async fn scan_library<R: Runtime>(
 
     info!("Found {} playlist(s) to import", playlist_paths.len());
 
-    // Start scanning the content of the playlists and adding them to the DB
     for playlist_path in playlist_paths {
         let res = {
-            let mut reader = m3u::Reader::open(&playlist_path).unwrap();
-            let playlist_dir_path = playlist_path.parent().unwrap();
+            let mut reader = m3u::Reader::open(&playlist_path)
+                .map_err(|e| MuseeksError::Unknown(anyhow::anyhow!("Invalid M3U file: {e}")))?;
+            let playlist_dir_path = playlist_path
+                .parent()
+                .ok_or_else(|| MuseeksError::Unknown(anyhow::anyhow!("Missing playlist parent")))?;
 
             let track_paths: Vec<PathBuf> = reader
                 .entries()
@@ -225,13 +233,11 @@ async fn scan_library<R: Runtime>(
 
                     match entry {
                         m3u::Entry::Path(path) => Some(playlist_dir_path.join(path)),
-                        _ => None, // We don't support (yet?) URLs in playlists
+                        _ => None,
                     }
                 })
                 .collect();
 
-            // Ok, this is sketchy. To avoid having to create a TrackByPath DB View,
-            // let's guess the ID of the track with UUID::v3
             let track_ids = track_paths
                 .iter()
                 .flat_map(get_track_id_for_path)
@@ -239,9 +245,8 @@ async fn scan_library<R: Runtime>(
 
             let playlist_name = playlist_path
                 .file_stem()
-                .unwrap()
-                .to_str()
-                .unwrap_or("unknown playlist")
+                .and_then(|s| s.to_str())
+                .unwrap_or("Playlist importada")
                 .to_owned();
 
             let tracks = db.get_tracks(&track_ids).await?;
@@ -276,7 +281,6 @@ async fn scan_library<R: Runtime>(
         }
     }
 
-    // All good :]
     Ok(scan_result)
 }
 

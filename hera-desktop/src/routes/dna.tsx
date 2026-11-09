@@ -1,15 +1,17 @@
 import * as stylex from '@stylexjs/stylex';
-import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { useEffect, useMemo, useState } from 'react';
 
 import Icon from '../components/Icon';
 import View from '../elements/View';
+import DatabaseBridge from '../lib/bridge-database';
 import {
   computeDjStyleDna,
   type HeraStyleDnaResponse,
 } from '../lib/bridge-hera';
 import { useHeraViewStore } from '../lib/hera-human-language';
 import useLibraryStore from '../lib/store';
+import toastManager from '../lib/toast-manager';
 
 export const Route = createFileRoute('/dna')({
   component: ViewDjStyleDna,
@@ -46,18 +48,49 @@ function ViewDjStyleDna() {
   );
 
   useEffect(() => {
+    if (tracks.length === 0) {
+      void DatabaseBridge.getAllTracks()
+        .then((dbTracks) => {
+          if (dbTracks.length > 0) {
+            useLibraryStore.setState({ tracks: dbTracks });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [tracks.length]);
+
+  const activeRulesList = useMemo(() => {
+    const list: string[] = [];
+    if (ruleVocalClash) list.push('Evitar cruce de voces (Cue 4 → Cue 1)');
+    if (ruleSubBass) list.push('Continuidad de sub-bajo');
+    if (ruleAudioQuality) list.push('Filtro forense lossless');
+    list.push('Enjambre P2P activo');
+    return list;
+  }, [ruleAudioQuality, ruleSubBass, ruleVocalClash]);
+
+  const goldenRulesString = useMemo(
+    () => activeRulesList.join(' · '),
+    [activeRulesList],
+  );
+
+  useEffect(() => {
     void computeDjStyleDna(
       tracks,
       djHandle,
       preferredSoftware,
-      'Cuidar vocales · Proteger sub-bajo · Calidad estudio',
+      goldenRulesString,
     ).then(setDnaProfile);
-  }, [tracks, djHandle, preferredSoftware]);
+  }, [tracks, djHandle, preferredSoftware, goldenRulesString]);
 
   const analyzedCount = tracks.length;
   const averageBpm = dnaProfile?.overall_average_bpm
     ? `${Math.round(dnaProfile.overall_average_bpm)} BPM`
     : '125 BPM';
+  const dominantKeys =
+    dnaProfile?.dominant_camelot_keys &&
+    dnaProfile.dominant_camelot_keys.length > 0
+      ? dnaProfile.dominant_camelot_keys.slice(0, 3)
+      : ['8A', '9A', '10A'];
 
   return (
     <View aria-label="Perfil acústico y ADN DJ">
@@ -85,7 +118,14 @@ function ViewDjStyleDna() {
               <button
                 key={sw}
                 type="button"
-                onClick={() => setPreferredSoftware(sw)}
+                onClick={() => {
+                  setPreferredSoftware(sw);
+                  toastManager.add({
+                    title: `Software principal configurado: ${sw}`,
+                    type: 'info',
+                    timeout: 2400,
+                  });
+                }}
                 {...stylex.props(
                   styles.swBtn,
                   preferredSoftware === sw && styles.swBtnActive,
@@ -203,12 +243,12 @@ function ViewDjStyleDna() {
                     Matriz armónica Camelot 1A–12A (escala menor)
                   </h2>
                   <span {...stylex.props(styles.panelAccentMeta)}>
-                    Dominantes: 8A (34%) · 9A (28%) · 10A (19%)
+                    Dominantes: {dominantKeys.join(' · ')}
                   </span>
                 </div>
                 <div {...stylex.props(styles.camelotGrid)}>
                   {PRO_CAMELOT_KEYS_MINOR.map((k) => {
-                    const isDominant = ['8A', '9A', '10A'].includes(k.code);
+                    const isDominant = dominantKeys.includes(k.code);
                     return (
                       <div
                         key={k.code}
@@ -342,11 +382,17 @@ function ViewDjStyleDna() {
               <p {...stylex.props(styles.summaryBody)}>
                 Al armar sets o puentes para{' '}
                 <strong>{preferredSoftware}</strong>, HERA priorizará
-                transiciones alrededor de <strong>{averageBpm}</strong>,
-                enlazando el <strong>Cue 4 (Salida)</strong> con el{' '}
-                <strong>Cue 1 (Entrada)</strong> en llaves vecinas para evitar
-                choques armónicos y vocales.
+                transiciones alrededor de <strong>{averageBpm}</strong> (
+                {dnaProfile?.dominant_bpm_zone || 'zona progresiva de club'}) y
+                llaves <strong>{dominantKeys.join(' · ')}</strong>. Reglas
+                activas: {goldenRulesString}.
               </p>
+              <div>
+                <Link to="/bridge" {...stylex.props(styles.applyBridgeLink)}>
+                  <Icon name="bridge" size={14} />
+                  <span>Aplicar este ADN en Puente y Copiloto</span>
+                </Link>
+              </div>
             </div>
           </section>
         </div>
@@ -696,5 +742,23 @@ const styles = stylex.create({
     fontSize: '12.5px',
     lineHeight: 1.55,
     color: '#8e98a8',
+  },
+  applyBridgeLink: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '8px',
+    marginTop: '4px',
+    paddingBlock: '7px',
+    paddingInline: '13px',
+    borderRadius: '6px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#14b8a6',
+    backgroundColor: '#14b8a6',
+    color: '#041311',
+    fontSize: '12px',
+    fontWeight: 700,
+    lineHeight: 1.2,
+    textDecoration: 'none',
   },
 });

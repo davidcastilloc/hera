@@ -48,7 +48,9 @@ fn is_dir_visible(entry: &walkdir::DirEntry) -> bool {
  */
 pub fn is_file_valid(path: &Path, allowed_extensions: &[&str]) -> bool {
     let extension = path.extension().and_then(OsStr::to_str).unwrap_or("");
-    allowed_extensions.contains(&extension)
+    allowed_extensions
+        .iter()
+        .any(|allowed| allowed.eq_ignore_ascii_case(extension))
 }
 
 /**

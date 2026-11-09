@@ -267,6 +267,79 @@ pub fn list_supported_ai_backends() -> Vec<AiBackendOption> {
         .collect()
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn configure_background_command(cmd: &mut std::process::Command) {
+    cmd.stdin(std::process::Stdio::null());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn run_command_with_timeout(
+    mut cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> Result<std::process::Output, String> {
+    use std::io::Read;
+    use std::process::Stdio;
+    use std::time::Instant;
+
+    configure_background_command(&mut cmd);
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+    let mut child = cmd.spawn().map_err(|e| format!("spawn failed: {e}"))?;
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+
+    let out_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut pipe) = stdout_pipe {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    });
+    let err_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        if let Some(mut pipe) = stderr_pipe {
+            let _ = pipe.read_to_end(&mut buf);
+        }
+        buf
+    });
+
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) => {
+                if started.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(format!(
+                        "Tiempo de espera agotado ({:.1}s) esperando salida del proceso CLI",
+                        timeout.as_secs_f32()
+                    ));
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                return Err(format!("Fallo monitoreando proceso CLI: {e}"));
+            }
+        }
+    };
+
+    let stdout = out_reader.join().unwrap_or_default();
+    let stderr = err_reader.join().unwrap_or_default();
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
+}
+
 pub fn check_binary_in_path(bin_name: &str) -> (bool, Option<String>) {
     #[cfg(target_arch = "wasm32")]
     {
@@ -276,15 +349,29 @@ pub fn check_binary_in_path(bin_name: &str) -> (bool, Option<String>) {
     #[cfg(not(target_arch = "wasm32"))]
     {
         let probe_cmd = if cfg!(windows) { "where" } else { "which" };
-        if let Ok(out) = std::process::Command::new(probe_cmd).arg(bin_name).output() {
+        let mut cmd = std::process::Command::new(probe_cmd);
+        cmd.arg(bin_name);
+        if let Ok(out) = run_command_with_timeout(cmd, std::time::Duration::from_millis(1200)) {
             if out.status.success() {
-                let first_line = String::from_utf8_lossy(&out.stdout)
-                    .lines()
-                    .next()
-                    .unwrap_or("")
-                    .trim()
-                    .to_string();
-                return (true, Some(first_line));
+                let raw = String::from_utf8_lossy(&out.stdout);
+                let lines: Vec<&str> = raw.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+                let preferred = if cfg!(windows) {
+                    lines
+                        .iter()
+                        .copied()
+                        .find(|l| {
+                            let lower = l.to_ascii_lowercase();
+                            lower.ends_with(".exe")
+                                || lower.ends_with(".cmd")
+                                || lower.ends_with(".bat")
+                        })
+                        .or_else(|| lines.first().copied())
+                } else {
+                    lines.first().copied()
+                };
+                if let Some(resolved) = preferred {
+                    return (true, Some(resolved.to_string()));
+                }
             }
         }
         (false, None)
@@ -293,28 +380,54 @@ pub fn check_binary_in_path(bin_name: &str) -> (bool, Option<String>) {
 
 pub fn scan_system_cli_agents() -> Vec<DetectedCliAgent> {
     const CANDIDATES: &[(&str, &str, &str, &str)] = &[
-        ("cli_agy", "agy", "Antigravity CLI (agy)", "agy run --non-interactive <prompt>"),
+        ("cli_agy", "agy", "Antigravity CLI (agy)", "agy -p --disable-slash-commands <prompt>"),
         ("cli_claude", "claude", "Claude Code (claude)", "claude -p <prompt>"),
         ("cli_codex", "codex", "OpenAI Codex CLI (codex)", "codex exec <prompt>"),
         ("cli_gemini", "gemini", "Google Gemini CLI (gemini)", "gemini --prompt <prompt>"),
         ("cli_ollama", "ollama", "Ollama CLI (ollama)", "ollama run llama3.3 <prompt>"),
     ];
 
-    CANDIDATES
-        .iter()
-        .map(|&(id, bin, display_name, cmd_preview)| {
-            let (installed, path_hint) = check_binary_in_path(bin);
-            DetectedCliAgent {
+    #[cfg(target_arch = "wasm32")]
+    {
+        CANDIDATES
+            .iter()
+            .map(|&(id, bin, display_name, cmd_preview)| DetectedCliAgent {
                 id: id.to_string(),
                 binary_name: bin.to_string(),
                 display_name: display_name.to_string(),
-                installed,
-                version_hint: path_hint,
+                installed: false,
+                version_hint: None,
                 command_preview: cmd_preview.to_string(),
                 zero_api_key_needed: true,
-            }
+            })
+            .collect()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::thread::scope(|s| {
+            let handles: Vec<_> = CANDIDATES
+                .iter()
+                .map(|&(id, bin, display_name, cmd_preview)| {
+                    s.spawn(move || {
+                        let (installed, path_hint) = check_binary_in_path(bin);
+                        DetectedCliAgent {
+                            id: id.to_string(),
+                            binary_name: bin.to_string(),
+                            display_name: display_name.to_string(),
+                            installed,
+                            version_hint: path_hint,
+                            command_preview: cmd_preview.to_string(),
+                            zero_api_key_needed: true,
+                        }
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .filter_map(|h| h.join().ok())
+                .collect()
         })
-        .collect()
+    }
 }
 
 pub fn scan_local_ai_servers() -> Vec<DetectedLocalServer> {
@@ -326,34 +439,68 @@ pub fn scan_local_ai_servers() -> Vec<DetectedLocalServer> {
         ("vllm", "vLLM (:8000)", "http://localhost:8000/v1"),
     ];
 
-    candidates
-        .into_iter()
-        .map(|(id, display_name, url)| {
-            let start = std::time::Instant::now();
-            let models = probe_backend_models(url, None).unwrap_or_default();
-            let reachable = !models.is_empty();
-            let latency_ms = if reachable {
-                Some(start.elapsed().as_millis() as u64)
-            } else {
-                None
-            };
-            DetectedLocalServer {
+    #[cfg(target_arch = "wasm32")]
+    {
+        candidates
+            .into_iter()
+            .map(|(id, display_name, url)| DetectedLocalServer {
                 id: id.to_string(),
                 display_name: display_name.to_string(),
                 base_url: url.to_string(),
-                reachable,
-                active_models: models,
-                latency_ms,
-            }
+                reachable: false,
+                active_models: Vec::new(),
+                latency_ms: None,
+            })
+            .collect()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        std::thread::scope(|s| {
+            let handles: Vec<_> = candidates
+                .into_iter()
+                .map(|(id, display_name, url)| {
+                    s.spawn(move || {
+                        let start = std::time::Instant::now();
+                        let models = probe_backend_models(url, None).unwrap_or_default();
+                        let reachable = !models.is_empty();
+                        let latency_ms = if reachable {
+                            Some(start.elapsed().as_millis() as u64)
+                        } else {
+                            None
+                        };
+                        DetectedLocalServer {
+                            id: id.to_string(),
+                            display_name: display_name.to_string(),
+                            base_url: url.to_string(),
+                            reachable,
+                            active_models: models,
+                            latency_ms,
+                        }
+                    })
+                })
+                .collect();
+            handles
+                .into_iter()
+                .filter_map(|h| h.join().ok())
+                .collect()
         })
-        .collect()
+    }
 }
 
 pub fn scan_ai_connectivity_onboarding(
     commander_mode: Option<&str>,
 ) -> AiConnectivityOnboardingReport {
-    let cli_agents = scan_system_cli_agents();
-    let local_servers = scan_local_ai_servers();
+    #[cfg(not(target_arch = "wasm32"))]
+    let (cli_agents, local_servers) = std::thread::scope(|s| {
+        let cli_job = s.spawn(scan_system_cli_agents);
+        let local_job = s.spawn(scan_local_ai_servers);
+        (
+            cli_job.join().unwrap_or_default(),
+            local_job.join().unwrap_or_default(),
+        )
+    });
+    #[cfg(target_arch = "wasm32")]
+    let (cli_agents, local_servers) = (scan_system_cli_agents(), scan_local_ai_servers());
 
     let active_local = local_servers.iter().find(|s| s.reachable);
     let active_cli = cli_agents.iter().find(|c| c.installed);
@@ -366,9 +513,12 @@ pub fn scan_ai_connectivity_onboarding(
         )
     } else if let Some(cli) = active_cli {
         (
-            "cli_agent".to_string(),
-            cli.id.clone(),
-            format!("⌨️ Agente CLI Detectado: {} (Suscripción Local Activa)", cli.display_name),
+            "cloud_free".to_string(),
+            "cloudflare_free".to_string(),
+            format!(
+                "⚡ Cloud Free Activo ($0.00 instantáneo) · {} disponible en selector Pro",
+                cli.display_name
+            ),
         )
     } else {
         (
@@ -539,25 +689,46 @@ pub fn build_agent_harness_system_prompt(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
+#[derive(Debug)]
+enum LocalHttpError {
+    Unreachable(String),
+    InvalidResponse,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn normalize_loopback_host_port(host_port: &str) -> String {
+    if let Some(port) = host_port.strip_prefix("localhost:") {
+        format!("127.0.0.1:{port}")
+    } else if host_port.eq_ignore_ascii_case("localhost") {
+        "127.0.0.1:80".to_string()
+    } else {
+        host_port.to_string()
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn http_get_json_local(
     host_port: &str,
     path: &str,
     api_key: Option<&str>,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, LocalHttpError> {
     use std::io::{Read, Write};
     use std::net::{TcpStream, ToSocketAddrs};
     use std::time::Duration;
 
-    let timeout = Duration::from_millis(600);
-    let addr = host_port
+    let connect_target = normalize_loopback_host_port(host_port);
+    let connect_timeout = Duration::from_millis(200);
+    let rw_timeout = Duration::from_millis(500);
+    let addr = connect_target
         .to_socket_addrs()
-        .map_err(|e| format!("Invalid address `{host_port}`: {e}"))?
+        .map_err(|e| LocalHttpError::Unreachable(format!("Invalid address `{host_port}`: {e}")))?
         .next()
-        .ok_or_else(|| format!("Could not resolve `{host_port}`"))?;
-    let mut stream = TcpStream::connect_timeout(&addr, timeout)
-        .map_err(|e| format!("Connect timeout/error to `{host_port}`: {e}"))?;
-    let _ = stream.set_read_timeout(Some(timeout));
-    let _ = stream.set_write_timeout(Some(timeout));
+        .ok_or_else(|| LocalHttpError::Unreachable(format!("Could not resolve `{host_port}`")))?;
+    let mut stream = TcpStream::connect_timeout(&addr, connect_timeout).map_err(|e| {
+        LocalHttpError::Unreachable(format!("Connect timeout/error to `{host_port}`: {e}"))
+    })?;
+    let _ = stream.set_read_timeout(Some(rw_timeout));
+    let _ = stream.set_write_timeout(Some(rw_timeout));
 
     let auth_header = api_key
         .filter(|k| !k.trim().is_empty())
@@ -568,7 +739,7 @@ fn http_get_json_local(
     );
     stream
         .write_all(req.as_bytes())
-        .map_err(|e| format!("Write failed to `{host_port}`: {e}"))?;
+        .map_err(|_| LocalHttpError::InvalidResponse)?;
 
     let mut raw = Vec::new();
     let _ = stream.read_to_end(&mut raw);
@@ -584,7 +755,7 @@ fn http_get_json_local(
         (Some(start), Some(end)) if end >= start => &body[start..=end],
         _ => body,
     };
-    serde_json::from_str(json_slice).map_err(|e| format!("Invalid JSON from `{host_port}{path}`: {e}"))
+    serde_json::from_str(json_slice).map_err(|_| LocalHttpError::InvalidResponse)
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -646,12 +817,19 @@ pub fn probe_backend_models(base_url: &str, api_key: Option<&str>) -> Result<Vec
             format!("{base_path}/v1/models")
         };
 
-        if let Ok(json_val) = http_get_json_local(&host_port, &models_path, api_key) {
-            let models = extract_models_from_payload(&json_val);
-            if !models.is_empty() {
-                return Ok(models);
+        match http_get_json_local(&host_port, &models_path, api_key) {
+            Ok(json_val) => {
+                let models = extract_models_from_payload(&json_val);
+                if !models.is_empty() {
+                    return Ok(models);
+                }
             }
+            Err(LocalHttpError::Unreachable(err)) => {
+                return Err(err);
+            }
+            Err(LocalHttpError::InvalidResponse) => {}
         }
+
         if let Ok(json_val) = http_get_json_local(&host_port, "/api/tags", api_key) {
             let models = extract_models_from_payload(&json_val);
             if !models.is_empty() {
@@ -753,34 +931,45 @@ pub fn execute_cli_agent_turn(
         ));
     }
 
-    let mut cmd = std::process::Command::new(bin_name);
+    if cfg!(test) {
+        return Err(format!(
+            "Modo de pruebas unitarias offline activo para `{bin_name}`."
+        ));
+    }
+
+    let exec_target = path_hint.as_deref().unwrap_or(bin_name);
+    let mut cmd = std::process::Command::new(exec_target);
+    let combined_prompt = format!("{system_prompt}\n\nUsuario: {prompt}");
     match bin_name {
         "agy" => {
-            cmd.args(["run", "--non-interactive"])
-                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+            cmd.args([
+                "-p",
+                "--disable-slash-commands",
+                "--effort",
+                "low",
+                "--print-timeout",
+                "8s",
+            ])
+            .arg(&combined_prompt);
         }
         "claude" => {
-            cmd.args(["-p"])
-                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+            cmd.args(["-p"]).arg(&combined_prompt);
         }
         "codex" => {
-            cmd.args(["exec"])
-                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+            cmd.args(["exec"]).arg(&combined_prompt);
         }
         "gemini" => {
-            cmd.args(["--prompt"])
-                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+            cmd.args(["--prompt"]).arg(&combined_prompt);
         }
         "ollama" => {
-            cmd.args(["run", "llama3.3"])
-                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+            cmd.args(["run", "llama3.3"]).arg(&combined_prompt);
         }
         _ => {
             cmd.arg(prompt);
         }
     }
 
-    let out = cmd.output().map_err(|e| {
+    let out = run_command_with_timeout(cmd, std::time::Duration::from_secs(10)).map_err(|e| {
         format!(
             "Fallo al ejecutar binario `{bin_name}` (path {:?}): {e}",
             path_hint
@@ -830,15 +1019,22 @@ fn http_post_chat_completions(
         } else {
             format!("{host_port_raw}:80")
         };
-        let addr = host_port
+        let connect_target = normalize_loopback_host_port(&host_port);
+        let is_loopback = connect_target.starts_with("127.0.0.1:");
+        let connect_timeout = if is_loopback {
+            Duration::from_millis(500)
+        } else {
+            Duration::from_millis(1500)
+        };
+        let addr = connect_target
             .to_socket_addrs()
             .map_err(|e| format!("Invalid address `{host_port}`: {e}"))?
             .next()
             .ok_or_else(|| format!("Could not resolve `{host_port}`"))?;
-        let mut stream = TcpStream::connect_timeout(&addr, Duration::from_millis(1500))
+        let mut stream = TcpStream::connect_timeout(&addr, connect_timeout)
             .map_err(|e| format!("Connect error to `{host_port}`: {e}"))?;
-        let _ = stream.set_read_timeout(Some(Duration::from_secs(15)));
-        let _ = stream.set_write_timeout(Some(Duration::from_secs(15)));
+        let _ = stream.set_read_timeout(Some(Duration::from_secs(12)));
+        let _ = stream.set_write_timeout(Some(Duration::from_secs(12)));
 
         let auth_header = api_key
             .filter(|k| !k.trim().is_empty())
@@ -897,7 +1093,7 @@ fn http_post_chat_completions(
     cmd.args([
         "-sS",
         "--max-time",
-        "15",
+        "12",
         "-X",
         "POST",
         &chat_url,
@@ -907,9 +1103,8 @@ fn http_post_chat_completions(
     if let Some(k) = api_key.filter(|k| !k.trim().is_empty()) {
         cmd.args(["-H", &format!("Authorization: Bearer {}", k.trim())]);
     }
-    let out = cmd
-        .args(["-d", &body_str])
-        .output()
+    cmd.args(["-d", &body_str]);
+    let out = run_command_with_timeout(cmd, std::time::Duration::from_secs(14))
         .map_err(|e| format!("curl execution failed: {e}"))?;
     if !out.status.success() {
         return Err(format!(
@@ -1676,5 +1871,35 @@ mod tests {
         let resp = evaluate_agent_harness_turn(&req, &state);
         assert_eq!(resp.backend_used, "cli_agy");
         assert!(resp.assistant_reply.len() > 10);
+    }
+
+    #[test]
+    fn test_parallel_onboarding_scan_latency_and_command_timeout_guard() {
+        let start = std::time::Instant::now();
+        let report = scan_ai_connectivity_onboarding(Some("executive_boss"));
+        let elapsed = start.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_millis(2500),
+            "scan_ai_connectivity_onboarding took {:?} (expected < 2.5s)",
+            elapsed
+        );
+        assert_eq!(report.local_servers.len(), 5);
+
+        let slow_cmd = if cfg!(windows) {
+            let mut c = std::process::Command::new("powershell");
+            c.args(["-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 5"]);
+            c
+        } else {
+            let mut c = std::process::Command::new("sleep");
+            c.arg("5");
+            c
+        };
+        let timeout_start = std::time::Instant::now();
+        let res = run_command_with_timeout(slow_cmd, std::time::Duration::from_millis(180));
+        assert!(res.is_err());
+        assert!(
+            timeout_start.elapsed() < std::time::Duration::from_millis(2000),
+            "run_command_with_timeout did not terminate slow child quickly enough"
+        );
     }
 }
