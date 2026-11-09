@@ -1,6 +1,7 @@
 import { plural } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
+import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { lstat } from '@tauri-apps/plugin-fs';
 import { useEffect, useState } from 'react';
@@ -18,6 +19,10 @@ export default function DropzoneImport() {
 
   // Simplification welcome
   useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
     async function attachFileDropEvent() {
       const unlisten = getCurrentWindow()
         .onDragDropEvent(async (event) => {
@@ -51,21 +56,14 @@ export default function DropzoneImport() {
                 other: '# invalid items ignored',
               });
 
-              toastManager.add({ title: message, type: 'warning' });
+              toastManager.add('warning', message);
             }
 
-            if (folders.length > 0) {
-              await LibraryAPI.addLibraryFolders(folders);
-
-              const message = plural(folders.length, {
-                one: '# folder added to the library',
-                other: '# folders added to the library',
-              });
-
-              toastManager.add({ title: message, type: 'success' });
-
-              await LibraryAPI.scan();
-              await invalidate();
+            try {
+              await LibraryAPI.importTracksFromFolders(folders);
+              invalidate();
+            } catch (err) {
+              logAndNotifyError(err);
             }
           } else {
             setIsShown(false);
@@ -76,19 +74,22 @@ export default function DropzoneImport() {
       return unlisten;
     }
 
-    const unlisten = attachFileDropEvent().catch(logAndNotifyError);
+    const unlisten = attachFileDropEvent();
 
     return function cleanup() {
       void unlisten.then((unlisten) => (unlisten ? unlisten() : null));
     };
-  }, [invalidate]);
+  }, [invalidate, t]);
+
+  if (!isShown) {
+    return null;
+  }
 
   return (
-    <div {...stylex.props(styles.dropzone, isShown && styles.shown)}>
-      <div
-        {...stylex.props(styles.dropzoneTitle)}
-      >{t`Add music to the library`}</div>
-      <span>{t`Drop folders anywhere`}</span>
+    <div {...stylex.props(styles.dropzone)}>
+      <div {...stylex.props(styles.dropzoneContent)}>
+        {t`Drop folders anywhere to import them`}
+      </div>
     </div>
   );
 }
@@ -96,23 +97,25 @@ export default function DropzoneImport() {
 const styles = stylex.create({
   dropzone: {
     position: 'fixed',
-    inset: 0,
-    pointerEvents: 'none',
-    backgroundColor: 'var(--faded-bg)',
-    zIndex: 1000,
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 10000,
     display: 'flex',
-    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '20px',
-    opacity: 0,
-    transition: 'opacity 0.1s ease-in-out',
+    pointerEvents: 'none',
   },
-  shown: {
-    opacity: 1,
-  },
-  dropzoneTitle: {
-    fontSize: '1.4rem',
-    marginBottom: '8px',
+  dropzoneContent: {
+    padding: '20px 40px',
+    backgroundColor: 'var(--background)',
+    borderWidth: '2px',
+    borderStyle: 'dashed',
+    borderColor: 'var(--primary)',
+    borderRadius: '8px',
+    fontSize: '18px',
+    color: 'var(--text)',
   },
 });

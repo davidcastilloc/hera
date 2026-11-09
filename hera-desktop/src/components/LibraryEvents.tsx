@@ -1,3 +1,4 @@
+import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useEffect } from 'react';
 
@@ -9,6 +10,10 @@ import type { IPCEvent, ScanProgress } from '../generated/typings';
  */
 function LibraryEvents() {
   useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
     const promise = listen<ScanProgress>(
       'LibraryScanProgress' satisfies IPCEvent,
       ({ payload }) => {

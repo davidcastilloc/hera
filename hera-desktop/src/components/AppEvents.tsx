@@ -1,3 +1,4 @@
+import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useEffect } from 'react';
 
@@ -20,6 +21,17 @@ function AppEvents() {
     // Disable the default context menu on production builds
     if (!isDev()) {
       window.addEventListener('contextmenu', preventNativeDefault);
+    }
+
+    if (!isTauri()) {
+      return function cleanup() {
+        window.removeEventListener('dragover', preventNativeDefault, false);
+        window.removeEventListener('drop', preventNativeDefault, false);
+
+        if (!isDev()) {
+          window.removeEventListener('contextmenu', preventNativeDefault);
+        }
+      };
     }
 
     const unlistenSystemThemeChange = getCurrentWindow().listen(

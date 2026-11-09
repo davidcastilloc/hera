@@ -1,3 +1,4 @@
+import { isTauri } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useEffect } from 'react';
 
@@ -9,6 +10,10 @@ import player from '../lib/player';
  */
 function IPCPlayerEvents() {
   useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
     const unlistenerPromises = [
       listen('PlaybackPlay' satisfies IPCEvent, () => player.play()),
       listen('PlaybackPause' satisfies IPCEvent, () => player.pause()),

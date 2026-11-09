@@ -1,4 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
+import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useCallback, useEffect } from 'react';
 import Keybinding from 'react-keybinding-component';
@@ -34,6 +35,10 @@ export default function IPCNavigationEvents() {
 
   // Listen to IPC events for navigation
   useEffect(() => {
+    if (!isTauri()) {
+      return;
+    }
+
     const unlistenerPromises = [
       // Shortcuts from the application menu
       getCurrentWindow().listen('GoToLibrary', () => {
@@ -51,48 +56,34 @@ export default function IPCNavigationEvents() {
         });
       });
     };
-  }, [goToLibrary, goToPlaylists, goToSettings, goToPlayingTrackOnEvent]);
+  }, [
+    goToLibrary,
+    goToPlaylists,
+    goToPlayingTrackOnEvent,
+    goToSettings,
+    navigate,
+    queueOrigin,
+  ]);
 
-  // On Windows, accelerators don't work https://github.com/tauri-apps/tauri/issues/6981
-  // On Linux, accelerators don't work if the window menu is hidden
-  // So we need to leverage a semi-global keybinding for those in the meantime ._.
-  const onKey = useCallback(
-    async (e: KeyboardEvent) => {
-      // Prevent double navigation for cases we know work well
-      if (window.__MUSEEKS_PLATFORM === 'macos') {
-        return;
-      }
-
-      if (!isCtrlKey(e)) {
-        return;
-      }
-
-      switch (e.key) {
-        case 'l': {
-          goToLibrary();
-          break;
+  return (
+    <Keybinding
+      onKey={(e) => {
+        if (isCtrlKey(e)) {
+          switch (e.key) {
+            case '1':
+              goToLibrary();
+              break;
+            case '2':
+              goToPlaylists();
+              break;
+            case ',':
+              goToSettings();
+              break;
+            default:
+              break;
+          }
         }
-        case 'p': {
-          goToPlaylists();
-          break;
-        }
-        case ',': {
-          goToSettings();
-          break;
-        }
-        case 't': {
-          goToPlayingTrackOnEvent();
-          break;
-        }
-      }
-
-      switch (e.key) {
-        default:
-          break;
-      }
-    },
-    [goToLibrary, goToPlaylists, goToSettings, goToPlayingTrackOnEvent],
+      }}
+    />
   );
-
-  return <Keybinding onKey={onKey} preventInputConflict />;
 }
