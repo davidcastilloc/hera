@@ -129,27 +129,28 @@
 
 ---
 
-### Task 4: Modular Decomposition of `hera-rs` Monoliths (`dj_brain` & `mcp`, `< 350` LOC/file)
+### Task 4: Modular Decomposition of `hera-rs` Monoliths (`dj_brain`, `mcp` & `code_mode`, `< 350` LOC/file)
 
 **Files:**
-- Delete/Replace: `hera-rs/src/dj_brain.rs` → `hera-rs/src/dj_brain/{mod.rs, dna.rs, backends.rs, http_client.rs, cli_runner.rs, prompts.rs, harness.rs, tests.rs}`
-- Delete/Replace: `hera-rs/src/mcp.rs` → `hera-rs/src/mcp/{mod.rs, schemas.rs, dispatch.rs}`
+- Delete/Replace: `hera-rs/src/dj_brain.rs` → `hera-rs/src/dj_brain/{mod.rs, dna.rs, backends.rs, onboarding.rs, http_client.rs, cli_runner.rs, prompts.rs, harness.rs, turn_eval.rs, tests.rs, tests_harness.rs}`
+- Delete/Replace: `hera-rs/src/mcp.rs` → `hera-rs/src/mcp/{mod.rs, schemas_core.rs, schemas_swarm.rs, analyze.rs, dispatch_core.rs, dispatch_swarm.rs}`
+- Delete/Replace: `hera-rs/src/code_mode.rs` → `hera-rs/src/code_mode/{mod.rs, sdk_spec.rs, parser.rs, dispatch_core.rs, dispatch_swarm.rs}`
 
 **Interfaces:**
-- Preserves 100% of `hera_node_rs::dj_brain::*` and `hera_node_rs::mcp::*` public signatures (`compute_dj_style_dna`, `list_supported_ai_backends`, `scan_ai_connectivity_onboarding`, `probe_backend_models`, `build_cli_agent_args`, `execute_cli_agent_turn`, `evaluate_agent_harness_turn`, `evaluate_cloudflare_free_ai_turn`, `list_mcp_tools`, `handle_mcp_request`, `dispatch_tool_call`, `run_mcp_stdio_loop`).
+- Preserves 100% of `hera_node_rs::dj_brain::*`, `hera_node_rs::mcp::*`, and `hera_node_rs::code_mode::*` public signatures (`compute_dj_style_dna`, `list_supported_ai_backends`, `scan_ai_connectivity_onboarding`, `probe_backend_models`, `build_cli_agent_args`, `execute_cli_agent_turn`, `evaluate_agent_harness_turn`, `evaluate_cloudflare_free_ai_turn`, `list_mcp_tools`, `handle_mcp_request`, `dispatch_tool_call`, `run_mcp_stdio_loop`, `get_typescript_sdk_definitions`, `execute_code_mode`, `get_openapi_3_1_spec`).
 
-- [ ] **Step 1: Split `hera-rs/src/mcp.rs` (`900` LOC) into `mcp/{mod.rs, schemas.rs, dispatch.rs}` (`< 350` LOC each)**
-  Keep `list_mcp_tools` tool schemas in `schemas.rs`, tool execution in `dispatch.rs` (split cleanly if needed so each file is `< 350` LOC), and JSON-RPC framing + stdio loop + `pub use` in `mod.rs`.
-- [ ] **Step 2: Split `hera-rs/src/dj_brain.rs` (`1,911` LOC) into `dj_brain/{mod.rs, dna.rs, backends.rs, http_client.rs, cli_runner.rs, prompts.rs, harness.rs, tests.rs}` (`< 350` LOC each)**
+- [x] **Step 1: Split `hera-rs/src/mcp.rs` (`900` LOC) and `hera-rs/src/code_mode.rs` (`1,154` LOC) into `< 350` LOC submodules**
+  Keep `list_mcp_tools` tool schemas in `schemas_core.rs` + `schemas_swarm.rs`, tool execution in `analyze.rs` + `dispatch_core.rs` + `dispatch_swarm.rs`, JSON-RPC framing + stdio loop + `pub use` in `mcp/mod.rs`, and Code Mode SDK/parser/dispatch in `code_mode/*` (`< 350` LOC each).
+- [x] **Step 2: Split `hera-rs/src/dj_brain.rs` (`1,948` LOC) into `dj_brain/{mod.rs, dna.rs, backends.rs, onboarding.rs, http_client.rs, cli_runner.rs, prompts.rs, harness.rs, turn_eval.rs, tests.rs, tests_harness.rs}` (`< 350` LOC each)**
   Preserve every `#[cfg(not(target_arch = "wasm32"))]` gate and `#[cfg_attr(feature = "ts", ...)]` attribute from Task 3.
-- [ ] **Step 3: Verify line counts (`wc -l < 350`), `hera-rs` unit tests, `hera-ipc` typegen, and WASM build**
+- [x] **Step 3: Verify line counts (`wc -l < 350`), `hera-rs` unit tests, `hera-ipc` typegen, and WASM build**
   Run:
-  - `wc -l hera-rs/src/dj_brain/*.rs hera-rs/src/mcp/*.rs`
+  - `wc -l hera-rs/src/dj_brain/*.rs hera-rs/src/mcp/*.rs hera-rs/src/code_mode/*.rs`
   - `cargo test -p hera-node-rs && cargo test -p hera-ipc`
   - `cargo check --manifest-path hera-rs/Cargo.toml --target wasm32-unknown-unknown --features cloudflare --no-default-features`
-  Expected: Every file under `hera-rs/src/dj_brain/` and `hera-rs/src/mcp/` is `< 350` LOC; all `19+` `hera-rs` tests and WASM check exit `0`.
-- [ ] **Step 4: Mark `[x]` and create atomic commit**
-  Commit `refactor(hera-rs): modularize dj_brain and mcp into <350 LOC cohesive submodules`.
+  Expected: Every file under `hera-rs/src/dj_brain/`, `hera-rs/src/mcp/`, and `hera-rs/src/code_mode/` is `< 350` LOC; all `19` `hera-rs` tests, `4` `hera-ipc` tests, and WASM check exit `0`.
+- [x] **Step 4: Mark `[x]` and create atomic commit**
+  Commit `refactor(hera-rs): modularize dj_brain, mcp, and code_mode into <350 LOC submodules`.
 
 ---
 

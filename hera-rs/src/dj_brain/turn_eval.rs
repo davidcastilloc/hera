@@ -1,0 +1,240 @@
+use super::backends::{auto_detect_local_backend, list_supported_ai_backends};
+#[cfg(not(target_arch = "wasm32"))]
+use super::cli_runner::execute_cli_agent_turn;
+#[cfg(not(target_arch = "wasm32"))]
+use super::harness::execute_live_http_react_loop;
+use super::harness::{
+    AgentToolExecutionStep, CloudflareFreeAiTurnRequest, CloudflareFreeAiTurnResponse,
+};
+use super::http_client::probe_backend_models;
+#[cfg(not(target_arch = "wasm32"))]
+use super::prompts::build_agent_harness_system_prompt;
+use super::{CF_LLAMA_8B_FAST_NEURONS_PER_TURN, CF_WORKERS_AI_FREE_DAILY_NEURONS};
+
+pub fn evaluate_agent_harness_turn(
+    req: &CloudflareFreeAiTurnRequest,
+    state: &crate::p2p::P2PMeshState,
+) -> CloudflareFreeAiTurnResponse {
+    let requested_backend = req
+        .backend
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("cloudflare_free");
+
+    let (resolved_backend_id, detected_url, detected_model) = if requested_backend == "auto" {
+        if let Some((b_id, url, mdl)) = auto_detect_local_backend() {
+            (b_id, Some(url), Some(mdl))
+        } else {
+            ("cloudflare_free".to_string(), None, None)
+        }
+    } else {
+        (requested_backend.to_string(), None, None)
+    };
+
+    let catalog = list_supported_ai_backends();
+    let spec = catalog
+        .iter()
+        .find(|b| b.id == resolved_backend_id)
+        .or_else(|| catalog.first());
+
+    let base_url = req
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+        .or(detected_url)
+        .unwrap_or_else(|| {
+            spec.map(|s| s.base_url.clone())
+                .unwrap_or_else(|| "http://localhost:1234/v1".to_string())
+        });
+
+    let is_local_backend = matches!(
+        resolved_backend_id.as_str(),
+        "lmstudio" | "ollama" | "jan" | "llamacpp" | "vllm" | "custom"
+    );
+
+    let is_cli_agent = matches!(
+        resolved_backend_id.as_str(),
+        "cli_agy" | "cli_claude" | "cli_codex" | "cli_gemini" | "cli_ollama"
+    );
+
+    #[cfg(not(target_arch = "wasm32"))]
+    if is_cli_agent {
+        let sys_prompt = build_agent_harness_system_prompt(
+            &req.dj_handle,
+            req.style_dna.as_ref(),
+            state,
+            req.commander_mode.as_deref(),
+        );
+        match execute_cli_agent_turn(&resolved_backend_id, &req.message, &sys_prompt) {
+            Ok(reply) => {
+                let d1_bytes = req.message.len() + reply.len() + 64;
+                return CloudflareFreeAiTurnResponse {
+                    backend_used: resolved_backend_id,
+                    model_used: "cli_subshell".to_string(),
+                    cf_aig_cache_status: "CLI_LOCAL_EXEC".to_string(),
+                    neurons_consumed_this_turn: 0.0,
+                    daily_neurons_remaining: (CF_WORKERS_AI_FREE_DAILY_NEURONS
+                        - req.daily_neurons_used_so_far)
+                        .max(0.0),
+                    estimated_cost_usd: 0.0,
+                    d1_synced_bytes: d1_bytes,
+                    assistant_reply: reply,
+                    tool_calls_trace: Vec::new(),
+                    iterations_executed: 1,
+                };
+            }
+            Err(cli_err) => {
+                let fallback_reply = format!(
+                    "⚠️ [Aviso del Sistema - Agente CLI {}]: {}. Fallback a modo determinista seguro activado.",
+                    resolved_backend_id, cli_err
+                );
+                let d1_bytes = req.message.len() + fallback_reply.len() + 64;
+                return CloudflareFreeAiTurnResponse {
+                    backend_used: resolved_backend_id,
+                    model_used: "cli_fallback_deterministic".to_string(),
+                    cf_aig_cache_status: "CLI_ERROR_FALLBACK".to_string(),
+                    neurons_consumed_this_turn: 0.0,
+                    daily_neurons_remaining: (CF_WORKERS_AI_FREE_DAILY_NEURONS
+                        - req.daily_neurons_used_so_far)
+                        .max(0.0),
+                    estimated_cost_usd: 0.0,
+                    d1_synced_bytes: d1_bytes,
+                    assistant_reply: fallback_reply,
+                    tool_calls_trace: Vec::new(),
+                    iterations_executed: 1,
+                };
+            }
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = is_cli_agent;
+
+    let model = req
+        .model
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty() && *s != "default")
+        .map(String::from)
+        .or(detected_model)
+        .unwrap_or_else(|| {
+            if is_local_backend {
+                if let Ok(models) = probe_backend_models(&base_url, req.api_key.as_deref()) {
+                    if let Some(first) = models.into_iter().next() {
+                        return first;
+                    }
+                }
+            }
+            spec.map(|s| s.default_model.clone())
+                .unwrap_or_else(|| "default".to_string())
+        });
+
+    let should_call_live_http = req
+        .base_url
+        .as_deref()
+        .map(|s| !s.trim().is_empty())
+        .unwrap_or(false)
+        || resolved_backend_id != "cloudflare_free";
+
+    #[allow(unused_mut)]
+    let mut tool_calls_trace: Vec<AgentToolExecutionStep> = Vec::new();
+    #[allow(unused_mut)]
+    let mut iterations_executed = 1usize;
+
+    #[cfg(not(target_arch = "wasm32"))]
+    if should_call_live_http {
+        if let Some(live_resp) = execute_live_http_react_loop(
+            req,
+            state,
+            &resolved_backend_id,
+            &base_url,
+            &model,
+            is_local_backend,
+            &mut tool_calls_trace,
+            &mut iterations_executed,
+        ) {
+            return live_resp;
+        }
+    }
+    #[cfg(target_arch = "wasm32")]
+    let _ = should_call_live_http;
+
+    let cache_status = if req.cache_hit { "HIT" } else { "MISS" };
+    let neurons_this_turn = if req.cache_hit || is_local_backend {
+        0.0
+    } else {
+        CF_LLAMA_8B_FAST_NEURONS_PER_TURN
+    };
+    let total_used = req.daily_neurons_used_so_far + neurons_this_turn;
+    let over_daily_free = total_used > CF_WORKERS_AI_FREE_DAILY_NEURONS;
+
+    let (backend_used, model_used) = if resolved_backend_id != "cloudflare_free" {
+        (resolved_backend_id, model)
+    } else if over_daily_free {
+        (
+            "ai_gateway_fallback_openrouter_free".to_string(),
+            "meta-llama/llama-3.3-70b-instruct:free".to_string(),
+        )
+    } else {
+        (
+            "cloudflare_workers_ai_free".to_string(),
+            "@cf/meta/llama-3.1-8b-instruct-fp8-fast".to_string(),
+        )
+    };
+
+    let dna_ctx = req
+        .style_dna
+        .as_ref()
+        .map(|d| {
+            format!(
+                "zona {} ({:.1} BPM, {:?}, software {})",
+                d.dominant_bpm_zone,
+                d.overall_average_bpm,
+                d.dominant_camelot_keys,
+                d.preferred_dj_software
+            )
+        })
+        .unwrap_or_else(|| "perfil estándar 124 BPM (8A, VirtualDJ)".to_string());
+
+    let swarm_index = state.build_broker_swarm_index();
+    let swarm_preview: Vec<String> = swarm_index
+        .iter()
+        .take(3)
+        .map(|r| {
+            format!(
+                "{} - {} ({:.1} BPM · {} · {} réplicas)",
+                r.canonical_artist, r.canonical_title, r.bpm, r.camelot_key, r.swarm_replicas_count
+            )
+        })
+        .collect();
+    let reply = format!(
+        "¡Listo, {}! Usando tu DJ Brain ({}) y el Radar del Enjambre ({} Masters verificados listos para descargar: {}) preparé la acción para: \"{}\". Los archivos y los 4 Hot Cues quedan listos en tu disco local.",
+        req.dj_handle,
+        dna_ctx,
+        swarm_index.len(),
+        swarm_preview.join(" | "),
+        req.message
+    );
+    let d1_bytes = req.message.len() + reply.len() + 64;
+
+    CloudflareFreeAiTurnResponse {
+        backend_used,
+        model_used,
+        cf_aig_cache_status: cache_status.to_string(),
+        neurons_consumed_this_turn: neurons_this_turn,
+        daily_neurons_remaining: (CF_WORKERS_AI_FREE_DAILY_NEURONS - total_used).max(0.0),
+        estimated_cost_usd: 0.0,
+        d1_synced_bytes: d1_bytes,
+        assistant_reply: reply,
+        tool_calls_trace,
+        iterations_executed,
+    }
+}
+
+pub fn evaluate_cloudflare_free_ai_turn(
+    req: &CloudflareFreeAiTurnRequest,
+) -> CloudflareFreeAiTurnResponse {
+    evaluate_agent_harness_turn(req, &crate::p2p::P2PMeshState::new("hera-default-node"))
+}
