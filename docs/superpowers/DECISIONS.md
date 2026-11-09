@@ -148,3 +148,14 @@
   3. **5,000x UDP P2P Disk I/O Reduction, CGNAT Spray Fix, & Zero-Allocation `2-Opt TSP` (`hera-rs/src/p2p/nat_stun.rs`, `hera-rs/src/synergy.rs`):** Added `P2PMeshState::get_local_file_chunk_slice` using `Seek::seek` + `Read::take(8192)` so `spawn_desktop_udp_p2p_daemon` reads only `8 KiB` per UDP datagram instead of the entire 40 MB file; captured the responder `SocketAddr` from `HERA_PUNCH_ACK` in `request_chunk_from_peer_with_spray`; and refactored `optimize_crate_with_spine` in `hera-rs/src/synergy.rs` to use a flat 1D matrix (`vec![0.0_f32; n_all * n_all]`) and in-place reversals/swaps with zero `Vec` clones across all 35 passes.
   4. **Modular Decomposition of `hera-rs/src/p2p.rs` (`hera-rs/src/p2p/*.rs`):** Extracted 5 cohesive submodules (`broker.rs`, `cloud_links.rs`, `crypto_merkle.rs`, `nat_stun.rs`, and `swarm_custody.rs`) with full `pub use` re-exports in `hera-rs/src/p2p.rs` for 100% API compatibility, alongside `[observability]` and `[observability.traces]` in `hera-rs/wrangler.toml`.
 
+### [2026-11-08] ADR-014: Stage 3.5 Cloudflare Managed TURN Relay (RFC 5766, `0 R2`), Windows UDP Loop Guard & Handoff Roadmap
+- **Context:** When both peers reside behind strict random Symmetric CGNAT, direct UDP hole punching (Stage 2) and 16-port spray (Stage 3) cannot establish a direct socket. To avoid premature R2 storage costs (`Stage 4`), we require a zero-storage binary relay layer.
+- **Decision:**
+  1. **Stage 3.5 Cloudflare Calls Managed TURN Relay (`hera-rs/src/p2p/nat_stun.rs`, `hera-rs/src/cloudflare_edge.rs`, `hera-rs/src/router.rs`):** Implemented RFC 5766 `Allocate` (`0x0003`) + `ChannelBind` (`0x0009`, channel `0x4000`) binary relay forwarding `8 KiB` chunks with SHA-256 integrity checks at `r2_bytes_used = 0`. Added `POST /api/v1/p2p/turn-credentials` and `POST /api/v1/p2p/turn-relay-proof`.
+  2. **Windows Sequential UDP Port Self-Spray Guard (`hera-rs/src/p2p/nat_stun.rs`):** Added `if target == my_local_addr { continue; }` to prevent client sockets from spraying themselves in loopback, and enforced explicit `HERA_PUNCH_ACK` validation before locking peer routes.
+  3. **Operational Roadmap & Pending Items (Recorded for Subsequent Review):**
+     - **Field Testing:** Physical 2-machine / 2-ISP field trial (Home Wi-Fi vs. 4G/5G mobile hotspot) to stress-test live CGNAT traversal and packet loss recovery in the wild.
+     - **Cloudflare Infrastructure:** Uncomment and populate `[[d1_databases]]` and `[[r2_buckets]]` in `wrangler.toml` once provisioned via `npx wrangler d1 create` and `npx wrangler r2 bucket create`.
+     - **Desktop DSP Enhancement:** Expand `enrich_track_with_hera_dsp` in `hera-desktop/src-tauri/src/libs/track.rs` to run partial `Symphonia` spectral decoding on `.flac`/`.mp3`/`.m4a` files alongside the existing `.wav` pipeline.
+
+
