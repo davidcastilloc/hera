@@ -11,16 +11,19 @@ use crate::dj_brain::{
     list_supported_ai_backends, probe_backend_models, CloudflareFreeAiTurnRequest,
     DjStyleDnaRequest,
 };
+use crate::error::HeraError;
 use crate::export::{export_crate_bundle, ExportCrateRequest};
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditReport};
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
-    build_gdrive_large_file_bypass_url, compute_canonical_audio_sha256, compute_cas_fingerprint,
-    compute_hera_seal, compute_opaque_shard_blob_key, get_cloud_referral_catalog,
-    BrokerBatchLookupRequest, BrokerBridgeRequest, BrokerSimilarQuery, CloudReferralOption,
-    ConnectDjDriveRequest, CustodyAuditSubmission, CustodyChallengeRequest, FederatedSyncRequest,
-    P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
-    SwarmHeartbeatRequest, SwarmParallelManifestRequest, SwarmRedirectTicket, SwarmRouteRequest,
+    build_gdrive_large_file_bypass_url, calculate_cloudflare_saas_economics_with_price,
+    compute_canonical_audio_sha256, compute_cas_fingerprint, compute_hera_seal,
+    compute_opaque_shard_blob_key, get_cloud_referral_catalog, BrokerBatchLookupRequest,
+    BrokerBridgeRequest, BrokerClaimCloudTrackRequest, BrokerSimilarQuery, CasCheckRequest,
+    CloudReferralOption, ConnectDjDriveRequest, CustodyAuditSubmission, CustodyChallengeRequest,
+    FederatedSyncRequest, P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack,
+    ScanLocalDirRequest, SetP2PSharingRequest, SwarmHeartbeatRequest,
+    SwarmParallelManifestRequest, SwarmRedirectTicket, SwarmRouteRequest, UpgradeTierRequest,
     SWARM_ALIGNED_BLOCK_BYTES,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
@@ -122,12 +125,30 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/mcp/code-mode", post(code_mode_exec_handler))
         .route("/mcp/code-mode.d.ts", get(code_mode_dts_handler))
         .route("/api/v1/node/manifest", get(manifest_handler))
+        .route("/api/v1/cloud/economics", get(cloud_economics_handler))
+        .route("/api/v1/cloud/check-cas", post(cloud_check_cas_handler))
+        .route("/api/v1/cloud/d1-snapshot", get(cloud_d1_snapshot_handler))
         .route("/api/v1/broker/stats", get(broker_stats_handler))
         .route("/api/v1/broker/lookup-intel", post(broker_lookup_intel_handler))
         .route("/api/v1/broker/resolve-bridge", post(broker_resolve_bridge_handler))
         .route("/api/v1/broker/similar", post(broker_similar_handler))
+        .route("/api/v1/broker/optimize-tiering", post(broker_optimize_tiering_handler))
+        .route("/api/v1/broker/claim-cloud-track", post(broker_claim_cloud_track_handler))
+        .route("/api/v1/swarm/strength", get(swarm_strength_handler))
+        .route("/api/v1/swarm/heartbeat", post(swarm_heartbeat_handler))
+        .route("/api/v1/swarm/route-ticket", post(swarm_route_ticket_handler))
+        .route("/api/v1/swarm/parallel-manifest", post(swarm_parallel_manifest_handler))
+        .route("/api/v1/swarm/crdt-sync", post(swarm_crdt_sync_handler))
+        .route("/api/v1/swarm/subscribe", post(swarm_subscribe_handler))
+        .route("/api/v1/swarm/shard/:blob_id", get(swarm_shard_delivery_handler))
+        .route("/api/v1/swarm/custody-challenge", post(swarm_custody_challenge_handler))
+        .route("/api/v1/swarm/custody-probe/:blob_id", get(swarm_custody_probe_handler))
+        .route("/api/v1/swarm/custody-audit", post(swarm_custody_audit_handler))
+        .route("/api/v1/swarm/quarantine", get(swarm_quarantine_list_handler))
         .route("/api/v1/node/scan-local-dir", post(scan_local_dir_handler))
         .route("/api/v1/dj/connect-drive", post(connect_dj_drive_handler))
+        .route("/api/v1/dj/upgrade-tier", post(upgrade_dj_tier_handler))
+        .route("/api/v1/dj/p2p-sharing", post(set_p2p_sharing_handler))
         .route("/api/v1/dj/profiles", get(list_dj_profiles_handler))
         .route("/api/v1/dj/style-dna", post(dj_style_dna_handler))
         .route("/api/v1/ai/backends", get(ai_backends_list_handler))
@@ -151,19 +172,55 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/p2p/export-federation", get(p2p_export_federation_handler))
         .route("/api/v1/p2p/stream/:track_id", get(p2p_stream_handler))
         .route("/api/v1/p2p/download/:track_id", get(p2p_download_local_file_handler))
-        .route("/api/v1/swarm/strength", get(swarm_strength_handler))
-        .route("/api/v1/swarm/heartbeat", post(swarm_heartbeat_handler))
-        .route("/api/v1/swarm/route-ticket", post(swarm_route_ticket_handler))
-        .route("/api/v1/swarm/parallel-manifest", post(swarm_parallel_manifest_handler))
-        .route("/api/v1/swarm/crdt-sync", post(swarm_crdt_sync_handler))
-        .route("/api/v1/swarm/subscribe", post(swarm_subscribe_handler))
-        .route("/api/v1/swarm/shard/:blob_id", get(swarm_shard_delivery_handler))
-        .route("/api/v1/swarm/custody-challenge", post(swarm_custody_challenge_handler))
-        .route("/api/v1/swarm/custody-probe/:blob_id", get(swarm_custody_probe_handler))
-        .route("/api/v1/swarm/custody-audit", post(swarm_custody_audit_handler))
-        .route("/api/v1/swarm/quarantine", get(swarm_quarantine_list_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EconomicsQuery {
+    pub djs: Option<usize>,
+    pub gb_per_dj: Option<f32>,
+    pub price_usd: Option<f32>,
+}
+
+fn verify_admin_secret(state: &P2PMeshState, headers: &HeaderMap) -> Result<(), HeraError> {
+    let provided = headers
+        .get("x-hera-admin-secret")
+        .and_then(|v| v.to_str().ok());
+    state.verify_admin_secret(provided)
+}
+
+async fn cloud_economics_handler(
+    State(state): State<P2PMeshState>,
+    headers: HeaderMap,
+    Query(q): Query<EconomicsQuery>,
+) -> Result<Json<crate::p2p::CloudflareBetaEconomicsReport>, HeraError> {
+    verify_admin_secret(&state, &headers)?;
+    let djs = q.djs.unwrap_or(10);
+    let gb_per_dj = q.gb_per_dj.unwrap_or(5.0);
+    let price_usd = q.price_usd.unwrap_or(5.99);
+    Ok(Json(calculate_cloudflare_saas_economics_with_price(
+        djs, gb_per_dj, price_usd,
+    )))
+}
+
+async fn cloud_check_cas_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<CasCheckRequest>,
+) -> impl IntoResponse {
+    Json(state.check_cas_before_upload(req))
+}
+
+async fn cloud_d1_snapshot_handler(
+    headers: HeaderMap,
+    State(state): State<P2PMeshState>,
+) -> Result<impl IntoResponse, HeraError> {
+    verify_admin_secret(&state, &headers)?;
+    let sql = state.export_d1_sql_snapshot();
+    Ok((
+        [(http::header::CONTENT_TYPE, "application/sql; charset=utf-8")],
+        sql,
+    ))
 }
 
 async fn broker_stats_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
@@ -202,19 +259,67 @@ async fn broker_similar_handler(
     }))
 }
 
+async fn broker_optimize_tiering_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
+    Json(state.broker_optimize_hot_cold_tier())
+}
+
+async fn broker_claim_cloud_track_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<BrokerClaimCloudTrackRequest>,
+) -> Result<(StatusCode, Json<serde_json::Value>), HeraError> {
+    match state.broker_claim_cloud_track(req) {
+        Ok(res) => Ok((
+            StatusCode::CREATED,
+            Json(serde_json::to_value(res).unwrap_or_default()),
+        )),
+        Err(e) => Err(HeraError::BadRequest(e)),
+    }
+}
+
+async fn set_p2p_sharing_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<SetP2PSharingRequest>,
+) -> Result<Json<serde_json::Value>, HeraError> {
+    match state.set_p2p_sharing(req) {
+        Ok(profile) => Ok(Json(serde_json::json!({
+            "status": "p2p_sharing_updated",
+            "profile": profile
+        }))),
+        Err(e) => {
+            if e.starts_with("PLAN_UPGRADE_REQUIRED") {
+                Err(HeraError::Forbidden(e))
+            } else {
+                Err(HeraError::NotFound(e))
+            }
+        }
+    }
+}
+
 async fn scan_local_dir_handler(
     State(state): State<P2PMeshState>,
     Json(req): Json<ScanLocalDirRequest>,
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), HeraError> {
     match state.scan_local_directory(req) {
         Ok(res) => Ok((
             StatusCode::CREATED,
             Json(serde_json::to_value(res).unwrap_or_default()),
         )),
-        Err(e) => Err((
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": e })),
-        )),
+        Err(e) => Err(HeraError::BadRequest(e)),
+    }
+}
+
+async fn upgrade_dj_tier_handler(
+    headers: HeaderMap,
+    State(state): State<P2PMeshState>,
+    Json(req): Json<UpgradeTierRequest>,
+) -> Result<Json<serde_json::Value>, HeraError> {
+    verify_admin_secret(&state, &headers)?;
+    match state.upgrade_dj_tier(&req.dj_handle, &req.tier) {
+        Ok(profile) => Ok(Json(serde_json::json!({
+            "status": "tier_upgraded",
+            "profile": profile
+        }))),
+        Err(e) => Err(HeraError::NotFound(e)),
     }
 }
 
@@ -270,7 +375,7 @@ async fn p2p_export_federation_handler(
 async fn p2p_download_local_file_handler(
     State(state): State<P2PMeshState>,
     Path(track_id): Path<String>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<impl IntoResponse, HeraError> {
     match state.get_local_file_bytes(&track_id) {
         Ok((path_str, bytes)) => {
             let content_type = if path_str.ends_with(".flac") {
@@ -282,10 +387,7 @@ async fn p2p_download_local_file_handler(
             };
             Ok(([(http::header::CONTENT_TYPE, content_type)], bytes))
         }
-        Err(e) => Err((
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": e })),
-        )),
+        Err(e) => Err(HeraError::NotFound(e)),
     }
 }
 
@@ -309,7 +411,7 @@ async fn list_dj_profiles_handler(State(state): State<P2PMeshState>) -> impl Int
 async fn p2p_stream_handler(
     State(state): State<P2PMeshState>,
     Path(track_id): Path<String>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<serde_json::Value>, HeraError> {
     if let Some(track) = state.find_track_by_id(&track_id) {
         let cas = compute_cas_fingerprint(&track.artist, &track.title, track.bpm);
         let audio_sha256 = state
@@ -341,10 +443,9 @@ async fn p2p_stream_handler(
             "hot_cues": track.hot_cues
         })))
     } else {
-        Err((
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": format!("Track `{track_id}` not found in P2P catalog") })),
-        ))
+        Err(HeraError::NotFound(format!(
+            "Track `{track_id}` not found in P2P catalog"
+        )))
     }
 }
 
@@ -355,48 +456,39 @@ async fn swarm_strength_handler(State(state): State<P2PMeshState>) -> impl IntoR
 async fn swarm_heartbeat_handler(
     State(state): State<P2PMeshState>,
     Json(req): Json<SwarmHeartbeatRequest>,
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), HeraError> {
     match state.process_swarm_heartbeat(req) {
         Ok(res) => Ok((
             StatusCode::OK,
             Json(serde_json::to_value(res).unwrap_or_default()),
         )),
-        Err(e) => Err((
-            StatusCode::FORBIDDEN,
-            Json(serde_json::json!({ "error": e })),
-        )),
+        Err(e) => Err(HeraError::Forbidden(e)),
     }
 }
 
 async fn swarm_route_ticket_handler(
     State(state): State<P2PMeshState>,
     Json(req): Json<SwarmRouteRequest>,
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), HeraError> {
     match state.issue_route_ticket(req) {
         Ok(res) => Ok((
             StatusCode::OK,
             Json(serde_json::to_value(res).unwrap_or_default()),
         )),
-        Err(e) => Err((
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": e })),
-        )),
+        Err(e) => Err(HeraError::NotFound(e)),
     }
 }
 
 async fn swarm_parallel_manifest_handler(
     State(state): State<P2PMeshState>,
     Json(req): Json<SwarmParallelManifestRequest>,
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), HeraError> {
     match state.issue_parallel_swarm_manifest(req) {
         Ok(res) => Ok((
             StatusCode::OK,
             Json(serde_json::to_value(res).unwrap_or_default()),
         )),
-        Err(e) => Err((
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": e })),
-        )),
+        Err(e) => Err(HeraError::NotFound(e)),
     }
 }
 
@@ -427,7 +519,7 @@ async fn swarm_shard_delivery_handler(
     Path(blob_id): Path<String>,
     Query(q): Query<ShardDeliveryQuery>,
     headers: HeaderMap,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<impl IntoResponse, HeraError> {
     let ticket_header = headers
         .get("x-hera-swarm-ticket")
         .and_then(|v| v.to_str().ok())
@@ -487,26 +579,20 @@ async fn swarm_shard_delivery_handler(
                 bytes,
             ))
         }
-        Err(e) => Err((
-            StatusCode::FORBIDDEN,
-            Json(serde_json::json!({ "error": e })),
-        )),
+        Err(e) => Err(HeraError::Forbidden(e)),
     }
 }
 
 async fn swarm_custody_challenge_handler(
     State(state): State<P2PMeshState>,
     Json(req): Json<CustodyChallengeRequest>,
-) -> Result<(StatusCode, Json<serde_json::Value>), (StatusCode, Json<serde_json::Value>)> {
+) -> Result<(StatusCode, Json<serde_json::Value>), HeraError> {
     match state.generate_custody_challenge(req) {
         Ok(res) => Ok((
             StatusCode::OK,
             Json(serde_json::to_value(res).unwrap_or_default()),
         )),
-        Err(e) => Err((
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": e })),
-        )),
+        Err(e) => Err(HeraError::NotFound(e)),
     }
 }
 
@@ -514,7 +600,7 @@ async fn swarm_custody_probe_handler(
     State(state): State<P2PMeshState>,
     Path(blob_id): Path<String>,
     headers: HeaderMap,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<impl IntoResponse, HeraError> {
     let range_hdr = headers.get(http::header::RANGE).and_then(|v| v.to_str().ok());
     match state.probe_custody_64_bytes(&blob_id, range_hdr) {
         Ok((offset, slice, sha256)) => Ok((
@@ -532,10 +618,7 @@ async fn swarm_custody_probe_handler(
             ],
             slice,
         )),
-        Err(e) => Err((
-            StatusCode::NOT_FOUND,
-            Json(serde_json::json!({ "error": e })),
-        )),
+        Err(e) => Err(HeraError::NotFound(e)),
     }
 }
 
@@ -575,13 +658,10 @@ async fn code_mode_dts_handler() -> impl IntoResponse {
 async fn code_mode_exec_handler(
     State(state): State<P2PMeshState>,
     Json(req): Json<CodeModeRequest>,
-) -> Result<Json<serde_json::Value>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<serde_json::Value>, HeraError> {
     match execute_code_mode(req, &state) {
         Ok(res) => Ok(Json(serde_json::to_value(res).unwrap_or_default())),
-        Err(e) => Err((
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": e })),
-        )),
+        Err(e) => Err(HeraError::BadRequest(e)),
     }
 }
 
@@ -655,11 +735,10 @@ async fn manifest_handler(State(state): State<P2PMeshState>) -> impl IntoRespons
 
 async fn analyze_pcm_handler(
     Json(req): Json<AnalyzePcmRequest>,
-) -> Result<Json<FullDspAnalysisResponse>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<FullDspAnalysisResponse>, HeraError> {
     if req.left.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": "PCM `left` channel buffer cannot be empty" })),
+        return Err(HeraError::BadRequest(
+            "PCM `left` channel buffer cannot be empty".to_string(),
         ));
     }
 
@@ -714,24 +793,17 @@ async fn analyze_pcm_handler(
 async fn analyze_file_handler(
     Query(q): Query<AnalyzeFileQuery>,
     body: Bytes,
-) -> Result<Json<FullDspAnalysisResponse>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<FullDspAnalysisResponse>, HeraError> {
     if body.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": "Empty audio file body" })),
-        ));
+        return Err(HeraError::BadRequest("Empty audio file body".to_string()));
     }
 
     let ext = q.ext.as_deref().unwrap_or("wav");
     let claimed_ext = q.claimed_ext.as_deref().unwrap_or(ext);
     let max_sec = q.max_seconds.unwrap_or(45.0).clamp(5.0, 90.0);
 
-    let decoded = decode_audio_bytes(&body, Some(ext), max_sec).map_err(|e| {
-        (
-            StatusCode::UNPROCESSABLE_ENTITY,
-            Json(serde_json::json!({ "error": e })),
-        )
-    })?;
+    let decoded = decode_audio_bytes(&body, Some(ext), max_sec)
+        .map_err(HeraError::UnprocessableEntity)?;
 
     let forensics = audit_pcm_channels(
         &decoded.left,
@@ -772,11 +844,10 @@ async fn analyze_file_handler(
 
 async fn build_crate_handler(
     Json(req): Json<BuildCrateRequest>,
-) -> Result<Json<OptimizedCrateResult>, (StatusCode, Json<serde_json::Value>)> {
+) -> Result<Json<OptimizedCrateResult>, HeraError> {
     if req.candidates.is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(serde_json::json!({ "error": "Crate `candidates` list cannot be empty" })),
+        return Err(HeraError::BadRequest(
+            "Crate `candidates` list cannot be empty".to_string(),
         ));
     }
     let spine = SetSpineConfig {

@@ -1,6 +1,7 @@
 pub mod cloudflare_edge;
 pub mod code_mode;
 pub mod dj_brain;
+pub mod error;
 pub mod export;
 pub mod forensics;
 pub mod mcp;
@@ -11,12 +12,18 @@ pub mod structure;
 pub mod synergy;
 
 #[cfg(feature = "cloudflare")]
+use std::sync::OnceLock;
+#[cfg(feature = "cloudflare")]
 use tower_service::Service;
 #[cfg(feature = "cloudflare")]
 use worker::{event, Context, Env, HttpRequest, Result as WorkerResult};
 
+#[cfg(feature = "cloudflare")]
+static ISOLATE_MESH_STATE: OnceLock<p2p::P2PMeshState> = OnceLock::new();
+
 /// Cloudflare Workers WASM Entrypoint (`npx wrangler deploy --features cloudflare --no-default-features`).
-/// Uses the exact same `axum::Router` as the Native VPS binary!
+/// Uses the exact same `axum::Router` as the Native VPS binary, while persisting `P2PMeshState`
+/// across warm isolate invocations and injecting `HERA_ADMIN_SECRET` from `worker::Env`.
 #[cfg(feature = "cloudflare")]
 #[event(fetch)]
 pub async fn fetch(
@@ -24,11 +31,23 @@ pub async fn fetch(
     env: Env,
     _ctx: Context,
 ) -> WorkerResult<http::Response<axum::body::Body>> {
-    let node_id = env
-        .var("HERA_NODE_ID")
-        .map(|v| v.to_string())
-        .unwrap_or_else(|_| "hera-cf-edge-node".to_string());
-    let state = p2p::P2PMeshState::new(node_id);
+    let state = ISOLATE_MESH_STATE
+        .get_or_init(|| {
+            let node_id = env
+                .var("HERA_NODE_ID")
+                .map(|v| v.to_string())
+                .unwrap_or_else(|_| "hera-cf-edge-node".to_string());
+            p2p::P2PMeshState::new(node_id)
+        })
+        .clone();
+
+    if let Ok(secret) = env
+        .secret("HERA_ADMIN_SECRET")
+        .or_else(|_| env.var("HERA_ADMIN_SECRET"))
+    {
+        state.set_admin_secret(secret.to_string());
+    }
+
     let mut router = router::build_hera_router(state);
     Ok(router.call(req).await?)
 }

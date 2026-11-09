@@ -945,6 +945,8 @@ pub struct P2PMeshState {
     pub crdt_state: Arc<RwLock<SwarmCrdtDelta>>,
     /// Layer 5 MoQ-style Harmonic Topic Subscriptions (`hera://swarm/<camelot>/<bpm_band>`)
     pub topic_subscriptions: Arc<RwLock<Vec<SwarmTopicSubscription>>>,
+    /// Optional `HERA_ADMIN_SECRET` injected from `worker::Env` (WASM) or `std::env` (Native VPS)
+    pub admin_secret: Arc<RwLock<Option<String>>>,
 }
 
 impl P2PMeshState {
@@ -1214,7 +1216,50 @@ impl P2PMeshState {
             delivery_receipts: Arc::new(RwLock::new(Vec::new())),
             crdt_state: Arc::new(RwLock::new(initial_crdt)),
             topic_subscriptions: Arc::new(RwLock::new(Vec::new())),
+            admin_secret: Arc::new(RwLock::new(
+                std::env::var("HERA_ADMIN_SECRET")
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty()),
+            )),
         }
+    }
+
+    /// Sets or updates the `HERA_ADMIN_SECRET` at runtime (e.g., from Cloudflare Worker `env.secret("HERA_ADMIN_SECRET")`).
+    pub fn set_admin_secret(&self, secret: impl Into<String>) {
+        let trimmed = secret.into().trim().to_string();
+        if !trimmed.is_empty() {
+            if let Ok(mut guard) = self.admin_secret.write() {
+                *guard = Some(trimmed);
+            }
+        }
+    }
+
+    /// Verifies `X-Hera-Admin-Secret` in constant time (`constant_time_eq`) against either the injected
+    /// `worker::Env` secret or `std::env::var("HERA_ADMIN_SECRET")`.
+    pub fn verify_admin_secret(&self, provided_header: Option<&str>) -> Result<(), crate::error::HeraError> {
+        let expected_opt = self
+            .admin_secret
+            .read()
+            .ok()
+            .and_then(|g| g.clone())
+            .or_else(|| {
+                std::env::var("HERA_ADMIN_SECRET")
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            });
+
+        if let Some(expected) = expected_opt {
+            let provided = provided_header.unwrap_or("").trim();
+            if !crate::error::constant_time_eq(provided.as_bytes(), expected.as_bytes()) {
+                return Err(crate::error::HeraError::Unauthorized(
+                    "Missing or invalid `X-Hera-Admin-Secret` header for Hera Cloud Control Plane."
+                        .to_string(),
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Zero-Tech Onboarding: A non-technical DJ (`DJFoo`) simply pastes their DJ name and Google Drive folder link
@@ -1877,6 +1922,42 @@ impl P2PMeshState {
         let bytes = std::fs::read(&path_str)
             .map_err(|e| format!("Failed to read local P2P file `{path_str}`: {e}"))?;
         Ok((path_str, bytes))
+    }
+
+    /// Reads only an aligned `chunk_size` slice at `chunk_idx * chunk_size` using `Seek` + `Read::take`,
+    /// avoiding loading the entire 40 MB lossless audio file into RAM on every 8 KiB UDP datagram.
+    pub fn get_local_file_chunk_slice(
+        &self,
+        track_id: &str,
+        chunk_idx: usize,
+        chunk_size: usize,
+    ) -> Result<Vec<u8>, String> {
+        use std::io::{Read, Seek, SeekFrom};
+
+        let path_str = self
+            .local_files
+            .read()
+            .map_err(|_| "Lock error".to_string())?
+            .get(track_id)
+            .cloned()
+            .ok_or_else(|| format!("Track `{track_id}` is not stored on this local disk node"))?;
+
+        let mut file = std::fs::File::open(&path_str)
+            .map_err(|e| format!("Failed to open local P2P file `{path_str}`: {e}"))?;
+        let file_len = file.metadata().map(|m| m.len() as usize).unwrap_or(0);
+        let start = (chunk_idx.saturating_mul(chunk_size)).min(file_len);
+        let to_read = chunk_size.min(file_len.saturating_sub(start));
+        if to_read == 0 {
+            return Ok(Vec::new());
+        }
+
+        file.seek(SeekFrom::Start(start as u64))
+            .map_err(|e| format!("Failed to seek local P2P file `{path_str}`: {e}"))?;
+        let mut buf = Vec::with_capacity(to_read);
+        file.take(to_read as u64)
+            .read_to_end(&mut buf)
+            .map_err(|e| format!("Failed to read slice from `{path_str}`: {e}"))?;
+        Ok(buf)
     }
 
     pub fn register_peer_node(&self, peer: P2PPeerNode) -> Vec<P2PPeerNode> {
@@ -4647,6 +4728,90 @@ pub fn get_cloud_referral_catalog() -> Vec<CloudReferralOption> {
     ]
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CloudflareBetaEconomicsReport {
+    pub cohort_djs_count: usize,
+    pub r2_quota_gb_per_dj: f32,
+    pub total_r2_storage_gb: f32,
+    pub approx_lossless_flac_tracks_per_dj: usize,
+    pub total_shared_p2p_tracks_in_pool: usize,
+    pub cloudflare_r2_free_tier_gb: f32,
+    pub max_zero_cost_djs_in_free_r2_tier: usize,
+    pub billable_r2_gb: f32,
+    pub monthly_r2_storage_cost_usd: f32,
+    pub monthly_egress_bandwidth_cost_usd: f32,
+    pub monthly_workers_d1_vectorize_cost_usd: f32,
+    pub total_monthly_cohort_cost_usd: f32,
+    pub cost_per_dj_usd: f32,
+    pub subscription_price_per_dj_usd: f32,
+    pub gross_monthly_revenue_usd: f32,
+    pub net_monthly_profit_usd: f32,
+    pub profit_margin_pct: f32,
+}
+
+/// Calculates exact monthly Cloudflare unit economics & SaaS profit margins for a cohort of DJs maxing out the app.
+pub fn calculate_cloudflare_beta_economics(
+    num_djs: usize,
+    gb_per_dj: f32,
+) -> CloudflareBetaEconomicsReport {
+    calculate_cloudflare_saas_economics_with_price(num_djs, gb_per_dj, 5.99)
+}
+
+pub fn calculate_cloudflare_saas_economics_with_price(
+    num_djs: usize,
+    gb_per_dj: f32,
+    price_per_dj_usd: f32,
+) -> CloudflareBetaEconomicsReport {
+    let djs = num_djs.max(1);
+    let gb_dj = gb_per_dj.max(0.1);
+    let total_gb = (djs as f32) * gb_dj;
+    let free_r2_gb = 10.0f32;
+    let max_free_djs = (free_r2_gb / gb_dj).floor() as usize;
+    let billable_gb = (total_gb - free_r2_gb).max(0.0);
+
+    // Cloudflare R2: $0.015 / GB-month, $0.00 egress
+    let r2_cost = (billable_gb * 0.015 * 100.0).round() / 100.0;
+    // Heavy compute + D1 + Vectorize 64D (~$0.02/mo per DJ when covered by free/base allowances)
+    let compute_db_cost = if djs <= 25 {
+        0.0 // 100% covered inside Cloudflare Free Tier (100k req/day, 5M D1 reads/day, 30M Vectorize dims)
+    } else {
+        (((djs - 25) as f32) * 0.02 * 100.0).round() / 100.0
+    };
+
+    let total_cost = ((r2_cost + compute_db_cost) * 100.0).round() / 100.0;
+    let per_dj = ((total_cost / (djs as f32)) * 1000.0).round() / 1000.0;
+    let tracks_per_dj = ((gb_dj * 1024.0) / 38.0).round() as usize;
+
+    let price = price_per_dj_usd.max(0.0);
+    let gross_rev = ((djs as f32) * price * 100.0).round() / 100.0;
+    let net_profit = ((gross_rev - total_cost) * 100.0).round() / 100.0;
+    let margin_pct = if gross_rev > 0.0 {
+        (((net_profit / gross_rev) * 100.0) * 10.0).round() / 10.0
+    } else {
+        0.0
+    };
+
+    CloudflareBetaEconomicsReport {
+        cohort_djs_count: djs,
+        r2_quota_gb_per_dj: gb_dj,
+        total_r2_storage_gb: total_gb,
+        approx_lossless_flac_tracks_per_dj: tracks_per_dj,
+        total_shared_p2p_tracks_in_pool: tracks_per_dj * djs,
+        cloudflare_r2_free_tier_gb: free_r2_gb,
+        max_zero_cost_djs_in_free_r2_tier: max_free_djs,
+        billable_r2_gb: billable_gb,
+        monthly_r2_storage_cost_usd: r2_cost,
+        monthly_egress_bandwidth_cost_usd: 0.0,
+        monthly_workers_d1_vectorize_cost_usd: compute_db_cost,
+        total_monthly_cohort_cost_usd: total_cost,
+        cost_per_dj_usd: per_dj,
+        subscription_price_per_dj_usd: price,
+        gross_monthly_revenue_usd: gross_rev,
+        net_monthly_profit_usd: net_profit,
+        profit_margin_pct: margin_pct,
+    }
+}
+
 /// Generates a Google Drive direct binary download URL with `&confirm=t` virus-scan warning bypass
 /// automatically appended for lossless audio files larger than 25 MB.
 pub fn build_gdrive_large_file_bypass_url(file_id: &str, file_size_mb: f32) -> String {
@@ -5347,9 +5512,6 @@ fn query_stun_on_existing_socket(
     Err("XOR-MAPPED-ADDRESS not found".to_string())
 }
 
-/// Discovers LAN IPv4 + queries two independent STUN servers (`Cloudflare` + `Google`) on the SAME
-/// UDP socket to classify whether the router is Endpoint-Independent (`Cone NAT`) or `Symmetric CGNAT`
-/// and computes the exact port delta for Port-Prediction Spray (`Tailscale/Iroh` style).
 #[cfg(not(target_arch = "wasm32"))]
 pub fn diagnose_multi_stun_nat_on_socket(
     socket: &std::net::UdpSocket,
@@ -5435,10 +5597,6 @@ pub fn diagnose_multi_stun_nat_on_socket(
     }
 }
 
-/// Spawns a real background UDP P2P Seeder Daemon thread for `HERA Desktop` (`src-tauri`) or `hera-node`
-/// that listens continuously on a single UDP socket (`0.0.0.0:0`), classifies its NAT via Multi-STUN,
-/// answers `HERA_PUNCH_SYN` hole-punch packets, and serves SHA-256 verified audio chunks (`HERA_REQ_CHUNK`)
-/// with automatic retransmission support.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn spawn_desktop_udp_p2p_daemon(
     state: Arc<P2PMeshState>,
@@ -5470,7 +5628,6 @@ pub fn spawn_desktop_udp_p2p_daemon(
                 if msg.starts_with("HERA_PUNCH_SYN") {
                     let _ = socket.send_to(b"HERA_PUNCH_ACK", peer_addr);
                 } else if let Some(rest) = msg.strip_prefix("HERA_REQ_CHUNK:") {
-                    // Format: HERA_REQ_CHUNK:<track_id>:<chunk_idx>
                     let mut parts = rest.splitn(2, ':');
                     let track_id = parts.next().unwrap_or("hera-seed-001");
                     let chunk_idx: usize = parts
@@ -5478,27 +5635,22 @@ pub fn spawn_desktop_udp_p2p_daemon(
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(0);
 
-                    let full_bytes = state
-                        .get_local_file_bytes(track_id)
-                        .map(|(_, b)| b)
-                        .unwrap_or_else(|_| {
-                            let mut synth = Vec::with_capacity(65_536);
-                            for i in 0..65_536usize {
-                                synth.push(((i.wrapping_mul(73) ^ (i >> 3)) & 0xFF) as u8);
-                            }
-                            synth
-                        });
-
                     let chunk_size = 8192usize;
-                    let start = (chunk_idx * chunk_size).min(full_bytes.len());
-                    let end = (start + chunk_size).min(full_bytes.len());
-                    let slice = &full_bytes[start..end];
-                    let digest = compute_sha256_bytes(slice);
+                    let slice = state
+                        .get_local_file_chunk_slice(track_id, chunk_idx, chunk_size)
+                        .unwrap_or_else(|_| {
+                            let start = (chunk_idx * chunk_size).min(65_536);
+                            let end = (start + chunk_size).min(65_536);
+                            (start..end)
+                                .map(|i| ((i.wrapping_mul(73) ^ (i >> 3)) & 0xFF) as u8)
+                                .collect()
+                        });
+                    let digest = compute_sha256_bytes(&slice);
 
                     let mut packet = Vec::with_capacity(4 + 32 + slice.len());
                     packet.extend_from_slice(&(chunk_idx as u32).to_be_bytes());
                     packet.extend_from_slice(&digest);
-                    packet.extend_from_slice(slice);
+                    packet.extend_from_slice(&slice);
 
                     chunks_served_bg.fetch_add(1, Ordering::SeqCst);
                     let _ = socket.send_to(&packet, peer_addr);
@@ -5517,8 +5669,6 @@ pub fn spawn_desktop_udp_p2p_daemon(
     ))
 }
 
-/// Downloads a chunk from a remote DJ's `DesktopUdpP2PDaemon` using Multi-Port Prediction Spray
-/// (`spray_window_ports`) + automatic UDP retransmission on timeout + per-frame SHA-256 verification.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn request_chunk_from_peer_with_spray(
     base_peer_addr: &str,
@@ -5540,7 +5690,6 @@ pub fn request_chunk_from_peer_with_spray(
     let base_ip = parsed.ip();
     let base_port = parsed.port();
 
-    // 1. Fire Simultaneous UDP Hole-Punch + Port-Prediction Spray across predicted CGNAT ports
     let count = spray_ports.clamp(1, 16) as i32;
     for step in 0..count {
         let candidate_port = ((base_port as i32) + step * port_delta).clamp(1024, 65535) as u16;
@@ -5548,19 +5697,19 @@ pub fn request_chunk_from_peer_with_spray(
         let _ = sock.send_to(b"HERA_PUNCH_SYN", target);
     }
 
-    // Drain optional HERA_PUNCH_ACK if already arrived
     let mut ack_buf = [0u8; 128];
-    let _ = sock.recv_from(&mut ack_buf);
+    let active_peer_addr = match sock.recv_from(&mut ack_buf) {
+        Ok((_, ack_sender)) => ack_sender,
+        Err(_) => parsed,
+    };
 
-    // 2. Request chunk with up to 3 automatic retransmissions and verify 32-byte SHA-256 frame header
     let req_msg = format!("HERA_REQ_CHUNK:{track_id}:{chunk_idx}");
     let mut recv_buf = vec![0u8; 4 + 32 + 8192];
 
     for _attempt in 0..3 {
-        let _ = sock.send_to(req_msg.as_bytes(), parsed);
+        let _ = sock.send_to(req_msg.as_bytes(), active_peer_addr);
         while let Ok((n, _)) = sock.recv_from(&mut recv_buf) {
             if n <= 36 {
-                // Ignore 14-byte HERA_PUNCH_ACK control packets without re-sending request
                 continue;
             }
             let r_idx = u32::from_be_bytes([recv_buf[0], recv_buf[1], recv_buf[2], recv_buf[3]]);
@@ -5625,7 +5774,6 @@ pub fn probe_stun_public_endpoint(stun_host_port: &str) -> Result<StunPublicEndp
         .find(|a| a.is_ipv4())
         .ok_or_else(|| format!("No IPv4 address for {stun_host_port}"))?;
 
-    // 20-byte RFC 5389 Binding Request: Type=0x0001, Length=0x0000, MagicCookie=0x2112A442, TxID=12 bytes
     let req: [u8; 20] = [
         0x00, 0x01, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x48, 0x45, 0x52, 0x41, 0x5F, 0x50, 0x32,
         0x50, 0x5F, 0x44, 0x4A, 0x31,
@@ -5650,7 +5798,6 @@ pub fn probe_stun_public_endpoint(stun_host_port: &str) -> Result<StunPublicEndp
         if pos + attr_len > n {
             break;
         }
-        // 0x0020 = XOR-MAPPED-ADDRESS (IPv4)
         if attr_type == 0x0020 && attr_len >= 8 && buf[pos + 1] == 0x01 {
             let xport = u16::from_be_bytes([buf[pos + 2], buf[pos + 3]]) ^ 0x2112;
             let ip = [
@@ -5666,7 +5813,6 @@ pub fn probe_stun_public_endpoint(stun_host_port: &str) -> Result<StunPublicEndp
                 router_port_forwarding_required: false,
             });
         }
-        // Pad to 4-byte boundary
         pos += (attr_len + 3) & !3;
     }
 
@@ -5698,7 +5844,6 @@ pub fn run_live_udp_hole_punch_p2p_proof(
     let coord_addr = coordinator.local_addr().map_err(|e| e.to_string())?;
     let mut signaling_bytes = 0usize;
 
-    // 1. Terminal A & Terminal B send outbound REGISTER packets to Coordinator (zero inbound ports configured)
     signaling_bytes += terminal_a
         .send_to(b"REG:TERMINAL_A:cas_baiana_124_8a", coord_addr)
         .map_err(|e| e.to_string())?;
@@ -5714,7 +5859,6 @@ pub fn run_live_udp_hole_punch_p2p_proof(
         .recv_from(&mut reg_buf)
         .map_err(|e| e.to_string())?;
 
-    // 2. Coordinator ("Cupido") sends tiny peer address tickets to A and B (0 bytes of audio!)
     let msg_to_a = format!("PUNCH:{observed_b_addr}");
     let msg_to_b = format!("PUNCH:{observed_a_addr}");
     signaling_bytes += coordinator
@@ -5742,7 +5886,6 @@ pub fn run_live_udp_hole_punch_p2p_proof(
         .unwrap_or("")
         .to_string();
 
-    // 3. Simultaneous UDP Hole Punching: both terminals fire outbound UDP packets at each other
     terminal_a
         .send_to(b"HERA_PUNCH_SYN_FROM_A", &target_for_a)
         .map_err(|e| e.to_string())?;
@@ -5753,7 +5896,6 @@ pub fn run_live_udp_hole_punch_p2p_proof(
     let _ = terminal_a.recv_from(&mut reg_buf).map_err(|e| e.to_string())?;
     let _ = terminal_b.recv_from(&mut reg_buf).map_err(|e| e.to_string())?;
 
-    // 4. Direct Terminal-to-Terminal Audio Streaming (Terminal A ---> Terminal B, 0 bytes via Coordinator/R2!)
     let chunk_size = 8192usize;
     let total_chunks = audio_payload.chunks(chunk_size).len();
     let mut received_audio = Vec::with_capacity(audio_payload.len());
