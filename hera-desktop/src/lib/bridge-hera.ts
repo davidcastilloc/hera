@@ -123,6 +123,7 @@ export type ResolveHarmonicBridgeResponse = {
   bridge_steps: Array<HarmonicBridgeStep>;
   preview_mix_window_seconds: number;
   swarm_catalog?: Array<SwarmCatalogItem>;
+  stun_public_endpoint?: string | null;
 };
 
 export function getFourHotCuesForTrack(track: Track): Array<HotCuePin> {

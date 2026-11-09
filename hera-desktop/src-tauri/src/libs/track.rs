@@ -104,7 +104,7 @@ fn enrich_track_with_hera_dsp(
     if let Ok(bytes) = std::fs::read(path) {
         if !bytes.is_empty() && bytes.len() <= 64 * 1024 * 1024 {
             if let Ok(decoded) =
-                hera_node_rs::forensics::decode_audio_bytes(&bytes, Some(&ext), Some(45.0))
+                hera_node_rs::forensics::decode_audio_bytes(&bytes, Some(&ext), 45.0)
             {
                 let forensics = hera_node_rs::forensics::audit_pcm_channels(
                     &decoded.left,

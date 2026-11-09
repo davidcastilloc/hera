@@ -162,6 +162,11 @@ function ViewHarmonicBridgeP2P() {
             </p>
           </div>
           <div {...stylex.props(styles.bridgeActions)}>
+            <span {...stylex.props(styles.badgeOrigin)}>
+              🟢 Nodo Desktop UDP/STUN:{' '}
+              {bridgeResult?.stun_public_endpoint ||
+                'Auto-NAT Activo (0 Puertos Abiertos)'}
+            </span>
             <span {...stylex.props(styles.camelotBadge)}>
               ⚡ Saldo P2P Boost: {turboCreditsMb.toFixed(1)} MB (Ganado 1:1.5
               sembrando en el enjambre)

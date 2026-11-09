@@ -7,12 +7,27 @@ use hera_node_rs::dj_brain::{
     CloudflareFreeAiTurnResponse, DjStyleDnaProfile, DjStyleDnaRequest,
 };
 use hera_node_rs::export::{export_crate_bundle, ExportCrateRequest, ExportCrateResponse};
-use hera_node_rs::p2p::P2PMeshState;
+use hera_node_rs::p2p::{
+    probe_stun_public_endpoint, ConnectDjDriveRequest, DjDriveTrackInput, P2PMeshState,
+    StunPublicEndpointReport,
+};
 use hera_node_rs::router::BuildCrateRequest;
 use hera_node_rs::synergy::{optimize_crate_with_spine, OptimizedCrateResult, SetSpineConfig};
 use serde::{Deserialize, Serialize};
+use std::sync::OnceLock;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::Runtime;
+
+fn shared_desktop_p2p_state() -> &'static P2PMeshState {
+    static STATE: OnceLock<P2PMeshState> = OnceLock::new();
+    STATE.get_or_init(|| P2PMeshState::new("hera-desktop-local-node"))
+}
+
+fn shared_stun_endpoint() -> Option<StunPublicEndpointReport> {
+    static STUN: OnceLock<Option<StunPublicEndpointReport>> = OnceLock::new();
+    STUN.get_or_init(|| probe_stun_public_endpoint("stun.cloudflare.com:3478").ok())
+        .clone()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HarmonicBridgeStep {
@@ -76,10 +91,51 @@ pub struct ResolveHarmonicBridgeResponse {
     pub preview_mix_window_seconds: u8,
     #[serde(default)]
     pub swarm_catalog: Vec<SwarmCatalogItem>,
+    #[serde(default)]
+    pub stun_public_endpoint: Option<String>,
 }
 
 #[tauri::command]
 pub fn compute_style_dna(request: DjStyleDnaRequest) -> Result<DjStyleDnaProfile, String> {
+    if !request.tracks.is_empty() {
+        let state = shared_desktop_p2p_state();
+        let p2p_tracks: Vec<DjDriveTrackInput> = request
+            .tracks
+            .iter()
+            .map(|t| DjDriveTrackInput {
+                title: t.title.clone(),
+                artist: t.artist.clone(),
+                bpm: t.bpm,
+                camelot_key: t.camelot.clone(),
+                top_subgenre: "Club / Local Desktop Seeder".to_string(),
+                duration_seconds: t.duration_seconds,
+                format: "flac".to_string(),
+                gdrive_file_link_or_id: None,
+                r2_object_key: None,
+                cloud_share_url: None,
+                file_size_mb: 34.0,
+                effective_bandwidth_hz: 21200.0,
+                sub_bass_phase_correlation: 0.94,
+                is_synthetic_tone: false,
+                share_on_p2p: Some(true),
+                audio_sha256: None,
+            })
+            .collect();
+        let handle = request
+            .dj_handle
+            .clone()
+            .unwrap_or_else(|| "DaviDJ".to_string());
+        let _ = state.connect_dj_drive(ConnectDjDriveRequest {
+            dj_handle: handle.clone(),
+            display_name: Some(format!("{} (HERA Desktop Node)", handle)),
+            gdrive_folder_link: None,
+            gdrive_embedded_html: None,
+            r2_bucket_url: None,
+            subscription_tier: Some("local_unlimited".to_string()),
+            p2p_sharing_enabled: Some(true),
+            tracks: p2p_tracks,
+        });
+    }
     Ok(compute_dj_style_dna(&request))
 }
 
@@ -108,8 +164,8 @@ pub fn build_dj_set_spine(request: BuildCrateRequest) -> Result<OptimizedCrateRe
 
 #[tauri::command]
 pub fn get_cloudflare_edge_radar() -> Result<CloudflareEdgeCapabilities, String> {
-    let state = P2PMeshState::new("hera-desktop-local-node");
-    Ok(get_cloudflare_edge_capabilities(&state))
+    let state = shared_desktop_p2p_state();
+    Ok(get_cloudflare_edge_capabilities(state))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,8 +180,8 @@ pub struct ProbeAiBackendResponse {
 pub fn chat_copilot(
     request: CloudflareFreeAiTurnRequest,
 ) -> Result<CloudflareFreeAiTurnResponse, String> {
-    let state = P2PMeshState::new("hera-desktop-local-node");
-    Ok(evaluate_agent_harness_turn(&request, &state))
+    let state = shared_desktop_p2p_state();
+    Ok(evaluate_agent_harness_turn(&request, state))
 }
 
 #[tauri::command]
@@ -228,7 +284,7 @@ pub fn resolve_harmonic_bridge(
         },
     ];
 
-    let state = P2PMeshState::new("hera-desktop-local-node");
+    let state = shared_desktop_p2p_state();
     let mut swarm_catalog: Vec<SwarmCatalogItem> = state
         .build_broker_swarm_index()
         .into_iter()
@@ -287,6 +343,8 @@ pub fn resolve_harmonic_bridge(
         });
     }
 
+    let stun_public_endpoint = shared_stun_endpoint().map(|s| s.public_mapped_endpoint);
+
     Ok(ResolveHarmonicBridgeResponse {
         origin_summary: format!(
             "{} — {} ({:.1} BPM · {})",
@@ -300,6 +358,7 @@ pub fn resolve_harmonic_bridge(
         bridge_steps,
         preview_mix_window_seconds: 15,
         swarm_catalog,
+        stun_public_endpoint,
     })
 }
 
