@@ -28,6 +28,8 @@ pub enum SortBy {
     Title,
     Duration,
     Genre,
+    Bpm,
+    Camelot,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, TS)]

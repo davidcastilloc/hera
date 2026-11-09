@@ -25,7 +25,10 @@ export function formatSecondsToMinutes(sec: number): string {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-export function getHumanCueInfo(cueIndex: number, positionSec: number): HeraHumanCueInfo {
+export function getHumanCueInfo(
+  cueIndex: number,
+  positionSec: number,
+): HeraHumanCueInfo {
   const timeFormatted = formatSecondsToMinutes(positionSec);
   switch (cueIndex) {
     case 1:
@@ -91,15 +94,15 @@ export function getHumanMatchLabel(
   camelotFrom: string,
   camelotTo: string,
   bpmFrom: number,
-  bpmTo: number
+  bpmTo: number,
 ): HeraHumanMatchInfo {
   const bpmDelta = Math.abs(bpmTo - bpmFrom);
   const tempoAdvice =
     bpmDelta === 0
       ? 'Mismo ritmo exacto'
       : bpmTo > bpmFrom
-      ? `Sube suave (+${bpmDelta.toFixed(1)} BPM)`
-      : `Baja suave (-${bpmDelta.toFixed(1)} BPM)`;
+        ? `Sube suave (+${bpmDelta.toFixed(1)} BPM)`
+        : `Baja suave (-${bpmDelta.toFixed(1)} BPM)`;
 
   // Same key
   if (camelotFrom === camelotTo) {

@@ -70,7 +70,9 @@ function ViewRoot() {
   return (
     <div
       {...stylex.props(styles.root)}
-      data-museeks-os={typeof window !== 'undefined' ? window.__MUSEEKS_PLATFORM : 'windows'}
+      data-museeks-os={
+        typeof window !== 'undefined' ? window.__MUSEEKS_PLATFORM : 'windows'
+      }
     >
       {/** Bunch of global event handlers */}
       <IPCNavigationEvents />

@@ -56,12 +56,12 @@ export default function DropzoneImport() {
                 other: '# invalid items ignored',
               });
 
-              toastManager.add('warning', message);
+              toastManager.add({ title: message, type: 'warning' });
             }
 
             try {
-              await LibraryAPI.importTracksFromFolders(folders);
-              invalidate();
+              await LibraryAPI.addLibraryFolders(folders);
+              await invalidate();
             } catch (err) {
               logAndNotifyError(err);
             }
@@ -109,7 +109,8 @@ const styles = stylex.create({
     pointerEvents: 'none',
   },
   dropzoneContent: {
-    padding: '20px 40px',
+    paddingBlock: '20px',
+    paddingInline: '40px',
     backgroundColor: 'var(--background)',
     borderWidth: '2px',
     borderStyle: 'dashed',

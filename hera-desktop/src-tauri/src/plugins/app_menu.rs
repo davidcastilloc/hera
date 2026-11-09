@@ -95,10 +95,12 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             // -----------------------------------------------------------------
             let package_info = app_handle.package_info();
             let version = package_info.version.to_string().into();
-            let resource_path: PathBuf = app_handle.path().resource_dir().unwrap();
-            let icon_path = resource_path.join("icons").join("icon.png");
-            let icon = Image::from_path(&icon_path)
-                .unwrap_or_else(|_| panic!("Failed to load icon from path: {:?}", &icon_path));
+            let icon = app_handle
+                .path()
+                .resource_dir()
+                .ok()
+                .map(|resource_path: PathBuf| resource_path.join("icons").join("icon.png"))
+                .and_then(|icon_path| Image::from_path(&icon_path).ok());
 
             let about_metadata = AboutMetadataBuilder::new()
                 .version(version)
@@ -106,7 +108,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 .license("MIT".into())
                 .website("https://museeks.io".into())
                 .website_label("museeks.io".into())
-                .icon(Some(icon))
+                .icon(icon)
                 .build();
 
             // -----------------------------------------------------------------

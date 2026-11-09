@@ -53,14 +53,19 @@ pub struct Track {
     pub disk_of: Option<u32>,
     pub is_compilation: bool,
     #[sqlx(default)]
+    #[ts(optional)]
     pub bpm: Option<f64>,
     #[sqlx(default)]
+    #[ts(optional)]
     pub camelot: Option<String>,
     #[sqlx(default)]
+    #[ts(optional)]
     pub energy: Option<f64>,
     #[sqlx(default)]
+    #[ts(optional)]
     pub hera_seal: Option<String>,
     #[sqlx(json, default)]
+    #[ts(optional)]
     pub hot_cues: Option<Vec<HotCuePin>>,
 }
 

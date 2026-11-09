@@ -71,7 +71,8 @@ async function init(then: () => void): Promise<void> {
   checkForUpdate({ silentFail: true }).catch(logAndNotifyError);
 
   // Check if we should start a queue (maybe put that somewhere else)
-  const initialQueue = typeof window !== 'undefined' ? window.__MUSEEKS_INITIAL_QUEUE : null;
+  const initialQueue =
+    typeof window !== 'undefined' ? window.__MUSEEKS_INITIAL_QUEUE : null;
   if (initialQueue && Array.isArray(initialQueue) && initialQueue.length > 0) {
     if (isTauri()) {
       info(
@@ -115,7 +116,11 @@ const setTheme = async (themeID: string): Promise<void> => {
     }
   }
 
-  const theme = isTauri() ? ((await getCurrentWindow().theme().catch(() => null)) ?? 'dark') : 'dark';
+  const theme = isTauri()
+    ? ((await getCurrentWindow()
+        .theme()
+        .catch(() => null)) ?? 'dark')
+    : 'dark';
 
   applyThemeToUI(theme);
 };

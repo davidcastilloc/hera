@@ -37,7 +37,10 @@ const ConfigBridge = {
    * Should only be used when starting the app.
    */
   getInitial<T extends keyof Config>(key: T): Config[T] {
-    if (typeof window === 'undefined' || window.__MUSEEKS_INITIAL_CONFIG === undefined) {
+    if (
+      typeof window === 'undefined' ||
+      window.__MUSEEKS_INITIAL_CONFIG === undefined
+    ) {
       return DEFAULT_FALLBACK_CONFIG[key];
     }
 
@@ -48,7 +51,10 @@ const ConfigBridge = {
     try {
       return await invoke('plugin:config|get_config');
     } catch {
-      return (typeof window !== 'undefined' && window.__MUSEEKS_INITIAL_CONFIG) || DEFAULT_FALLBACK_CONFIG;
+      return (
+        (typeof window !== 'undefined' && window.__MUSEEKS_INITIAL_CONFIG) ||
+        DEFAULT_FALLBACK_CONFIG
+      );
     }
   },
 

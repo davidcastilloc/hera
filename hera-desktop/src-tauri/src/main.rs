@@ -62,8 +62,11 @@ fn main() {
         // Ensure a single instance of the app is running, if needed, play opened files
         .plugin(tauri_plugin_single_instance::init(|app_handle, args, _| {
             // Focus on the already running app in case the app is opened again
-            let window = app_handle.get_webview_window("main").unwrap();
-            window.set_focus().unwrap();
+            if let Some(window) = app_handle.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
 
             plugins::file_associations::handle_opened_files(app_handle, args);
         }))
@@ -116,7 +119,8 @@ fn main() {
             let window_builder =
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                     .title("HERA Desktop")
-                    .visible(false)
+                    .visible(true)
+                    .focused(true)
                     .theme(get_theme_from_name(&conf.theme))
                     .inner_size(1100.0, 680.0)
                     .min_inner_size(900.0, 550.0)

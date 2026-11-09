@@ -4,6 +4,12 @@ export type Config = { language: string, theme: string, ui_accent_color: string 
 
 export type DefaultView = "Library" | "Artists" | "Playlists";
 
+/**
+ * Track
+ * represent a single track, id and path should be unique
+ */
+export type HotCuePin = { num: number, name: string, seconds: number, color: string, role: string, };
+
 export type IPCEvent = { "Unknown": string } | "PlaybackPlay" | "PlaybackPause" | "PlaybackStop" | "PlaybackPlayPause" | "PlaybackPrevious" | "PlaybackNext" | "PlaybackStart" | "LibraryScanProgress" | "GoToLibrary" | "GoToPlaylists" | "GoToSettings" | "JumpToPlayingTrack";
 
 /** ----------------------------------------------------------------------------
@@ -25,39 +31,11 @@ export type SortBy = "Artist" | "Album" | "Title" | "Duration" | "Genre" | "Bpm"
 
 export type SortOrder = "Asc" | "Dsc";
 
-export type HotCuePin = {
-  num: number;
-  name: string;
-  seconds: number;
-  color: string;
-  role: string;
-};
-
 /**
  * Track
  * represent a single track, id and path should be unique
  */
-export type Track = {
-  id: string;
-  path: string;
-  title: string;
-  album: string;
-  album_artist: string;
-  artists: Array<string>;
-  genres: Array<string>;
-  year: number | null;
-  duration: number;
-  track_no: number | null;
-  track_of: number | null;
-  disk_no: number | null;
-  disk_of: number | null;
-  is_compilation: boolean;
-  bpm?: number | null;
-  camelot?: string | null;
-  energy?: number | null;
-  hera_seal?: string | null;
-  hot_cues?: Array<HotCuePin> | null;
-};
+export type Track = { id: string, path: string, title: string, album: string, album_artist: string, artists: Array<string>, genres: Array<string>, year: number | null, duration: number, track_no: number | null, track_of: number | null, disk_no: number | null, disk_of: number | null, is_compilation: boolean, bpm?: number, camelot?: string, energy?: number, hera_seal?: string, hot_cues?: Array<HotCuePin>, };
 
 /**
  * Represents a group of tracks, grouped by "something", lib artist name, or

@@ -164,7 +164,10 @@ export default function HeraDjToolbar() {
             : 'Ordenar biblioteca con 2-Opt TSP + Rueda Camelot + Anclas'
         }
       >
-        🧭 {viewMode === 'simple' ? 'Acomodar Canciones' : 'Ordenar Set (2-Opt TSP)'}
+        🧭{' '}
+        {viewMode === 'simple'
+          ? 'Acomodar Canciones'
+          : 'Ordenar Set (2-Opt TSP)'}
       </button>
 
       <select
@@ -202,7 +205,10 @@ export default function HeraDjToolbar() {
             : 'Abrir Buscador del Enjambre P2P, Puente Armónico y Copiloto IA'
         }
       >
-        🌐 {viewMode === 'simple' ? 'Conectar & Copiloto' : 'Enjambre P2P & Copiloto IA'}
+        🌐{' '}
+        {viewMode === 'simple'
+          ? 'Conectar & Copiloto'
+          : 'Enjambre P2P & Copiloto IA'}
       </Link>
 
       <button
@@ -346,8 +352,10 @@ const styles = stylex.create({
   toolbar: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '8px 12px',
+    rowGap: '8px',
+    columnGap: '8px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
     backgroundColor: '#070a0f',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -362,7 +370,8 @@ const styles = stylex.create({
     borderColor: '#1f2a3d',
     borderRadius: '6px',
     padding: '2px',
-    gap: '2px',
+    rowGap: '2px',
+    columnGap: '2px',
   },
   toggleBtn: {
     borderWidth: 0,
@@ -370,7 +379,8 @@ const styles = stylex.create({
     color: '#94a3b8',
     fontSize: '11.5px',
     fontWeight: 500,
-    padding: '3px 8px',
+    paddingBlock: '3px',
+    paddingInline: '8px',
     borderRadius: '4px',
     cursor: 'pointer',
     transition: 'all 0.15s ease',
@@ -383,8 +393,10 @@ const styles = stylex.create({
   actionBtn: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '4px',
-    padding: '5px 10px',
+    rowGap: '4px',
+    columnGap: '4px',
+    paddingBlock: '5px',
+    paddingInline: '10px',
     fontSize: '12px',
     fontWeight: 600,
     color: '#f8fafc',
@@ -413,7 +425,8 @@ const styles = stylex.create({
     color: '#fbbf24',
   },
   selectFormat: {
-    padding: '5px 8px',
+    paddingBlock: '5px',
+    paddingInline: '8px',
     fontSize: '12px',
     backgroundColor: '#101622',
     color: '#f8fafc',
@@ -428,7 +441,8 @@ const styles = stylex.create({
     fontSize: '11px',
     color: '#94a3b8',
     backgroundColor: '#0c111a',
-    padding: '4px 10px',
+    paddingBlock: '4px',
+    paddingInline: '10px',
     borderRadius: '99px',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -458,10 +472,12 @@ const styles = stylex.create({
     width: '90%',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    rowGap: '16px',
+    columnGap: '16px',
   },
   exportReceipt: {
-    padding: '8px 12px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
     backgroundColor: 'rgba(6, 182, 212, 0.12)',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -473,11 +489,15 @@ const styles = stylex.create({
   },
   memeHeader: {
     display: 'flex',
-    gap: '16px',
+    rowGap: '16px',
+    columnGap: '16px',
     alignItems: 'flex-start',
   },
   modalTitle: {
-    margin: '0 0 6px 0',
+    marginTop: '0',
+    marginRight: '0',
+    marginBottom: '6px',
+    marginLeft: '0',
     fontSize: '15px',
     fontWeight: 700,
     color: '#fbbf24',
@@ -485,12 +505,13 @@ const styles = stylex.create({
   modalText: {
     margin: 0,
     fontSize: '12.5px',
-    lineHeight: '1.5',
+    lineHeight: 1.5,
     color: '#94a3b8',
   },
   supportActions: {
     display: 'flex',
-    gap: '10px',
+    rowGap: '10px',
+    columnGap: '10px',
     justifyContent: 'flex-end',
     flexWrap: 'wrap',
     marginTop: '8px',

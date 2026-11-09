@@ -52,6 +52,13 @@ const SettingsBridge = {
       await invoke('plugin:sleepblocker|disable');
     }
   },
+
+  /**
+   * Toggle Wayland compatibility enhancements
+   */
+  async toggleWaylandCompat(value: boolean): Promise<void> {
+    await ConfigBridge.set('wayland_compat', value);
+  },
 };
 
 export default SettingsBridge;

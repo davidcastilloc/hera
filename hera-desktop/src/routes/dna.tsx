@@ -35,12 +35,14 @@ function ViewDjStyleDna() {
   const tracks = useLibraryStore((state) => state.tracks);
   const viewMode = useHeraViewStore((state) => state.viewMode);
 
-  const [djHandle, setDjHandle] = useState('DaviDJ');
+  const [djHandle] = useState('DaviDJ');
   const [preferredSoftware, setPreferredSoftware] = useState('VirtualDJ');
   const [ruleVocalClash, setRuleVocalClash] = useState(true);
   const [ruleSubBass, setRuleSubBass] = useState(true);
   const [ruleAudioQuality, setRuleAudioQuality] = useState(true);
-  const [dnaProfile, setDnaProfile] = useState<HeraStyleDnaResponse | null>(null);
+  const [dnaProfile, setDnaProfile] = useState<HeraStyleDnaResponse | null>(
+    null,
+  );
 
   useEffect(() => {
     void computeDjStyleDna(
@@ -58,7 +60,10 @@ function ViewDjStyleDna() {
         <div {...stylex.props(styles.headerBar)}>
           <div>
             <h2 {...stylex.props(styles.pageTitle)}>
-              🧬 {viewMode === 'simple' ? 'Mi Estilo DJ (Lo que hace único a tu sonido)' : 'Mi ADN Musical & Matriz Camelot'}
+              🧬{' '}
+              {viewMode === 'simple'
+                ? 'Mi Estilo DJ (Lo que hace único a tu sonido)'
+                : 'Mi ADN Musical & Matriz Camelot'}
             </h2>
             <p {...stylex.props(styles.subDesc)}>
               {viewMode === 'simple'
@@ -68,7 +73,9 @@ function ViewDjStyleDna() {
           </div>
 
           <div {...stylex.props(styles.switchesGroup)}>
-            <span style={{ fontSize: '12px', color: '#94a3b8', marginRight: '4px' }}>
+            <span
+              style={{ fontSize: '12px', color: '#94a3b8', marginRight: '4px' }}
+            >
               Mi Programa DJ:
             </span>
             {DJ_SOFTWARES.map((sw) => (
@@ -95,8 +102,13 @@ function ViewDjStyleDna() {
             <div {...stylex.props(styles.telemetryRow)}>
               <div {...stylex.props(styles.telemetryCard)}>
                 <div {...stylex.props(styles.tLabel)}>TU RITMO FAVORITO</div>
-                <div {...stylex.props(styles.tVal)} style={{ color: '#67e8f9' }}>
-                  {dnaProfile?.overall_average_bpm ? `${Math.round(dnaProfile.overall_average_bpm)} BPM` : '125 BPM'}
+                <div
+                  {...stylex.props(styles.tVal)}
+                  style={{ color: '#67e8f9' }}
+                >
+                  {dnaProfile?.overall_average_bpm
+                    ? `${Math.round(dnaProfile.overall_average_bpm)} BPM`
+                    : '125 BPM'}
                 </div>
                 <div {...stylex.props(styles.tSub)}>
                   Te mueves entre 122 y 128 BPM
@@ -105,7 +117,10 @@ function ViewDjStyleDna() {
 
               <div {...stylex.props(styles.telemetryCard)}>
                 <div {...stylex.props(styles.tLabel)}>TU FORMA DE MEZCLAR</div>
-                <div {...stylex.props(styles.tVal)} style={{ color: '#6ee7b7' }}>
+                <div
+                  {...stylex.props(styles.tVal)}
+                  style={{ color: '#6ee7b7' }}
+                >
                   Subida Suave
                 </div>
                 <div {...stylex.props(styles.tSub)}>
@@ -115,9 +130,7 @@ function ViewDjStyleDna() {
 
               <div {...stylex.props(styles.telemetryCard)}>
                 <div {...stylex.props(styles.tLabel)}>TU VIBRA PRINCIPAL</div>
-                <div {...stylex.props(styles.tVal)}>
-                  Melódica &amp; Club
-                </div>
+                <div {...stylex.props(styles.tVal)}>Melódica &amp; Club</div>
                 <div {...stylex.props(styles.tSub)}>
                   Ideal para sets fluidos
                 </div>
@@ -138,40 +151,64 @@ function ViewDjStyleDna() {
 
                 <div {...stylex.props(styles.vibeRow)}>
                   <div {...stylex.props(styles.vibeTopLine)}>
-                    <span style={{ color: '#67e8f9' }}>🌌 Melódico, Profundo y Envolvente</span>
-                    <strong style={{ color: '#67e8f9' }}>62% de tu música</strong>
+                    <span style={{ color: '#67e8f9' }}>
+                      🌌 Melódico, Profundo y Envolvente
+                    </span>
+                    <strong style={{ color: '#67e8f9' }}>
+                      62% de tu música
+                    </strong>
                   </div>
                   <div {...stylex.props(styles.vibeDesc)}>
-                    Canciones hipnóticas que mantienen a la gente bailando sin cansar el oído.
+                    Canciones hipnóticas que mantienen a la gente bailando sin
+                    cansar el oído.
                   </div>
                   <div {...stylex.props(styles.vibeBarBg)}>
-                    <div {...stylex.props(styles.vibeBarFill)} style={{ width: '62%', backgroundColor: '#06b6d4' }} />
+                    <div
+                      {...stylex.props(styles.vibeBarFill)}
+                      style={{ width: '62%', backgroundColor: '#06b6d4' }}
+                    />
                   </div>
                 </div>
 
                 <div {...stylex.props(styles.vibeRow)}>
                   <div {...stylex.props(styles.vibeTopLine)}>
-                    <span style={{ color: '#6ee7b7' }}>🔥 Energía de Hora Pico (Fiestero)</span>
-                    <strong style={{ color: '#6ee7b7' }}>24% de tu música</strong>
+                    <span style={{ color: '#6ee7b7' }}>
+                      🔥 Energía de Hora Pico (Fiestero)
+                    </span>
+                    <strong style={{ color: '#6ee7b7' }}>
+                      24% de tu música
+                    </strong>
                   </div>
                   <div {...stylex.props(styles.vibeDesc)}>
-                    Temas con bajo potente y explosiones fuertes para levantar las manos.
+                    Temas con bajo potente y explosiones fuertes para levantar
+                    las manos.
                   </div>
                   <div {...stylex.props(styles.vibeBarBg)}>
-                    <div {...stylex.props(styles.vibeBarFill)} style={{ width: '24%', backgroundColor: '#10b981' }} />
+                    <div
+                      {...stylex.props(styles.vibeBarFill)}
+                      style={{ width: '24%', backgroundColor: '#10b981' }}
+                    />
                   </div>
                 </div>
 
                 <div {...stylex.props(styles.vibeRow)}>
                   <div {...stylex.props(styles.vibeTopLine)}>
-                    <span style={{ color: '#fcd34d' }}>☀️ Cantado, Alegre y Eufórico</span>
-                    <strong style={{ color: '#fcd34d' }}>14% de tu música</strong>
+                    <span style={{ color: '#fcd34d' }}>
+                      ☀️ Cantado, Alegre y Eufórico
+                    </span>
+                    <strong style={{ color: '#fcd34d' }}>
+                      14% de tu música
+                    </strong>
                   </div>
                   <div {...stylex.props(styles.vibeDesc)}>
-                    Himnos con voces conocidas ideales para momentos especiales o cierre de fiesta.
+                    Himnos con voces conocidas ideales para momentos especiales
+                    o cierre de fiesta.
                   </div>
                   <div {...stylex.props(styles.vibeBarBg)}>
-                    <div {...stylex.props(styles.vibeBarFill)} style={{ width: '14%', backgroundColor: '#f59e0b' }} />
+                    <div
+                      {...stylex.props(styles.vibeBarFill)}
+                      style={{ width: '14%', backgroundColor: '#f59e0b' }}
+                    />
                   </div>
                 </div>
               </div>
@@ -197,11 +234,21 @@ function ViewDjStyleDna() {
                           isDominant && styles.camelotCellActive,
                         )}
                       >
-                        <span style={{ fontWeight: 700, fontSize: '12px', color: isDominant ? '#67e8f9' : '#f8fafc' }}>
+                        <span
+                          style={{
+                            fontWeight: 700,
+                            fontSize: '12px',
+                            color: isDominant ? '#67e8f9' : '#f8fafc',
+                          }}
+                        >
                           {k.code}
                         </span>
-                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>{k.note}</span>
-                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>{k.pct}</span>
+                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+                          {k.note}
+                        </span>
+                        <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+                          {k.pct}
+                        </span>
                       </div>
                     );
                   })}
@@ -212,8 +259,12 @@ function ViewDjStyleDna() {
 
           {/* RIGHT COLUMN: GOLDEN MIXING RULES & COPILOT UNDERSTANDING */}
           <section {...stylex.props(styles.dnaRight)}>
-            <h3 style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700 }}>
-              {viewMode === 'simple' ? 'Tus Reglas de Oro al Mezclar' : 'Invariantes de Curaduría & DSP'}
+            <h3
+              style={{ margin: '0 0 4px 0', fontSize: '15px', fontWeight: 700 }}
+            >
+              {viewMode === 'simple'
+                ? 'Tus Reglas de Oro al Mezclar'
+                : 'Invariantes de Curaduría & DSP'}
             </h3>
 
             <div {...stylex.props(styles.rulesRack)}>
@@ -223,13 +274,17 @@ function ViewDjStyleDna() {
                     🎤 Cuidar que no se encimen dos voces
                   </div>
                   <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                    Conecta el final instrumental de una canción con el inicio limpio de la siguiente
+                    Conecta el final instrumental de una canción con el inicio
+                    limpio de la siguiente
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setRuleVocalClash(!ruleVocalClash)}
-                  {...stylex.props(styles.toggleBtn, ruleVocalClash && styles.toggleActive)}
+                  {...stylex.props(
+                    styles.toggleBtn,
+                    ruleVocalClash && styles.toggleActive,
+                  )}
                 >
                   {ruleVocalClash ? '✓ ACTIVADO' : 'APAGADO'}
                 </button>
@@ -241,13 +296,17 @@ function ViewDjStyleDna() {
                     🔊 Mantener siempre la fuerza del bajo
                   </div>
                   <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                    Evita que la pista sienta un vacío de potencia cuando cambias de canción
+                    Evita que la pista sienta un vacío de potencia cuando
+                    cambias de canción
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setRuleSubBass(!ruleSubBass)}
-                  {...stylex.props(styles.toggleBtn, ruleSubBass && styles.toggleActive)}
+                  {...stylex.props(
+                    styles.toggleBtn,
+                    ruleSubBass && styles.toggleActive,
+                  )}
                 >
                   {ruleSubBass ? '✓ ACTIVADO' : 'APAGADO'}
                 </button>
@@ -259,13 +318,17 @@ function ViewDjStyleDna() {
                     ✨ Bloquear audios malos o bajados de YouTube
                   </div>
                   <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                    Revisa cada canción para que nunca suene opaca en las bocinas grandes
+                    Revisa cada canción para que nunca suene opaca en las
+                    bocinas grandes
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setRuleAudioQuality(!ruleAudioQuality)}
-                  {...stylex.props(styles.toggleBtn, ruleAudioQuality && styles.toggleActive)}
+                  {...stylex.props(
+                    styles.toggleBtn,
+                    ruleAudioQuality && styles.toggleActive,
+                  )}
                 >
                   {ruleAudioQuality ? '✓ ACTIVADO' : 'APAGADO'}
                 </button>
@@ -277,25 +340,58 @@ function ViewDjStyleDna() {
                     🤝 Red Colaborativa entre DJs
                   </div>
                   <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                    Comparte y recibe música de estudio verificada con la comunidad
+                    Comparte y recibe música de estudio verificada con la
+                    comunidad
                   </div>
                 </div>
-                <span {...stylex.props(styles.toggleLocked)}>🔒 SIEMPRE ACTIVO</span>
+                <span {...stylex.props(styles.toggleLocked)}>
+                  🔒 SIEMPRE ACTIVO
+                </span>
               </div>
             </div>
 
             {/* HUMAN COPILOT UNDERSTANDING SUMMARY */}
             <div {...stylex.props(styles.summaryBox)}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 700, fontSize: '13.5px', color: '#67e8f9' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <span
+                  style={{
+                    fontWeight: 700,
+                    fontSize: '13.5px',
+                    color: '#67e8f9',
+                  }}
+                >
                   💬 Así te entiende tu Copiloto IA ahora mismo:
                 </span>
-                <span style={{ fontSize: '11.5px', color: '#6ee7b7', fontWeight: 600 }}>
+                <span
+                  style={{
+                    fontSize: '11.5px',
+                    color: '#6ee7b7',
+                    fontWeight: 600,
+                  }}
+                >
                   ✓ Aprendido
                 </span>
               </div>
-              <p style={{ margin: 0, fontSize: '12.5px', color: '#f8fafc', lineHeight: 1.55 }}>
-                “Cuando me pidas ayuda para armar una lista o buscar qué canción poner después, buscaré temas alrededor de <strong>125 BPM</strong> que suenen afinados entre sí, entrando en el <strong>Punto 1 (Entrada)</strong> cuando la canción anterior llegue al <strong>Punto 4 (Salida)</strong> para que nunca choquen las voces.”
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '12.5px',
+                  color: '#f8fafc',
+                  lineHeight: 1.55,
+                }}
+              >
+                “Cuando me pidas ayuda para armar una lista o buscar qué canción
+                poner después, buscaré temas alrededor de{' '}
+                <strong>125 BPM</strong> que suenen afinados entre sí, entrando
+                en el <strong>Punto 1 (Entrada)</strong> cuando la canción
+                anterior llegue al <strong>Punto 4 (Salida)</strong> para que
+                nunca choquen las voces.”
               </p>
             </div>
           </section>
@@ -315,7 +411,8 @@ const styles = stylex.create({
     overflow: 'hidden',
   },
   headerBar: {
-    padding: '14px 20px',
+    paddingBlock: '14px',
+    paddingInline: '20px',
     backgroundColor: '#070a0f',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -331,17 +428,22 @@ const styles = stylex.create({
     fontWeight: 700,
   },
   subDesc: {
-    margin: '3px 0 0 0',
+    marginTop: '3px',
+    marginRight: '0',
+    marginBottom: '0',
+    marginLeft: '0',
     fontSize: '12.5px',
     color: '#94a3b8',
   },
   switchesGroup: {
     display: 'flex',
     alignItems: 'center',
-    gap: '6px',
+    rowGap: '6px',
+    columnGap: '6px',
   },
   swBtn: {
-    padding: '4px 10px',
+    paddingBlock: '4px',
+    paddingInline: '10px',
     borderRadius: '5px',
     backgroundColor: '#101622',
     borderWidth: '1px',
@@ -359,27 +461,33 @@ const styles = stylex.create({
     fontWeight: 700,
   },
   dnaWorkspace: {
-    flex: 1,
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0%',
     display: 'grid',
     gridTemplateColumns: '56% 44%',
     overflow: 'hidden',
   },
   dnaLeft: {
-    padding: '16px 20px',
+    paddingBlock: '16px',
+    paddingInline: '20px',
     borderRightWidth: '1px',
     borderRightStyle: 'solid',
     borderRightColor: '#1f2a3d',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    rowGap: '16px',
+    columnGap: '16px',
     overflowY: 'auto',
   },
   dnaRight: {
-    padding: '16px 20px',
+    paddingBlock: '16px',
+    paddingInline: '20px',
     backgroundColor: '#0b0f17',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    rowGap: '16px',
+    columnGap: '16px',
     overflowY: 'auto',
   },
   telemetryRow: {
@@ -393,7 +501,8 @@ const styles = stylex.create({
     overflow: 'hidden',
   },
   telemetryCard: {
-    padding: '12px 14px',
+    paddingBlock: '12px',
+    paddingInline: '14px',
     borderRightWidth: '1px',
     borderRightStyle: 'solid',
     borderRightColor: '#1f2a3d',
@@ -422,7 +531,8 @@ const styles = stylex.create({
     overflow: 'hidden',
   },
   vibeHead: {
-    padding: '10px 16px',
+    paddingBlock: '10px',
+    paddingInline: '16px',
     backgroundColor: '#0c111a',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -432,13 +542,15 @@ const styles = stylex.create({
     justifyContent: 'space-between',
   },
   vibeRow: {
-    padding: '12px 16px',
+    paddingBlock: '12px',
+    paddingInline: '16px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: '#1f2a3d',
     display: 'flex',
     flexDirection: 'column',
-    gap: '5px',
+    rowGap: '5px',
+    columnGap: '5px',
   },
   vibeTopLine: {
     display: 'flex',
@@ -465,10 +577,12 @@ const styles = stylex.create({
     padding: '12px',
     display: 'grid',
     gridTemplateColumns: 'repeat(6, 1fr)',
-    gap: '6px',
+    rowGap: '6px',
+    columnGap: '6px',
   },
   camelotCell: {
-    padding: '8px 4px',
+    paddingBlock: '8px',
+    paddingInline: '4px',
     borderRadius: '5px',
     backgroundColor: '#090c12',
     borderWidth: '1px',
@@ -478,7 +592,8 @@ const styles = stylex.create({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '2px',
+    rowGap: '2px',
+    columnGap: '2px',
   },
   camelotCellActive: {
     backgroundColor: 'rgba(6, 182, 212, 0.14)',
@@ -496,14 +611,17 @@ const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '12px 14px',
+    paddingBlock: '12px',
+    paddingInline: '14px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: '#1f2a3d',
-    gap: '12px',
+    rowGap: '12px',
+    columnGap: '12px',
   },
   toggleBtn: {
-    padding: '4px 10px',
+    paddingBlock: '4px',
+    paddingInline: '10px',
     borderRadius: '99px',
     backgroundColor: '#161f30',
     borderWidth: '1px',
@@ -521,7 +639,8 @@ const styles = stylex.create({
     color: '#6ee7b7',
   },
   toggleLocked: {
-    padding: '4px 10px',
+    paddingBlock: '4px',
+    paddingInline: '10px',
     borderRadius: '99px',
     backgroundColor: 'rgba(6, 182, 212, 0.14)',
     borderColor: 'rgba(6, 182, 212, 0.45)',
@@ -536,9 +655,11 @@ const styles = stylex.create({
     borderColor: '#2e3d57',
     borderRadius: '8px',
     backgroundColor: '#101622',
-    padding: '14px 16px',
+    paddingBlock: '14px',
+    paddingInline: '16px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
 });

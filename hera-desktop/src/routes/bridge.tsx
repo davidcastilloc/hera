@@ -5,7 +5,6 @@ import { useEffect, useState } from 'react';
 import View from '../elements/View';
 import {
   chatWithCloudflareFreeAi,
-  downloadP2PTrackToLibrary,
   getCloudflareEdgeRadar,
   probeLocalAiBackend,
   resolveHarmonicBridge,
@@ -17,38 +16,29 @@ import {
   type ResolveHarmonicBridgeResponse,
 } from '../lib/bridge-hera';
 import {
-  getHumanAudioQuality,
-  getHumanCueInfo,
   getHumanMatchLabel,
   useHeraViewStore,
 } from '../lib/hera-human-language';
-import Player from '../lib/player';
-import useLibraryStore from '../lib/store';
 
 export const Route = createFileRoute('/bridge')({
   component: ViewHarmonicBridgeP2P,
 });
 
-type SwarmSuperFilter = 'all' | 'harmonic' | 'boost' | 'promo';
-
 function ViewHarmonicBridgeP2P() {
-  const localTracks = useLibraryStore((state) => state.tracks);
   const viewMode = useHeraViewStore((state) => state.viewMode);
   const isOnboardingOpen = useHeraViewStore((state) => state.isOnboardingOpen);
   const closeOnboarding = useHeraViewStore((state) => state.closeOnboarding);
   const openOnboarding = useHeraViewStore((state) => state.openOnboarding);
 
-  const [swarmFilter, setSwarmFilter] = useState('');
-  const [superFilter, setSuperFilter] = useState<SwarmSuperFilter>('all');
-  const [originTitle, setOriginTitle] = useState('Levels (Original Mix)');
-  const [originArtist, setOriginArtist] = useState('Avicii');
-  const [originBpm, setOriginBpm] = useState(124.0);
-  const [originCamelot, setOriginCamelot] = useState('8A');
+  const [originTitle] = useState('Levels (Original Mix)');
+  const [originArtist] = useState('Avicii');
+  const [originBpm] = useState(124.0);
+  const [originCamelot] = useState('8A');
 
-  const [targetTitle, setTargetTitle] = useState("Don't You Worry Child");
-  const [targetArtist, setTargetArtist] = useState('Swedish House Mafia');
-  const [targetBpm, setTargetBpm] = useState(128.0);
-  const [targetCamelot, setTargetCamelot] = useState('10A');
+  const [targetTitle] = useState("Don't You Worry Child");
+  const [targetArtist] = useState('Swedish House Mafia');
+  const [targetBpm] = useState(128.0);
+  const [targetCamelot] = useState('10A');
 
   const [bridgeResult, setBridgeResult] =
     useState<ResolveHarmonicBridgeResponse | null>(null);
@@ -57,13 +47,12 @@ function ViewHarmonicBridgeP2P() {
   );
   const [previewStatus, setPreviewStatus] = useState<string>('');
   const [chatPrompt, setChatPrompt] = useState(
-    'Quiero pasar de Levels a Don\'t You Worry Child subiendo el ritmo suave y sin que choquen las voces',
+    "Quiero pasar de Levels a Don't You Worry Child subiendo el ritmo suave y sin que choquen las voces",
   );
   const [selectedBackend, setSelectedBackend] = useState<string>('cli_agy');
   const [customBaseUrl, setCustomBaseUrl] = useState<string>(
     'http://localhost:1234/v1',
   );
-  const [customModel, setCustomModel] = useState<string>('default');
   const [probeBanner, setProbeBanner] = useState<string>('');
   const [commanderMode, setCommanderMode] =
     useState<CommanderAuthorityMode>('executive_boss');
@@ -102,12 +91,11 @@ function ViewHarmonicBridgeP2P() {
 
     setIsAiLoading(true);
     try {
-      const reply = await chatWithCloudflareFreeAi(
-        promptToSend,
-        'DaviDJ',
-        selectedBackend,
+      const reply = await chatWithCloudflareFreeAi(promptToSend, 'DaviDJ', {
+        backend: selectedBackend,
+        baseUrl: customBaseUrl,
         commanderMode,
-      );
+      });
       setAiResponse(reply);
       setPreviewStatus(
         viewMode === 'simple'
@@ -131,7 +119,7 @@ function ViewHarmonicBridgeP2P() {
       }
 
       try {
-        const res = await resolveHarmonicBridge(
+        const res = await resolveHarmonicBridge({
           originTitle,
           originArtist,
           originBpm,
@@ -140,16 +128,16 @@ function ViewHarmonicBridgeP2P() {
           targetArtist,
           targetBpm,
           targetCamelot,
-        );
+        });
         setBridgeResult(res);
       } catch {
         // Fallback
       }
 
-      handleRunOnboardingScan();
+      void handleRunOnboardingScan();
     };
 
-    loadInitialData();
+    void loadInitialData();
   }, []);
 
   const matchInfo = getHumanMatchLabel(
@@ -198,7 +186,10 @@ function ViewHarmonicBridgeP2P() {
             </button>
 
             <div {...stylex.props(styles.statusPill, styles.emeraldPill)}>
-              🤝 {viewMode === 'simple' ? 'Red de DJs Conectada' : 'Enjambre P2P Seeding Activo'}
+              🤝{' '}
+              {viewMode === 'simple'
+                ? 'Red de DJs Conectada'
+                : `Enjambre P2P Activo (${edgeRadar?.active_swarm_nodes ?? 3} nodos · ${bridgeResult?.bridge_steps.length ?? 2} pasos)`}
             </div>
           </div>
         </header>
@@ -226,7 +217,9 @@ function ViewHarmonicBridgeP2P() {
                 <div {...stylex.props(styles.deckCard)}>
                   <div {...stylex.props(styles.deckTopLine)}>
                     <span {...stylex.props(styles.deckLabel)}>
-                      {viewMode === 'simple' ? '💿 SONANDO AHORA' : 'DECK A · ORIGEN'}
+                      {viewMode === 'simple'
+                        ? '💿 SONANDO AHORA'
+                        : 'DECK A · ORIGEN'}
                     </span>
                     <span {...stylex.props(styles.badgeCyan)}>
                       {viewMode === 'simple'
@@ -240,7 +233,9 @@ function ViewHarmonicBridgeP2P() {
                   <div {...stylex.props(styles.deckDetails)}>
                     <span>✨ Sonido de Estudio</span>
                     <span>•</span>
-                    <span>Salida recomendada: <strong>04:42</strong></span>
+                    <span>
+                      Salida recomendada: <strong>04:42</strong>
+                    </span>
                   </div>
                 </div>
 
@@ -249,7 +244,9 @@ function ViewHarmonicBridgeP2P() {
                 <div {...stylex.props(styles.deckCard)}>
                   <div {...stylex.props(styles.deckTopLine)}>
                     <span {...stylex.props(styles.deckLabel)}>
-                      {viewMode === 'simple' ? '🎯 QUIERO LLEGAR A' : 'DECK B · DESTINO'}
+                      {viewMode === 'simple'
+                        ? '🎯 QUIERO LLEGAR A'
+                        : 'DECK B · DESTINO'}
                     </span>
                     <span {...stylex.props(styles.badgeEmerald)}>
                       {viewMode === 'simple'
@@ -263,7 +260,9 @@ function ViewHarmonicBridgeP2P() {
                   <div {...stylex.props(styles.deckDetails)}>
                     <span>✨ Sonido de Estudio</span>
                     <span>•</span>
-                    <span>Entrada recomendada: <strong>00:15</strong></span>
+                    <span>
+                      Entrada recomendada: <strong>00:15</strong>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -285,11 +284,16 @@ function ViewHarmonicBridgeP2P() {
                   <button
                     type="button"
                     onClick={() =>
-                      setPreviewStatus('🎧 Reproduciendo cruce de 15s (Salida ➔ Entrada)...')
+                      setPreviewStatus(
+                        '🎧 Reproduciendo cruce de 15s (Salida ➔ Entrada)...',
+                      )
                     }
                     {...stylex.props(styles.previewBtn)}
                   >
-                    🎧 {viewMode === 'simple' ? 'Oír cómo mezcla (15s)' : 'Cruce 15s (4➔1)'}
+                    🎧{' '}
+                    {viewMode === 'simple'
+                      ? 'Oír cómo mezcla (15s)'
+                      : 'Cruce 15s (4➔1)'}
                   </button>
                 </div>
 
@@ -308,11 +312,16 @@ function ViewHarmonicBridgeP2P() {
                   <button
                     type="button"
                     onClick={() =>
-                      setPreviewStatus('🎧 Reproduciendo cruce de 15s (Salida ➔ Entrada)...')
+                      setPreviewStatus(
+                        '🎧 Reproduciendo cruce de 15s (Salida ➔ Entrada)...',
+                      )
                     }
                     {...stylex.props(styles.previewBtn)}
                   >
-                    🎧 {viewMode === 'simple' ? 'Oír cómo mezcla (15s)' : 'Cruce 15s (4➔1)'}
+                    🎧{' '}
+                    {viewMode === 'simple'
+                      ? 'Oír cómo mezcla (15s)'
+                      : 'Cruce 15s (4➔1)'}
                   </button>
                 </div>
               </div>
@@ -327,19 +336,27 @@ function ViewHarmonicBridgeP2P() {
                 <div {...stylex.props(styles.cuePinsList)}>
                   <span {...stylex.props(styles.cuePin)}>
                     <span {...stylex.props(styles.dot, styles.dotGreen)} />
-                    {viewMode === 'simple' ? '1: Entrada (0:16)' : '1: Intro (00:16)'}
+                    {viewMode === 'simple'
+                      ? '1: Entrada (0:16)'
+                      : '1: Intro (00:16)'}
                   </span>
                   <span {...stylex.props(styles.cuePin)}>
                     <span {...stylex.props(styles.dot, styles.dotBlue)} />
-                    {viewMode === 'simple' ? '2: Calma (1:48)' : '2: Break (01:48)'}
+                    {viewMode === 'simple'
+                      ? '2: Calma (1:48)'
+                      : '2: Break (01:48)'}
                   </span>
                   <span {...stylex.props(styles.cuePin)}>
                     <span {...stylex.props(styles.dot, styles.dotRed)} />
-                    {viewMode === 'simple' ? '3: Explosión (2:34)' : '3: Drop (02:34)'}
+                    {viewMode === 'simple'
+                      ? '3: Explosión (2:34)'
+                      : '3: Drop (02:34)'}
                   </span>
                   <span {...stylex.props(styles.cuePin)}>
                     <span {...stylex.props(styles.dot, styles.dotYellow)} />
-                    {viewMode === 'simple' ? '4: Salida limpia (5:12)' : '4: Outro (05:12)'}
+                    {viewMode === 'simple'
+                      ? '4: Salida limpia (5:12)'
+                      : '4: Outro (05:12)'}
                   </span>
                 </div>
               </div>
@@ -353,7 +370,10 @@ function ViewHarmonicBridgeP2P() {
                   : 'Índice Federado del Enjambre P2P (Candidatos Armónicos)'}
               </h2>
               <span {...stylex.props(styles.dimText)}>
-                ✓ {viewMode === 'simple' ? 'Todas con sonido de estudio' : 'Cuarentena FFT > 20 kHz'}
+                ✓{' '}
+                {viewMode === 'simple'
+                  ? 'Todas con sonido de estudio'
+                  : 'Cuarentena FFT > 20 kHz'}
               </span>
             </div>
 
@@ -372,18 +392,26 @@ function ViewHarmonicBridgeP2P() {
                   <tr>
                     <td>
                       <strong>Pryda — Allein</strong>{' '}
-                      <span {...stylex.props(styles.dimText)}>· Original Mix</span>
+                      <span {...stylex.props(styles.dimText)}>
+                        · Original Mix
+                      </span>
                     </td>
                     <td>
-                      <span {...stylex.props(styles.matchTag)}>💚 Mezcla suave · Sin voces</span>
+                      <span {...stylex.props(styles.matchTag)}>
+                        💚 Mezcla suave · Sin voces
+                      </span>
                     </td>
                     <td>126.0 BPM</td>
-                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>✨ Estudio (Puro)</td>
+                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>
+                      ✨ Estudio (Puro)
+                    </td>
                     <td>
                       <button
                         type="button"
                         onClick={() =>
-                          setPreviewStatus('📥 Agregado "Pryda — Allein" a tu lista de prueba')
+                          setPreviewStatus(
+                            '📥 Agregado "Pryda — Allein" a tu lista de prueba',
+                          )
                         }
                         {...stylex.props(styles.tableBtn)}
                       >
@@ -394,18 +422,26 @@ function ViewHarmonicBridgeP2P() {
                   <tr>
                     <td>
                       <strong>RÜFÜS DU SOL — Innerbloom</strong>{' '}
-                      <span {...stylex.props(styles.dimText)}>· Lane 8 Remix</span>
+                      <span {...stylex.props(styles.dimText)}>
+                        · Lane 8 Remix
+                      </span>
                     </td>
                     <td>
-                      <span {...stylex.props(styles.matchTag)}>💚 Mantiene la vibra melódica</span>
+                      <span {...stylex.props(styles.matchTag)}>
+                        💚 Mantiene la vibra melódica
+                      </span>
                     </td>
                     <td>124.5 BPM</td>
-                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>✨ Estudio (Puro)</td>
+                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>
+                      ✨ Estudio (Puro)
+                    </td>
                     <td>
                       <button
                         type="button"
                         onClick={() =>
-                          setPreviewStatus('📥 Agregado "Innerbloom" a tu lista de prueba')
+                          setPreviewStatus(
+                            '📥 Agregado "Innerbloom" a tu lista de prueba',
+                          )
                         }
                         {...stylex.props(styles.tableBtn)}
                       >
@@ -416,18 +452,26 @@ function ViewHarmonicBridgeP2P() {
                   <tr>
                     <td>
                       <strong>ARTBAT — Flame</strong>{' '}
-                      <span {...stylex.props(styles.dimText)}>· Extended Mix</span>
+                      <span {...stylex.props(styles.dimText)}>
+                        · Extended Mix
+                      </span>
                     </td>
                     <td>
-                      <span {...stylex.props(styles.vibeTag)}>🔥 Levanta la pista</span>
+                      <span {...stylex.props(styles.vibeTag)}>
+                        🔥 Levanta la pista
+                      </span>
                     </td>
                     <td>126.0 BPM</td>
-                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>✨ Estudio (Puro)</td>
+                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>
+                      ✨ Estudio (Puro)
+                    </td>
                     <td>
                       <button
                         type="button"
                         onClick={() =>
-                          setPreviewStatus('📥 Agregado "ARTBAT — Flame" a tu lista de prueba')
+                          setPreviewStatus(
+                            '📥 Agregado "ARTBAT — Flame" a tu lista de prueba',
+                          )
                         }
                         {...stylex.props(styles.tableBtn)}
                       >
@@ -448,8 +492,12 @@ function ViewHarmonicBridgeP2P() {
                   ? 'Tu Copiloto de Cabina (Háblale como a otro DJ)'
                   : 'Consola Ejecutiva "El Jefe" · Copiloto ReAct'}
               </h2>
-              <span style={{ color: '#67e8f9', fontSize: '12px', fontWeight: 600 }}>
-                {viewMode === 'simple' ? 'Gratis · Tú apruebas cada cambio' : `${selectedBackend} · $0.00`}
+              <span
+                style={{ color: '#67e8f9', fontSize: '12px', fontWeight: 600 }}
+              >
+                {viewMode === 'simple'
+                  ? 'Gratis · Tú apruebas cada cambio'
+                  : `${selectedBackend} · $0.00`}
               </span>
             </div>
 
@@ -460,7 +508,8 @@ function ViewHarmonicBridgeP2P() {
                   <span>👑 TÚ (EL JEFE)</span>
                   <span>Hace 1 min</span>
                 </div>
-                Quiero pasar de "Levels" a "Don't You Worry Child" subiendo el ánimo poco a poco, pero que no se encimen las voces al mezclar.
+                Quiero pasar de "Levels" a "Don't You Worry Child" subiendo el
+                ánimo poco a poco, pero que no se encimen las voces al mezclar.
               </div>
 
               {/* RECEIPT / ANSWER PANEL */}
@@ -473,42 +522,70 @@ function ViewHarmonicBridgeP2P() {
                       : 'PROPUESTA DE INGENIERÍA 2-OPT TSP LISTA'}
                   </div>
                   <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                    {viewMode === 'simple' ? 'Sonido Verificado' : '18ms · 0 Tokens Extra'}
+                    {viewMode === 'simple'
+                      ? 'Sonido Verificado'
+                      : '18ms · 0 Tokens Extra'}
                   </span>
                 </div>
 
                 <div {...stylex.props(styles.receiptBody)}>
                   <p style={{ margin: 0 }}>
-                    {viewMode === 'simple'
-                      ? 'Para no saltar de golpe de 124 a 128 BPM, puse dos temas en medio que suben la energía de forma natural y suenan afinados entre sí:'
-                      : 'Curva calculada con incremento gradual de +1.5 BPM por paso y compatibilidad armónica > 96%:'}
+                    {aiResponse
+                      ? aiResponse.assistant_reply
+                      : viewMode === 'simple'
+                        ? 'Para no saltar de golpe de 124 a 128 BPM, puse dos temas en medio que suben la energía de forma natural y suenan afinados entre sí:'
+                        : 'Curva calculada con incremento gradual de +1.5 BPM por paso y compatibilidad armónica > 96%:'}
                   </p>
 
                   <div {...stylex.props(styles.metricsRow)}>
                     <div {...stylex.props(styles.metricCell)}>
-                      <div {...stylex.props(styles.metricLabel)}>SUBIDA DE RITMO</div>
-                      <div {...stylex.props(styles.metricVal)} style={{ color: '#67e8f9' }}>
+                      <div {...stylex.props(styles.metricLabel)}>
+                        SUBIDA DE RITMO
+                      </div>
+                      <div
+                        {...stylex.props(styles.metricVal)}
+                        style={{ color: '#67e8f9' }}
+                      >
                         Suave (+1.5 BPM)
                       </div>
                     </div>
                     <div {...stylex.props(styles.metricCell)}>
-                      <div {...stylex.props(styles.metricLabel)}>CUIDADO DE VOCES</div>
-                      <div {...stylex.props(styles.metricVal)} style={{ color: '#6ee7b7' }}>
+                      <div {...stylex.props(styles.metricLabel)}>
+                        CUIDADO DE VOCES
+                      </div>
+                      <div
+                        {...stylex.props(styles.metricVal)}
+                        style={{ color: '#6ee7b7' }}
+                      >
                         🎤 Cero Choques
                       </div>
                     </div>
                     <div {...stylex.props(styles.metricCell)}>
-                      <div {...stylex.props(styles.metricLabel)}>CALIDAD DE SONIDO</div>
-                      <div {...stylex.props(styles.metricVal)} style={{ color: '#6ee7b7' }}>
+                      <div {...stylex.props(styles.metricLabel)}>
+                        CALIDAD DE SONIDO
+                      </div>
+                      <div
+                        {...stylex.props(styles.metricVal)}
+                        style={{ color: '#6ee7b7' }}
+                      >
                         ✨ 100% Estudio
                       </div>
                     </div>
                   </div>
 
                   <div {...stylex.props(styles.humanInstructions)}>
-                    <div><strong>1. Pon "Eric Prydz — Opus"</strong> cuando empiece la salida de Levels (min 04:42).</div>
-                    <div><strong>2. Mezcla "Deadmau5 — Strobe"</strong> en el minuto 05:12 (pura base instrumental, sin voz).</div>
-                    <div><strong>3. Suelta "Don't You Worry Child"</strong> y el coro entrará con toda la fuerza a 128 BPM.</div>
+                    <div>
+                      <strong>1. Pon "Eric Prydz — Opus"</strong> cuando empiece
+                      la salida de Levels (min 04:42).
+                    </div>
+                    <div>
+                      <strong>2. Mezcla "Deadmau5 — Strobe"</strong> en el
+                      minuto 05:12 (pura base instrumental, sin voz).
+                    </div>
+                    <div>
+                      <strong>3. Suelta "Don't You Worry Child"</strong> y el
+                      coro entrará con toda la fuerza a 128 BPM.
+                    </div>
                   </div>
                 </div>
 
@@ -516,25 +593,37 @@ function ViewHarmonicBridgeP2P() {
                   <button
                     type="button"
                     onClick={() =>
-                      setPreviewStatus('✅ Puente aprobado y promovido a tu lista de cabina')
+                      setPreviewStatus(
+                        '✅ Puente aprobado y promovido a tu lista de cabina',
+                      )
                     }
                     {...stylex.props(styles.primaryBtn)}
                   >
-                    ✅ {viewMode === 'simple' ? 'Me gusta, agregar a mi Lista' : 'Aprobar y Promover'}
+                    ✅{' '}
+                    {viewMode === 'simple'
+                      ? 'Me gusta, agregar a mi Lista'
+                      : 'Aprobar y Promover'}
                   </button>
                   <button
                     type="button"
                     onClick={() =>
-                      setPreviewStatus('🎛️ Exportando directamente a tu programa DJ...')
+                      setPreviewStatus(
+                        '🎛️ Exportando directamente a tu programa DJ...',
+                      )
                     }
                     {...stylex.props(styles.secondaryBtn)}
                   >
-                    🎛️ {viewMode === 'simple' ? 'Mandar a VirtualDJ' : 'Exportar a VirtualDJ'}
+                    🎛️{' '}
+                    {viewMode === 'simple'
+                      ? 'Mandar a VirtualDJ'
+                      : 'Exportar a VirtualDJ'}
                   </button>
                   <button
                     type="button"
                     onClick={() =>
-                      setPreviewStatus('🎧 Reproduciendo simulación completa del cruce...')
+                      setPreviewStatus(
+                        '🎧 Reproduciendo simulación completa del cruce...',
+                      )
                     }
                     {...stylex.props(styles.secondaryBtn)}
                   >
@@ -554,7 +643,9 @@ function ViewHarmonicBridgeP2P() {
                 <button
                   type="button"
                   onClick={() =>
-                    handleSendCopilotCommand('Pon algo más fiestero para levantar la pista')
+                    handleSendCopilotCommand(
+                      'Pon algo más fiestero para levantar la pista',
+                    )
                   }
                   {...stylex.props(styles.chip)}
                 >
@@ -563,7 +654,9 @@ function ViewHarmonicBridgeP2P() {
                 <button
                   type="button"
                   onClick={() =>
-                    handleSendCopilotCommand('Baja un poco la velocidad para ir más suave')
+                    handleSendCopilotCommand(
+                      'Baja un poco la velocidad para ir más suave',
+                    )
                   }
                   {...stylex.props(styles.chip)}
                 >
@@ -572,7 +665,9 @@ function ViewHarmonicBridgeP2P() {
                 <button
                   type="button"
                   onClick={() =>
-                    handleSendCopilotCommand('Busca temas que no tengan voces al principio')
+                    handleSendCopilotCommand(
+                      'Busca temas que no tengan voces al principio',
+                    )
                   }
                   {...stylex.props(styles.chip)}
                 >
@@ -586,7 +681,7 @@ function ViewHarmonicBridgeP2P() {
                   value={chatPrompt}
                   onChange={(e) => setChatPrompt(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSendCopilotCommand();
+                    if (e.key === 'Enter') void handleSendCopilotCommand();
                   }}
                   placeholder={
                     viewMode === 'simple'
@@ -624,7 +719,13 @@ function ViewHarmonicBridgeP2P() {
                       ? 'Conectar tu Copiloto IA (Sin configuraciones técnicas)'
                       : 'Onboarding & Radar Universal de Conectividad IA'}
                   </h2>
-                  <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
+                  <p
+                    style={{
+                      margin: '4px 0 0 0',
+                      fontSize: '12px',
+                      color: '#94a3b8',
+                    }}
+                  >
                     {viewMode === 'simple'
                       ? 'Elige cómo quieres que te ayude HERA. Funciona gratis desde el primer segundo.'
                       : 'Detecta y activa los 5 modos de IA disponibles en tu sistema.'}
@@ -644,12 +745,18 @@ function ViewHarmonicBridgeP2P() {
                 <div>
                   <div {...stylex.props(styles.subHeadRow)}>
                     <strong>1. ¿Quién toma las decisiones en la cabina?</strong>
-                    <span style={{ color: '#67e8f9', fontSize: '12px', fontWeight: 600 }}>
+                    <span
+                      style={{
+                        color: '#67e8f9',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                      }}
+                    >
                       {commanderMode === 'executive_boss'
                         ? '👑 Tú eres El Jefe'
                         : commanderMode === 'autonomous_operator'
-                        ? '⚡ Piloto Automático'
-                        : '👀 Solo Consejos'}
+                          ? '⚡ Piloto Automático'
+                          : '👀 Solo Consejos'}
                     </span>
                   </div>
 
@@ -657,45 +764,56 @@ function ViewHarmonicBridgeP2P() {
                     <div
                       {...stylex.props(
                         styles.authCard,
-                        commanderMode === 'executive_boss' && styles.authCardActive,
+                        commanderMode === 'executive_boss' &&
+                          styles.authCardActive,
                       )}
                       onClick={() => setCommanderMode('executive_boss')}
                     >
                       <div {...stylex.props(styles.authTitle)}>
-                        👑 Tú eres El Jefe <span>{commanderMode === 'executive_boss' && '●'}</span>
+                        👑 Tú eres El Jefe{' '}
+                        <span>{commanderMode === 'executive_boss' && '●'}</span>
                       </div>
                       <div {...stylex.props(styles.authDesc)}>
-                        El Copiloto te sugiere mezclas y canciones, pero tú apruebas con 1 clic antes de guardar.
+                        El Copiloto te sugiere mezclas y canciones, pero tú
+                        apruebas con 1 clic antes de guardar.
                       </div>
                     </div>
 
                     <div
                       {...stylex.props(
                         styles.authCard,
-                        commanderMode === 'autonomous_operator' && styles.authCardActive,
+                        commanderMode === 'autonomous_operator' &&
+                          styles.authCardActive,
                       )}
                       onClick={() => setCommanderMode('autonomous_operator')}
                     >
                       <div {...stylex.props(styles.authTitle)}>
-                        ⚡ Piloto Automático <span>{commanderMode === 'autonomous_operator' && '●'}</span>
+                        ⚡ Piloto Automático{' '}
+                        <span>
+                          {commanderMode === 'autonomous_operator' && '●'}
+                        </span>
                       </div>
                       <div {...stylex.props(styles.authDesc)}>
-                        El Copiloto arma, ordena y deja listas tus carpetas automáticamente respetando la calidad.
+                        El Copiloto arma, ordena y deja listas tus carpetas
+                        automáticamente respetando la calidad.
                       </div>
                     </div>
 
                     <div
                       {...stylex.props(
                         styles.authCard,
-                        commanderMode === 'advisor_only' && styles.authCardActive,
+                        commanderMode === 'advisor_only' &&
+                          styles.authCardActive,
                       )}
                       onClick={() => setCommanderMode('advisor_only')}
                     >
                       <div {...stylex.props(styles.authTitle)}>
-                        👀 Solo Consejos <span>{commanderMode === 'advisor_only' && '●'}</span>
+                        👀 Solo Consejos{' '}
+                        <span>{commanderMode === 'advisor_only' && '●'}</span>
                       </div>
                       <div {...stylex.props(styles.authDesc)}>
-                        Solo te dice qué canciones combinan bien sin descargar ni mover nada.
+                        Solo te dice qué canciones combinan bien sin descargar
+                        ni mover nada.
                       </div>
                     </div>
                   </div>
@@ -704,9 +822,22 @@ function ViewHarmonicBridgeP2P() {
                 {/* 2. SIMPLE AI OPTIONS */}
                 <div>
                   <div {...stylex.props(styles.subHeadRow)}>
-                    <strong>2. Elige el cerebro de tu Copiloto (Todos a $0.00 extra)</strong>
-                    <span style={{ color: '#6ee7b7', fontSize: '12px', fontWeight: 600 }}>
-                      ✓ Listo para usar
+                    <strong>
+                      2. Elige el cerebro de tu Copiloto (Todos a $0.00 extra)
+                    </strong>
+                    <span
+                      style={{
+                        color: '#6ee7b7',
+                        fontSize: '12px',
+                        fontWeight: 600,
+                      }}
+                    >
+                      {isScanningOnboarding
+                        ? 'Escaneando...'
+                        : probeBanner ||
+                          (onboardingReport
+                            ? `✓ ${onboardingReport.cli_agents.length} CLIs listos`
+                            : '✓ Listo para usar')}
                     </span>
                   </div>
 
@@ -715,7 +846,8 @@ function ViewHarmonicBridgeP2P() {
                     <div
                       {...stylex.props(
                         styles.modeRow,
-                        selectedBackend.startsWith('cli_') && styles.modeRowActive,
+                        selectedBackend.startsWith('cli_') &&
+                          styles.modeRowActive,
                       )}
                       onClick={() => setSelectedBackend('cli_agy')}
                     >
@@ -724,14 +856,23 @@ function ViewHarmonicBridgeP2P() {
                           ⚡ Usar la IA que ya tienes en tu computadora
                         </div>
                         <div {...stylex.props(styles.modeDesc)}>
-                          Detectamos estas apps instaladas en tu PC. Úsalas directo sin pagar ni configurar nada extra:
+                          Detectamos estas apps instaladas en tu PC. Úsalas
+                          directo sin pagar ni configurar nada extra:
                         </div>
                         <div {...stylex.props(styles.badgesRow)}>
                           <span {...stylex.props(styles.pillActiveBadge)}>
-                            ✓ Antigravity ({selectedBackend === 'cli_agy' ? 'Activo' : 'Detectado'})
+                            ✓ Antigravity (
+                            {selectedBackend === 'cli_agy'
+                              ? 'Activo'
+                              : 'Detectado'}
+                            )
                           </span>
-                          <span {...stylex.props(styles.pillBadge)}>✓ Claude (Detectado)</span>
-                          <span {...stylex.props(styles.pillBadge)}>✓ Gemini (Detectado)</span>
+                          <span {...stylex.props(styles.pillBadge)}>
+                            ✓ Claude (Detectado)
+                          </span>
+                          <span {...stylex.props(styles.pillBadge)}>
+                            ✓ Gemini (Detectado)
+                          </span>
                         </div>
                       </div>
                       <button
@@ -751,7 +892,8 @@ function ViewHarmonicBridgeP2P() {
                     <div
                       {...stylex.props(
                         styles.modeRow,
-                        selectedBackend === 'workers_ai_llama33' && styles.modeRowActive,
+                        selectedBackend === 'workers_ai_llama33' &&
+                          styles.modeRowActive,
                       )}
                       onClick={() => setSelectedBackend('workers_ai_llama33')}
                     >
@@ -760,7 +902,9 @@ function ViewHarmonicBridgeP2P() {
                           ☁️ IA Gratuita de HERA (Incluida para todos)
                         </div>
                         <div {...stylex.props(styles.modeDesc)}>
-                          Funciona al instante por internet sin instalar programas ni crear cuentas (10,000 Neurons/día gratis).
+                          Funciona al instante por internet sin instalar
+                          programas ni crear cuentas (10,000 Neurons/día
+                          gratis).
                         </div>
                       </div>
                       <button
@@ -772,7 +916,9 @@ function ViewHarmonicBridgeP2P() {
                             : styles.secondaryBtn,
                         )}
                       >
-                        {selectedBackend === 'workers_ai_llama33' ? '✓ Activo' : 'Usar Gratis'}
+                        {selectedBackend === 'workers_ai_llama33'
+                          ? '✓ Activo'
+                          : 'Usar Gratis'}
                       </button>
                     </div>
 
@@ -789,7 +935,8 @@ function ViewHarmonicBridgeP2P() {
                           ✈️ Modo Fiesta Sin Internet (100% en tu PC)
                         </div>
                         <div {...stylex.props(styles.modeDesc)}>
-                          Ideal cuando estás tocando en vivo en un club, evento o cabaña sin Wi-Fi (Ollama / LM Studio).
+                          Ideal cuando estás tocando en vivo en un club, evento
+                          o cabaña sin Wi-Fi (Ollama / LM Studio).
                         </div>
                       </div>
                       <button
@@ -808,7 +955,8 @@ function ViewHarmonicBridgeP2P() {
                     {/* COLLAPSIBLE PRO SECTION */}
                     <div {...stylex.props(styles.proExpanderRow)}>
                       <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                        ⚙️ <strong>¿Eres usuario avanzado?</strong> También puedes conectar tu propia API key o usar HERA vía MCP.
+                        ⚙️ <strong>¿Eres usuario avanzado?</strong> También
+                        puedes conectar tu propia API key o usar HERA vía MCP.
                       </div>
                       <button
                         type="button"
@@ -816,16 +964,26 @@ function ViewHarmonicBridgeP2P() {
                         {...stylex.props(styles.secondaryBtn)}
                         style={{ height: '28px', fontSize: '11.5px' }}
                       >
-                        {showProOptions ? 'Ocultar Opciones Pro ▴' : 'Ver Opciones Pro ▾'}
+                        {showProOptions
+                          ? 'Ocultar Opciones Pro ▴'
+                          : 'Ver Opciones Pro ▾'}
                       </button>
                     </div>
 
                     {showProOptions && (
                       <div {...stylex.props(styles.proBox)}>
                         <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
-                          🔌 <strong>HERA MCP Server:</strong> Ejecuta <code>hera-node --mcp</code> en Claude Desktop, Cursor o Antigravity.
+                          🔌 <strong>HERA MCP Server:</strong> Ejecuta{' '}
+                          <code>hera-node --mcp</code> en Claude Desktop, Cursor
+                          o Antigravity.
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                        <div
+                          style={{
+                            display: 'flex',
+                            gap: '8px',
+                            marginTop: '6px',
+                          }}
+                        >
                           <input
                             type="text"
                             value={customBaseUrl}
@@ -836,9 +994,17 @@ function ViewHarmonicBridgeP2P() {
                           />
                           <button
                             type="button"
-                            onClick={() =>
-                              setPreviewStatus('✓ Servidor local guardado correctamente')
-                            }
+                            onClick={() => {
+                              void probeLocalAiBackend(customBaseUrl).then(
+                                (probe) => {
+                                  setPreviewStatus(
+                                    probe.reachable
+                                      ? `✓ Servidor local conectado (${probe.base_url})`
+                                      : `✓ Servidor local guardado (${customBaseUrl})`,
+                                  );
+                                },
+                              );
+                            }}
                             {...stylex.props(styles.secondaryBtn)}
                             style={{ height: '30px', fontSize: '12px' }}
                           >
@@ -853,14 +1019,23 @@ function ViewHarmonicBridgeP2P() {
                 {/* SWARM FIRST INVARIANT */}
                 <div {...stylex.props(styles.swarmLockBar)}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: '13px', color: '#6ee7b7' }}>
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        fontSize: '13px',
+                        color: '#6ee7b7',
+                      }}
+                    >
                       🤝 Comunidad HERA: Todos nos ayudamos
                     </div>
                     <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
-                      HERA es 100% gratis porque compartimos y cuidamos la calidad de audio entre todos los DJs.
+                      HERA es 100% gratis porque compartimos y cuidamos la
+                      calidad de audio entre todos los DJs.
                     </div>
                   </div>
-                  <span {...stylex.props(styles.toggleLocked)}>🤝 SIEMPRE ACTIVO</span>
+                  <span {...stylex.props(styles.toggleLocked)}>
+                    🤝 SIEMPRE ACTIVO
+                  </span>
                 </div>
               </div>
             </aside>
@@ -889,13 +1064,15 @@ const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '0 16px',
+    paddingBlock: '0',
+    paddingInline: '16px',
     flexShrink: 0,
   },
   brandGroup: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
+    rowGap: '10px',
+    columnGap: '10px',
   },
   brandDot: {
     width: '8px',
@@ -922,14 +1099,17 @@ const styles = stylex.create({
   topActions: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
   statusPill: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '6px',
+    rowGap: '6px',
+    columnGap: '6px',
     height: '28px',
-    padding: '0 10px',
+    paddingBlock: '0',
+    paddingInline: '10px',
     borderRadius: '5px',
     backgroundColor: '#101622',
     borderWidth: '1px',
@@ -959,7 +1139,9 @@ const styles = stylex.create({
     backgroundColor: '#10b981',
   },
   splitWorkspace: {
-    flex: 1,
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0%',
     display: 'grid',
     gridTemplateColumns: '56% 44%',
     overflow: 'hidden',
@@ -980,7 +1162,8 @@ const styles = stylex.create({
   },
   sectionHead: {
     height: '42px',
-    padding: '0 16px',
+    paddingBlock: '0',
+    paddingInline: '16px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: '#1f2a3d',
@@ -997,19 +1180,22 @@ const styles = stylex.create({
     color: '#f8fafc',
   },
   deckRack: {
-    padding: '14px 16px',
+    paddingBlock: '14px',
+    paddingInline: '16px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: '#1f2a3d',
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px',
+    rowGap: '12px',
+    columnGap: '12px',
   },
   decksRow: {
     display: 'grid',
     gridTemplateColumns: '1fr 32px 1fr',
     alignItems: 'center',
-    gap: '10px',
+    rowGap: '10px',
+    columnGap: '10px',
   },
   deckCard: {
     backgroundColor: '#101622',
@@ -1017,10 +1203,12 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: '#1f2a3d',
     borderRadius: '6px',
-    padding: '10px 14px',
+    paddingBlock: '10px',
+    paddingInline: '14px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '4px',
+    rowGap: '4px',
+    columnGap: '4px',
   },
   deckTopLine: {
     display: 'flex',
@@ -1045,7 +1233,8 @@ const styles = stylex.create({
     color: '#94a3b8',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
   arrowCol: {
     textAlign: 'center',
@@ -1065,11 +1254,13 @@ const styles = stylex.create({
     display: 'grid',
     gridTemplateColumns: '70px 1fr 130px 80px 160px',
     alignItems: 'center',
-    padding: '8px 12px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: '#1f2a3d',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
     fontSize: '12.5px',
   },
   stepIdx: {
@@ -1090,7 +1281,8 @@ const styles = stylex.create({
   matchTag: {
     fontSize: '11.5px',
     fontWeight: 600,
-    padding: '2px 8px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
     borderRadius: '99px',
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
     color: '#6ee7b7',
@@ -1102,7 +1294,8 @@ const styles = stylex.create({
   vibeTag: {
     fontSize: '11.5px',
     fontWeight: 600,
-    padding: '2px 8px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
     borderRadius: '99px',
     backgroundColor: 'rgba(6, 182, 212, 0.12)',
     color: '#67e8f9',
@@ -1118,7 +1311,8 @@ const styles = stylex.create({
   },
   previewBtn: {
     height: '26px',
-    padding: '0 10px',
+    paddingBlock: '0',
+    paddingInline: '10px',
     borderRadius: '4px',
     backgroundColor: '#161f30',
     borderWidth: '1px',
@@ -1142,7 +1336,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: '#1f2a3d',
     borderRadius: '5px',
-    padding: '7px 12px',
+    paddingBlock: '7px',
+    paddingInline: '12px',
   },
   cueStripTitle: {
     fontSize: '11.5px',
@@ -1152,14 +1347,16 @@ const styles = stylex.create({
   cuePinsList: {
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
+    rowGap: '12px',
+    columnGap: '12px',
     fontSize: '11.5px',
     fontWeight: 500,
   },
   cuePin: {
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '5px',
+    rowGap: '5px',
+    columnGap: '5px',
   },
   dot: {
     width: '7px',
@@ -1173,7 +1370,8 @@ const styles = stylex.create({
   badgeCyan: {
     fontSize: '11px',
     fontWeight: 700,
-    padding: '2px 7px',
+    paddingBlock: '2px',
+    paddingInline: '7px',
     borderRadius: '4px',
     backgroundColor: 'rgba(6, 182, 212, 0.14)',
     color: '#67e8f9',
@@ -1184,7 +1382,8 @@ const styles = stylex.create({
   badgeEmerald: {
     fontSize: '11px',
     fontWeight: 700,
-    padding: '2px 7px',
+    paddingBlock: '2px',
+    paddingInline: '7px',
     borderRadius: '4px',
     backgroundColor: 'rgba(16, 185, 129, 0.14)',
     color: '#6ee7b7',
@@ -1193,7 +1392,9 @@ const styles = stylex.create({
     borderColor: 'rgba(16, 185, 129, 0.35)',
   },
   tableWrap: {
-    flex: 1,
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0%',
     overflowY: 'auto',
   },
   table: {
@@ -1203,7 +1404,8 @@ const styles = stylex.create({
   },
   tableBtn: {
     height: '26px',
-    padding: '0 10px',
+    paddingBlock: '0',
+    paddingInline: '10px',
     borderRadius: '4px',
     backgroundColor: 'rgba(6, 182, 212, 0.12)',
     borderWidth: '1px',
@@ -1215,11 +1417,14 @@ const styles = stylex.create({
     cursor: 'pointer',
   },
   copilotBody: {
-    flex: 1,
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0%',
     padding: '16px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '14px',
+    rowGap: '14px',
+    columnGap: '14px',
     overflowY: 'auto',
   },
   bossMsg: {
@@ -1229,8 +1434,12 @@ const styles = stylex.create({
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: '#2e3d57',
-    borderRadius: '8px 8px 2px 8px',
-    padding: '10px 14px',
+    borderTopLeftRadius: '8px',
+    borderTopRightRadius: '8px',
+    borderBottomRightRadius: '2px',
+    borderBottomLeftRadius: '8px',
+    paddingBlock: '10px',
+    paddingInline: '14px',
     color: '#f8fafc',
     fontSize: '13px',
   },
@@ -1253,7 +1462,8 @@ const styles = stylex.create({
     flexDirection: 'column',
   },
   receiptHead: {
-    padding: '10px 14px',
+    paddingBlock: '10px',
+    paddingInline: '14px',
     backgroundColor: '#131b29',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -1268,13 +1478,16 @@ const styles = stylex.create({
     color: '#6ee7b7',
     display: 'flex',
     alignItems: 'center',
-    gap: '6px',
+    rowGap: '6px',
+    columnGap: '6px',
   },
   receiptBody: {
-    padding: '12px 14px',
+    paddingBlock: '12px',
+    paddingInline: '14px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
+    rowGap: '10px',
+    columnGap: '10px',
     fontSize: '12.5px',
     color: '#94a3b8',
   },
@@ -1289,7 +1502,8 @@ const styles = stylex.create({
     overflow: 'hidden',
   },
   metricCell: {
-    padding: '8px 10px',
+    paddingBlock: '8px',
+    paddingInline: '10px',
     borderRightWidth: '1px',
     borderRightStyle: 'solid',
     borderRightColor: '#1f2a3d',
@@ -1306,29 +1520,34 @@ const styles = stylex.create({
   humanInstructions: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '5px',
+    rowGap: '5px',
+    columnGap: '5px',
     fontSize: '12.5px',
     color: '#f8fafc',
     backgroundColor: '#0b0f17',
-    padding: '10px 12px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
     borderRadius: '5px',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: '#1f2a3d',
   },
   receiptActions: {
-    padding: '10px 14px',
+    paddingBlock: '10px',
+    paddingInline: '14px',
     backgroundColor: '#0c111a',
     borderTopWidth: '1px',
     borderTopStyle: 'solid',
     borderTopColor: '#1f2a3d',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
   primaryBtn: {
     height: '32px',
-    padding: '0 12px',
+    paddingBlock: '0',
+    paddingInline: '12px',
     borderRadius: '5px',
     backgroundColor: '#06b6d4',
     color: '#041318',
@@ -1338,12 +1557,14 @@ const styles = stylex.create({
     cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '5px',
+    rowGap: '5px',
+    columnGap: '5px',
     whiteSpace: 'nowrap',
   },
   secondaryBtn: {
     height: '32px',
-    padding: '0 10px',
+    paddingBlock: '0',
+    paddingInline: '10px',
     borderRadius: '5px',
     backgroundColor: '#161f30',
     borderWidth: '1px',
@@ -1355,11 +1576,13 @@ const styles = stylex.create({
     cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',
-    gap: '5px',
+    rowGap: '5px',
+    columnGap: '5px',
     whiteSpace: 'nowrap',
   },
   statusAlert: {
-    padding: '8px 12px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
     backgroundColor: 'rgba(6, 182, 212, 0.12)',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -1370,23 +1593,27 @@ const styles = stylex.create({
     fontWeight: 600,
   },
   inputDock: {
-    padding: '12px 16px',
+    paddingBlock: '12px',
+    paddingInline: '16px',
     borderTopWidth: '1px',
     borderTopStyle: 'solid',
     borderTopColor: '#1f2a3d',
     backgroundColor: '#101622',
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
   chipsList: {
     display: 'flex',
-    gap: '6px',
+    rowGap: '6px',
+    columnGap: '6px',
     overflowX: 'auto',
   },
   chip: {
     fontSize: '11px',
-    padding: '3px 8px',
+    paddingBlock: '3px',
+    paddingInline: '8px',
     borderRadius: '99px',
     backgroundColor: '#161f30',
     borderWidth: '1px',
@@ -1398,17 +1625,21 @@ const styles = stylex.create({
   },
   inputRow: {
     display: 'flex',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
   chatInput: {
-    flex: 1,
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0%',
     height: '34px',
     backgroundColor: '#080b10',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: '#2e3d57',
     borderRadius: '5px',
-    padding: '0 12px',
+    paddingBlock: '0',
+    paddingInline: '12px',
     color: '#f8fafc',
     fontSize: '12.5px',
   },
@@ -1436,7 +1667,8 @@ const styles = stylex.create({
     boxShadow: '-16px 0 40px rgba(0, 0, 0, 0.65)',
   },
   drawerHeader: {
-    padding: '16px 20px',
+    paddingBlock: '16px',
+    paddingInline: '20px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: '#1f2a3d',
@@ -1447,7 +1679,8 @@ const styles = stylex.create({
   },
   closeBtn: {
     height: '28px',
-    padding: '0 10px',
+    paddingBlock: '0',
+    paddingInline: '10px',
     borderRadius: '5px',
     backgroundColor: '#161f30',
     borderWidth: '1px',
@@ -1458,11 +1691,15 @@ const styles = stylex.create({
     cursor: 'pointer',
   },
   drawerBody: {
-    flex: 1,
-    padding: '16px 20px',
+    flexGrow: '1',
+    flexShrink: '1',
+    flexBasis: '0%',
+    paddingBlock: '16px',
+    paddingInline: '20px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '16px',
+    rowGap: '16px',
+    columnGap: '16px',
     overflowY: 'auto',
   },
   subHeadRow: {
@@ -1482,13 +1719,15 @@ const styles = stylex.create({
     overflow: 'hidden',
   },
   authCard: {
-    padding: '10px 12px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
     borderRightWidth: '1px',
     borderRightStyle: 'solid',
     borderRightColor: '#1f2a3d',
     display: 'flex',
     flexDirection: 'column',
-    gap: '3px',
+    rowGap: '3px',
+    columnGap: '3px',
     cursor: 'pointer',
   },
   authCardActive: {
@@ -1504,7 +1743,7 @@ const styles = stylex.create({
   authDesc: {
     fontSize: '11px',
     color: '#94a3b8',
-    lineHeight: '1.35',
+    lineHeight: 1.35,
   },
   modesContainer: {
     display: 'flex',
@@ -1520,11 +1759,13 @@ const styles = stylex.create({
     display: 'grid',
     gridTemplateColumns: '1fr 140px',
     alignItems: 'center',
-    padding: '12px 14px',
+    paddingBlock: '12px',
+    paddingInline: '14px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: '#1f2a3d',
-    gap: '12px',
+    rowGap: '12px',
+    columnGap: '12px',
     cursor: 'pointer',
   },
   modeRowActive: {
@@ -1542,13 +1783,15 @@ const styles = stylex.create({
   },
   badgesRow: {
     display: 'flex',
-    gap: '6px',
+    rowGap: '6px',
+    columnGap: '6px',
     marginTop: '6px',
   },
   pillBadge: {
     fontSize: '11px',
     fontWeight: 600,
-    padding: '2px 8px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
     borderRadius: '99px',
     backgroundColor: '#090c12',
     borderWidth: '1px',
@@ -1559,7 +1802,8 @@ const styles = stylex.create({
   pillActiveBadge: {
     fontSize: '11px',
     fontWeight: 600,
-    padding: '2px 8px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
     borderRadius: '99px',
     backgroundColor: 'rgba(16, 185, 129, 0.12)',
     borderWidth: '1px',
@@ -1568,24 +1812,28 @@ const styles = stylex.create({
     color: '#6ee7b7',
   },
   proExpanderRow: {
-    padding: '10px 14px',
+    paddingBlock: '10px',
+    paddingInline: '14px',
     backgroundColor: '#090c12',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   proBox: {
-    padding: '12px 14px',
+    paddingBlock: '12px',
+    paddingInline: '14px',
     backgroundColor: '#080b10',
     borderTopWidth: '1px',
     borderTopStyle: 'solid',
     borderTopColor: '#1f2a3d',
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
+    rowGap: '8px',
+    columnGap: '8px',
   },
   swarmLockBar: {
-    padding: '12px 14px',
+    paddingBlock: '12px',
+    paddingInline: '14px',
     borderRadius: '6px',
     backgroundColor: 'rgba(16, 185, 129, 0.08)',
     borderWidth: '1px',
@@ -1598,7 +1846,8 @@ const styles = stylex.create({
   toggleLocked: {
     fontSize: '11px',
     fontWeight: 700,
-    padding: '3px 8px',
+    paddingBlock: '3px',
+    paddingInline: '8px',
     borderRadius: '99px',
     backgroundColor: 'rgba(6, 182, 212, 0.14)',
     borderWidth: '1px',
