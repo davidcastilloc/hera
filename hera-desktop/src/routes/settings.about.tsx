@@ -33,29 +33,26 @@ function ViewSettingsAbout() {
   return (
     <>
       <Setting.Section>
-        <Setting.Title>
-          🐺🕶️🥫 HERA Open-Source DJ Engine &amp; Robin Hood Sustenance
-        </Setting.Title>
+        <Setting.Title>HERA Open-Source DJ Engine</Setting.Title>
         <Setting.Description>
-          <strong>{HERA_ROBIN_HOOD_SUPPORT.quote}</strong>
-        </Setting.Description>
-        <Setting.Description>
-          {HERA_ROBIN_HOOD_SUPPORT.philosophy}
+          Motor nativo en Rust + Tauri v2 (licencia MIT): análisis espectral
+          DSP, detección de 4 Hot Cues de frase, secuenciación armónica 2-Opt,
+          exportadores para cabina y copiloto IA incluidos de forma gratuita.
         </Setting.Description>
         <Flexbox gap={8}>
           <ExternalLink href={HERA_ROBIN_HOOD_SUPPORT.kofiUrl} type="url">
-            ☕ Ko-fi / Buy Me a Coffee
+            Apoyar en Ko-fi
           </ExternalLink>
           {' · '}
           <ExternalLink
             href={HERA_ROBIN_HOOD_SUPPORT.githubSponsorsUrl}
             type="url"
           >
-            💖 GitHub Sponsors
+            GitHub Sponsors
           </ExternalLink>
           {' · '}
           <ExternalLink href={HERA_ROBIN_HOOD_SUPPORT.repoUrl} type="url">
-            ⭐ GitHub (MIT)
+            Repositorio GitHub (MIT)
           </ExternalLink>
         </Flexbox>
       </Setting.Section>

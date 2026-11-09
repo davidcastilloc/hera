@@ -1,7 +1,9 @@
+import * as stylex from '@stylexjs/stylex';
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect } from 'react';
 
+import HeraDjToolbar from '../components/HeraDjToolbar';
 import TrackList from '../components/TrackList';
 import TrackListStates from '../components/TrackListStates';
 import View from '../elements/View';
@@ -31,10 +33,6 @@ function ViewLibrary() {
   const { playlists } = Route.useLoaderData();
 
   const config = useSuspenseQuery(configQuery).data;
-
-  // Some queries when switching routes can be expensive-ish (like getting all tracks),
-  // while at the same time, the data will most of the time never change.
-  // Using stale-while-revalidate libraries help us (fake-)loading this page faster
   const { data: tracks, isLoading } = useQuery(allTracksQuery);
 
   useEffect(() => {
@@ -51,16 +49,40 @@ function ViewLibrary() {
   useGlobalTrackListStatus(filteredTracks);
 
   return (
-    <View>
-      <TrackListStates isLoading={isLoading} tracks={filteredTracks}>
-        <TrackList
-          layout="default"
-          data={filteredTracks}
-          queueOrigin={QUEUE_ORIGIN}
-          tracksDensity={config.track_view_density}
-          playlists={playlists}
-        />
-      </TrackListStates>
+    <View xstyle={styles.libraryView}>
+      <HeraDjToolbar
+        title="Biblioteca de Cabina"
+        tracksOverride={filteredTracks}
+        crateName="Hera_Active_Set"
+      />
+      <div {...stylex.props(styles.listViewport)}>
+        <TrackListStates isLoading={isLoading} tracks={filteredTracks}>
+          <TrackList
+            layout="default"
+            data={filteredTracks}
+            queueOrigin={QUEUE_ORIGIN}
+            tracksDensity={config.track_view_density}
+            playlists={playlists}
+          />
+        </TrackListStates>
+      </div>
     </View>
   );
 }
+
+const styles = stylex.create({
+  libraryView: {
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  listViewport: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    minHeight: 0,
+    position: 'relative',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+});

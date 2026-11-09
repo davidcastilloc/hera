@@ -88,9 +88,9 @@ pub const SYSTEM_THEME: &str = "__system";
 impl Default for Config {
     fn default() -> Self {
         Config {
-            language: "en".to_owned(),
-            theme: SYSTEM_THEME.to_owned(),
-            ui_accent_color: None,
+            language: "es".to_owned(),
+            theme: "dark".to_owned(),
+            ui_accent_color: Some("#14b8a6".to_owned()),
             audio_volume: 1.0,
             audio_playback_rate: Some(1.0),
             audio_follow_playing_track: false,

@@ -77,13 +77,11 @@ pub fn scan_dir(path: &PathBuf, allowed_extensions: &[&str]) -> Vec<PathBuf> {
 
 /**
  * Give an arbitrary string (usually the theme value from the config), returns
- * a Tauri theme
+ * a Tauri theme. HERA Desktop operates exclusively in Dark Booth Studio mode.
  */
 pub fn get_theme_from_name(theme_name: &str) -> Option<Theme> {
     match theme_name {
-        "light" => Some(Theme::Light),
-        "dark" => Some(Theme::Dark),
-        SYSTEM_THEME => None,
-        _ => None, // ? :]
+        "dark" | "light" | SYSTEM_THEME => Some(Theme::Dark),
+        _ => Some(Theme::Dark),
     }
 }

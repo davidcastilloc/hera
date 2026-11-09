@@ -1,9 +1,19 @@
 import * as stylex from '@stylexjs/stylex';
 import { error } from '@tauri-apps/plugin-log';
 
+import artists from '../assets/icons/artists.svg?react';
+import bridge from '../assets/icons/bridge.svg?react';
+import checkCircle from '../assets/icons/check-circle.svg?react';
 import chevronDown from '../assets/icons/chevron-down.svg?react';
 import chevronUp from '../assets/icons/chevron-up.svg?react';
+import cpu from '../assets/icons/cpu.svg?react';
+import crateList from '../assets/icons/crate-list.svg?react';
+import disc from '../assets/icons/disc.svg?react';
+import dna from '../assets/icons/dna.svg?react';
+import exportIcon from '../assets/icons/export.svg?react';
+import folderPlus from '../assets/icons/folder-plus.svg?react';
 import globe from '../assets/icons/globe.svg?react';
+import heart from '../assets/icons/heart.svg?react';
 import list from '../assets/icons/list.svg?react';
 import microphone from '../assets/icons/microphone.svg?react';
 import musicalNotes from '../assets/icons/musical-notes.svg?react';
@@ -13,10 +23,13 @@ import playlist from '../assets/icons/playlist.svg?react';
 import plus from '../assets/icons/plus.svg?react';
 import repeatOne from '../assets/icons/repeat-one.svg?react';
 import repeat from '../assets/icons/repeat.svg?react';
+import search from '../assets/icons/search.svg?react';
 import settings from '../assets/icons/settings.svg?react';
 import shuffle from '../assets/icons/shuffle.svg?react';
 import skipBack from '../assets/icons/skip-back.svg?react';
 import skipForward from '../assets/icons/skip-forward.svg?react';
+import sliders from '../assets/icons/sliders.svg?react';
+import sparkles from '../assets/icons/sparkles.svg?react';
 import volumeHigh from '../assets/icons/volume-high.svg?react';
 import volumeLow from '../assets/icons/volume-low.svg?react';
 import volumeMedium from '../assets/icons/volume-medium.svg?react';
@@ -27,9 +40,19 @@ const icons: Record<
   string,
   React.FunctionComponent<React.SVGProps<SVGSVGElement>>
 > = {
+  artists,
+  bridge,
+  checkCircle,
   chevronDown,
   chevronUp,
+  cpu,
+  crateList,
+  disc,
+  dna,
+  export: exportIcon,
+  folderPlus,
   globe,
+  heart,
   list,
   microphone,
   musicalNotes,
@@ -39,10 +62,13 @@ const icons: Record<
   plus,
   repeat,
   repeatOne,
+  search,
   settings,
   shuffle,
   skipBack,
   skipForward,
+  sliders,
+  sparkles,
   volumeHigh,
   volumeLow,
   volumeMedium,
@@ -95,6 +121,7 @@ const styles = stylex.create({
     aspectRatio: '1',
     fill: 'currentColor',
     lineHeight: 1,
+    flexShrink: 0,
   },
 });
 
@@ -102,8 +129,14 @@ const stylesBySize = stylex.create({
   12: {
     width: '12px',
   },
+  14: {
+    width: '14px',
+  },
   16: {
     width: '16px',
+  },
+  18: {
+    width: '18px',
   },
   20: {
     width: '20px',

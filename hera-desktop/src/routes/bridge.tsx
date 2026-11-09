@@ -1,7 +1,8 @@
 import * as stylex from '@stylexjs/stylex';
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
+import Icon from '../components/Icon';
 import View from '../elements/View';
 import {
   chatWithCloudflareFreeAi,
@@ -23,6 +24,41 @@ import {
 export const Route = createFileRoute('/bridge')({
   component: ViewHarmonicBridgeP2P,
 });
+
+const PHRASE_RAIL_MARKERS = [
+  {
+    num: 1,
+    simpleLabel: '1 · Entrada',
+    proLabel: '1 · Intro',
+    time: '00:16',
+    pct: '5%',
+    color: '#22c55e',
+  },
+  {
+    num: 2,
+    simpleLabel: '2 · Calma',
+    proLabel: '2 · Breakdown',
+    time: '01:48',
+    pct: '33%',
+    color: '#38bdf8',
+  },
+  {
+    num: 3,
+    simpleLabel: '3 · Explosión',
+    proLabel: '3 · Drop',
+    time: '02:34',
+    pct: '48%',
+    color: '#ef4444',
+  },
+  {
+    num: 4,
+    simpleLabel: '4 · Salida',
+    proLabel: '4 · Outro',
+    time: '05:12',
+    pct: '92%',
+    color: '#f59e0b',
+  },
+] as const;
 
 function ViewHarmonicBridgeP2P() {
   const viewMode = useHeraViewStore((state) => state.viewMode);
@@ -65,7 +101,7 @@ function ViewHarmonicBridgeP2P() {
   const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
   const [showProOptions, setShowProOptions] = useState<boolean>(false);
 
-  const handleRunOnboardingScan = async () => {
+  const handleRunOnboardingScan = useCallback(async () => {
     setIsScanningOnboarding(true);
     try {
       const rep = await scanAiConnectivityOnboarding(commanderMode);
@@ -75,15 +111,15 @@ function ViewHarmonicBridgeP2P() {
       }
       setProbeBanner(
         viewMode === 'simple'
-          ? `✓ Copiloto listo: ${rep.recommended_backend_id.replace('cli_', '')} · Calidad y comunidad blindadas`
-          : `🧭 ${rep.summary_badge} · Escudo del Enjambre: Quarantine-First Activo`,
+          ? `Motor listo: ${rep.recommended_backend_id.replace('cli_', '')}`
+          : `${rep.summary_badge} · Quarantine-First`,
       );
     } catch {
-      // Fallback
+      // Offline fallback
     } finally {
       setIsScanningOnboarding(false);
     }
-  };
+  }, [commanderMode, viewMode]);
 
   const handleSendCopilotCommand = async (customText?: string) => {
     const promptToSend = customText || chatPrompt;
@@ -99,11 +135,11 @@ function ViewHarmonicBridgeP2P() {
       setAiResponse(reply);
       setPreviewStatus(
         viewMode === 'simple'
-          ? '✨ Propuesta lista: revisa los pasos y dale a "Me gusta" para guardar'
-          : `🤖 Respuesta generada por ${reply.model_used}`,
+          ? 'Propuesta actualizada · Revisa los pasos antes de agregar al crate'
+          : `Respuesta generada por ${reply.model_used}`,
       );
     } catch {
-      setPreviewStatus('⚠️ Conectando con el copiloto...');
+      setPreviewStatus('Conectando con el motor del copiloto...');
     } finally {
       setIsAiLoading(false);
     }
@@ -115,7 +151,7 @@ function ViewHarmonicBridgeP2P() {
         const radar = await getCloudflareEdgeRadar();
         setEdgeRadar(radar);
       } catch {
-        // Fallback
+        // Offline fallback
       }
 
       try {
@@ -131,14 +167,24 @@ function ViewHarmonicBridgeP2P() {
         });
         setBridgeResult(res);
       } catch {
-        // Fallback
+        // Offline fallback
       }
 
       void handleRunOnboardingScan();
     };
 
     void loadInitialData();
-  }, []);
+  }, [
+    handleRunOnboardingScan,
+    originArtist,
+    originBpm,
+    originCamelot,
+    originTitle,
+    targetArtist,
+    targetBpm,
+    targetCamelot,
+    targetTitle,
+  ]);
 
   const matchInfo = getHumanMatchLabel(
     originCamelot,
@@ -148,232 +194,234 @@ function ViewHarmonicBridgeP2P() {
   );
 
   return (
-    <View aria-label="HERA Studio & Copilot Console">
+    <View aria-label="Puente Armónico y Copiloto de Cabina">
       <div {...stylex.props(styles.pageContainer)}>
-        {/* TOP STATUS BAR */}
         <header {...stylex.props(styles.topBar)}>
           <div {...stylex.props(styles.brandGroup)}>
-            <span {...stylex.props(styles.brandDot)} />
-            <strong {...stylex.props(styles.brandTitle)}>HERA DJ</strong>
-            <span {...stylex.props(styles.divider)} />
-            <span {...stylex.props(styles.subLabel)}>
+            <Icon name="bridge" size={18} color="#2dd4bf" />
+            <h1 {...stylex.props(styles.pageTitle)}>
               {viewMode === 'simple'
-                ? 'Conectar Canciones & Copiloto de Cabina'
-                : 'Consola de Puente Armónico & Copiloto ReAct'}
-            </span>
+                ? 'Puente Musical y Copiloto de Cabina'
+                : 'Puente Armónico 2-Opt y Enjambre P2P'}
+            </h1>
           </div>
 
           <div {...stylex.props(styles.topActions)}>
-            <div
-              {...stylex.props(styles.statusPill, styles.activePill)}
+            <button
+              type="button"
               onClick={openOnboarding}
-              role="button"
-              tabIndex={0}
-              title="Abrir panel de copiloto e IA"
+              {...stylex.props(styles.statusPill, styles.activePill)}
+              title="Configurar motor de IA y autoridad de cabina"
             >
-              <span {...stylex.props(styles.greenDot)} />
-              {viewMode === 'simple'
-                ? `Copiloto: ${selectedBackend.replace('cli_', '')} · 👑 Tú eres El Jefe ▾`
-                : `IA: ${selectedBackend} · Modo: ${commanderMode} ▾`}
-            </div>
+              <span {...stylex.props(styles.emeraldDot)} />
+              <span>
+                {viewMode === 'simple'
+                  ? `Copiloto: ${selectedBackend.replace('cli_', '')} · Control manual`
+                  : `Motor: ${selectedBackend} · ${commanderMode}`}
+              </span>
+            </button>
 
             <button
               type="button"
               onClick={openOnboarding}
               {...stylex.props(styles.statusPill)}
             >
-              🔌 {viewMode === 'simple' ? 'Cambiar IA' : 'Radar IA (5 Modos)'}
+              <Icon name="cpu" size={14} />
+              <span>{viewMode === 'simple' ? 'Motor IA' : '5 Modos IA'}</span>
             </button>
 
-            <div {...stylex.props(styles.statusPill, styles.emeraldPill)}>
-              🤝{' '}
-              {viewMode === 'simple'
-                ? 'Red de DJs Conectada'
-                : `Enjambre P2P Activo (${edgeRadar?.active_swarm_nodes ?? 3} nodos · ${bridgeResult?.bridge_steps.length ?? 2} pasos)`}
+            <div {...stylex.props(styles.swarmPill)}>
+              <Icon name="checkCircle" size={14} color="#2dd4bf" />
+              <span>
+                {viewMode === 'simple'
+                  ? 'Enjambre conectado'
+                  : `${edgeRadar?.active_swarm_nodes ?? 3} nodos · ${bridgeResult?.bridge_steps.length ?? 2} pasos`}
+              </span>
             </div>
           </div>
         </header>
 
-        {/* MAIN SPLIT-SCREEN WORKSPACE */}
         <div {...stylex.props(styles.splitWorkspace)}>
-          {/* LEFT COLUMN: BRIDGE DECKS, STEPS & COMMUNITY TRACKS */}
           <section {...stylex.props(styles.leftCol)}>
             <div {...stylex.props(styles.sectionHead)}>
               <h2 {...stylex.props(styles.sectionTitle)}>
                 {viewMode === 'simple'
-                  ? 'Puente Musical (Cómo pasar de una canción a otra sin que choquen)'
-                  : 'Puente Armónico 2-Opt TSP (Deck A ➔ Deck B)'}
+                  ? 'Secuencia sugerida entre ambas pistas'
+                  : 'Ruta óptima Deck A a Deck B (2-Opt TSP)'}
               </h2>
               <span {...stylex.props(styles.matchTag)}>
                 {viewMode === 'simple'
                   ? `${matchInfo.compatibilityLabel} · ${matchInfo.tempoAdvice}`
-                  : `Delta: ${(targetBpm - originBpm).toFixed(1)} BPM · ${originCamelot} ➔ ${targetCamelot}`}
+                  : `Delta +${(targetBpm - originBpm).toFixed(1)} BPM · ${originCamelot} a ${targetCamelot}`}
               </span>
             </div>
 
-            {/* DECKS A & B */}
             <div {...stylex.props(styles.deckRack)}>
               <div {...stylex.props(styles.decksRow)}>
                 <div {...stylex.props(styles.deckCard)}>
                   <div {...stylex.props(styles.deckTopLine)}>
-                    <span {...stylex.props(styles.deckLabel)}>
+                    <span {...stylex.props(styles.deckRole)}>
                       {viewMode === 'simple'
-                        ? '💿 SONANDO AHORA'
-                        : 'DECK A · ORIGEN'}
+                        ? 'Deck A · En reproducción'
+                        : 'Deck A · Origen'}
                     </span>
-                    <span {...stylex.props(styles.badgeCyan)}>
-                      {viewMode === 'simple'
-                        ? `Melódica · ${originBpm} BPM`
-                        : `${originCamelot} · ${originBpm} BPM`}
+                    <span {...stylex.props(styles.deckMetricBadge)}>
+                      {originCamelot} · {originBpm.toFixed(1)} BPM
                     </span>
                   </div>
                   <div {...stylex.props(styles.deckSongTitle)}>
                     {originArtist} — {originTitle}
                   </div>
                   <div {...stylex.props(styles.deckDetails)}>
-                    <span>✨ Sonido de Estudio</span>
-                    <span>•</span>
+                    <span>Sonido de estudio</span>
+                    <span>·</span>
                     <span>
-                      Salida recomendada: <strong>04:42</strong>
+                      Salida limpia: <strong>04:42</strong>
                     </span>
                   </div>
                 </div>
 
-                <div {...stylex.props(styles.arrowCol)}>➔</div>
+                <div {...stylex.props(styles.arrowCol)} aria-hidden="true">
+                  →
+                </div>
 
                 <div {...stylex.props(styles.deckCard)}>
                   <div {...stylex.props(styles.deckTopLine)}>
-                    <span {...stylex.props(styles.deckLabel)}>
+                    <span {...stylex.props(styles.deckRole)}>
                       {viewMode === 'simple'
-                        ? '🎯 QUIERO LLEGAR A'
-                        : 'DECK B · DESTINO'}
+                        ? 'Deck B · Pista destino'
+                        : 'Deck B · Destino'}
                     </span>
-                    <span {...stylex.props(styles.badgeEmerald)}>
-                      {viewMode === 'simple'
-                        ? `Eufórica · ${targetBpm} BPM`
-                        : `${targetCamelot} · ${targetBpm} BPM`}
+                    <span {...stylex.props(styles.deckMetricBadge)}>
+                      {targetCamelot} · {targetBpm.toFixed(1)} BPM
                     </span>
                   </div>
                   <div {...stylex.props(styles.deckSongTitle)}>
                     {targetArtist} — {targetTitle}
                   </div>
                   <div {...stylex.props(styles.deckDetails)}>
-                    <span>✨ Sonido de Estudio</span>
-                    <span>•</span>
+                    <span>Sonido de estudio</span>
+                    <span>·</span>
                     <span>
-                      Entrada recomendada: <strong>00:15</strong>
+                      Entrada limpia: <strong>00:15</strong>
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* INTERMEDIATE BRIDGE STEPS */}
               <div {...stylex.props(styles.stepsContainer)}>
                 <div {...stylex.props(styles.stepRow)}>
-                  <span {...stylex.props(styles.stepIdx)}>PASO 1</span>
+                  <span {...stylex.props(styles.stepIdx)}>Paso 1</span>
                   <div {...stylex.props(styles.stepName)}>
                     Eric Prydz — Opus{' '}
                     <span {...stylex.props(styles.dimText)}>
                       {viewMode === 'simple'
-                        ? '(Sube el ritmo suave)'
-                        : '(8A ➔ 9A)'}
+                        ? '· Subida progresiva'
+                        : '· 8A a 9A'}
                     </span>
                   </div>
-                  <span {...stylex.props(styles.matchTag)}>💚 Combina 98%</span>
+                  <span {...stylex.props(styles.matchTag)}>Afinidad 98%</span>
                   <span {...stylex.props(styles.bpmTag)}>125.5 BPM</span>
                   <button
                     type="button"
                     onClick={() =>
                       setPreviewStatus(
-                        '🎧 Reproduciendo cruce de 15s (Salida ➔ Entrada)...',
+                        'Preescuchando transición de 15s (Cue 4 Salida a Cue 1 Entrada)...',
                       )
                     }
                     {...stylex.props(styles.previewBtn)}
                   >
-                    🎧{' '}
-                    {viewMode === 'simple'
-                      ? 'Oír cómo mezcla (15s)'
-                      : 'Cruce 15s (4➔1)'}
+                    <Icon name="play" size={12} />
+                    <span>
+                      {viewMode === 'simple' ? 'Oír cruce 15s' : 'Cruce 4→1'}
+                    </span>
                   </button>
                 </div>
 
                 <div {...stylex.props(styles.stepRow)}>
-                  <span {...stylex.props(styles.stepIdx)}>PASO 2</span>
+                  <span {...stylex.props(styles.stepIdx)}>Paso 2</span>
                   <div {...stylex.props(styles.stepName)}>
                     Deadmau5 — Strobe{' '}
                     <span {...stylex.props(styles.dimText)}>
                       {viewMode === 'simple'
-                        ? '(Prepara la entrada del coro)'
-                        : '(9A ➔ 10A)'}
+                        ? '· Prepara entrada vocal'
+                        : '· 9A a 10A'}
                     </span>
                   </div>
-                  <span {...stylex.props(styles.matchTag)}>💚 Combina 97%</span>
+                  <span {...stylex.props(styles.matchTag)}>Afinidad 97%</span>
                   <span {...stylex.props(styles.bpmTag)}>127.0 BPM</span>
                   <button
                     type="button"
                     onClick={() =>
                       setPreviewStatus(
-                        '🎧 Reproduciendo cruce de 15s (Salida ➔ Entrada)...',
+                        'Preescuchando transición de 15s (Cue 4 Salida a Cue 1 Entrada)...',
                       )
                     }
                     {...stylex.props(styles.previewBtn)}
                   >
-                    🎧{' '}
-                    {viewMode === 'simple'
-                      ? 'Oír cómo mezcla (15s)'
-                      : 'Cruce 15s (4➔1)'}
+                    <Icon name="play" size={12} />
+                    <span>
+                      {viewMode === 'simple' ? 'Oír cruce 15s' : 'Cruce 4→1'}
+                    </span>
                   </button>
                 </div>
               </div>
 
-              {/* 4 HOT CUES STRIP */}
-              <div {...stylex.props(styles.cueStrip)}>
-                <span {...stylex.props(styles.cueStripTitle)}>
-                  {viewMode === 'simple'
-                    ? 'PUNTOS CLAVE PARA MEZCLAR:'
-                    : 'HOT CUES ACÚSTICOS DSP:'}
-                </span>
+              <div {...stylex.props(styles.phraseRailPanel)}>
+                <div {...stylex.props(styles.phraseRailHeader)}>
+                  <span {...stylex.props(styles.phraseRailTitle)}>
+                    {viewMode === 'simple'
+                      ? 'Mapa proporcional de 4 Hot Cues de frase'
+                      : 'Riel acústico de 4 Hot Cues (detección espectral)'}
+                  </span>
+                  <span {...stylex.props(styles.dimText)}>Duración 05:30</span>
+                </div>
+
+                <div {...stylex.props(styles.phraseTimelineTrack)}>
+                  {PHRASE_RAIL_MARKERS.map((marker) => (
+                    <span
+                      key={marker.num}
+                      {...stylex.props(styles.phraseTimelineTick)}
+                      style={{
+                        left: marker.pct,
+                        backgroundColor: marker.color,
+                      }}
+                      title={`${marker.simpleLabel} (${marker.time})`}
+                    />
+                  ))}
+                </div>
+
                 <div {...stylex.props(styles.cuePinsList)}>
-                  <span {...stylex.props(styles.cuePin)}>
-                    <span {...stylex.props(styles.dot, styles.dotGreen)} />
-                    {viewMode === 'simple'
-                      ? '1: Entrada (0:16)'
-                      : '1: Intro (00:16)'}
-                  </span>
-                  <span {...stylex.props(styles.cuePin)}>
-                    <span {...stylex.props(styles.dot, styles.dotBlue)} />
-                    {viewMode === 'simple'
-                      ? '2: Calma (1:48)'
-                      : '2: Break (01:48)'}
-                  </span>
-                  <span {...stylex.props(styles.cuePin)}>
-                    <span {...stylex.props(styles.dot, styles.dotRed)} />
-                    {viewMode === 'simple'
-                      ? '3: Explosión (2:34)'
-                      : '3: Drop (02:34)'}
-                  </span>
-                  <span {...stylex.props(styles.cuePin)}>
-                    <span {...stylex.props(styles.dot, styles.dotYellow)} />
-                    {viewMode === 'simple'
-                      ? '4: Salida limpia (5:12)'
-                      : '4: Outro (05:12)'}
-                  </span>
+                  {PHRASE_RAIL_MARKERS.map((marker) => (
+                    <span key={marker.num} {...stylex.props(styles.cuePin)}>
+                      <span
+                        {...stylex.props(styles.cueDot)}
+                        style={{ backgroundColor: marker.color }}
+                      />
+                      <span>
+                        {viewMode === 'simple'
+                          ? marker.simpleLabel
+                          : marker.proLabel}
+                      </span>
+                      <span {...stylex.props(styles.cueTime)}>
+                        {marker.time}
+                      </span>
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* COMMUNITY / SWARM TRACKS TABLE */}
             <div {...stylex.props(styles.sectionHead)}>
               <h2 {...stylex.props(styles.sectionTitle)}>
                 {viewMode === 'simple'
-                  ? 'Otras canciones de la Comunidad que quedan increíbles en esta mezcla'
-                  : 'Índice Federado del Enjambre P2P (Candidatos Armónicos)'}
+                  ? 'Candidatos compatibles en la red de cabinas'
+                  : 'Índice federado del enjambre P2P'}
               </h2>
               <span {...stylex.props(styles.dimText)}>
-                ✓{' '}
                 {viewMode === 'simple'
-                  ? 'Todas con sonido de estudio'
-                  : 'Cuarentena FFT > 20 kHz'}
+                  ? 'Calidad de estudio verificada'
+                  : 'Auditoría espectral FFT > 20 kHz'}
               </span>
             </div>
 
@@ -381,101 +429,110 @@ function ViewHarmonicBridgeP2P() {
               <table {...stylex.props(styles.table)}>
                 <thead>
                   <tr>
-                    <th>CANCIÓN / ARTISTA</th>
-                    <th>¿CÓMO QUEDA?</th>
-                    <th>RITMO</th>
-                    <th>CALIDAD</th>
-                    <th>ACCIÓN</th>
+                    <th {...stylex.props(styles.th)}>Pista / Artista</th>
+                    <th {...stylex.props(styles.th)}>Compatibilidad</th>
+                    <th {...stylex.props(styles.th)}>BPM</th>
+                    <th {...stylex.props(styles.th)}>Calidad</th>
+                    <th {...stylex.props(styles.th)}>Acción</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td>
+                    <td {...stylex.props(styles.td)}>
                       <strong>Pryda — Allein</strong>{' '}
                       <span {...stylex.props(styles.dimText)}>
                         · Original Mix
                       </span>
                     </td>
-                    <td>
+                    <td {...stylex.props(styles.td)}>
                       <span {...stylex.props(styles.matchTag)}>
-                        💚 Mezcla suave · Sin voces
+                        Instrumental · 9A
                       </span>
                     </td>
-                    <td>126.0 BPM</td>
-                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>
-                      ✨ Estudio (Puro)
+                    <td {...stylex.props(styles.td, styles.tabularCell)}>
+                      126.0
                     </td>
-                    <td>
+                    <td {...stylex.props(styles.td, styles.verifiedCell)}>
+                      Estudio (Lossless)
+                    </td>
+                    <td {...stylex.props(styles.td)}>
                       <button
                         type="button"
                         onClick={() =>
                           setPreviewStatus(
-                            '📥 Agregado "Pryda — Allein" a tu lista de prueba',
+                            'Añadido «Pryda — Allein» al crate de prueba',
                           )
                         }
                         {...stylex.props(styles.tableBtn)}
                       >
-                        ➕ Probar
+                        <Icon name="plus" size={12} />
+                        <span>Probar</span>
                       </button>
                     </td>
                   </tr>
                   <tr>
-                    <td>
+                    <td {...stylex.props(styles.td)}>
                       <strong>RÜFÜS DU SOL — Innerbloom</strong>{' '}
                       <span {...stylex.props(styles.dimText)}>
                         · Lane 8 Remix
                       </span>
                     </td>
-                    <td>
+                    <td {...stylex.props(styles.td)}>
                       <span {...stylex.props(styles.matchTag)}>
-                        💚 Mantiene la vibra melódica
+                        Melódica · 8A
                       </span>
                     </td>
-                    <td>124.5 BPM</td>
-                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>
-                      ✨ Estudio (Puro)
+                    <td {...stylex.props(styles.td, styles.tabularCell)}>
+                      124.5
                     </td>
-                    <td>
+                    <td {...stylex.props(styles.td, styles.verifiedCell)}>
+                      Estudio (Lossless)
+                    </td>
+                    <td {...stylex.props(styles.td)}>
                       <button
                         type="button"
                         onClick={() =>
                           setPreviewStatus(
-                            '📥 Agregado "Innerbloom" a tu lista de prueba',
+                            'Añadido «Innerbloom (Lane 8 Remix)» al crate de prueba',
                           )
                         }
                         {...stylex.props(styles.tableBtn)}
                       >
-                        ➕ Probar
+                        <Icon name="plus" size={12} />
+                        <span>Probar</span>
                       </button>
                     </td>
                   </tr>
                   <tr>
-                    <td>
+                    <td {...stylex.props(styles.td)}>
                       <strong>ARTBAT — Flame</strong>{' '}
                       <span {...stylex.props(styles.dimText)}>
                         · Extended Mix
                       </span>
                     </td>
-                    <td>
+                    <td {...stylex.props(styles.td)}>
                       <span {...stylex.props(styles.vibeTag)}>
-                        🔥 Levanta la pista
+                        Sube energía · 9A
                       </span>
                     </td>
-                    <td>126.0 BPM</td>
-                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>
-                      ✨ Estudio (Puro)
+                    <td {...stylex.props(styles.td, styles.tabularCell)}>
+                      126.0
                     </td>
-                    <td>
+                    <td {...stylex.props(styles.td, styles.verifiedCell)}>
+                      Estudio (Lossless)
+                    </td>
+                    <td {...stylex.props(styles.td)}>
                       <button
                         type="button"
                         onClick={() =>
                           setPreviewStatus(
-                            '📥 Agregado "ARTBAT — Flame" a tu lista de prueba',
+                            'Añadido «ARTBAT — Flame» al crate de prueba',
                           )
                         }
                         {...stylex.props(styles.tableBtn)}
                       >
-                        ➕ Probar
+                        <Icon name="plus" size={12} />
+                        <span>Probar</span>
                       </button>
                     </td>
                   </tr>
@@ -484,107 +541,89 @@ function ViewHarmonicBridgeP2P() {
             </div>
           </section>
 
-          {/* RIGHT COLUMN: EXECUTIVE COPILOT DOCK */}
           <section {...stylex.props(styles.rightCol)}>
             <div {...stylex.props(styles.sectionHead)}>
               <h2 {...stylex.props(styles.sectionTitle)}>
                 {viewMode === 'simple'
-                  ? 'Tu Copiloto de Cabina (Háblale como a otro DJ)'
-                  : 'Consola Ejecutiva "El Jefe" · Copiloto ReAct'}
+                  ? 'Copiloto de Cabina'
+                  : 'Consola ReAct de Curaduría'}
               </h2>
-              <span
-                style={{ color: '#67e8f9', fontSize: '12px', fontWeight: 600 }}
-              >
+              <span {...stylex.props(styles.freeMeta)}>
                 {viewMode === 'simple'
-                  ? 'Gratis · Tú apruebas cada cambio'
+                  ? 'Aprobación manual por cambio'
                   : `${selectedBackend} · $0.00`}
               </span>
             </div>
 
             <div {...stylex.props(styles.copilotBody)}>
-              {/* BOSS MESSAGE */}
               <div {...stylex.props(styles.bossMsg)}>
                 <div {...stylex.props(styles.bossHeader)}>
-                  <span>👑 TÚ (EL JEFE)</span>
-                  <span>Hace 1 min</span>
+                  <strong>Tu instrucción</strong>
+                  <span>Activa</span>
                 </div>
-                Quiero pasar de "Levels" a "Don't You Worry Child" subiendo el
-                ánimo poco a poco, pero que no se encimen las voces al mezclar.
+                Quiero pasar de «Levels» a «Don&apos;t You Worry Child» subiendo
+                el ritmo de forma progresiva y sin superponer vocales.
               </div>
 
-              {/* RECEIPT / ANSWER PANEL */}
               <div {...stylex.props(styles.receiptBox)}>
                 <div {...stylex.props(styles.receiptHead)}>
                   <div {...stylex.props(styles.receiptTitle)}>
-                    <span {...stylex.props(styles.greenDot)} />
-                    {viewMode === 'simple'
-                      ? '¡LISTO JEFE! TE ARMÉ ESTE PUENTE DE 2 CANCIONES'
-                      : 'PROPUESTA DE INGENIERÍA 2-OPT TSP LISTA'}
+                    <span {...stylex.props(styles.emeraldDot)} />
+                    <span>
+                      {viewMode === 'simple'
+                        ? 'Puente de 2 pistas listo para cabina'
+                        : 'Secuencia 2-Opt TSP verificada'}
+                    </span>
                   </div>
-                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                  <span {...stylex.props(styles.dimText)}>
                     {viewMode === 'simple'
-                      ? 'Sonido Verificado'
-                      : '18ms · 0 Tokens Extra'}
+                      ? 'Audio verificado'
+                      : 'Sinergia 97%'}
                   </span>
                 </div>
 
                 <div {...stylex.props(styles.receiptBody)}>
-                  <p style={{ margin: 0 }}>
+                  <p {...stylex.props(styles.receiptParagraph)}>
                     {aiResponse
                       ? aiResponse.assistant_reply
                       : viewMode === 'simple'
-                        ? 'Para no saltar de golpe de 124 a 128 BPM, puse dos temas en medio que suben la energía de forma natural y suenan afinados entre sí:'
-                        : 'Curva calculada con incremento gradual de +1.5 BPM por paso y compatibilidad armónica > 96%:'}
+                        ? 'Para evitar un salto brusco de 124 a 128 BPM, intercalé dos cortes instrumentales que elevan la tensión de forma natural:'
+                        : 'Curva calculada con incremento medio de +1.5 BPM por transición y continuidad armónica 8A → 9A → 10A:'}
                   </p>
 
                   <div {...stylex.props(styles.metricsRow)}>
                     <div {...stylex.props(styles.metricCell)}>
-                      <div {...stylex.props(styles.metricLabel)}>
-                        SUBIDA DE RITMO
-                      </div>
-                      <div
-                        {...stylex.props(styles.metricVal)}
-                        style={{ color: '#67e8f9' }}
-                      >
-                        Suave (+1.5 BPM)
+                      <div {...stylex.props(styles.metricVal)}>+1.5 BPM</div>
+                      <div {...stylex.props(styles.metricName)}>
+                        Pendiente por paso
                       </div>
                     </div>
                     <div {...stylex.props(styles.metricCell)}>
-                      <div {...stylex.props(styles.metricLabel)}>
-                        CUIDADO DE VOCES
-                      </div>
-                      <div
-                        {...stylex.props(styles.metricVal)}
-                        style={{ color: '#6ee7b7' }}
-                      >
-                        🎤 Cero Choques
+                      <div {...stylex.props(styles.metricVal)}>Cue 4 → 1</div>
+                      <div {...stylex.props(styles.metricName)}>
+                        Cero choque vocal
                       </div>
                     </div>
                     <div {...stylex.props(styles.metricCell)}>
-                      <div {...stylex.props(styles.metricLabel)}>
-                        CALIDAD DE SONIDO
-                      </div>
-                      <div
-                        {...stylex.props(styles.metricVal)}
-                        style={{ color: '#6ee7b7' }}
-                      >
-                        ✨ 100% Estudio
+                      <div {...stylex.props(styles.metricVal)}>Lossless</div>
+                      <div {...stylex.props(styles.metricName)}>
+                        Espectro completo
                       </div>
                     </div>
                   </div>
 
                   <div {...stylex.props(styles.humanInstructions)}>
                     <div>
-                      <strong>1. Pon "Eric Prydz — Opus"</strong> cuando empiece
-                      la salida de Levels (min 04:42).
+                      <strong>1. Eric Prydz — Opus:</strong> mezcla sobre la
+                      salida instrumental de Levels en 04:42.
                     </div>
                     <div>
-                      <strong>2. Mezcla "Deadmau5 — Strobe"</strong> en el
-                      minuto 05:12 (pura base instrumental, sin voz).
+                      <strong>2. Deadmau5 — Strobe:</strong> entra limpio en
+                      05:12 manteniendo el pulso grave.
                     </div>
                     <div>
-                      <strong>3. Suelta "Don't You Worry Child"</strong> y el
-                      coro entrará con toda la fuerza a 128 BPM.
+                      <strong>3. Don&apos;t You Worry Child:</strong> lanza en
+                      128.0 BPM con entrada armónica en 10A.
                     </div>
                   </div>
                 </div>
@@ -594,84 +633,87 @@ function ViewHarmonicBridgeP2P() {
                     type="button"
                     onClick={() =>
                       setPreviewStatus(
-                        '✅ Puente aprobado y promovido a tu lista de cabina',
+                        'Puente aprobado e incorporado a tu crate activo',
                       )
                     }
                     {...stylex.props(styles.primaryBtn)}
                   >
-                    ✅{' '}
-                    {viewMode === 'simple'
-                      ? 'Me gusta, agregar a mi Lista'
-                      : 'Aprobar y Promover'}
+                    <Icon name="checkCircle" size={14} />
+                    <span>
+                      {viewMode === 'simple'
+                        ? 'Agregar al Set'
+                        : 'Aprobar y Promover'}
+                    </span>
                   </button>
                   <button
                     type="button"
                     onClick={() =>
                       setPreviewStatus(
-                        '🎛️ Exportando directamente a tu programa DJ...',
+                        'Exportando puente con 4 Hot Cues a VirtualDJ...',
                       )
                     }
                     {...stylex.props(styles.secondaryBtn)}
                   >
-                    🎛️{' '}
-                    {viewMode === 'simple'
-                      ? 'Mandar a VirtualDJ'
-                      : 'Exportar a VirtualDJ'}
+                    <Icon name="export" size={14} />
+                    <span>Exportar a VirtualDJ</span>
                   </button>
                   <button
                     type="button"
                     onClick={() =>
                       setPreviewStatus(
-                        '🎧 Reproduciendo simulación completa del cruce...',
+                        'Reproduciendo simulación completa del puente...',
                       )
                     }
                     {...stylex.props(styles.secondaryBtn)}
                   >
-                    🎧 Escuchar Mezcla
+                    <Icon name="play" size={12} />
+                    <span>Escuchar puente</span>
                   </button>
                 </div>
               </div>
 
               {previewStatus && (
-                <div {...stylex.props(styles.statusAlert)}>{previewStatus}</div>
+                <div {...stylex.props(styles.statusAlert)}>
+                  <Icon name="checkCircle" size={14} color="#2dd4bf" />
+                  <span>{previewStatus}</span>
+                </div>
               )}
             </div>
 
-            {/* COPILOT INPUT BAR */}
             <div {...stylex.props(styles.inputDock)}>
               <div {...stylex.props(styles.chipsList)}>
                 <button
                   type="button"
                   onClick={() =>
                     handleSendCopilotCommand(
-                      'Pon algo más fiestero para levantar la pista',
+                      'Propón una alternativa con más energía para hora pico',
                     )
                   }
                   {...stylex.props(styles.chip)}
                 >
-                  🔥 Pon algo más fiestero
+                  Subir energía
                 </button>
                 <button
                   type="button"
                   onClick={() =>
                     handleSendCopilotCommand(
-                      'Baja un poco la velocidad para ir más suave',
+                      'Reduce la pendiente de BPM para una transición más larga',
                     )
                   }
                   {...stylex.props(styles.chip)}
                 >
-                  🌙 Baja un poco la velocidad
+                  Transición más suave
                 </button>
                 <button
                   type="button"
                   onClick={() =>
                     handleSendCopilotCommand(
-                      'Busca temas que no tengan voces al principio',
+                      'Prioriza pistas 100% instrumentales en la entrada',
                     )
                   }
                   {...stylex.props(styles.chip)}
                 >
-                  🎤 Busca temas sin voz al inicio
+                  Solo entradas sin voz
                 </button>
               </div>
 
@@ -683,11 +725,7 @@ function ViewHarmonicBridgeP2P() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') void handleSendCopilotCommand();
                   }}
-                  placeholder={
-                    viewMode === 'simple'
-                      ? 'Pídele lo que quieras (ej. "Cambia la segunda canción por algo más movido")...'
-                      : 'Ordena al copiloto (ej. "Sustituye el paso 2 por Pryda - Allein")...'
-                  }
+                  placeholder="Indica qué ajuste quieres en el puente o en tu set..."
                   {...stylex.props(styles.chatInput)}
                 />
                 <button
@@ -696,39 +734,35 @@ function ViewHarmonicBridgeP2P() {
                   disabled={isAiLoading}
                   {...stylex.props(styles.primaryBtn)}
                 >
-                  {isAiLoading ? 'Pensando...' : 'Pedir al Copiloto'}
+                  {isAiLoading ? 'Calculando...' : 'Enviar'}
                 </button>
               </div>
             </div>
           </section>
         </div>
 
-        {/* ONBOARDING DRAWER (CONTEXTUAL SLIDE-OUT) */}
         {isOnboardingOpen && (
           <div
             {...stylex.props(styles.drawerOverlay)}
-            onClick={(e) => {
-              if (e.target === e.currentTarget) closeOnboarding();
-            }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Configuración de Motor IA y Autoridad de Cabina"
           >
+            <button
+              type="button"
+              aria-label="Cerrar panel de configuración"
+              onClick={closeOnboarding}
+              {...stylex.props(styles.drawerBackdropBtn)}
+            />
             <aside {...stylex.props(styles.drawer)}>
               <div {...stylex.props(styles.drawerHeader)}>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
-                    {viewMode === 'simple'
-                      ? 'Conectar tu Copiloto IA (Sin configuraciones técnicas)'
-                      : 'Onboarding & Radar Universal de Conectividad IA'}
+                  <h2 {...stylex.props(styles.drawerTitle)}>
+                    Configuración de Motor IA y Autoridad de Cabina
                   </h2>
-                  <p
-                    style={{
-                      margin: '4px 0 0 0',
-                      fontSize: '12px',
-                      color: '#94a3b8',
-                    }}
-                  >
-                    {viewMode === 'simple'
-                      ? 'Elige cómo quieres que te ayude HERA. Funciona gratis desde el primer segundo.'
-                      : 'Detecta y activa los 5 modos de IA disponibles en tu sistema.'}
+                  <p {...stylex.props(styles.drawerSub)}>
+                    Selecciona cómo interviene el copiloto y qué motor local o
+                    en la nube procesa tus consultas.
                   </p>
                 </div>
                 <button
@@ -736,32 +770,26 @@ function ViewHarmonicBridgeP2P() {
                   onClick={closeOnboarding}
                   {...stylex.props(styles.closeBtn)}
                 >
-                  Cerrar ✕
+                  Cerrar
                 </button>
               </div>
 
               <div {...stylex.props(styles.drawerBody)}>
-                {/* 1. AUTHORITY MODE */}
-                <div>
+                <div {...stylex.props(styles.drawerSection)}>
                   <div {...stylex.props(styles.subHeadRow)}>
-                    <strong>1. ¿Quién toma las decisiones en la cabina?</strong>
-                    <span
-                      style={{
-                        color: '#67e8f9',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                      }}
-                    >
+                    <strong>1. Nivel de autonomía en cabina</strong>
+                    <span {...stylex.props(styles.freeMeta)}>
                       {commanderMode === 'executive_boss'
-                        ? '👑 Tú eres El Jefe'
+                        ? 'Aprobación manual'
                         : commanderMode === 'autonomous_operator'
-                          ? '⚡ Piloto Automático'
-                          : '👀 Solo Consejos'}
+                          ? 'Piloto automático'
+                          : 'Solo lectura'}
                     </span>
                   </div>
 
                   <div {...stylex.props(styles.authGrid)}>
-                    <div
+                    <button
+                      type="button"
                       {...stylex.props(
                         styles.authCard,
                         commanderMode === 'executive_boss' &&
@@ -770,16 +798,16 @@ function ViewHarmonicBridgeP2P() {
                       onClick={() => setCommanderMode('executive_boss')}
                     >
                       <div {...stylex.props(styles.authTitle)}>
-                        👑 Tú eres El Jefe{' '}
-                        <span>{commanderMode === 'executive_boss' && '●'}</span>
+                        Control manual del DJ
                       </div>
                       <div {...stylex.props(styles.authDesc)}>
-                        El Copiloto te sugiere mezclas y canciones, pero tú
-                        apruebas con 1 clic antes de guardar.
+                        El copiloto sugiere puentes y ordenamientos; tú apruebas
+                        con un clic antes de aplicar cambios.
                       </div>
-                    </div>
+                    </button>
 
-                    <div
+                    <button
+                      type="button"
                       {...stylex.props(
                         styles.authCard,
                         commanderMode === 'autonomous_operator' &&
@@ -788,18 +816,16 @@ function ViewHarmonicBridgeP2P() {
                       onClick={() => setCommanderMode('autonomous_operator')}
                     >
                       <div {...stylex.props(styles.authTitle)}>
-                        ⚡ Piloto Automático{' '}
-                        <span>
-                          {commanderMode === 'autonomous_operator' && '●'}
-                        </span>
+                        Curaduría automática
                       </div>
                       <div {...stylex.props(styles.authDesc)}>
-                        El Copiloto arma, ordena y deja listas tus carpetas
-                        automáticamente respetando la calidad.
+                        Ordena crates y prepara exportaciones automáticamente
+                        respetando tus invariantes acústicos.
                       </div>
-                    </div>
+                    </button>
 
-                    <div
+                    <button
+                      type="button"
                       {...stylex.props(
                         styles.authCard,
                         commanderMode === 'advisor_only' &&
@@ -808,71 +834,44 @@ function ViewHarmonicBridgeP2P() {
                       onClick={() => setCommanderMode('advisor_only')}
                     >
                       <div {...stylex.props(styles.authTitle)}>
-                        👀 Solo Consejos{' '}
-                        <span>{commanderMode === 'advisor_only' && '●'}</span>
+                        Modo consulta
                       </div>
                       <div {...stylex.props(styles.authDesc)}>
-                        Solo te dice qué canciones combinan bien sin descargar
-                        ni mover nada.
+                        Muestra sugerencias de compatibilidad sin modificar
+                        listas ni archivos.
                       </div>
-                    </div>
+                    </button>
                   </div>
                 </div>
 
-                {/* 2. SIMPLE AI OPTIONS */}
-                <div>
+                <div {...stylex.props(styles.drawerSection)}>
                   <div {...stylex.props(styles.subHeadRow)}>
-                    <strong>
-                      2. Elige el cerebro de tu Copiloto (Todos a $0.00 extra)
-                    </strong>
-                    <span
-                      style={{
-                        color: '#6ee7b7',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                      }}
-                    >
+                    <strong>2. Motor de inferencia ($0.00 incluidos)</strong>
+                    <span {...stylex.props(styles.freeMeta)}>
                       {isScanningOnboarding
-                        ? 'Escaneando...'
+                        ? 'Detectando motores...'
                         : probeBanner ||
                           (onboardingReport
-                            ? `✓ ${onboardingReport.cli_agents.length} CLIs listos`
-                            : '✓ Listo para usar')}
+                            ? `${onboardingReport.cli_agents.length} motores locales detectados`
+                            : 'Listo')}
                     </span>
                   </div>
 
                   <div {...stylex.props(styles.modesContainer)}>
-                    {/* LOCAL CLI APPS */}
                     <div
                       {...stylex.props(
                         styles.modeRow,
                         selectedBackend.startsWith('cli_') &&
                           styles.modeRowActive,
                       )}
-                      onClick={() => setSelectedBackend('cli_agy')}
                     >
-                      <div>
+                      <div {...stylex.props(styles.modeInfo)}>
                         <div {...stylex.props(styles.modeTitle)}>
-                          ⚡ Usar la IA que ya tienes en tu computadora
+                          Agentes CLI locales en este equipo
                         </div>
                         <div {...stylex.props(styles.modeDesc)}>
-                          Detectamos estas apps instaladas en tu PC. Úsalas
-                          directo sin pagar ni configurar nada extra:
-                        </div>
-                        <div {...stylex.props(styles.badgesRow)}>
-                          <span {...stylex.props(styles.pillActiveBadge)}>
-                            ✓ Antigravity (
-                            {selectedBackend === 'cli_agy'
-                              ? 'Activo'
-                              : 'Detectado'}
-                            )
-                          </span>
-                          <span {...stylex.props(styles.pillBadge)}>
-                            ✓ Claude (Detectado)
-                          </span>
-                          <span {...stylex.props(styles.pillBadge)}>
-                            ✓ Gemini (Detectado)
-                          </span>
+                          Aprovecha tus herramientas locales instaladas sin
+                          configurar llaves adicionales.
                         </div>
                       </div>
                       <button
@@ -884,27 +883,26 @@ function ViewHarmonicBridgeP2P() {
                             : styles.secondaryBtn,
                         )}
                       >
-                        {selectedBackend === 'cli_agy' ? '✓ Activo' : 'Usar'}
+                        {selectedBackend === 'cli_agy'
+                          ? 'Activo'
+                          : 'Seleccionar'}
                       </button>
                     </div>
 
-                    {/* FREE CLOUD */}
                     <div
                       {...stylex.props(
                         styles.modeRow,
                         selectedBackend === 'workers_ai_llama33' &&
                           styles.modeRowActive,
                       )}
-                      onClick={() => setSelectedBackend('workers_ai_llama33')}
                     >
-                      <div>
+                      <div {...stylex.props(styles.modeInfo)}>
                         <div {...stylex.props(styles.modeTitle)}>
-                          ☁️ IA Gratuita de HERA (Incluida para todos)
+                          Cloudflare Workers AI Free (10k Neurons/día)
                         </div>
                         <div {...stylex.props(styles.modeDesc)}>
-                          Funciona al instante por internet sin instalar
-                          programas ni crear cuentas (10,000 Neurons/día
-                          gratis).
+                          Motor en la nube incluido de forma gratuita sin
+                          instalar modelos pesados.
                         </div>
                       </div>
                       <button
@@ -917,26 +915,24 @@ function ViewHarmonicBridgeP2P() {
                         )}
                       >
                         {selectedBackend === 'workers_ai_llama33'
-                          ? '✓ Activo'
-                          : 'Usar Gratis'}
+                          ? 'Activo'
+                          : 'Seleccionar'}
                       </button>
                     </div>
 
-                    {/* OFFLINE CLUB */}
                     <div
                       {...stylex.props(
                         styles.modeRow,
                         selectedBackend === 'ollama' && styles.modeRowActive,
                       )}
-                      onClick={() => setSelectedBackend('ollama')}
                     >
-                      <div>
+                      <div {...stylex.props(styles.modeInfo)}>
                         <div {...stylex.props(styles.modeTitle)}>
-                          ✈️ Modo Fiesta Sin Internet (100% en tu PC)
+                          Cabina Offline (Ollama / LM Studio local)
                         </div>
                         <div {...stylex.props(styles.modeDesc)}>
-                          Ideal cuando estás tocando en vivo en un club, evento
-                          o cabaña sin Wi-Fi (Ollama / LM Studio).
+                          100% sin conexión a internet para sets en vivo en
+                          clubes o eventos remotos.
                         </div>
                       </div>
                       <button
@@ -948,49 +944,38 @@ function ViewHarmonicBridgeP2P() {
                             : styles.secondaryBtn,
                         )}
                       >
-                        {selectedBackend === 'ollama' ? '✓ Activo' : 'Activar'}
+                        {selectedBackend === 'ollama'
+                          ? 'Activo'
+                          : 'Seleccionar'}
                       </button>
                     </div>
 
-                    {/* COLLAPSIBLE PRO SECTION */}
                     <div {...stylex.props(styles.proExpanderRow)}>
-                      <div style={{ fontSize: '12px', color: '#94a3b8' }}>
-                        ⚙️ <strong>¿Eres usuario avanzado?</strong> También
-                        puedes conectar tu propia API key o usar HERA vía MCP.
-                      </div>
+                      <span {...stylex.props(styles.dimText)}>
+                        Servidor OpenAI-compatible personalizado o protocolo MCP
+                      </span>
                       <button
                         type="button"
                         onClick={() => setShowProOptions(!showProOptions)}
                         {...stylex.props(styles.secondaryBtn)}
-                        style={{ height: '28px', fontSize: '11.5px' }}
                       >
-                        {showProOptions
-                          ? 'Ocultar Opciones Pro ▴'
-                          : 'Ver Opciones Pro ▾'}
+                        {showProOptions ? 'Ocultar' : 'Configurar'}
                       </button>
                     </div>
 
                     {showProOptions && (
                       <div {...stylex.props(styles.proBox)}>
-                        <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
-                          🔌 <strong>HERA MCP Server:</strong> Ejecuta{' '}
-                          <code>hera-node --mcp</code> en Claude Desktop, Cursor
-                          o Antigravity.
+                        <div {...stylex.props(styles.modeDesc)}>
+                          Servidor MCP nativo disponible mediante{' '}
+                          <code>hera-node --mcp</code>.
                         </div>
-                        <div
-                          style={{
-                            display: 'flex',
-                            gap: '8px',
-                            marginTop: '6px',
-                          }}
-                        >
+                        <div {...stylex.props(styles.inputRow)}>
                           <input
                             type="text"
                             value={customBaseUrl}
                             onChange={(e) => setCustomBaseUrl(e.target.value)}
-                            placeholder="URL Servidor Local (ej. http://localhost:1234/v1)"
+                            placeholder="http://localhost:1234/v1"
                             {...stylex.props(styles.chatInput)}
-                            style={{ height: '30px', fontSize: '12px' }}
                           />
                           <button
                             type="button"
@@ -999,16 +984,15 @@ function ViewHarmonicBridgeP2P() {
                                 (probe) => {
                                   setPreviewStatus(
                                     probe.reachable
-                                      ? `✓ Servidor local conectado (${probe.base_url})`
-                                      : `✓ Servidor local guardado (${customBaseUrl})`,
+                                      ? `Servidor local verificado (${probe.base_url})`
+                                      : `URL local guardada (${customBaseUrl})`,
                                   );
                                 },
                               );
                             }}
                             {...stylex.props(styles.secondaryBtn)}
-                            style={{ height: '30px', fontSize: '12px' }}
                           >
-                            Guardar
+                            Verificar
                           </button>
                         </div>
                       </div>
@@ -1016,25 +1000,18 @@ function ViewHarmonicBridgeP2P() {
                   </div>
                 </div>
 
-                {/* SWARM FIRST INVARIANT */}
                 <div {...stylex.props(styles.swarmLockBar)}>
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: '13px',
-                        color: '#6ee7b7',
-                      }}
-                    >
-                      🤝 Comunidad HERA: Todos nos ayudamos
+                  <div {...stylex.props(styles.modeInfo)}>
+                    <div {...stylex.props(styles.modeTitle)}>
+                      Invariante colaborativo del enjambre HERA
                     </div>
-                    <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
-                      HERA es 100% gratis porque compartimos y cuidamos la
-                      calidad de audio entre todos los DJs.
+                    <div {...stylex.props(styles.modeDesc)}>
+                      El motor DSP, los 4 Hot Cues y los exportadores DJ son
+                      100% libres manteniendo activa la red P2P comunitaria.
                     </div>
                   </div>
-                  <span {...stylex.props(styles.toggleLocked)}>
-                    🤝 SIEMPRE ACTIVO
+                  <span {...stylex.props(styles.swarmActiveTag)}>
+                    Siempre activo
                   </span>
                 </div>
               </div>
@@ -1051,808 +1028,830 @@ const styles = stylex.create({
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
-    backgroundColor: '#090c12',
-    color: '#f8fafc',
+    backgroundColor: '#0c0e12',
+    color: '#edeff3',
     overflow: 'hidden',
   },
   topBar: {
-    height: '48px',
-    backgroundColor: '#070a0f',
+    height: '46px',
+    flexShrink: 0,
+    backgroundColor: '#12161d',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#1f2a3d',
+    borderBottomColor: '#232a36',
+    paddingBlock: 0,
+    paddingInline: '18px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBlock: '0',
-    paddingInline: '16px',
-    flexShrink: 0,
+    columnGap: '12px',
   },
   brandGroup: {
     display: 'flex',
     alignItems: 'center',
-    rowGap: '10px',
-    columnGap: '10px',
+    columnGap: '8px',
+    minWidth: 0,
   },
-  brandDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    backgroundColor: '#06b6d4',
-    boxShadow: '0 0 8px #06b6d4',
-  },
-  brandTitle: {
-    fontSize: '14px',
-    letterSpacing: '0.04em',
-    color: '#f8fafc',
-  },
-  divider: {
-    width: '1px',
-    height: '16px',
-    backgroundColor: '#1f2a3d',
-  },
-  subLabel: {
-    fontSize: '13px',
-    color: '#94a3b8',
-    fontWeight: 500,
+  pageTitle: {
+    margin: 0,
+    fontSize: '13.5px',
+    fontWeight: 600,
+    color: '#edeff3',
+    whiteSpace: 'nowrap',
   },
   topActions: {
     display: 'flex',
     alignItems: 'center',
-    rowGap: '8px',
     columnGap: '8px',
+    flexShrink: 0,
   },
   statusPill: {
     display: 'inline-flex',
     alignItems: 'center',
-    rowGap: '6px',
     columnGap: '6px',
-    height: '28px',
-    paddingBlock: '0',
+    paddingBlock: '5px',
     paddingInline: '10px',
-    borderRadius: '5px',
-    backgroundColor: '#101622',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: 500,
+    backgroundColor: '#171c24',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#1f2a3d',
-    fontSize: '12px',
-    color: '#94a3b8',
+    borderColor: '#232a36',
+    color: '#edeff3',
     cursor: 'pointer',
-    whiteSpace: 'nowrap',
   },
   activePill: {
-    backgroundColor: 'rgba(6, 182, 212, 0.12)',
-    borderColor: 'rgba(6, 182, 212, 0.4)',
-    color: '#67e8f9',
-    fontWeight: 600,
+    borderColor: 'rgba(20, 184, 166, 0.32)',
+    backgroundColor: 'rgba(20, 184, 166, 0.1)',
   },
-  emeraldPill: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    borderColor: 'rgba(16, 185, 129, 0.35)',
-    color: '#6ee7b7',
-    fontWeight: 600,
+  swarmPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '6px',
+    paddingBlock: '5px',
+    paddingInline: '10px',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: 500,
+    backgroundColor: '#0c0e12',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    color: '#8e98a8',
   },
-  greenDot: {
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    backgroundColor: '#10b981',
+  emeraldDot: {
+    width: '7px',
+    height: '7px',
+    borderRadius: '999px',
+    backgroundColor: '#14b8a6',
+    flexShrink: 0,
   },
   splitWorkspace: {
-    flexGrow: '1',
-    flexShrink: '1',
+    flexGrow: 1,
+    flexShrink: 1,
     flexBasis: '0%',
+    minHeight: 0,
     display: 'grid',
-    gridTemplateColumns: '56% 44%',
+    gridTemplateColumns: '1.25fr 0.95fr',
     overflow: 'hidden',
   },
   leftCol: {
+    padding: '18px',
+    overflowY: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '14px',
     borderRightWidth: '1px',
     borderRightStyle: 'solid',
-    borderRightColor: '#1f2a3d',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
+    borderRightColor: '#232a36',
+    minWidth: 0,
   },
   rightCol: {
+    padding: '18px',
     display: 'flex',
     flexDirection: 'column',
-    backgroundColor: '#0b0f17',
+    rowGap: '12px',
+    backgroundColor: '#10141b',
+    minWidth: 0,
+    minHeight: 0,
     overflow: 'hidden',
   },
   sectionHead: {
-    height: '42px',
-    paddingBlock: '0',
-    paddingInline: '16px',
-    borderBottomWidth: '1px',
-    borderBottomStyle: 'solid',
-    borderBottomColor: '#1f2a3d',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#101622',
-    flexShrink: 0,
+    columnGap: '10px',
+    flexWrap: 'wrap',
+    rowGap: '4px',
   },
   sectionTitle: {
     margin: 0,
     fontSize: '13.5px',
     fontWeight: 600,
-    color: '#f8fafc',
+    color: '#edeff3',
+  },
+  matchTag: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '4px',
+    fontSize: '11.5px',
+    fontWeight: 600,
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(20, 184, 166, 0.28)',
+    color: '#2dd4bf',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  vibeTag: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    paddingBlock: '2px',
+    paddingInline: '8px',
+    borderRadius: '4px',
+    fontSize: '11.5px',
+    fontWeight: 600,
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(245, 158, 11, 0.28)',
+    color: '#fbbf24',
   },
   deckRack: {
-    paddingBlock: '14px',
-    paddingInline: '16px',
-    borderBottomWidth: '1px',
-    borderBottomStyle: 'solid',
-    borderBottomColor: '#1f2a3d',
+    backgroundColor: '#12161d',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '8px',
+    padding: '14px',
     display: 'flex',
     flexDirection: 'column',
     rowGap: '12px',
-    columnGap: '12px',
   },
   decksRow: {
     display: 'grid',
-    gridTemplateColumns: '1fr 32px 1fr',
+    gridTemplateColumns: '1fr auto 1fr',
     alignItems: 'center',
-    rowGap: '10px',
     columnGap: '10px',
   },
   deckCard: {
-    backgroundColor: '#101622',
+    backgroundColor: '#0c0e12',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#1f2a3d',
+    borderColor: '#232a36',
     borderRadius: '6px',
-    paddingBlock: '10px',
-    paddingInline: '14px',
+    padding: '12px',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '4px',
-    columnGap: '4px',
+    rowGap: '6px',
+    minWidth: 0,
   },
   deckTopLine: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    columnGap: '8px',
   },
-  deckLabel: {
+  deckRole: {
+    fontSize: '11.5px',
+    fontWeight: 600,
+    color: '#8e98a8',
+  },
+  deckMetricBadge: {
     fontSize: '11px',
-    fontWeight: 700,
-    color: '#67e8f9',
+    fontWeight: 600,
+    color: '#2dd4bf',
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    paddingBlock: '2px',
+    paddingInline: '7px',
+    borderRadius: '4px',
+    fontVariantNumeric: 'tabular-nums',
   },
   deckSongTitle: {
-    fontSize: '14px',
+    fontSize: '13.5px',
     fontWeight: 700,
-    color: '#f8fafc',
-    whiteSpace: 'nowrap',
+    color: '#edeff3',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   deckDetails: {
-    fontSize: '12px',
-    color: '#94a3b8',
     display: 'flex',
     alignItems: 'center',
-    rowGap: '8px',
-    columnGap: '8px',
+    columnGap: '6px',
+    fontSize: '11.5px',
+    color: '#8e98a8',
+    fontVariantNumeric: 'tabular-nums',
   },
   arrowCol: {
-    textAlign: 'center',
-    color: '#06b6d4',
-    fontSize: '16px',
-    fontWeight: 800,
+    color: '#8e98a8',
+    fontSize: '15px',
+    fontWeight: 600,
   },
   stepsContainer: {
-    backgroundColor: '#101622',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#1f2a3d',
-    borderRadius: '6px',
-    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '6px',
   },
   stepRow: {
-    display: 'grid',
-    gridTemplateColumns: '70px 1fr 130px 80px 160px',
+    display: 'flex',
     alignItems: 'center',
+    columnGap: '10px',
     paddingBlock: '8px',
-    paddingInline: '12px',
-    borderBottomWidth: '1px',
-    borderBottomStyle: 'solid',
-    borderBottomColor: '#1f2a3d',
-    rowGap: '8px',
-    columnGap: '8px',
-    fontSize: '12.5px',
+    paddingInline: '10px',
+    backgroundColor: '#171c24',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '6px',
   },
   stepIdx: {
-    fontWeight: 700,
-    color: '#67e8f9',
-    fontSize: '11.5px',
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#2dd4bf',
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    paddingBlock: '2px',
+    paddingInline: '7px',
+    borderRadius: '4px',
+    flexShrink: 0,
   },
   stepName: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    minWidth: 0,
+    fontSize: '12.5px',
     fontWeight: 600,
-    whiteSpace: 'nowrap',
+    color: '#edeff3',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   },
   dimText: {
-    color: '#94a3b8',
+    color: '#8e98a8',
+    fontSize: '11.5px',
     fontWeight: 400,
-  },
-  matchTag: {
-    fontSize: '11.5px',
-    fontWeight: 600,
-    paddingBlock: '2px',
-    paddingInline: '8px',
-    borderRadius: '99px',
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    color: '#6ee7b7',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(16, 185, 129, 0.35)',
-    whiteSpace: 'nowrap',
-  },
-  vibeTag: {
-    fontSize: '11.5px',
-    fontWeight: 600,
-    paddingBlock: '2px',
-    paddingInline: '8px',
-    borderRadius: '99px',
-    backgroundColor: 'rgba(6, 182, 212, 0.12)',
-    color: '#67e8f9',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(6, 182, 212, 0.35)',
-    whiteSpace: 'nowrap',
   },
   bpmTag: {
     fontSize: '12px',
-    color: '#94a3b8',
     fontWeight: 600,
+    color: '#edeff3',
+    fontVariantNumeric: 'tabular-nums',
+    flexShrink: 0,
   },
   previewBtn: {
-    height: '26px',
-    paddingBlock: '0',
-    paddingInline: '10px',
-    borderRadius: '4px',
-    backgroundColor: '#161f30',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#2e3d57',
-    color: '#f8fafc',
-    fontSize: '11.5px',
-    fontWeight: 600,
-    cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    whiteSpace: 'nowrap',
+    columnGap: '5px',
+    paddingBlock: '4px',
+    paddingInline: '9px',
+    borderRadius: '5px',
+    backgroundColor: '#12161d',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    color: '#edeff3',
+    fontSize: '11.5px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    flexShrink: 0,
   },
-  cueStrip: {
+  phraseRailPanel: {
+    backgroundColor: '#0c0e12',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '6px',
+    paddingBlock: '10px',
+    paddingInline: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '8px',
+  },
+  phraseRailHeader: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#070a0f',
+  },
+  phraseRailTitle: {
+    fontSize: '11.5px',
+    fontWeight: 600,
+    color: '#edeff3',
+  },
+  phraseTimelineTrack: {
+    position: 'relative',
+    height: '6px',
+    width: '100%',
+    backgroundColor: '#171c24',
+    borderRadius: '999px',
+  },
+  phraseTimelineTick: {
+    position: 'absolute',
+    top: '-3px',
+    width: '6px',
+    height: '12px',
+    borderRadius: '2px',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#1f2a3d',
-    borderRadius: '5px',
-    paddingBlock: '7px',
-    paddingInline: '12px',
-  },
-  cueStripTitle: {
-    fontSize: '11.5px',
-    color: '#94a3b8',
-    fontWeight: 600,
+    borderColor: '#0c0e12',
+    transform: 'translateX(-3px)',
   },
   cuePinsList: {
     display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    rowGap: '12px',
-    columnGap: '12px',
-    fontSize: '11.5px',
-    fontWeight: 500,
+    justifyContent: 'space-between',
+    rowGap: '6px',
+    columnGap: '10px',
   },
   cuePin: {
     display: 'inline-flex',
     alignItems: 'center',
-    rowGap: '5px',
-    columnGap: '5px',
+    columnGap: '6px',
+    fontSize: '11.5px',
+    color: '#edeff3',
   },
-  dot: {
+  cueDot: {
     width: '7px',
     height: '7px',
-    borderRadius: '50%',
+    borderRadius: '999px',
+    flexShrink: 0,
   },
-  dotGreen: { backgroundColor: '#10b981' },
-  dotBlue: { backgroundColor: '#3b82f6' },
-  dotRed: { backgroundColor: '#f43f5e' },
-  dotYellow: { backgroundColor: '#f59e0b' },
-  badgeCyan: {
-    fontSize: '11px',
-    fontWeight: 700,
-    paddingBlock: '2px',
-    paddingInline: '7px',
-    borderRadius: '4px',
-    backgroundColor: 'rgba(6, 182, 212, 0.14)',
-    color: '#67e8f9',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(6, 182, 212, 0.35)',
-  },
-  badgeEmerald: {
-    fontSize: '11px',
-    fontWeight: 700,
-    paddingBlock: '2px',
-    paddingInline: '7px',
-    borderRadius: '4px',
-    backgroundColor: 'rgba(16, 185, 129, 0.14)',
-    color: '#6ee7b7',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+  cueTime: {
+    color: '#8e98a8',
+    fontVariantNumeric: 'tabular-nums',
   },
   tableWrap: {
-    flexGrow: '1',
-    flexShrink: '1',
-    flexBasis: '0%',
-    overflowY: 'auto',
+    backgroundColor: '#12161d',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '8px',
+    overflow: 'hidden',
   },
   table: {
     width: '100%',
     borderCollapse: 'collapse',
+    fontSize: '12.5px',
+  },
+  th: {
     textAlign: 'left',
+    paddingBlock: '9px',
+    paddingInline: '12px',
+    fontSize: '11.5px',
+    fontWeight: 600,
+    color: '#8e98a8',
+    backgroundColor: '#171c24',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#232a36',
+  },
+  td: {
+    paddingBlock: '9px',
+    paddingInline: '12px',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: 'rgba(35, 42, 54, 0.6)',
+    color: '#edeff3',
+  },
+  tabularCell: {
+    fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+  },
+  verifiedCell: {
+    color: '#2dd4bf',
+    fontSize: '12px',
+    fontWeight: 500,
   },
   tableBtn: {
-    height: '26px',
-    paddingBlock: '0',
-    paddingInline: '10px',
-    borderRadius: '4px',
-    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '5px',
+    paddingBlock: '4px',
+    paddingInline: '9px',
+    borderRadius: '5px',
+    backgroundColor: '#171c24',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: 'rgba(6, 182, 212, 0.4)',
-    color: '#67e8f9',
+    borderColor: '#232a36',
+    color: '#edeff3',
     fontSize: '11.5px',
     fontWeight: 600,
     cursor: 'pointer',
   },
+  freeMeta: {
+    fontSize: '11.5px',
+    fontWeight: 600,
+    color: '#2dd4bf',
+  },
   copilotBody: {
-    flexGrow: '1',
-    flexShrink: '1',
+    flexGrow: 1,
+    flexShrink: 1,
     flexBasis: '0%',
-    padding: '16px',
+    minHeight: 0,
+    overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '14px',
-    columnGap: '14px',
-    overflowY: 'auto',
+    rowGap: '12px',
   },
   bossMsg: {
-    alignSelf: 'flex-end',
-    maxWidth: '90%',
-    backgroundColor: '#161f30',
+    backgroundColor: '#12161d',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#2e3d57',
-    borderTopLeftRadius: '8px',
-    borderTopRightRadius: '8px',
-    borderBottomRightRadius: '2px',
-    borderBottomLeftRadius: '8px',
-    paddingBlock: '10px',
-    paddingInline: '14px',
-    color: '#f8fafc',
-    fontSize: '13px',
+    borderColor: '#232a36',
+    borderRadius: '8px',
+    padding: '12px',
+    fontSize: '12.5px',
+    lineHeight: 1.5,
+    color: '#edeff3',
   },
   bossHeader: {
-    fontSize: '11px',
-    fontWeight: 700,
-    color: '#67e8f9',
-    marginBottom: '4px',
     display: 'flex',
     justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '4px',
+    fontSize: '11.5px',
+    color: '#8e98a8',
   },
   receiptBox: {
-    backgroundColor: '#101622',
+    backgroundColor: '#12161d',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#2e3d57',
+    borderColor: '#232a36',
     borderRadius: '8px',
-    overflow: 'hidden',
+    padding: '14px',
     display: 'flex',
     flexDirection: 'column',
+    rowGap: '12px',
   },
   receiptHead: {
-    paddingBlock: '10px',
-    paddingInline: '14px',
-    backgroundColor: '#131b29',
-    borderBottomWidth: '1px',
-    borderBottomStyle: 'solid',
-    borderBottomColor: '#1f2a3d',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    columnGap: '8px',
   },
   receiptTitle: {
-    fontWeight: 700,
-    fontSize: '12.5px',
-    color: '#6ee7b7',
     display: 'flex',
     alignItems: 'center',
-    rowGap: '6px',
-    columnGap: '6px',
+    columnGap: '8px',
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#edeff3',
   },
   receiptBody: {
-    paddingBlock: '12px',
-    paddingInline: '14px',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '10px',
-    columnGap: '10px',
+    rowGap: '12px',
+  },
+  receiptParagraph: {
+    margin: 0,
     fontSize: '12.5px',
-    color: '#94a3b8',
+    lineHeight: 1.5,
+    color: '#8e98a8',
   },
   metricsRow: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#1f2a3d',
-    borderRadius: '5px',
-    backgroundColor: '#090c12',
-    overflow: 'hidden',
+    columnGap: '8px',
   },
   metricCell: {
-    paddingBlock: '8px',
-    paddingInline: '10px',
-    borderRightWidth: '1px',
-    borderRightStyle: 'solid',
-    borderRightColor: '#1f2a3d',
-  },
-  metricLabel: {
-    fontSize: '10.5px',
-    color: '#94a3b8',
+    backgroundColor: '#0c0e12',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '6px',
+    padding: '9px',
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '2px',
   },
   metricVal: {
-    fontSize: '12.5px',
+    fontSize: '13px',
     fontWeight: 700,
-    marginTop: '2px',
+    color: '#2dd4bf',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  metricName: {
+    fontSize: '11px',
+    color: '#8e98a8',
   },
   humanInstructions: {
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '5px',
-    columnGap: '5px',
-    fontSize: '12.5px',
-    color: '#f8fafc',
-    backgroundColor: '#0b0f17',
-    paddingBlock: '10px',
-    paddingInline: '12px',
-    borderRadius: '5px',
+    rowGap: '6px',
+    fontSize: '12px',
+    lineHeight: 1.45,
+    color: '#edeff3',
+    backgroundColor: '#0c0e12',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#1f2a3d',
+    borderColor: '#232a36',
+    borderRadius: '6px',
+    padding: '10px',
+    fontVariantNumeric: 'tabular-nums',
   },
   receiptActions: {
-    paddingBlock: '10px',
-    paddingInline: '14px',
-    backgroundColor: '#0c111a',
-    borderTopWidth: '1px',
-    borderTopStyle: 'solid',
-    borderTopColor: '#1f2a3d',
     display: 'flex',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     rowGap: '8px',
     columnGap: '8px',
   },
   primaryBtn: {
-    height: '32px',
-    paddingBlock: '0',
-    paddingInline: '12px',
-    borderRadius: '5px',
-    backgroundColor: '#06b6d4',
-    color: '#041318',
-    fontWeight: 700,
-    fontSize: '12px',
-    borderWidth: 0,
-    cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',
-    rowGap: '5px',
-    columnGap: '5px',
-    whiteSpace: 'nowrap',
+    justifyContent: 'center',
+    columnGap: '6px',
+    paddingBlock: '7px',
+    paddingInline: '13px',
+    borderRadius: '6px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#14b8a6',
+    backgroundColor: '#14b8a6',
+    color: '#041311',
+    fontSize: '12px',
+    fontWeight: 700,
+    cursor: 'pointer',
+    flexShrink: 0,
   },
   secondaryBtn: {
-    height: '32px',
-    paddingBlock: '0',
-    paddingInline: '10px',
-    borderRadius: '5px',
-    backgroundColor: '#161f30',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#2e3d57',
-    color: '#f8fafc',
-    fontWeight: 600,
-    fontSize: '12px',
-    cursor: 'pointer',
     display: 'inline-flex',
     alignItems: 'center',
-    rowGap: '5px',
-    columnGap: '5px',
-    whiteSpace: 'nowrap',
-  },
-  statusAlert: {
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    justifyContent: 'center',
+    columnGap: '6px',
+    paddingBlock: '7px',
+    paddingInline: '11px',
+    borderRadius: '6px',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: 'rgba(6, 182, 212, 0.35)',
-    borderRadius: '5px',
+    borderColor: '#232a36',
+    backgroundColor: '#171c24',
+    color: '#edeff3',
     fontSize: '12px',
-    color: '#67e8f9',
     fontWeight: 600,
+    cursor: 'pointer',
+    flexShrink: 0,
+  },
+  statusAlert: {
+    display: 'flex',
+    alignItems: 'center',
+    columnGap: '8px',
+    paddingBlock: '8px',
+    paddingInline: '12px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(20, 184, 166, 0.1)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(20, 184, 166, 0.28)',
+    color: '#2dd4bf',
+    fontSize: '12px',
+    fontWeight: 500,
   },
   inputDock: {
-    paddingBlock: '12px',
-    paddingInline: '16px',
-    borderTopWidth: '1px',
-    borderTopStyle: 'solid',
-    borderTopColor: '#1f2a3d',
-    backgroundColor: '#101622',
     display: 'flex',
     flexDirection: 'column',
     rowGap: '8px',
-    columnGap: '8px',
+    paddingTop: '10px',
+    borderTopWidth: '1px',
+    borderTopStyle: 'solid',
+    borderTopColor: '#232a36',
+    flexShrink: 0,
   },
   chipsList: {
     display: 'flex',
+    flexWrap: 'wrap',
     rowGap: '6px',
     columnGap: '6px',
-    overflowX: 'auto',
   },
   chip: {
-    fontSize: '11px',
-    paddingBlock: '3px',
-    paddingInline: '8px',
-    borderRadius: '99px',
-    backgroundColor: '#161f30',
+    paddingBlock: '4px',
+    paddingInline: '9px',
+    borderRadius: '999px',
+    backgroundColor: '#171c24',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#1f2a3d',
-    color: '#f8fafc',
+    borderColor: '#232a36',
+    color: '#8e98a8',
+    fontSize: '11.5px',
+    fontWeight: 500,
     cursor: 'pointer',
-    whiteSpace: 'nowrap',
   },
   inputRow: {
     display: 'flex',
-    rowGap: '8px',
+    alignItems: 'center',
     columnGap: '8px',
   },
   chatInput: {
-    flexGrow: '1',
-    flexShrink: '1',
+    flexGrow: 1,
+    flexShrink: 1,
     flexBasis: '0%',
-    height: '34px',
-    backgroundColor: '#080b10',
+    minWidth: 0,
+    paddingBlock: '8px',
+    paddingInline: '11px',
+    borderRadius: '6px',
+    backgroundColor: '#0c0e12',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#2e3d57',
-    borderRadius: '5px',
-    paddingBlock: '0',
-    paddingInline: '12px',
-    color: '#f8fafc',
+    borderColor: '#232a36',
+    color: '#edeff3',
     fontSize: '12.5px',
   },
   drawerOverlay: {
     position: 'fixed',
     top: 0,
-    left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(5, 8, 13, 0.75)',
-    backdropFilter: 'blur(3px)',
-    zIndex: 999,
+    left: 0,
+    backgroundColor: 'rgba(6, 8, 12, 0.72)',
     display: 'flex',
     justifyContent: 'flex-end',
+    zIndex: 1000,
+  },
+  drawerBackdropBtn: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    borderWidth: 0,
+    padding: 0,
+    margin: 0,
+    backgroundColor: 'transparent',
+    cursor: 'default',
   },
   drawer: {
-    width: '640px',
+    width: '520px',
+    maxWidth: '92vw',
     height: '100%',
-    backgroundColor: '#0d121b',
+    backgroundColor: '#12161d',
     borderLeftWidth: '1px',
     borderLeftStyle: 'solid',
-    borderLeftColor: '#2e3d57',
+    borderLeftColor: '#232a36',
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: '-16px 0 40px rgba(0, 0, 0, 0.65)',
+    overflow: 'hidden',
   },
   drawerHeader: {
     paddingBlock: '16px',
     paddingInline: '20px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#1f2a3d',
+    borderBottomColor: '#232a36',
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    backgroundColor: '#0a0e16',
+    columnGap: '12px',
+  },
+  drawerTitle: {
+    margin: 0,
+    fontSize: '15px',
+    fontWeight: 700,
+    color: '#edeff3',
+  },
+  drawerSub: {
+    marginTop: '4px',
+    marginRight: 0,
+    marginBottom: 0,
+    marginLeft: 0,
+    fontSize: '12px',
+    color: '#8e98a8',
+    lineHeight: 1.4,
   },
   closeBtn: {
-    height: '28px',
-    paddingBlock: '0',
+    paddingBlock: '5px',
     paddingInline: '10px',
-    borderRadius: '5px',
-    backgroundColor: '#161f30',
+    borderRadius: '6px',
+    backgroundColor: '#171c24',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#1f2a3d',
-    color: '#94a3b8',
+    borderColor: '#232a36',
+    color: '#edeff3',
     fontSize: '12px',
     cursor: 'pointer',
   },
   drawerBody: {
-    flexGrow: '1',
-    flexShrink: '1',
-    flexBasis: '0%',
-    paddingBlock: '16px',
-    paddingInline: '20px',
+    padding: '20px',
+    overflowY: 'auto',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '16px',
-    columnGap: '16px',
-    overflowY: 'auto',
+    rowGap: '18px',
+  },
+  drawerSection: {
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '10px',
   },
   subHeadRow: {
     display: 'flex',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: '6px',
-    fontSize: '12.5px',
+    fontSize: '13px',
+    color: '#edeff3',
   },
   authGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#2e3d57',
-    borderRadius: '6px',
-    backgroundColor: '#080b10',
-    overflow: 'hidden',
+    columnGap: '8px',
   },
   authCard: {
-    paddingBlock: '10px',
-    paddingInline: '12px',
-    borderRightWidth: '1px',
-    borderRightStyle: 'solid',
-    borderRightColor: '#1f2a3d',
+    textAlign: 'left',
+    padding: '11px',
+    borderRadius: '6px',
+    backgroundColor: '#0c0e12',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    color: '#edeff3',
+    cursor: 'pointer',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '3px',
-    columnGap: '3px',
-    cursor: 'pointer',
+    rowGap: '5px',
   },
   authCardActive: {
-    backgroundColor: 'rgba(6, 182, 212, 0.14)',
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    borderColor: 'rgba(20, 184, 166, 0.4)',
   },
   authTitle: {
-    fontSize: '12.5px',
+    fontSize: '12px',
     fontWeight: 700,
-    color: '#f8fafc',
-    display: 'flex',
-    justifyContent: 'space-between',
+    color: '#edeff3',
   },
   authDesc: {
-    fontSize: '11px',
-    color: '#94a3b8',
-    lineHeight: 1.35,
+    fontSize: '11.5px',
+    lineHeight: 1.4,
+    color: '#8e98a8',
   },
   modesContainer: {
     display: 'flex',
     flexDirection: 'column',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#1f2a3d',
-    borderRadius: '6px',
-    backgroundColor: '#101622',
-    overflow: 'hidden',
+    rowGap: '8px',
   },
   modeRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 140px',
+    padding: '12px',
+    borderRadius: '6px',
+    backgroundColor: '#0c0e12',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    display: 'flex',
     alignItems: 'center',
-    paddingBlock: '12px',
-    paddingInline: '14px',
-    borderBottomWidth: '1px',
-    borderBottomStyle: 'solid',
-    borderBottomColor: '#1f2a3d',
-    rowGap: '12px',
+    justifyContent: 'space-between',
     columnGap: '12px',
-    cursor: 'pointer',
   },
   modeRowActive: {
-    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+    borderColor: 'rgba(20, 184, 166, 0.36)',
+  },
+  modeInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '3px',
+    minWidth: 0,
   },
   modeTitle: {
-    fontSize: '13px',
-    fontWeight: 700,
-    color: '#f8fafc',
+    fontSize: '12.5px',
+    fontWeight: 600,
+    color: '#edeff3',
   },
   modeDesc: {
     fontSize: '11.5px',
-    color: '#94a3b8',
-    marginTop: '2px',
-  },
-  badgesRow: {
-    display: 'flex',
-    rowGap: '6px',
-    columnGap: '6px',
-    marginTop: '6px',
-  },
-  pillBadge: {
-    fontSize: '11px',
-    fontWeight: 600,
-    paddingBlock: '2px',
-    paddingInline: '8px',
-    borderRadius: '99px',
-    backgroundColor: '#090c12',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#1f2a3d',
-    color: '#94a3b8',
-  },
-  pillActiveBadge: {
-    fontSize: '11px',
-    fontWeight: 600,
-    paddingBlock: '2px',
-    paddingInline: '8px',
-    borderRadius: '99px',
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(16, 185, 129, 0.4)',
-    color: '#6ee7b7',
+    lineHeight: 1.4,
+    color: '#8e98a8',
   },
   proExpanderRow: {
-    paddingBlock: '10px',
-    paddingInline: '14px',
-    backgroundColor: '#090c12',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    columnGap: '10px',
+    paddingTop: '4px',
   },
   proBox: {
-    paddingBlock: '12px',
-    paddingInline: '14px',
-    backgroundColor: '#080b10',
-    borderTopWidth: '1px',
-    borderTopStyle: 'solid',
-    borderTopColor: '#1f2a3d',
+    padding: '12px',
+    borderRadius: '6px',
+    backgroundColor: '#0c0e12',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
     display: 'flex',
     flexDirection: 'column',
     rowGap: '8px',
-    columnGap: '8px',
   },
   swarmLockBar: {
-    paddingBlock: '12px',
-    paddingInline: '14px',
+    padding: '12px',
     borderRadius: '6px',
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: '#0c0e12',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderColor: 'rgba(20, 184, 166, 0.28)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    columnGap: '12px',
   },
-  toggleLocked: {
-    fontSize: '11px',
-    fontWeight: 700,
-    paddingBlock: '3px',
-    paddingInline: '8px',
-    borderRadius: '99px',
-    backgroundColor: 'rgba(6, 182, 212, 0.14)',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(6, 182, 212, 0.45)',
-    color: '#67e8f9',
+  swarmActiveTag: {
+    fontSize: '11.5px',
+    fontWeight: 600,
+    color: '#2dd4bf',
+    flexShrink: 0,
   },
 });

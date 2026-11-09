@@ -122,8 +122,9 @@ fn main() {
                     .visible(true)
                     .focused(true)
                     .theme(get_theme_from_name(&conf.theme))
-                    .inner_size(1100.0, 680.0)
-                    .min_inner_size(900.0, 550.0)
+                    .background_color(tauri::window::Color(12, 14, 18, 255))
+                    .inner_size(1180.0, 720.0)
+                    .min_inner_size(960.0, 580.0)
                     .fullscreen(false)
                     .resizable(true)
                     .zoom_hotkeys_enabled(true);

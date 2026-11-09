@@ -8,11 +8,11 @@ interface WrapProps {
 }
 
 /**
- * Wrapper for navigation
+ * Horizontal studio sub-navigation for Settings
  */
 export function SettingsNav(props: WrapProps) {
   return (
-    <NavigationMenu.Root orientation="vertical">
+    <NavigationMenu.Root orientation="horizontal">
       <NavigationMenu.List {...stylex.props(styles.nav)}>
         {props.children}
       </NavigationMenu.List>
@@ -26,7 +26,7 @@ interface LinkProps {
 }
 
 /**
- * Single navigation item (anchor)
+ * Single settings sub-navigation tab
  */
 export function SettingsNavLink(props: LinkProps) {
   return (
@@ -50,22 +50,42 @@ export function SettingsNavLink(props: LinkProps) {
 const styles = stylex.create({
   nav: {
     display: 'flex',
-    flexDirection: 'column',
-    rowGap: '32px',
-    columnGap: '32px',
+    flexDirection: 'row',
+    alignItems: 'center',
+    columnGap: '6px',
     listStyle: 'none',
     margin: 0,
     padding: 0,
   },
   link: {
-    display: 'inline-block',
-    fontWeight: 'bold',
+    display: 'inline-flex',
+    alignItems: 'center',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    borderRadius: '6px',
+    fontSize: '12.5px',
+    fontWeight: {
+      default: 500,
+      ':is([data-status="active"])': 600,
+    },
     textDecoration: 'none',
     whiteSpace: 'nowrap',
-    textDecorationLine: 'none',
-    color: {
-      default: 'var(--text)',
-      ':is([data-status="active"])': 'var(--main-color)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: {
+      default: 'transparent',
+      ':is([data-status="active"])': 'rgba(20, 184, 166, 0.32)',
     },
+    backgroundColor: {
+      default: 'transparent',
+      ':hover': 'rgba(237, 239, 243, 0.04)',
+      ':is([data-status="active"])': 'rgba(20, 184, 166, 0.12)',
+    },
+    color: {
+      default: '#8e98a8',
+      ':hover': '#edeff3',
+      ':is([data-status="active"])': '#2dd4bf',
+    },
+    transition: 'background-color 0.14s ease, color 0.14s ease',
   },
 });

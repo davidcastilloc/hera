@@ -78,15 +78,15 @@ export function getHumanAudioQuality(cutoffKhz?: number | null): {
 } {
   if (cutoffKhz && cutoffKhz >= 20.0) {
     return {
-      label: '✨ Sonido de Estudio',
+      label: 'Sonido de Estudio',
       isLossless: true,
-      color: '#6ee7b7',
+      color: '#2dd4bf',
     };
   }
   return {
-    label: '✨ Audio Limpio (Verificado)',
+    label: 'Audio Limpio (Verificado)',
     isLossless: true,
-    color: '#67e8f9',
+    color: '#2dd4bf',
   };
 }
 
@@ -104,10 +104,9 @@ export function getHumanMatchLabel(
         ? `Sube suave (+${bpmDelta.toFixed(1)} BPM)`
         : `Baja suave (-${bpmDelta.toFixed(1)} BPM)`;
 
-  // Same key
   if (camelotFrom === camelotTo) {
     return {
-      compatibilityLabel: '💚 Mezcla Perfecta (99%)',
+      compatibilityLabel: 'Mezcla Perfecta (99%)',
       badgeClass: 'match',
       vibeDescription: 'Misma afinación exacta · Cero choque',
       tempoAdvice,
@@ -115,7 +114,6 @@ export function getHumanMatchLabel(
     };
   }
 
-  // Neighbor key logic (e.g. 8A to 9A, 8A to 7A, 8A to 8B)
   const numFrom = parseInt(camelotFrom, 10);
   const letterFrom = camelotFrom.slice(-1);
   const numTo = parseInt(camelotTo, 10);
@@ -128,7 +126,7 @@ export function getHumanMatchLabel(
 
   if (isNumericNeighbor) {
     return {
-      compatibilityLabel: '💚 Mezcla Fluida (98%)',
+      compatibilityLabel: 'Mezcla Fluida (98%)',
       badgeClass: 'match',
       vibeDescription: 'Evolución armónica continua',
       tempoAdvice,
@@ -138,7 +136,7 @@ export function getHumanMatchLabel(
 
   if (isModeShift) {
     return {
-      compatibilityLabel: '☀️ Cambio de Brillo (95%)',
+      compatibilityLabel: 'Cambio de Brillo (95%)',
       badgeClass: 'vibe',
       vibeDescription: 'Pasa de tono menor a mayor suavemente',
       tempoAdvice,
@@ -147,7 +145,7 @@ export function getHumanMatchLabel(
   }
 
   return {
-    compatibilityLabel: '⚡ Transición Dinámica (91%)',
+    compatibilityLabel: 'Transición Dinámica (91%)',
     badgeClass: 'vibe',
     vibeDescription: 'Cruce controlado con EQ o filtro',
     tempoAdvice,

@@ -1,5 +1,4 @@
 import { Popover } from '@base-ui/react/popover';
-import { useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
 import { useRef } from 'react';
 
@@ -15,18 +14,14 @@ export default function Header() {
   const queue = usePlayerState((state) => state.queue);
   const queueCursor = usePlayerState((state) => state.queueCursor);
   const trackPlaying = usePlayingTrack();
-  const { t } = useLingui();
-  const platform = window.__MUSEEKS_PLATFORM;
+  const platform =
+    typeof window !== 'undefined' ? window.__MUSEEKS_PLATFORM : 'windows';
   const queueAnchorRef = useRef<HTMLDivElement>(null);
 
   return (
     <header
-      aria-label={t`Header`}
-      {...stylex.props(
-        styles.header,
-        (platform === 'windows' || platform === 'linux') &&
-          styles.headerBorderTop,
-      )}
+      aria-label="Transporte y búsqueda de cabina"
+      {...stylex.props(styles.header)}
       data-tauri-drag-region
     >
       <div
@@ -38,8 +33,9 @@ export default function Header() {
       >
         <PlayerControls />
       </div>
+
       <div {...stylex.props(styles.headerPlayingBar)} data-tauri-drag-region>
-        {trackPlaying != null && (
+        {trackPlaying != null ? (
           <>
             <PlayingBar trackPlaying={trackPlaying} />
             <Popover.Root>
@@ -49,8 +45,8 @@ export default function Header() {
                     <ButtonIcon
                       {...triggerProps}
                       icon="list"
-                      iconSize={20}
-                      label={t`Queue`}
+                      iconSize={18}
+                      label="Cola de reproducción"
                       data-tauri-drag-region
                     />
                   )}
@@ -70,8 +66,14 @@ export default function Header() {
               </Popover.Portal>
             </Popover.Root>
           </>
+        ) : (
+          <div {...stylex.props(styles.idleTransport)} data-tauri-drag-region>
+            Preescucha lista · Doble clic en cualquier pista para activar 4 Hot
+            Cues
+          </div>
         )}
       </div>
+
       <div {...stylex.props(styles.headerSearch)} data-tauri-drag-region>
         <Search />
       </div>
@@ -84,25 +86,19 @@ const styles = stylex.create({
     boxSizing: 'border-box',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: 'var(--border-color)',
-    backgroundColor: 'var(--header-bg)',
-    color: 'var(--header-color)',
-    paddingTop: 0,
-    paddingBottom: 0,
-    paddingLeft: '10px',
-    paddingRight: '10px',
+    borderBottomColor: '#232a36',
+    backgroundColor: '#12161d',
+    color: '#edeff3',
+    paddingBlock: 0,
+    paddingInline: '14px',
     display: 'flex',
-    alignItems: 'stretch',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    height: '50px',
+    columnGap: '16px',
+    height: '52px',
     flexGrow: 0,
     flexShrink: 0,
-    flexBasis: 'auto',
-  },
-  headerBorderTop: {
-    borderTopWidth: '1px',
-    borderTopStyle: 'solid',
-    borderTopColor: 'var(--border-color)',
+    flexBasis: '52px',
   },
   headerMainControls: {
     flexGrow: 0,
@@ -110,33 +106,41 @@ const styles = stylex.create({
     flexBasis: 'auto',
     display: 'flex',
     alignItems: 'center',
-    paddingRight: '10px',
-    minWidth: '200px',
-    paddingLeft: '12px',
+    minWidth: '196px',
+    paddingLeft: '4px',
   },
   headerMainControlsMacos: {
     paddingLeft: '72px',
-  },
-  headerSearch: {
-    flexGrow: 0,
-    flexShrink: 0,
-    flexBasis: 'auto',
-    display: 'flex',
-    justifyContent: 'flex-end',
   },
   headerPlayingBar: {
     flexGrow: 1,
     flexShrink: 1,
     flexBasis: 'auto',
     minWidth: 0,
-    maxWidth: '600px',
+    maxWidth: '640px',
+    height: '100%',
     display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  idleTransport: {
+    fontSize: '12px',
+    color: '#8e98a8',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  headerSearch: {
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   queue: {
-    marginTop: 0,
-    marginBottom: 0,
-    marginLeft: '16px',
-    marginRight: '16px',
+    marginBlock: 0,
+    marginInline: '12px',
     display: 'flex',
     alignItems: 'center',
   },

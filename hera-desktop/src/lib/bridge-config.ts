@@ -5,8 +5,8 @@ import { logAndNotifyError } from './utils';
 
 const DEFAULT_FALLBACK_CONFIG: Config = {
   language: 'es',
-  theme: '__system',
-  ui_accent_color: null,
+  theme: 'dark',
+  ui_accent_color: '#14b8a6',
   audio_volume: 1.0,
   audio_playback_rate: 1.0,
   audio_follow_playing_track: false,

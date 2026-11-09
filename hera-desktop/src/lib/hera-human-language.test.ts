@@ -49,7 +49,7 @@ describe('hera-human-language (Zero Jargon translation layer)', () => {
 
   it('translates forensics FFT cutoff into clean studio badges', () => {
     const hiRes = getHumanAudioQuality(21.8);
-    expect(hiRes.label).toBe('✨ Sonido de Estudio');
+    expect(hiRes.label).toBe('Sonido de Estudio');
     expect(hiRes.isLossless).toBe(true);
 
     const fallback = getHumanAudioQuality(null);

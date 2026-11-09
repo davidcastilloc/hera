@@ -32,9 +32,6 @@ export const Route = createRootRoute({
   notFoundComponent: NotFoundView,
   loader: () => queryClient.ensureQueryData(configQuery),
   validateSearch: (search): Search => {
-    // Why circumvolutions here? If the key is defined, it will be added to the
-    // fragment of the URL (after the #), which will prevent the default_view
-    // plugin to navigate to the default view.
     const jump_to_playing_track = Boolean(search?.jump_to_playing_track);
 
     if (jump_to_playing_track === true) {
@@ -52,11 +49,9 @@ function ViewRoot() {
   const { t } = useLingui();
 
   useEffect(() => {
-    // If the app imported tracks, we need to refresh route data, but it seems invalidate is not super stable
     SettingsAPI.init(invalidate).catch(logAndNotifyError);
   }, [invalidate]);
 
-  // Log each navigation to the console for debug purposes
   const location = useLocation();
 
   useEffect(() => {
@@ -74,7 +69,6 @@ function ViewRoot() {
         typeof window !== 'undefined' ? window.__MUSEEKS_PLATFORM : 'windows'
       }
     >
-      {/** Bunch of global event handlers */}
       <IPCNavigationEvents />
       <IPCPlayerEvents />
       <AppEvents />
@@ -82,17 +76,17 @@ function ViewRoot() {
       <PlayerEvents />
       <GlobalKeyBindings />
 
-      {/** The actual app */}
       <Header />
-      <Navigation />
-      <main
-        aria-label={t`Application main content`}
-        {...stylex.props(styles.mainContent)}
-      >
-        <Outlet />
-      </main>
+      <div {...stylex.props(styles.workspaceBody)}>
+        <Navigation />
+        <main
+          aria-label={t`Contenido principal de cabina`}
+          {...stylex.props(styles.mainContent)}
+        >
+          <Outlet />
+        </main>
+      </div>
 
-      {/** Out-of-the-flow UI bits */}
       <Toasts />
       <DropzoneImport />
     </div>
@@ -104,16 +98,28 @@ const styles = stylex.create({
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
+    backgroundColor: 'var(--background)',
+    color: 'var(--text)',
   },
-  mainContent: {
-    order: 1,
-    width: '100%',
+  workspaceBody: {
+    display: 'flex',
+    flexDirection: 'row',
     flexGrow: 1,
     flexShrink: 1,
-    flexBasis: 'auto',
+    flexBasis: '0%',
+    minHeight: 0,
+    minWidth: 0,
+    backgroundColor: 'var(--background)',
+  },
+  mainContent: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
     position: 'relative',
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
+    minWidth: 0,
+    backgroundColor: 'var(--background)',
   },
 });

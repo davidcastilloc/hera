@@ -1,9 +1,58 @@
-/* Colors (default theme) */
+/* Studio Tokens — Pizarra de Cabina & Esmeralda Estudio */
 :root {
-  --main-color: hsl(208, 77%, 59%);
-  --focus-color: color-mix(in srgb, var(--main-color) 80%, white);
-  --link-color: var(--main-color);
+  --color-scheme: dark;
+  --main-color: #14b8a6;
+  --accent-ink: #041311;
+  --accent-subtle: rgba(20, 184, 166, 0.12);
+  --accent-border: rgba(20, 184, 166, 0.32);
+  --accent-text: #2dd4bf;
+  --focus-color: #2dd4bf;
+  --link-color: #2dd4bf;
   --bold: 600;
+
+  --surface-ground: #0c0e12;
+  --surface-rail: #10141b;
+  --surface-header: #12161d;
+  --surface-elevated: #171c24;
+
+  --text: #edeff3;
+  --text-muted: #8e98a8;
+  --text-interactive-bg: rgba(237, 239, 243, 0.06);
+  --background: #0c0e12;
+  --faded-bg: rgba(12, 14, 18, 0.88);
+  --border-color: #232a36;
+  --border-color-softer: #1b222d;
+  --border-radius: 6px;
+  --header-color: #edeff3;
+  --header-bg: #12161d;
+  --header-bg-softer: #171c24;
+  --footer-bg: #10141b;
+  --footer-nav-bg-color-active: rgba(20, 184, 166, 0.14);
+  --active-item-bg: rgba(20, 184, 166, 0.14);
+  --active-item-color: #edeff3;
+  --tracks-bg-even: #0c0e12;
+  --tracks-bg-odd: #10141b;
+  --tracks-header-bg: #12161d;
+  --tracks-header-color: #8e98a8;
+  --cover-bg: #171c24;
+  --success-color: #22c55e;
+  --info-color: #38bdf8;
+  --warning-color: #f59e0b;
+  --danger-color: #ef4444;
+  --toasts-bg: #171c24;
+  --progress-bg: #1c222d;
+  --sidebar-bg: #10141b;
+  --sidebar-item-active-bg: rgba(20, 184, 166, 0.14);
+  --search-bg: #0c0e12;
+  --slider-bg: #232a36;
+  --queue-bg: #12161d;
+  --queue-header-bg: #171c24;
+  --checkbox-bg: #171c24;
+  --input-bg: #12161d;
+  --input-color: #edeff3;
+  --button-bg: #171c24;
+  --button-border: #232a36;
+  --button-color: #edeff3;
 }
 
 *,
@@ -13,22 +62,58 @@
 }
 
 html {
-  font-size: 12px;
+  font-size: 13px;
   user-select: none;
   height: 100%;
   overflow: hidden;
-  color-scheme: var(--color-scheme);
+  background-color: var(--background);
+  color: var(--text);
+  color-scheme: dark;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
   margin: 0;
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Roboto,
-    Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+    "Segoe UI Variable Text",
+    "Segoe UI",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Inter",
+    Roboto,
+    "Helvetica Neue",
+    sans-serif;
+  background-color: var(--background);
   color: var(--text);
+  caret-color: var(--main-color);
   user-select: none;
   height: 100%;
   overflow: hidden;
+}
+
+::selection {
+  background-color: rgba(20, 184, 166, 0.28);
+  color: #edeff3;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0c0e12;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #232a36;
+  border-radius: 4px;
+  border: 2px solid #0c0e12;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #333d4f;
 }
 
 /** Global focus styles */
@@ -38,49 +123,52 @@ body {
 
 :focus-visible {
   --focus-offset: 1px;
-  outline: 2px solid var(--focus-color);
+  outline: 1.5px solid var(--focus-color);
   outline-offset: var(--focus-offset);
-  border-radius: calc(
-    var(--border-radius) + var(--focus-offset)
-  ); /* compensate radius on elements */
+  border-radius: calc(var(--border-radius) + var(--focus-offset));
   position: relative;
   z-index: 5 !important;
 }
 
 p {
-  line-height: 1.3;
+  line-height: 1.45;
+}
+
+a {
+  color: var(--link-color);
 }
 
 /* App wrapper */
 #wrap {
   height: 100vh;
   isolation: isolate;
+  background-color: var(--background);
 }
-
-/**
- * Museeks specific data-attributes to apply some easily reusable styles across the app.
- */
 
 [data-museeks-os="linux"],
 [data-museeks-os="macos"] {
   font-weight: 500;
 }
 
-/* For call-to-actions to show the interactibility of an element */
+/* Subtle studio micro-interaction for transport controls */
 [data-museeks-action] {
-  transition: transform 0.1s ease-in-out;
+  transition:
+    color 0.14s ease,
+    opacity 0.14s ease,
+    transform 0.12s ease;
 }
 
 [data-museeks-action]:hover {
-  transform: scale(1.2);
+  opacity: 0.92;
+  transform: translateY(-0.5px);
 }
 
 [data-museeks-action]:active {
-  transform: scale(1);
+  transform: translateY(0);
 }
 
-/* Active state of some elements that get de-emphasized, is not focused */
+/* Active row inside focused track list */
 [data-museeks-list]:focus-within {
-  --active-item-bg: var(--main-color);
-  --active-item-color: white;
+  --active-item-bg: rgba(20, 184, 166, 0.2);
+  --active-item-color: #edeff3;
 }

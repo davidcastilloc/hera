@@ -1,4 +1,3 @@
-import { useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
 
 import TrackListHeaderCell from './TrackListHeaderCell';
@@ -8,13 +7,11 @@ type Props = {
 };
 
 export default function TrackListHeader({ sortable = true }: Props) {
-  const { t } = useLingui();
-
   return (
     <div
       {...stylex.props(styles.trackListHeader)}
       role="group"
-      aria-label={t`Track list sorting options`}
+      aria-label="Columnas y orden de pistas"
     >
       <TrackListHeaderCell
         xstyle={styles.cellTrackPlaying}
@@ -23,7 +20,7 @@ export default function TrackListHeader({ sortable = true }: Props) {
       />
       <TrackListHeaderCell
         xstyle={styles.cellTrack}
-        title={t`Title`}
+        title="Título"
         sortBy={sortable ? 'Title' : null}
       />
       <TrackListHeaderCell
@@ -33,32 +30,32 @@ export default function TrackListHeader({ sortable = true }: Props) {
       />
       <TrackListHeaderCell
         xstyle={styles.cellCamelot}
-        title="Key"
+        title="Tono"
         sortBy={sortable ? 'Camelot' : null}
       />
       <TrackListHeaderCell
         xstyle={styles.cellCues}
-        title="4 Hot Cues"
+        title="4 Cues"
         sortBy={null}
       />
       <TrackListHeaderCell
         xstyle={styles.cellDuration}
-        title={t`Duration`}
+        title="Duración"
         sortBy={sortable ? 'Duration' : null}
       />
       <TrackListHeaderCell
         xstyle={styles.cellArtist}
-        title={t`Artist`}
+        title="Artista"
         sortBy={sortable ? 'Artist' : null}
       />
       <TrackListHeaderCell
         xstyle={styles.cellAlbum}
-        title={t`Album`}
+        title="Álbum"
         sortBy={sortable ? 'Album' : null}
       />
       <TrackListHeaderCell
         xstyle={styles.cellGenre}
-        title={t`Genre`}
+        title="Género"
         sortBy={sortable ? 'Genre' : null}
       />
     </div>
@@ -69,14 +66,16 @@ const styles = stylex.create({
   trackListHeader: {
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: 'var(--border-color)',
-    color: 'var(--tracks-header-color)',
-    backgroundColor: 'var(--tracks-header-bg)',
+    borderBottomColor: '#232a36',
+    color: '#8e98a8',
+    backgroundColor: '#12161d',
     display: 'flex',
     width: '100%',
     position: 'sticky',
     top: 0,
     zIndex: 5,
+    fontSize: '11.5px',
+    fontWeight: 600,
   },
   cellTrackPlaying: {
     width: '30px',
@@ -89,23 +88,23 @@ const styles = stylex.create({
     minWidth: 0,
   },
   cellBpm: {
-    width: '64px',
-    minWidth: '64px',
+    width: '66px',
+    minWidth: '66px',
     flexShrink: 0,
   },
   cellCamelot: {
-    width: '56px',
-    minWidth: '56px',
+    width: '58px',
+    minWidth: '58px',
     flexShrink: 0,
   },
   cellCues: {
-    width: '86px',
-    minWidth: '86px',
+    width: '104px',
+    minWidth: '104px',
     flexShrink: 0,
   },
   cellDuration: {
-    width: '68px',
-    minWidth: '68px',
+    width: '70px',
+    minWidth: '70px',
     flexShrink: 0,
   },
   cellArtist: {

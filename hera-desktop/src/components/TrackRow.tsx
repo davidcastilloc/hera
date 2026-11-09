@@ -32,6 +32,13 @@ type Props = {
   style?: React.CSSProperties;
 } & TrackRowEvents;
 
+const CUE_SLOTS = [
+  { num: 1, label: '1:Intro', color: '#22c55e' },
+  { num: 2, label: '2:Quiebre', color: '#38bdf8' },
+  { num: 3, label: '3:Drop', color: '#ef4444' },
+  { num: 4, label: '4:Salida', color: '#f59e0b' },
+] as const;
+
 export default function TrackRow(props: Props) {
   const {
     track,
@@ -45,13 +52,12 @@ export default function TrackRow(props: Props) {
 
   const duration = useFormattedDuration(track.duration);
 
-  // Drag-and-Drop for playlists
   const {
     attributes,
     listeners,
     setNodeRef,
-    isDragging, // is this item being dragged around
-    isOver, // is this item being dragged over by another item
+    isDragging,
+    isOver,
     activeIndex,
     overIndex,
   } = useSortable({
@@ -79,15 +85,12 @@ export default function TrackRow(props: Props) {
       onContextMenu={(e) => onContextMenu(e, track.id, index)}
       data-is-playing={props.isPlaying === true}
       data-track-id={track.id}
-      // dnd-related props:
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      // accessibility
-      aria-disabled="false" // required
+      aria-disabled="false"
       aria-selected={selected}
-      role="option" // technically already given by attributes, but that'll make the linter happy
-      // styles
+      role="option"
       {...stylex.props(
         trackStyles.track,
         isEvenRow && trackStyles.trackEvenRow,
@@ -129,9 +132,19 @@ export default function TrackRow(props: Props) {
           </div>
           <div
             {...stylex.props(cellStyles.cell, cellStyles.hotCues)}
-            title="4 Hot Cues: 1:Intro · 2:Breakdown · 3:Drop · 4:Outro"
+            title="4 Hot Cues: 1 Intro · 2 Quiebre · 3 Drop · 4 Salida"
           >
-            🟢 🔵 🔴 🟡
+            <div {...stylex.props(cellStyles.cueRail)}>
+              {CUE_SLOTS.map((cue) => (
+                <span key={cue.num} {...stylex.props(cellStyles.cueChip)}>
+                  <span
+                    {...stylex.props(cellStyles.cueDot)}
+                    style={{ backgroundColor: cue.color }}
+                  />
+                  <span {...stylex.props(cellStyles.cueNum)}>{cue.num}</span>
+                </span>
+              ))}
+            </div>
           </div>
         </>
       )}
@@ -170,7 +183,7 @@ const trackStyles = stylex.create({
     borderTopColor: 'transparent',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: 'transparent',
+    borderBottomColor: 'rgba(35, 42, 54, 0.45)',
     backgroundColor: 'var(--tracks-bg-even)',
     alignItems: 'center',
     maxWidth: '100%',
@@ -183,7 +196,7 @@ const trackStyles = stylex.create({
     color: 'var(--active-item-color)',
   },
   selectedWithSelectedAbove: {
-    borderTopColor: 'rgba(255 255 255 / 0.2)',
+    borderTopColor: 'rgba(45, 212, 191, 0.24)',
   },
   isDragging: {
     opacity: 0.5,
@@ -217,8 +230,8 @@ const cellStyles = stylex.create({
     borderLeftWidth: '1px',
     borderLeftStyle: 'solid',
     borderLeftColor: 'transparent',
-    paddingRight: '4px',
-    paddingLeft: '4px',
+    paddingRight: '6px',
+    paddingLeft: '6px',
     cursor: 'default',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
@@ -244,6 +257,7 @@ const cellStyles = stylex.create({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+    fontWeight: 500,
   },
   artistInTitle: {
     color: 'var(--text-muted)',
@@ -255,56 +269,99 @@ const cellStyles = stylex.create({
     whiteSpace: 'nowrap',
   },
   duration: {
-    width: '68px',
-    minWidth: '68px',
+    width: '70px',
+    minWidth: '70px',
     flexShrink: 0,
     fontVariantNumeric: 'tabular-nums',
+    color: '#8e98a8',
   },
   artist: {
     width: '16%',
     flexShrink: 0,
+    color: '#8e98a8',
   },
   album: {
     width: '14%',
     flexShrink: 0,
+    color: '#8e98a8',
   },
   genre: {
     width: '12%',
     flexShrink: 0,
+    color: '#8e98a8',
   },
   bpm: {
-    width: '64px',
-    minWidth: '64px',
+    width: '66px',
+    minWidth: '66px',
     flexShrink: 0,
     fontVariantNumeric: 'tabular-nums',
+    fontWeight: 600,
+    color: '#edeff3',
   },
   camelot: {
-    width: '56px',
-    minWidth: '56px',
+    width: '58px',
+    minWidth: '58px',
     flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
   },
   camelotBadge: {
-    display: 'inline-block',
-    paddingTop: '1px',
-    paddingBottom: '1px',
-    paddingLeft: '6px',
-    paddingRight: '6px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBlock: '1px',
+    paddingInline: '6px',
     borderRadius: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(20, 184, 166, 0.28)',
     fontSize: '11px',
     fontWeight: 600,
-    backgroundColor: 'rgba(139, 92, 246, 0.16)',
-    color: 'var(--main-color)',
+    lineHeight: 1.35,
+    fontVariantNumeric: 'tabular-nums',
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    color: '#2dd4bf',
   },
   camelotBadgeSelected: {
-    backgroundColor: 'rgba(0, 0, 0, 0.28)',
-    color: 'var(--active-item-color)',
+    backgroundColor: 'rgba(12, 14, 18, 0.55)',
+    borderColor: 'rgba(45, 212, 191, 0.45)',
+    color: '#2dd4bf',
   },
   hotCues: {
-    width: '86px',
-    minWidth: '86px',
+    width: '104px',
+    minWidth: '104px',
     flexShrink: 0,
-    fontSize: '10px',
-    letterSpacing: '1px',
+    display: 'flex',
+    alignItems: 'center',
+  },
+  cueRail: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '4px',
+    paddingBlock: '2px',
+    paddingInline: '5px',
+    borderRadius: '4px',
+    backgroundColor: '#0c0e12',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    lineHeight: 1,
+  },
+  cueChip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '2px',
+  },
+  cueDot: {
+    width: '5px',
+    height: '5px',
+    borderRadius: '999px',
+  },
+  cueNum: {
+    fontSize: '9.5px',
+    fontWeight: 600,
+    color: '#8e98a8',
+    fontVariantNumeric: 'tabular-nums',
   },
   rightAligned: {
     textAlign: 'right',

@@ -1,4 +1,5 @@
-import { Trans, useLingui } from '@lingui/react/macro';
+import { useLingui } from '@lingui/react/macro';
+import * as stylex from '@stylexjs/stylex';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import {
   createFileRoute,
@@ -8,6 +9,7 @@ import {
 import { useCallback, useMemo } from 'react';
 
 import PlaylistsAPI from '../api/PlaylistsAPI';
+import HeraDjToolbar from '../components/HeraDjToolbar';
 import TrackList from '../components/TrackList';
 import Link from '../elements/Link';
 import * as ViewMessage from '../elements/ViewMessage';
@@ -27,7 +29,7 @@ export const Route = createFileRoute('/playlists/$playlistID')({
       const playlist = await DatabaseBridge.getPlaylist(params.playlistID);
       const playlistTracks = await DatabaseBridge.getTracks(playlist.tracks);
 
-      return { playlistTracks };
+      return { playlist, playlistTracks };
     } catch (err) {
       if (err === 'Playlist not found') {
         throw redirect({ to: '/playlists' });
@@ -39,7 +41,7 @@ export const Route = createFileRoute('/playlists/$playlistID')({
 });
 
 function ViewPlaylistDetails() {
-  const { playlistTracks } = Route.useLoaderData();
+  const { playlist, playlistTracks } = Route.useLoaderData();
   const { playlists } = useLoaderData({ from: '/playlists' });
   const { playlistID } = Route.useParams();
   const config = useSuspenseQuery(configQuery).data;
@@ -84,14 +86,10 @@ function ViewPlaylistDetails() {
   if (playlistTracks.length === 0) {
     return (
       <ViewMessage.Notice>
-        <p>
-          <Trans>Empty playlist</Trans>
-        </p>
+        <p>Esta playlist aún no tiene pistas</p>
         <ViewMessage.Sub>
-          <Trans>
-            You can add tracks from the{' '}
-            <Link linkOptions={{ to: '/library' }}>library view</Link>
-          </Trans>
+          Añade pistas desde la{' '}
+          <Link linkOptions={{ to: '/library' }}>Biblioteca de Cabina</Link>
         </ViewMessage.Sub>
       </ViewMessage.Notice>
     );
@@ -100,40 +98,47 @@ function ViewPlaylistDetails() {
   if (filteredTracks.length === 0 && search.length > 0) {
     return (
       <ViewMessage.Notice>
-        <p>
-          <Trans>Your search returned no results</Trans>
-        </p>
-      </ViewMessage.Notice>
-    );
-  }
-
-  // A bit hacky though
-  if (filteredTracks && filteredTracks.length === 0) {
-    return (
-      <ViewMessage.Notice>
-        <p>
-          <Trans>Empty playlist</Trans>
-        </p>
-        <ViewMessage.Sub>
-          <Trans>
-            You can add tracks from the{' '}
-            <Link linkOptions={{ to: '/library' }}>library view</Link>
-          </Trans>
-        </ViewMessage.Sub>
+        <p>No hay resultados para tu búsqueda en esta playlist</p>
       </ViewMessage.Notice>
     );
   }
 
   return (
-    <TrackList
-      layout="default"
-      data={filteredTracks}
-      tracksDensity={config.track_view_density}
-      playlists={playlists}
-      queueOrigin={queueOrigin}
-      onReorder={onReorder}
-      reorderable={true}
-      extraContextMenu={extraContextMenu}
-    />
+    <div {...stylex.props(styles.playlistContainer)}>
+      <HeraDjToolbar
+        title={playlist.name}
+        tracksOverride={filteredTracks}
+        crateName={playlist.name}
+      />
+      <div {...stylex.props(styles.listViewport)}>
+        <TrackList
+          layout="default"
+          data={filteredTracks}
+          tracksDensity={config.track_view_density}
+          playlists={playlists}
+          queueOrigin={queueOrigin}
+          onReorder={onReorder}
+          reorderable={true}
+          extraContextMenu={extraContextMenu}
+        />
+      </div>
+    </div>
   );
 }
+
+const styles = stylex.create({
+  playlistContainer: {
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  listViewport: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: '0%',
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+  },
+});

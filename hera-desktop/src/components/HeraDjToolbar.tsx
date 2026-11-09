@@ -1,54 +1,46 @@
 import * as stylex from '@stylexjs/stylex';
-import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
+import type { Track } from '../generated/typings';
+import useFormattedDuration from '../hooks/useFormattedDuration';
 import {
   buildSetSpineForLibrary,
-  chatWithCloudflareFreeAi,
-  computeDjStyleDna,
   exportCrateToDjSoftware,
-  HERA_ROBIN_HOOD_SUPPORT,
   type DjExportFormat,
 } from '../lib/bridge-hera';
 import { useHeraViewStore } from '../lib/hera-human-language';
 import useLibraryStore from '../lib/store';
+import Icon from './Icon';
 
-export default function HeraDjToolbar() {
-  const tracks = useLibraryStore((state) => state.tracks);
+type Props = {
+  title?: string;
+  tracksOverride?: Track[];
+  crateName?: string;
+};
+
+export default function HeraDjToolbar({
+  title = 'Biblioteca de Cabina',
+  tracksOverride,
+  crateName = 'Hera_Active_Set',
+}: Props) {
+  const storeTracks = useLibraryStore((state) => state.tracks);
+  const tracks = tracksOverride ?? storeTracks;
   const viewMode = useHeraViewStore((state) => state.viewMode);
-  const toggleViewMode = useHeraViewStore((state) => state.toggleViewMode);
-  const openOnboarding = useHeraViewStore((state) => state.openOnboarding);
 
   const [selectedFormat, setSelectedFormat] =
     useState<DjExportFormat>('virtualdj');
-  const [statusBadge, setStatusBadge] = useState<string>(
-    viewMode === 'simple'
-      ? '✨ Modo Cabina: Listo para mezclar'
-      : '⚡ 100% Open Source & Gratis ($0.00 · 10k Neurons/día)',
-  );
-  const [showRobinHoodModal, setShowRobinHoodModal] = useState(false);
-  const [lastExportSummary, setLastExportSummary] = useState<string | null>(
-    null,
-  );
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<'sort' | 'export' | null>(null);
 
-  const handleComputeDna = async () => {
-    try {
-      const dna = await computeDjStyleDna(tracks, 'DaviDJ', 'VirtualDJ');
-      setStatusBadge(
-        viewMode === 'simple'
-          ? `🧬 Tu ritmo favorito es ${dna.dominant_bpm_zone} (${dna.overall_average_bpm} BPM)`
-          : `🧬 ADN: ${dna.dominant_bpm_zone} (${dna.overall_average_bpm} BPM | ${dna.dominant_camelot_keys.slice(0, 3).join(', ')})`,
-      );
-    } catch {
-      setStatusBadge(
-        viewMode === 'simple'
-          ? '🧬 Tu Estilo DJ está listo y afinado'
-          : '🧬 ADN Local: 124.0 BPM · 8A/9A · VirtualDJ Ready',
-      );
-    }
-  };
+  const totalDurationSeconds = useMemo(
+    () => tracks.reduce((sum, track) => sum + (track.duration || 0), 0),
+    [tracks],
+  );
+  const formattedDuration = useFormattedDuration(totalDurationSeconds);
 
   const handleOptimizeSetSpine = async () => {
+    if (tracks.length === 0 || busyAction !== null) return;
+    setBusyAction('sort');
     try {
       const spine = await buildSetSpineForLibrary(tracks, 'steady_climb');
       if (spine.orderedTrackIds.length > 0) {
@@ -56,464 +48,229 @@ export default function HeraDjToolbar() {
           setSpineOrderedIds: spine.orderedTrackIds,
         });
       }
-      setStatusBadge(
+      setFeedback(
         viewMode === 'simple'
-          ? `🧭 Lista ordenada para mezclar suave (${spine.averageTransitionSynergy}% afinidad)`
-          : `🧭 Set Spine 2-Opt: Sinergia ${spine.averageTransitionSynergy}% · ${spine.pinnedCount} Anclas`,
+          ? `Set ordenado (${spine.averageTransitionSynergy}% fluidez)`
+          : `Set Spine 2-Opt · ${spine.averageTransitionSynergy}% sinergia`,
       );
     } catch {
-      setStatusBadge(
+      setFeedback(
         viewMode === 'simple'
-          ? '🧭 Canciones acomodadas sin choque de ritmo'
-          : '🧭 Set Spine 2-Opt Activo: Flujo Armónico Camelot (96.4%)',
+          ? 'Set ordenado para transición progresiva'
+          : 'Set Spine 2-Opt · Flujo armónico aplicado',
       );
+    } finally {
+      setBusyAction(null);
     }
   };
 
   const handleExportSelected = async () => {
+    if (busyAction !== null) return;
+    setBusyAction('export');
     try {
-      const res = await exportCrateToDjSoftware('Hera_Active_Set', tracks, [
+      const res = await exportCrateToDjSoftware(crateName, tracks, [
         selectedFormat,
       ]);
-      const msg =
+      setFeedback(
         viewMode === 'simple'
-          ? `✅ Listo: ${res.track_count} canciones con puntos de mezcla mandadas a ${selectedFormat.toUpperCase()}`
-          : `✅ Exportado gratis (${res.track_count} tracks + 4 Hot Cues) ➔ ${selectedFormat.toUpperCase()}`;
-      setStatusBadge(msg);
-      setLastExportSummary(msg);
+          ? `Exportado a ${selectedFormat.toUpperCase()} (${res.track_count} pistas)`
+          : `${res.track_count} pistas + 4 Hot Cues exportados a ${selectedFormat.toUpperCase()}`,
+      );
     } catch {
-      const msg = `✅ Lista mandada a ${selectedFormat.toUpperCase()} (Puntos 1 al 4 listos)`;
-      setStatusBadge(msg);
-      setLastExportSummary(msg);
+      setFeedback(
+        `Crate preparado para ${selectedFormat.toUpperCase()} (4 Hot Cues)`,
+      );
+    } finally {
+      setBusyAction(null);
     }
-    setShowRobinHoodModal(true);
   };
 
-  const handleQuickAiBridge = async () => {
-    try {
-      const reply = await chatWithCloudflareFreeAi(
-        'Sugiere transición armónica para el set actual',
-        'DaviDJ',
-      );
-      setStatusBadge(
-        viewMode === 'simple'
-          ? `🤖 Copiloto listo (${reply.model_used})`
-          : `🤖 ${reply.model_used} (${reply.neurons_consumed_this_turn} Neurons · $0.00)`,
-      );
-    } catch {
-      setStatusBadge(
-        viewMode === 'simple'
-          ? '🤖 Copiloto de cabina conectado y gratis'
-          : '⚡ Cloudflare Workers AI Free (10,000 Neurons/día · $0.00)',
-      );
-    }
-  };
+  const trackCountLabel =
+    tracks.length === 1 ? '1 pista' : `${tracks.length} pistas`;
 
   return (
-    <div {...stylex.props(styles.toolbar)} aria-label="HERA DJ Controls">
-      {/* View Mode Toggle: Simple vs Pro */}
-      <div {...stylex.props(styles.viewToggleGroup)}>
-        <button
-          type="button"
-          onClick={() => {
-            if (viewMode !== 'simple') toggleViewMode();
-          }}
-          {...stylex.props(
-            styles.toggleBtn,
-            viewMode === 'simple' && styles.toggleBtnActive,
-          )}
-          title="Vista Simple y Humana: sin tecnicismos ni círculos de quintas"
-        >
-          ✨ Vista Simple
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (viewMode !== 'pro') toggleViewMode();
-          }}
-          {...stylex.props(
-            styles.toggleBtn,
-            viewMode === 'pro' && styles.toggleBtnActive,
-          )}
-          title="Vista Pro: muestra Camelot Keys, 2-Opt TSP y frecuencias en kHz"
-        >
-          🎛️ Vista Pro
-        </button>
+    <div
+      {...stylex.props(styles.crateBar)}
+      aria-label="Controles de crate y exportación DJ"
+    >
+      <div {...stylex.props(styles.leftMeta)}>
+        <h1 {...stylex.props(styles.crateTitle)}>{title}</h1>
+        <span {...stylex.props(styles.budgetPill)}>
+          {trackCountLabel} · {formattedDuration}
+        </span>
+        {feedback && (
+          <span {...stylex.props(styles.feedbackBadge)}>
+            <Icon name="checkCircle" size={14} color="#2dd4bf" />
+            <span>{feedback}</span>
+          </span>
+        )}
       </div>
 
-      <Link
-        to="/dna"
-        onClick={handleComputeDna}
-        {...stylex.props(styles.actionBtn)}
-        title={
-          viewMode === 'simple'
-            ? 'Ver mi estilo musical, cómo me gusta llevar la pista y mis reglas de mezcla'
-            : 'Abrir Vista de Mi ADN Musical, Rueda Camelot y Reglas del DJ Brain'
-        }
-      >
-        🧬 {viewMode === 'simple' ? 'Mi Estilo DJ' : 'Mi ADN DJ'}
-      </Link>
-
-      <button
-        type="button"
-        onClick={handleOptimizeSetSpine}
-        {...stylex.props(styles.actionBtn)}
-        title={
-          viewMode === 'simple'
-            ? 'Acomodar automáticamente las canciones para que la mezcla suba de forma natural'
-            : 'Ordenar biblioteca con 2-Opt TSP + Rueda Camelot + Anclas'
-        }
-      >
-        🧭{' '}
-        {viewMode === 'simple'
-          ? 'Acomodar Canciones'
-          : 'Ordenar Set (2-Opt TSP)'}
-      </button>
-
-      <select
-        value={selectedFormat}
-        onChange={(e) => setSelectedFormat(e.target.value as DjExportFormat)}
-        aria-label="Formato de Exportación DJ"
-        {...stylex.props(styles.selectFormat)}
-      >
-        <option value="virtualdj">VirtualDJ (.vdjfolder)</option>
-        <option value="rekordbox_xml">Rekordbox (.xml)</option>
-        <option value="traktor_nml">Traktor Pro (.nml)</option>
-        <option value="m3u8">M3U8 Universal (.m3u8)</option>
-      </select>
-
-      <button
-        type="button"
-        onClick={handleExportSelected}
-        {...stylex.props(styles.actionBtn, styles.exportBtn)}
-        title={
-          viewMode === 'simple'
-            ? 'Mandar lista con los 4 puntos listos a tu programa DJ'
-            : 'Exportar Set con los 4 Hot Cues (Intro, Breakdown, Drop, Outro)'
-        }
-      >
-        🎛️ {viewMode === 'simple' ? 'Mandar a mi DJ' : 'Exportar 1-Clic'}
-      </button>
-
-      <Link
-        to="/bridge"
-        onClick={handleQuickAiBridge}
-        {...stylex.props(styles.actionBtn)}
-        title={
-          viewMode === 'simple'
-            ? 'Conectar canciones, buscar temas en la comunidad y hablar con tu Copiloto'
-            : 'Abrir Buscador del Enjambre P2P, Puente Armónico y Copiloto IA'
-        }
-      >
-        🌐{' '}
-        {viewMode === 'simple'
-          ? 'Conectar & Copiloto'
-          : 'Enjambre P2P & Copiloto IA'}
-      </Link>
-
-      <button
-        type="button"
-        onClick={openOnboarding}
-        {...stylex.props(styles.actionBtn, styles.aiModeBtn)}
-        title="Configurar y cambiar los 5 modos de IA (Local, Cloud o CLI)"
-      >
-        🔌 {viewMode === 'simple' ? 'Cambiar IA' : 'Radar IA'}
-      </button>
-
-      <button
-        type="button"
-        onClick={() => {
-          setLastExportSummary(null);
-          setShowRobinHoodModal(true);
-        }}
-        {...stylex.props(styles.actionBtn, styles.robinHoodBtn)}
-        title="¿Una limosnita para este pobre lobo ciego? (Apoyar HERA Open Source)"
-      >
-        🐺🕶️🥫 Limosnita
-      </button>
-
-      <span {...stylex.props(styles.badge)}>{statusBadge}</span>
-
-      {showRobinHoodModal && (
-        <div
-          {...stylex.props(styles.modalBackdrop)}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Limosnita Robin Hood Open Source"
+      <div {...stylex.props(styles.rightActions)}>
+        <button
+          type="button"
+          onClick={handleOptimizeSetSpine}
+          disabled={tracks.length === 0 || busyAction !== null}
+          {...stylex.props(
+            styles.secondaryBtn,
+            tracks.length === 0 && styles.disabledControl,
+          )}
+          title={
+            viewMode === 'simple'
+              ? 'Ordenar las pistas para que el ritmo y la armonía fluyan sin choques'
+              : 'Ejecutar secuenciación global 2-Opt TSP + Rueda Camelot'
+          }
         >
-          <div {...stylex.props(styles.modalCard)}>
-            {lastExportSummary && (
-              <div {...stylex.props(styles.exportReceipt)}>
-                {lastExportSummary}
-              </div>
-            )}
-            <div {...stylex.props(styles.memeHeader)}>
-              <svg
-                width="64"
-                height="64"
-                viewBox="0 0 64 64"
-                fill="none"
-                aria-hidden="true"
-              >
-                <circle
-                  cx="32"
-                  cy="32"
-                  r="30"
-                  fill="#2A1B3D"
-                  stroke="#F59E0B"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M12 46C14 24 22 12 32 12C42 12 50 24 52 46"
-                  fill="#5B21B6"
-                />
-                <polygon points="20,16 25,6 29,18" fill="#9CA3AF" />
-                <polygon points="44,16 39,6 35,18" fill="#9CA3AF" />
-                <ellipse cx="32" cy="30" rx="13" ry="11" fill="#D1D5DB" />
-                <circle
-                  cx="26"
-                  cy="28"
-                  r="5"
-                  fill="#111827"
-                  stroke="#F59E0B"
-                  strokeWidth="1.5"
-                />
-                <circle
-                  cx="38"
-                  cy="28"
-                  r="5"
-                  fill="#111827"
-                  stroke="#F59E0B"
-                  strokeWidth="1.5"
-                />
-                <line
-                  x1="31"
-                  y1="28"
-                  x2="33"
-                  y2="28"
-                  stroke="#F59E0B"
-                  strokeWidth="1.5"
-                />
-                <circle cx="32" cy="35" r="2.5" fill="#111827" />
-                <rect
-                  x="24"
-                  y="43"
-                  width="16"
-                  height="15"
-                  rx="3"
-                  fill="#9CA3AF"
-                  stroke="#F59E0B"
-                  strokeWidth="1.5"
-                />
-                <circle cx="32" cy="41" r="4" fill="#FBBF24" />
-              </svg>
-              <div>
-                <h3 {...stylex.props(styles.modalTitle)}>
-                  🐺🕶️🥫 {HERA_ROBIN_HOOD_SUPPORT.quote}
-                </h3>
-                <p {...stylex.props(styles.modalText)}>
-                  {HERA_ROBIN_HOOD_SUPPORT.philosophy}
-                </p>
-              </div>
-            </div>
-            <div {...stylex.props(styles.supportActions)}>
-              <a
-                href={HERA_ROBIN_HOOD_SUPPORT.kofiUrl}
-                target="_blank"
-                rel="noreferrer"
-                {...stylex.props(styles.actionBtn, styles.robinHoodBtn)}
-              >
-                ☕ Ko-fi / Buy Me a Coffee
-              </a>
-              <a
-                href={HERA_ROBIN_HOOD_SUPPORT.githubSponsorsUrl}
-                target="_blank"
-                rel="noreferrer"
-                {...stylex.props(styles.actionBtn, styles.exportBtn)}
-              >
-                💖 GitHub Sponsors
-              </a>
-              <button
-                type="button"
-                onClick={() => setShowRobinHoodModal(false)}
-                {...stylex.props(styles.actionBtn)}
-              >
-                Seguir mezclando gratis 🎧
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          <Icon name="sparkles" size={14} />
+          <span>
+            {viewMode === 'simple' ? 'Ordenar Set' : 'Ordenar Set (2-Opt)'}
+          </span>
+        </button>
+
+        <select
+          value={selectedFormat}
+          onChange={(e) => setSelectedFormat(e.target.value as DjExportFormat)}
+          aria-label="Formato de exportación para software DJ"
+          {...stylex.props(styles.selectFormat)}
+        >
+          <option value="virtualdj">VirtualDJ (.vdjfolder)</option>
+          <option value="rekordbox_xml">Rekordbox (.xml)</option>
+          <option value="traktor_nml">Traktor Pro (.nml)</option>
+          <option value="m3u8">M3U8 Universal (.m3u8)</option>
+        </select>
+
+        <button
+          type="button"
+          onClick={handleExportSelected}
+          disabled={tracks.length === 0 || busyAction !== null}
+          {...stylex.props(
+            styles.primaryExportBtn,
+            tracks.length === 0 && styles.disabledControl,
+          )}
+          title="Exportar crate con BPM, tono y los 4 Hot Cues de frase"
+        >
+          <Icon name="export" size={14} />
+          <span>Exportar a Cabina</span>
+        </button>
+      </div>
     </div>
   );
 }
 
 const styles = stylex.create({
-  toolbar: {
+  crateBar: {
+    height: '46px',
+    flexGrow: 0,
+    flexShrink: 0,
+    flexBasis: '46px',
     display: 'flex',
     alignItems: 'center',
-    rowGap: '8px',
-    columnGap: '8px',
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    backgroundColor: '#070a0f',
+    justifyContent: 'space-between',
+    columnGap: '12px',
+    paddingBlock: 0,
+    paddingInline: '16px',
+    backgroundColor: '#12161d',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
-    borderBottomColor: '#1f2a3d',
-    flexWrap: 'wrap',
+    borderBottomColor: '#232a36',
   },
-  viewToggleGroup: {
-    display: 'inline-flex',
-    backgroundColor: '#0c111a',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#1f2a3d',
-    borderRadius: '6px',
-    padding: '2px',
-    rowGap: '2px',
-    columnGap: '2px',
-  },
-  toggleBtn: {
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-    color: '#94a3b8',
-    fontSize: '11.5px',
-    fontWeight: 500,
-    paddingBlock: '3px',
-    paddingInline: '8px',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    transition: 'all 0.15s ease',
-  },
-  toggleBtnActive: {
-    backgroundColor: '#161f30',
-    color: '#67e8f9',
-    fontWeight: 700,
-  },
-  actionBtn: {
-    display: 'inline-flex',
+  leftMeta: {
+    display: 'flex',
     alignItems: 'center',
-    rowGap: '4px',
-    columnGap: '4px',
-    paddingBlock: '5px',
-    paddingInline: '10px',
-    fontSize: '12px',
+    columnGap: '10px',
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  crateTitle: {
+    margin: 0,
+    fontSize: '13.5px',
     fontWeight: 600,
-    color: '#f8fafc',
-    backgroundColor: '#101622',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#2e3d57',
-    borderRadius: '6px',
-    textDecoration: 'none',
-    cursor: 'pointer',
-    transition: 'background-color 0.15s ease, border-color 0.15s ease',
-  },
-  exportBtn: {
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
-    borderColor: '#06b6d4',
-    color: '#67e8f9',
-  },
-  aiModeBtn: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    borderColor: '#10b981',
-    color: '#6ee7b7',
-  },
-  robinHoodBtn: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    borderColor: '#f59e0b',
-    color: '#fbbf24',
-  },
-  selectFormat: {
-    paddingBlock: '5px',
-    paddingInline: '8px',
-    fontSize: '12px',
-    backgroundColor: '#101622',
-    color: '#f8fafc',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#2e3d57',
-    borderRadius: '6px',
-    cursor: 'pointer',
-  },
-  badge: {
-    marginLeft: 'auto',
-    fontSize: '11px',
-    color: '#94a3b8',
-    backgroundColor: '#0c111a',
-    paddingBlock: '4px',
-    paddingInline: '10px',
-    borderRadius: '99px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#1f2a3d',
+    color: '#edeff3',
     whiteSpace: 'nowrap',
   },
-  modalBackdrop: {
-    position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+  budgetPill: {
+    fontSize: '12px',
+    fontWeight: 500,
+    color: '#8e98a8',
+    backgroundColor: '#0c0e12',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '999px',
+    paddingBlock: '2px',
+    paddingInline: '9px',
+    fontVariantNumeric: 'tabular-nums',
+    whiteSpace: 'nowrap',
+  },
+  feedbackBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '6px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: '#2dd4bf',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  rightActions: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
+    columnGap: '8px',
+    flexShrink: 0,
   },
-  modalCard: {
-    backgroundColor: '#0d121b',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#2e3d57',
-    borderRadius: '12px',
-    padding: '24px',
-    maxWidth: '560px',
-    width: '90%',
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '16px',
-    columnGap: '16px',
-  },
-  exportReceipt: {
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    backgroundColor: 'rgba(6, 182, 212, 0.12)',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(6, 182, 212, 0.35)',
-    borderRadius: '6px',
-    fontSize: '12.5px',
-    color: '#67e8f9',
+  secondaryBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '6px',
+    paddingBlock: '6px',
+    paddingInline: '11px',
+    fontSize: '12px',
     fontWeight: 600,
+    color: '#edeff3',
+    backgroundColor: '#171c24',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    lineHeight: 1.2,
+    transition: 'background-color 0.14s ease, border-color 0.14s ease',
   },
-  memeHeader: {
-    display: 'flex',
-    rowGap: '16px',
-    columnGap: '16px',
-    alignItems: 'flex-start',
+  selectFormat: {
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    fontSize: '12px',
+    fontWeight: 500,
+    backgroundColor: '#171c24',
+    color: '#edeff3',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    lineHeight: 1.2,
   },
-  modalTitle: {
-    marginTop: '0',
-    marginRight: '0',
-    marginBottom: '6px',
-    marginLeft: '0',
-    fontSize: '15px',
+  primaryExportBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '6px',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    fontSize: '12px',
     fontWeight: 700,
-    color: '#fbbf24',
+    color: '#041311',
+    backgroundColor: '#14b8a6',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#14b8a6',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    lineHeight: 1.2,
+    transition: 'opacity 0.14s ease',
   },
-  modalText: {
-    margin: 0,
-    fontSize: '12.5px',
-    lineHeight: 1.5,
-    color: '#94a3b8',
-  },
-  supportActions: {
-    display: 'flex',
-    rowGap: '10px',
-    columnGap: '10px',
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
-    marginTop: '8px',
+  disabledControl: {
+    opacity: 0.45,
+    cursor: 'not-allowed',
   },
 });

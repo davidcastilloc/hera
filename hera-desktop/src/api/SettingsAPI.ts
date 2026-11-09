@@ -15,7 +15,7 @@ import toastManager from '../lib/toast-manager';
 import { logAndNotifyError } from '../lib/utils';
 import LibraryAPI from './LibraryAPI';
 
-export const DEFAULT_MAIN_COLOR = '#459ce7';
+export const DEFAULT_MAIN_COLOR = '#14b8a6';
 
 /**
  * THIS WHOLE MODULE IS DEPRECATED as it has organically grown into something weird
@@ -38,25 +38,23 @@ async function init(then: () => void): Promise<void> {
   did_init = true;
 
   // Blocking (the window should not be shown until it's done)
-  const [theme, color] = await Promise.all([
-    ConfigBridge.get('theme').then(async (cfgTheme) => {
-      if (cfgTheme === 'dark' || cfgTheme === 'light') {
-        return cfgTheme;
-      }
-      try {
-        if (isTauri()) {
-          return (await getCurrentWindow().theme()) ?? 'dark';
-        }
-        return 'dark';
-      } catch {
-        return 'dark';
-      }
-    }),
-    ConfigBridge.get('ui_accent_color').then((c) => c ?? DEFAULT_MAIN_COLOR),
+  const [, color, language] = await Promise.all([
+    ConfigBridge.get('theme'),
+    ConfigBridge.get('ui_accent_color').then((c) =>
+      !c || c === '#459ce7' ? DEFAULT_MAIN_COLOR : c,
+    ),
+    ConfigBridge.get('language').then((lang) => lang || 'es'),
   ]);
 
-  applyThemeToUI(theme);
+  await loadTranslation(language).catch(() => loadTranslation('es'));
+  applyThemeToUI('dark');
   applyUIMainColorToUI(color);
+
+  if (isTauri()) {
+    getCurrentWindow()
+      .setTheme('dark')
+      .catch(() => {});
+  }
 
   // Show the app and apply persisted menu bar visibility
   await SettingsBridge.showWindow();
@@ -93,36 +91,17 @@ const setLanguage = async (language: Config['language']): Promise<void> => {
 };
 
 const setTheme = async (themeID: string): Promise<void> => {
-  await ConfigBridge.set('theme', themeID);
+  await ConfigBridge.set('theme', themeID === 'light' ? 'light' : 'dark');
 
   if (isTauri()) {
     try {
-      switch (themeID) {
-        case '__system': {
-          await getCurrentWindow().setTheme(null);
-          break;
-        }
-        case 'light': {
-          await getCurrentWindow().setTheme('light');
-          break;
-        }
-        case 'dark': {
-          await getCurrentWindow().setTheme('dark');
-          break;
-        }
-      }
+      await getCurrentWindow().setTheme('dark');
     } catch {
       // Ignored outside native window
     }
   }
 
-  const theme = isTauri()
-    ? ((await getCurrentWindow()
-        .theme()
-        .catch(() => null)) ?? 'dark')
-    : 'dark';
-
-  applyThemeToUI(theme);
+  applyThemeToUI('dark');
 };
 
 /**
