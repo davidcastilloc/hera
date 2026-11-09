@@ -155,7 +155,13 @@
   2. **Windows Sequential UDP Port Self-Spray Guard (`hera-rs/src/p2p/nat_stun.rs`):** Added `if target == my_local_addr { continue; }` to prevent client sockets from spraying themselves in loopback, and enforced explicit `HERA_PUNCH_ACK` validation before locking peer routes.
   3. **Operational Roadmap & Pending Items (Recorded for Subsequent Review):**
      - **Field Testing:** Physical 2-machine / 2-ISP field trial (Home Wi-Fi vs. 4G/5G mobile hotspot) to stress-test live CGNAT traversal and packet loss recovery in the wild.
-     - **Cloudflare Infrastructure:** Uncomment and populate `[[d1_databases]]` and `[[r2_buckets]]` in `wrangler.toml` once provisioned via `npx wrangler d1 create` and `npx wrangler r2 bucket create`.
-     - **Desktop DSP Enhancement:** Expand `enrich_track_with_hera_dsp` in `hera-desktop/src-tauri/src/libs/track.rs` to run partial `Symphonia` spectral decoding on `.flac`/`.mp3`/`.m4a` files alongside the existing `.wav` pipeline.
+
+### [2026-11-08] ADR-015: Universal Symphonia File Streaming Decoder & Cloudflare Production Resource Activation
+- **Context:** Following ADR-014, HERA required full multi-format decoding (FLAC, MP3, M4A/AAC, ALAC, OGG, WAV) without reading full files into memory during desktop import, alongside live Cloudflare resource bindings for production deployment.
+- **Decision:**
+  1. **Universal Streaming Decoder (`hera-rs/src/forensics.rs`):** Added `decode_audio_file_partial(path, max_seconds)` using `symphonia::default::get_probe()` directly on `std::fs::File` (via `MediaSourceStream`), streaming only the first 45 seconds of audio. Added codecs `symphonia-codec-aac`, `symphonia-codec-alac`, `symphonia-format-isomp4`, and `symphonia-codec-vorbis`.
+  2. **Desktop Library Auto-Enrichment (`hera-desktop/src-tauri/src/libs/track.rs`):** Wired `enrich_track_with_hera_dsp` to call `decode_audio_file_partial` directly across all supported file formats (`.wav`, `.flac`, `.mp3`, `.m4a`, `.aac`, `.alac`, `.ogg`), enabling genuine 4 Hot Cues and spectral quality verification on every imported song.
+  3. **Cloudflare Production Bindings (`hera-rs/wrangler.toml`):** Activated live D1 database (`fa584f5e-e59d-417a-aef6-23053b849c69`), R2 bucket (`hera-verified-masters`), KV namespace (`5a943afd2f7b4476bd79652da0a5679a`), Vectorize index (`hera-64d-style-embeddings`), and Workers AI (`AI`).
+
 
 
