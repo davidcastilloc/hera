@@ -3,6 +3,30 @@ import { invoke } from '@tauri-apps/api/core';
 import type { Config } from '../generated/typings';
 import { logAndNotifyError } from './utils';
 
+const DEFAULT_FALLBACK_CONFIG: Config = {
+  language: 'es',
+  theme: '__system',
+  ui_accent_color: null,
+  audio_volume: 1.0,
+  audio_playback_rate: 1.0,
+  audio_follow_playing_track: false,
+  audio_muted: false,
+  audio_shuffle: false,
+  audio_repeat: 'None',
+  audio_stream_server: false,
+  default_view: 'Library',
+  library_sort_by: 'Artist',
+  library_sort_order: 'Asc',
+  library_folders: [],
+  library_autorefresh: false,
+  sleepblocker: false,
+  auto_update_checker: true,
+  notifications: false,
+  track_view_density: 'normal',
+  wayland_compat: false,
+  menu_bar_visible: false,
+};
+
 /**
  * Config Bridge for the UI to communicate with the backend.
  * Grouped here so they're easier to mock in E2E tests.
@@ -13,15 +37,19 @@ const ConfigBridge = {
    * Should only be used when starting the app.
    */
   getInitial<T extends keyof Config>(key: T): Config[T] {
-    if (window.__MUSEEKS_INITIAL_CONFIG === undefined) {
-      throw new Error('Config has not been injected from the back-end');
+    if (typeof window === 'undefined' || window.__MUSEEKS_INITIAL_CONFIG === undefined) {
+      return DEFAULT_FALLBACK_CONFIG[key];
     }
 
     return window.__MUSEEKS_INITIAL_CONFIG[key];
   },
 
   async getAll(): Promise<Config> {
-    return invoke('plugin:config|get_config');
+    try {
+      return await invoke('plugin:config|get_config');
+    } catch {
+      return (typeof window !== 'undefined' && window.__MUSEEKS_INITIAL_CONFIG) || DEFAULT_FALLBACK_CONFIG;
+    }
   },
 
   async get<T extends keyof Config>(key: T): Promise<Config[T]> {
