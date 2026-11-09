@@ -23,7 +23,7 @@ static ISOLATE_MESH_STATE: OnceLock<p2p::P2PMeshState> = OnceLock::new();
 
 /// Cloudflare Workers WASM Entrypoint (`npx wrangler deploy --features cloudflare --no-default-features`).
 /// Uses the exact same `axum::Router` as the Native VPS binary, while persisting `P2PMeshState`
-/// across warm isolate invocations and injecting `HERA_ADMIN_SECRET` from `worker::Env`.
+/// across warm isolate invocations.
 #[cfg(feature = "cloudflare")]
 #[event(fetch)]
 pub async fn fetch(
@@ -40,13 +40,6 @@ pub async fn fetch(
             p2p::P2PMeshState::new(node_id)
         })
         .clone();
-
-    if let Ok(secret) = env
-        .secret("HERA_ADMIN_SECRET")
-        .or_else(|_| env.var("HERA_ADMIN_SECRET"))
-    {
-        state.set_admin_secret(secret.to_string());
-    }
 
     let mut router = router::build_hera_router(state);
     Ok(router.call(req).await?)

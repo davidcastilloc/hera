@@ -11,7 +11,7 @@ use std::fmt;
 /// handlers in `router.rs` can return `Result<T, HeraError>` using `?` without ad-hoc tuple plumbing.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum HeraError {
-    /// Missing or invalid `X-Hera-Admin-Secret` header (`401 Unauthorized`).
+    /// Missing or invalid authentication token (`401 Unauthorized`).
     Unauthorized(String),
     /// Swarm-First Policy / Quarantine / Poisoned Custody rejection (`403 Forbidden`).
     Forbidden(String),
@@ -92,8 +92,7 @@ impl IntoResponse for HeraError {
     }
 }
 
-/// Constant-time byte comparison to prevent timing side-channel attacks on `X-Hera-Admin-Secret`
-/// and HMAC signatures (`workers-best-practices` security invariant).
+/// Constant-time byte comparison to prevent timing side-channel attacks on HMAC tickets and Merkle proofs.
 #[inline]
 pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {

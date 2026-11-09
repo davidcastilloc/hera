@@ -16,14 +16,12 @@ use crate::export::{export_crate_bundle, ExportCrateRequest};
 use crate::forensics::{audit_pcm_channels, decode_audio_bytes, ForensicAuditReport};
 use crate::mcp::{handle_mcp_request, list_mcp_tools, JsonRpcRequest};
 use crate::p2p::{
-    build_gdrive_large_file_bypass_url, calculate_cloudflare_saas_economics_with_price,
-    compute_canonical_audio_sha256, compute_cas_fingerprint, compute_hera_seal,
-    compute_opaque_shard_blob_key, get_cloud_referral_catalog, BrokerBatchLookupRequest,
-    BrokerBridgeRequest, BrokerClaimCloudTrackRequest, BrokerSimilarQuery, CasCheckRequest,
-    CloudReferralOption, ConnectDjDriveRequest, CustodyAuditSubmission, CustodyChallengeRequest,
-    FederatedSyncRequest, P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack,
-    ScanLocalDirRequest, SetP2PSharingRequest, SwarmHeartbeatRequest,
-    SwarmParallelManifestRequest, SwarmRedirectTicket, SwarmRouteRequest, UpgradeTierRequest,
+    build_gdrive_large_file_bypass_url, compute_canonical_audio_sha256, compute_cas_fingerprint,
+    compute_hera_seal, compute_opaque_shard_blob_key, get_cloud_referral_catalog,
+    BrokerBatchLookupRequest, BrokerBridgeRequest, BrokerSimilarQuery, CloudReferralOption,
+    ConnectDjDriveRequest, CustodyAuditSubmission, CustodyChallengeRequest, FederatedSyncRequest,
+    P2PMeshState, P2PPeerNode, P2PSearchQuery, P2PVerifiedTrack, ScanLocalDirRequest,
+    SwarmHeartbeatRequest, SwarmParallelManifestRequest, SwarmRedirectTicket, SwarmRouteRequest,
     SWARM_ALIGNED_BLOCK_BYTES,
 };
 use crate::structure::{analyze_structure_and_style, StructuralCueProfile};
@@ -125,15 +123,10 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/mcp/code-mode", post(code_mode_exec_handler))
         .route("/mcp/code-mode.d.ts", get(code_mode_dts_handler))
         .route("/api/v1/node/manifest", get(manifest_handler))
-        .route("/api/v1/cloud/economics", get(cloud_economics_handler))
-        .route("/api/v1/cloud/check-cas", post(cloud_check_cas_handler))
-        .route("/api/v1/cloud/d1-snapshot", get(cloud_d1_snapshot_handler))
         .route("/api/v1/broker/stats", get(broker_stats_handler))
         .route("/api/v1/broker/lookup-intel", post(broker_lookup_intel_handler))
         .route("/api/v1/broker/resolve-bridge", post(broker_resolve_bridge_handler))
         .route("/api/v1/broker/similar", post(broker_similar_handler))
-        .route("/api/v1/broker/optimize-tiering", post(broker_optimize_tiering_handler))
-        .route("/api/v1/broker/claim-cloud-track", post(broker_claim_cloud_track_handler))
         .route("/api/v1/swarm/strength", get(swarm_strength_handler))
         .route("/api/v1/swarm/heartbeat", post(swarm_heartbeat_handler))
         .route("/api/v1/swarm/route-ticket", post(swarm_route_ticket_handler))
@@ -147,8 +140,6 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/swarm/quarantine", get(swarm_quarantine_list_handler))
         .route("/api/v1/node/scan-local-dir", post(scan_local_dir_handler))
         .route("/api/v1/dj/connect-drive", post(connect_dj_drive_handler))
-        .route("/api/v1/dj/upgrade-tier", post(upgrade_dj_tier_handler))
-        .route("/api/v1/dj/p2p-sharing", post(set_p2p_sharing_handler))
         .route("/api/v1/dj/profiles", get(list_dj_profiles_handler))
         .route("/api/v1/dj/style-dna", post(dj_style_dna_handler))
         .route("/api/v1/ai/backends", get(ai_backends_list_handler))
@@ -174,53 +165,6 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/p2p/download/:track_id", get(p2p_download_local_file_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EconomicsQuery {
-    pub djs: Option<usize>,
-    pub gb_per_dj: Option<f32>,
-    pub price_usd: Option<f32>,
-}
-
-fn verify_admin_secret(state: &P2PMeshState, headers: &HeaderMap) -> Result<(), HeraError> {
-    let provided = headers
-        .get("x-hera-admin-secret")
-        .and_then(|v| v.to_str().ok());
-    state.verify_admin_secret(provided)
-}
-
-async fn cloud_economics_handler(
-    State(state): State<P2PMeshState>,
-    headers: HeaderMap,
-    Query(q): Query<EconomicsQuery>,
-) -> Result<Json<crate::p2p::CloudflareBetaEconomicsReport>, HeraError> {
-    verify_admin_secret(&state, &headers)?;
-    let djs = q.djs.unwrap_or(10);
-    let gb_per_dj = q.gb_per_dj.unwrap_or(5.0);
-    let price_usd = q.price_usd.unwrap_or(5.99);
-    Ok(Json(calculate_cloudflare_saas_economics_with_price(
-        djs, gb_per_dj, price_usd,
-    )))
-}
-
-async fn cloud_check_cas_handler(
-    State(state): State<P2PMeshState>,
-    Json(req): Json<CasCheckRequest>,
-) -> impl IntoResponse {
-    Json(state.check_cas_before_upload(req))
-}
-
-async fn cloud_d1_snapshot_handler(
-    headers: HeaderMap,
-    State(state): State<P2PMeshState>,
-) -> Result<impl IntoResponse, HeraError> {
-    verify_admin_secret(&state, &headers)?;
-    let sql = state.export_d1_sql_snapshot();
-    Ok((
-        [(http::header::CONTENT_TYPE, "application/sql; charset=utf-8")],
-        sql,
-    ))
 }
 
 async fn broker_stats_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
@@ -259,42 +203,6 @@ async fn broker_similar_handler(
     }))
 }
 
-async fn broker_optimize_tiering_handler(State(state): State<P2PMeshState>) -> impl IntoResponse {
-    Json(state.broker_optimize_hot_cold_tier())
-}
-
-async fn broker_claim_cloud_track_handler(
-    State(state): State<P2PMeshState>,
-    Json(req): Json<BrokerClaimCloudTrackRequest>,
-) -> Result<(StatusCode, Json<serde_json::Value>), HeraError> {
-    match state.broker_claim_cloud_track(req) {
-        Ok(res) => Ok((
-            StatusCode::CREATED,
-            Json(serde_json::to_value(res).unwrap_or_default()),
-        )),
-        Err(e) => Err(HeraError::BadRequest(e)),
-    }
-}
-
-async fn set_p2p_sharing_handler(
-    State(state): State<P2PMeshState>,
-    Json(req): Json<SetP2PSharingRequest>,
-) -> Result<Json<serde_json::Value>, HeraError> {
-    match state.set_p2p_sharing(req) {
-        Ok(profile) => Ok(Json(serde_json::json!({
-            "status": "p2p_sharing_updated",
-            "profile": profile
-        }))),
-        Err(e) => {
-            if e.starts_with("PLAN_UPGRADE_REQUIRED") {
-                Err(HeraError::Forbidden(e))
-            } else {
-                Err(HeraError::NotFound(e))
-            }
-        }
-    }
-}
-
 async fn scan_local_dir_handler(
     State(state): State<P2PMeshState>,
     Json(req): Json<ScanLocalDirRequest>,
@@ -305,21 +213,6 @@ async fn scan_local_dir_handler(
             Json(serde_json::to_value(res).unwrap_or_default()),
         )),
         Err(e) => Err(HeraError::BadRequest(e)),
-    }
-}
-
-async fn upgrade_dj_tier_handler(
-    headers: HeaderMap,
-    State(state): State<P2PMeshState>,
-    Json(req): Json<UpgradeTierRequest>,
-) -> Result<Json<serde_json::Value>, HeraError> {
-    verify_admin_secret(&state, &headers)?;
-    match state.upgrade_dj_tier(&req.dj_handle, &req.tier) {
-        Ok(profile) => Ok(Json(serde_json::json!({
-            "status": "tier_upgraded",
-            "profile": profile
-        }))),
-        Err(e) => Err(HeraError::NotFound(e)),
     }
 }
 

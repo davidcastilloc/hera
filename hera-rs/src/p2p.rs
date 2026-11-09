@@ -944,8 +944,6 @@ pub struct P2PMeshState {
     pub crdt_state: Arc<RwLock<SwarmCrdtDelta>>,
     /// Layer 5 MoQ-style Harmonic Topic Subscriptions (`hera://swarm/<camelot>/<bpm_band>`)
     pub topic_subscriptions: Arc<RwLock<Vec<SwarmTopicSubscription>>>,
-    /// Optional `HERA_ADMIN_SECRET` injected from `worker::Env` (WASM) or `std::env` (Native VPS)
-    pub admin_secret: Arc<RwLock<Option<String>>>,
 }
 
 impl P2PMeshState {
@@ -1215,50 +1213,7 @@ impl P2PMeshState {
             delivery_receipts: Arc::new(RwLock::new(Vec::new())),
             crdt_state: Arc::new(RwLock::new(initial_crdt)),
             topic_subscriptions: Arc::new(RwLock::new(Vec::new())),
-            admin_secret: Arc::new(RwLock::new(
-                std::env::var("HERA_ADMIN_SECRET")
-                    .ok()
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty()),
-            )),
         }
-    }
-
-    /// Sets or updates the `HERA_ADMIN_SECRET` at runtime (e.g., from Cloudflare Worker `env.secret("HERA_ADMIN_SECRET")`).
-    pub fn set_admin_secret(&self, secret: impl Into<String>) {
-        let trimmed = secret.into().trim().to_string();
-        if !trimmed.is_empty() {
-            if let Ok(mut guard) = self.admin_secret.write() {
-                *guard = Some(trimmed);
-            }
-        }
-    }
-
-    /// Verifies `X-Hera-Admin-Secret` in constant time (`constant_time_eq`) against either the injected
-    /// `worker::Env` secret or `std::env::var("HERA_ADMIN_SECRET")`.
-    pub fn verify_admin_secret(&self, provided_header: Option<&str>) -> Result<(), crate::error::HeraError> {
-        let expected_opt = self
-            .admin_secret
-            .read()
-            .ok()
-            .and_then(|g| g.clone())
-            .or_else(|| {
-                std::env::var("HERA_ADMIN_SECRET")
-                    .ok()
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-            });
-
-        if let Some(expected) = expected_opt {
-            let provided = provided_header.unwrap_or("").trim();
-            if !crate::error::constant_time_eq(provided.as_bytes(), expected.as_bytes()) {
-                return Err(crate::error::HeraError::Unauthorized(
-                    "Missing or invalid `X-Hera-Admin-Secret` header for Hera Cloud Control Plane."
-                        .to_string(),
-                ));
-            }
-        }
-        Ok(())
     }
 
     /// Zero-Tech Onboarding: A non-technical DJ (`DJFoo`) simply pastes their DJ name and Google Drive folder link
