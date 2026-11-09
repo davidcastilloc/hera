@@ -63,6 +63,9 @@
     "hera-dj:allow-scan-ai-connectivity",
     "hera-dj:allow-resolve-harmonic-bridge",
     "hera-dj:allow-download-p2p-track",
+    "hera-dj:allow-set-mini-overlay-mode",
+    "hera-dj:allow-push-virtualdj-live-crate",
+    "hera-dj:allow-read-virtualdj-now-playing",
     "sleepblocker:allow-enable",
     "sleepblocker:allow-disable",
     "mcp-bridge:default"

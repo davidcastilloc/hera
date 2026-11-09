@@ -59,6 +59,9 @@ fn main() {
                     "scan_ai_connectivity",
                     "resolve_harmonic_bridge",
                     "download_p2p_track",
+                    "set_mini_overlay_mode",
+                    "push_virtualdj_live_crate",
+                    "read_virtualdj_now_playing",
                 ]),
             )
             .plugin(

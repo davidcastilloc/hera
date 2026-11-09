@@ -7,7 +7,9 @@ use hera_node_rs::dj_brain::{
     AiBackendOption, AiConnectivityOnboardingReport, CloudflareFreeAiTurnRequest,
     CloudflareFreeAiTurnResponse, DjStyleDnaProfile, DjStyleDnaRequest,
 };
-use hera_node_rs::export::{export_crate_bundle, ExportCrateRequest, ExportCrateResponse};
+use hera_node_rs::export::{
+    export_crate_bundle, ExportCrateRequest, ExportCrateResponse, ExportTrackItem,
+};
 use hera_node_rs::p2p::{
     compute_sha256_hex, request_chunk_with_turn_fallback, spawn_desktop_udp_p2p_daemon,
     ConnectDjDriveRequest, DesktopP2PDaemonStatus, DjDriveTrackInput, P2PMeshState,
@@ -778,6 +780,410 @@ pub async fn download_p2p_track<R: Runtime>(
     .map_err(|e| format!("Fallo en tarea download_p2p_track: {e}"))?
 }
 
+#[derive(Debug, Clone)]
+struct NormalWindowSnapshot {
+    outer_pos: Option<tauri::PhysicalPosition<i32>>,
+    inner_size: tauri::PhysicalSize<u32>,
+    is_maximized: bool,
+}
+
+fn normal_window_snapshot_slot() -> &'static Mutex<Option<NormalWindowSnapshot>> {
+    static SNAPSHOT: OnceLock<Mutex<Option<NormalWindowSnapshot>>> = OnceLock::new();
+    SNAPSHOT.get_or_init(|| Mutex::new(None))
+}
+
+fn current_overlay_mode_slot() -> &'static Mutex<String> {
+    static MODE: OnceLock<Mutex<String>> = OnceLock::new();
+    MODE.get_or_init(|| Mutex::new("full".to_string()))
+}
+
+fn live_vdj_crate_slot() -> &'static Mutex<Vec<ExportTrackItem>> {
+    static CRATE: OnceLock<Mutex<Vec<ExportTrackItem>>> = OnceLock::new();
+    CRATE.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn default_pinned_true() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetMiniOverlayModeRequest {
+    pub mode: String,
+    #[serde(default = "default_pinned_true")]
+    pub pinned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SetMiniOverlayModeResponse {
+    pub mode: String,
+    pub pinned: bool,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[tauri::command]
+pub async fn set_mini_overlay_mode<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    request: SetMiniOverlayModeRequest,
+) -> Result<SetMiniOverlayModeResponse, String> {
+    let window = app
+        .get_webview_window("main")
+        .ok_or_else(|| "No se encontró la ventana principal".to_string())?;
+
+    let target_mode = match request.mode.trim().to_ascii_lowercase().as_str() {
+        "pill" => "pill",
+        "card" => "card",
+        _ => "full",
+    };
+
+    let prev_mode = current_overlay_mode_slot()
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_else(|_| "full".to_string());
+
+    if target_mode == "full" {
+        let _ = window.set_always_on_top(false);
+        let _ = window.set_decorations(true);
+        let _ = window.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(
+            960.0, 580.0,
+        ))));
+
+        let saved = normal_window_snapshot_slot()
+            .lock()
+            .ok()
+            .and_then(|mut g| g.take());
+
+        let (restored_w, restored_h) = if let Some(snap) = saved {
+            let scale = window.scale_factor().unwrap_or(1.0);
+            let _ = window.set_size(tauri::Size::Physical(snap.inner_size));
+            if let Some(pos) = snap.outer_pos {
+                let _ = window.set_position(tauri::Position::Physical(pos));
+            }
+            if snap.is_maximized {
+                let _ = window.maximize();
+            }
+            (
+                (snap.inner_size.width as f64 / scale).round(),
+                (snap.inner_size.height as f64 / scale).round(),
+            )
+        } else {
+            let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(1180.0, 720.0)));
+            (1180.0, 720.0)
+        };
+
+        if let Ok(mut g) = current_overlay_mode_slot().lock() {
+            *g = "full".to_string();
+        }
+
+        return Ok(SetMiniOverlayModeResponse {
+            mode: "full".to_string(),
+            pinned: false,
+            width: restored_w,
+            height: restored_h,
+        });
+    }
+
+    if prev_mode == "full" {
+        let snap = NormalWindowSnapshot {
+            outer_pos: window.outer_position().ok(),
+            inner_size: window
+                .inner_size()
+                .unwrap_or(tauri::PhysicalSize::new(1180, 720)),
+            is_maximized: window.is_maximized().unwrap_or(false),
+        };
+        if snap.is_maximized {
+            let _ = window.unmaximize();
+        }
+        if let Ok(mut g) = normal_window_snapshot_slot().lock() {
+            *g = Some(snap);
+        }
+    }
+
+    let (target_w, target_h) = if target_mode == "pill" {
+        (560.0_f64, 52.0_f64)
+    } else {
+        (360.0_f64, 408.0_f64)
+    };
+
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let phys_w = (target_w * scale).round() as i32;
+    let phys_h = (target_h * scale).round() as i32;
+
+    let next_pos = if prev_mode != "full" && prev_mode != target_mode {
+        if let (Ok(pos), Ok(sz)) = (window.outer_position(), window.inner_size()) {
+            let right_edge = pos.x + sz.width as i32;
+            let bottom_edge = pos.y + sz.height as i32;
+            Some(tauri::PhysicalPosition::new(
+                (right_edge - phys_w).max(12),
+                (bottom_edge - phys_h).max(12),
+            ))
+        } else {
+            None
+        }
+    } else if prev_mode == "full" {
+        window.current_monitor().ok().flatten().map(|mon| {
+            let m_pos = mon.position();
+            let m_size = mon.size();
+            let margin_x = (24.0 * scale).round() as i32;
+            let margin_y = (56.0 * scale).round() as i32;
+            tauri::PhysicalPosition::new(
+                (m_pos.x + m_size.width as i32 - phys_w - margin_x).max(m_pos.x + 12),
+                (m_pos.y + m_size.height as i32 - phys_h - margin_y).max(m_pos.y + 12),
+            )
+        })
+    } else {
+        None
+    };
+
+    let _ = window.set_decorations(false);
+    let _ = window.set_always_on_top(request.pinned);
+    let _ = window.set_min_size(Some(tauri::Size::Logical(tauri::LogicalSize::new(
+        320.0, 48.0,
+    ))));
+    let _ = window.set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+        target_w, target_h,
+    )));
+    if let Some(pos) = next_pos {
+        let _ = window.set_position(tauri::Position::Physical(pos));
+    }
+
+    if let Ok(mut g) = current_overlay_mode_slot().lock() {
+        *g = target_mode.to_string();
+    }
+
+    Ok(SetMiniOverlayModeResponse {
+        mode: target_mode.to_string(),
+        pinned: request.pinned,
+        width: target_w,
+        height: target_h,
+    })
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PushVirtualDjLiveCrateRequest {
+    pub tracks: Vec<ExportTrackItem>,
+    #[serde(default = "default_pinned_true")]
+    pub append: bool,
+    pub crate_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PushVirtualDjLiveCrateResponse {
+    pub crate_name: String,
+    pub total_tracks: usize,
+    pub written_files: Vec<String>,
+    pub synced_to_virtualdj_home: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VirtualDjNowPlaying {
+    pub artist: String,
+    pub title: String,
+    pub source_path: String,
+}
+
+fn candidate_virtualdj_homes() -> Vec<std::path::PathBuf> {
+    let mut homes = Vec::new();
+    if let Ok(override_dir) = std::env::var("HERA_VDJ_HOME") {
+        if !override_dir.trim().is_empty() {
+            homes.push(std::path::PathBuf::from(override_dir));
+        }
+    }
+    if let Ok(user_profile) = std::env::var("USERPROFILE") {
+        homes.push(
+            std::path::PathBuf::from(&user_profile)
+                .join("Documents")
+                .join("VirtualDJ"),
+        );
+    }
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        homes.push(std::path::PathBuf::from(local_app_data).join("VirtualDJ"));
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        homes.push(
+            std::path::PathBuf::from(home)
+                .join("Documents")
+                .join("VirtualDJ"),
+        );
+    }
+    homes
+}
+
+pub(crate) fn parse_virtualdj_history_content(raw: &str) -> Option<(String, String)> {
+    for line in raw.lines().rev() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with("#EXTM3U") {
+            continue;
+        }
+        if let Some(rest) = trimmed.strip_prefix("#EXTINF:") {
+            let after_comma = rest.split_once(',').map(|(_, t)| t.trim()).unwrap_or(rest);
+            if let Some((artist, title)) = after_comma
+                .split_once(" - ")
+                .or_else(|| after_comma.split_once(" — "))
+            {
+                let a = artist.trim();
+                let t = title.trim();
+                if !a.is_empty() && !t.is_empty() {
+                    return Some((a.to_string(), t.to_string()));
+                }
+            }
+            continue;
+        }
+        if trimmed.starts_with('#')
+            || trimmed.contains(":\\")
+            || trimmed.starts_with('/')
+            || trimmed.ends_with(".mp3")
+            || trimmed.ends_with(".wav")
+            || trimmed.ends_with(".flac")
+        {
+            continue;
+        }
+        let cleaned = if trimmed.len() >= 7
+            && trimmed.as_bytes().get(2) == Some(&b':')
+            && let Some((_, after_time)) = trimmed.split_once(" : ")
+        {
+            after_time.trim()
+        } else if trimmed.len() >= 6
+            && trimmed.as_bytes().get(2) == Some(&b':')
+            && let Some((_, after_time)) = trimmed.split_once(' ')
+        {
+            after_time.trim_start_matches(':').trim()
+        } else {
+            trimmed
+        };
+
+        if let Some((artist, title)) = cleaned
+            .split_once(" - ")
+            .or_else(|| cleaned.split_once(" — "))
+        {
+            let a = artist.trim();
+            let t = title.trim();
+            if !a.is_empty() && !t.is_empty() {
+                return Some((a.to_string(), t.to_string()));
+            }
+        }
+    }
+    None
+}
+
+pub(crate) fn write_virtualdj_live_crate_files(
+    crate_name: &str,
+    tracks: &[ExportTrackItem],
+    target_dirs: &[std::path::PathBuf],
+) -> Vec<String> {
+    let mut all_written = Vec::new();
+    for dir in target_dirs {
+        let req = ExportCrateRequest {
+            crate_name: crate_name.to_string(),
+            brief: "HERA Live Overlay Crate".to_string(),
+            tracks: tracks.to_vec(),
+            formats: vec!["virtualdj".to_string(), "m3u8".to_string()],
+            output_dir: Some(dir.to_string_lossy().to_string()),
+        };
+        let res = export_crate_bundle(&req);
+        all_written.extend(res.written_files);
+    }
+    all_written
+}
+
+#[tauri::command]
+pub async fn push_virtualdj_live_crate<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    request: PushVirtualDjLiveCrateRequest,
+) -> Result<PushVirtualDjLiveCrateResponse, String> {
+    let fallback_data_dir = app.path().app_data_dir().ok();
+    tauri::async_runtime::spawn_blocking(move || {
+        let crate_name = request
+            .crate_name
+            .unwrap_or_else(|| "HERA En Vivo".to_string());
+
+        let merged_tracks = {
+            let mut guard = live_vdj_crate_slot()
+                .lock()
+                .map_err(|_| "No se pudo bloquear el estado de VirtualDJ en vivo".to_string())?;
+            if !request.append {
+                guard.clear();
+            }
+            for item in request.tracks {
+                if let Some(existing) = guard.iter_mut().find(|t| {
+                    t.track_id == item.track_id
+                        || (!item.file_path.is_empty() && t.file_path == item.file_path)
+                }) {
+                    *existing = item;
+                } else {
+                    guard.push(item);
+                }
+            }
+            guard.clone()
+        };
+
+        let mut target_dirs = Vec::new();
+        let mut synced_to_virtualdj_home = false;
+
+        for vdj_home in candidate_virtualdj_homes() {
+            if vdj_home.exists() {
+                let folders_dir = vdj_home.join("Folders");
+                if std::fs::create_dir_all(&folders_dir).is_ok() {
+                    target_dirs.push(folders_dir);
+                    synced_to_virtualdj_home = true;
+                }
+            }
+        }
+
+        let cwd_exports = std::env::current_dir()
+            .unwrap_or_else(|_| std::env::temp_dir())
+            .join("exports")
+            .join("VirtualDJ");
+        if std::fs::create_dir_all(&cwd_exports).is_ok() {
+            target_dirs.push(cwd_exports);
+        } else if let Some(app_dir) = fallback_data_dir {
+            let fallback_exports = app_dir.join("exports").join("VirtualDJ");
+            if std::fs::create_dir_all(&fallback_exports).is_ok() {
+                target_dirs.push(fallback_exports);
+            }
+        }
+
+        let written_files =
+            write_virtualdj_live_crate_files(&crate_name, &merged_tracks, &target_dirs);
+
+        Ok(PushVirtualDjLiveCrateResponse {
+            crate_name,
+            total_tracks: merged_tracks.len(),
+            written_files,
+            synced_to_virtualdj_home,
+        })
+    })
+    .await
+    .map_err(|e| format!("Fallo en tarea push_virtualdj_live_crate: {e}"))?
+}
+
+#[tauri::command]
+pub async fn read_virtualdj_now_playing() -> Result<Option<VirtualDjNowPlaying>, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        for vdj_home in candidate_virtualdj_homes() {
+            let history_dir = vdj_home.join("History");
+            if !history_dir.exists() {
+                continue;
+            }
+            let tracklist_txt = history_dir.join("tracklist.txt");
+            if tracklist_txt.is_file() {
+                if let Ok(raw) = std::fs::read_to_string(&tracklist_txt) {
+                    if let Some((artist, title)) = parse_virtualdj_history_content(&raw) {
+                        return Ok(Some(VirtualDjNowPlaying {
+                            artist,
+                            title,
+                            source_path: tracklist_txt.to_string_lossy().to_string(),
+                        }));
+                    }
+                }
+            }
+        }
+        Ok(None)
+    })
+    .await
+    .map_err(|e| format!("Fallo en tarea read_virtualdj_now_playing: {e}"))?
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     warm_desktop_udp_daemon_background();
     Builder::<R>::new("hera-dj")
@@ -791,7 +1197,80 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             list_ai_backends,
             scan_ai_connectivity,
             resolve_harmonic_bridge,
-            download_p2p_track
+            download_p2p_track,
+            set_mini_overlay_mode,
+            push_virtualdj_live_crate,
+            read_virtualdj_now_playing
         ])
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_virtualdj_history_tracklist_and_extinf() {
+        let vdj_txt = "21:05 : Avicii - Levels\n21:11 : Eric Prydz - Opus\n";
+        let parsed = parse_virtualdj_history_content(vdj_txt);
+        assert_eq!(
+            parsed,
+            Some(("Eric Prydz".to_string(), "Opus".to_string()))
+        );
+
+        let m3u_txt = "#EXTM3U\n#EXTINF:412,Keinemusik — Cesonia\nlibrary/Cesonia.wav\n";
+        let parsed_m3u = parse_virtualdj_history_content(m3u_txt);
+        assert_eq!(
+            parsed_m3u,
+            Some(("Keinemusik".to_string(), "Cesonia".to_string()))
+        );
+
+        assert_eq!(parse_virtualdj_history_content("   \n#EXTM3U\n"), None);
+    }
+
+    #[test]
+    fn test_write_virtualdj_live_crate_generates_vdjfolder_with_hot_cues() {
+        let temp_dir = std::env::temp_dir().join(format!(
+            "hera_vdj_overlay_test_{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).expect("create temp vdj dir");
+
+        let sample_track = ExportTrackItem {
+            track_id: "vdj-live-01".to_string(),
+            artist: "Keinemusik".to_string(),
+            title: "Cesonia".to_string(),
+            version: None,
+            file_path: temp_dir.join("Cesonia.wav").to_string_lossy().to_string(),
+            bpm: 125.0,
+            camelot: "9A".to_string(),
+            duration_seconds: 240.0,
+            bitrate_kbps: 1411,
+            energy: 0.84,
+            file_size_bytes: 0,
+            is_video: false,
+            is_own_production: false,
+            hot_cues: Vec::new(),
+        };
+
+        let written = write_virtualdj_live_crate_files(
+            "HERA En Vivo",
+            &[sample_track],
+            std::slice::from_ref(&temp_dir),
+        );
+        assert!(
+            written.iter().any(|p| p.ends_with("HERA En Vivo.vdjfolder")),
+            "Expected HERA En Vivo.vdjfolder in {:?}",
+            written
+        );
+        let folder_xml = std::fs::read_to_string(temp_dir.join("HERA En Vivo.vdjfolder"))
+            .expect("read vdjfolder");
+        assert!(folder_xml.contains("Cesonia"));
+        let db_xml = std::fs::read_to_string(temp_dir.join("HERA En Vivo_vdj_database.xml"))
+            .expect("read vdj database xml");
+        assert!(db_xml.contains("<Poi "));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }

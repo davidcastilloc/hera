@@ -943,3 +943,107 @@ export async function getCloudflareEdgeRadar(): Promise<CloudflareEdgeCapabiliti
     ],
   };
 }
+
+export type MiniOverlayLayoutMode = 'full' | 'card' | 'pill';
+
+export type SetMiniOverlayModeResponse = {
+  mode: MiniOverlayLayoutMode;
+  pinned: boolean;
+  width: number;
+  height: number;
+};
+
+export type PushVirtualDjLiveCrateResponse = {
+  crate_name: string;
+  total_tracks: number;
+  written_files: Array<string>;
+  synced_to_virtualdj_home: boolean;
+};
+
+export type VirtualDjNowPlaying = {
+  artist: string;
+  title: string;
+  source_path: string;
+};
+
+export async function setMiniOverlayMode(
+  mode: MiniOverlayLayoutMode,
+  pinned = true,
+): Promise<SetMiniOverlayModeResponse> {
+  const defaultDims =
+    mode === 'pill'
+      ? { width: 560, height: 52 }
+      : mode === 'card'
+        ? { width: 360, height: 408 }
+        : { width: 1180, height: 720 };
+
+  try {
+    const res = await invoke<SetMiniOverlayModeResponse>(
+      'plugin:hera-dj|set_mini_overlay_mode',
+      {
+        request: {
+          mode,
+          pinned,
+        },
+      },
+    );
+    if (res && res.mode) return res;
+  } catch {
+    // Fallback when running outside native Tauri IPC
+  }
+
+  return {
+    mode,
+    pinned: mode === 'full' ? false : pinned,
+    ...defaultDims,
+  };
+}
+
+export async function pushVirtualDjLiveCrate(
+  tracks: Array<Track>,
+  append = true,
+  crateName = 'HERA En Vivo',
+): Promise<PushVirtualDjLiveCrateResponse> {
+  try {
+    const res = await invoke<PushVirtualDjLiveCrateResponse>(
+      'plugin:hera-dj|push_virtualdj_live_crate',
+      {
+        request: {
+          crate_name: crateName,
+          append,
+          tracks: tracks.map((t) => ({
+            track_id: t.id,
+            artist: t.artists.join(', ') || t.album_artist || 'Artista',
+            title: t.title,
+            version: null,
+            file_path: t.path,
+            bpm: t.bpm ?? 124.0,
+            camelot: t.camelot ?? '8A',
+            duration_seconds: t.duration || 180,
+          })),
+        },
+      },
+    );
+    if (res && typeof res.total_tracks === 'number') return res;
+  } catch {
+    // Fallback when running outside native Tauri IPC
+  }
+
+  return {
+    crate_name: crateName,
+    total_tracks: tracks.length,
+    written_files: [`exports/VirtualDJ/${crateName}.vdjfolder`],
+    synced_to_virtualdj_home: false,
+  };
+}
+
+export async function readVirtualDjNowPlaying(): Promise<VirtualDjNowPlaying | null> {
+  try {
+    const res = await invoke<VirtualDjNowPlaying | null>(
+      'plugin:hera-dj|read_virtualdj_now_playing',
+    );
+    return res ?? null;
+  } catch {
+    return null;
+  }
+}

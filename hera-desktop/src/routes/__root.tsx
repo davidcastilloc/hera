@@ -3,7 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router';
 import { isTauri } from '@tauri-apps/api/core';
 import { info } from '@tauri-apps/plugin-log';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 
 import SettingsAPI from '../api/SettingsAPI';
 import AppEvents from '../components/AppEvents';
@@ -19,10 +19,13 @@ import PlayerEvents from '../components/PlayerEvents';
 import Toasts from '../components/Toasts';
 import useInvalidate from '../hooks/useInvalidate';
 import DatabaseBridge from '../lib/bridge-database';
+import { useMiniModeStore } from '../lib/mini-mode-store';
 import { configQuery } from '../lib/queries';
 import queryClient from '../lib/query-client';
 import useLibraryStore from '../lib/store';
 import { logAndNotifyError } from '../lib/utils';
+
+const LazyMiniOverlay = lazy(() => import('../components/MiniOverlay'));
 
 type Search = {
   jump_to_playing_track?: boolean;
@@ -60,6 +63,25 @@ function ViewRoot() {
   }, [invalidate]);
 
   const location = useLocation();
+  const layoutMode = useMiniModeStore((s) => s.layoutMode);
+  const toggleMiniMode = useMiniModeStore((s) => s.toggleMiniMode);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === 'm'
+      ) {
+        e.preventDefault();
+        void toggleMiniMode();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [toggleMiniMode]);
 
   useEffect(() => {
     if (isTauri()) {
@@ -83,19 +105,27 @@ function ViewRoot() {
       <PlayerEvents />
       <GlobalKeyBindings />
 
-      <Header />
-      <div {...stylex.props(styles.workspaceBody)}>
-        <Navigation />
-        <main
-          aria-label={t`Contenido principal de cabina`}
-          {...stylex.props(styles.mainContent)}
-        >
-          <Outlet />
-        </main>
-      </div>
+      {layoutMode !== 'full' ? (
+        <Suspense fallback={null}>
+          <LazyMiniOverlay />
+        </Suspense>
+      ) : (
+        <>
+          <Header />
+          <div {...stylex.props(styles.workspaceBody)}>
+            <Navigation />
+            <main
+              aria-label={t`Contenido principal de cabina`}
+              {...stylex.props(styles.mainContent)}
+            >
+              <Outlet />
+            </main>
+          </div>
+          <DropzoneImport />
+        </>
+      )}
 
       <Toasts />
-      <DropzoneImport />
     </div>
   );
 }
