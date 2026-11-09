@@ -1,6 +1,7 @@
 import { useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
 import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router';
+import { isTauri } from '@tauri-apps/api/core';
 import { info } from '@tauri-apps/plugin-log';
 import { useEffect } from 'react';
 
@@ -59,13 +60,17 @@ function ViewRoot() {
   const location = useLocation();
 
   useEffect(() => {
-    info(`Navigated to: ${location.pathname}`);
+    if (isTauri()) {
+      info(`Navigated to: ${location.pathname}`).catch(() => {});
+    } else {
+      console.info(`Navigated to: ${location.pathname}`);
+    }
   }, [location]);
 
   return (
     <div
       {...stylex.props(styles.root)}
-      data-museeks-os={window.__MUSEEKS_PLATFORM}
+      data-museeks-os={typeof window !== 'undefined' ? window.__MUSEEKS_PLATFORM : 'windows'}
     >
       {/** Bunch of global event handlers */}
       <IPCNavigationEvents />

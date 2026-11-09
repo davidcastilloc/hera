@@ -1,3 +1,4 @@
+import { isTauri } from '@tauri-apps/api/core';
 import * as logger from '@tauri-apps/plugin-log';
 
 import toastManager from './toast-manager';
@@ -20,10 +21,18 @@ export function logAndNotifyError(
     message = `${pre}: ${message}`;
   }
 
-  if (isWarning) {
-    logger.warn(message);
+  if (isTauri()) {
+    if (isWarning) {
+      logger.warn(message).catch(() => console.warn(message));
+    } else {
+      logger.error(message).catch(() => console.error(message));
+    }
   } else {
-    logger.error(message);
+    if (isWarning) {
+      console.warn(message);
+    } else {
+      console.error(message);
+    }
   }
 
   if (silent === false) {

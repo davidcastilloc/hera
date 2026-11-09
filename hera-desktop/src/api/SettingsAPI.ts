@@ -1,5 +1,6 @@
 import { t } from '@lingui/core/macro';
 import { getVersion } from '@tauri-apps/api/app';
+import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { info } from '@tauri-apps/plugin-log';
 import * as semver from 'semver';
@@ -43,7 +44,10 @@ async function init(then: () => void): Promise<void> {
         return cfgTheme;
       }
       try {
-        return (await getCurrentWindow().theme()) ?? 'dark';
+        if (isTauri()) {
+          return (await getCurrentWindow().theme()) ?? 'dark';
+        }
+        return 'dark';
       } catch {
         return 'dark';
       }
@@ -56,18 +60,24 @@ async function init(then: () => void): Promise<void> {
 
   // Show the app and apply persisted menu bar visibility
   await SettingsBridge.showWindow();
-  info('UI is ready!');
+  if (isTauri()) {
+    info('UI is ready!').catch(() => {});
+  } else {
+    console.info('UI is ready!');
+  }
 
   // Non-blocking, these can be done later
   checkForLibraryRefresh().catch(logAndNotifyError);
   checkForUpdate({ silentFail: true }).catch(logAndNotifyError);
 
   // Check if we should start a queue (maybe put that somewhere else)
-  const initialQueue = window.__MUSEEKS_INITIAL_QUEUE;
-  if (initialQueue !== null && initialQueue.length > 0) {
-    info(
-      `Starting queue from file associations (${initialQueue.length} tracks)`,
-    );
+  const initialQueue = typeof window !== 'undefined' ? window.__MUSEEKS_INITIAL_QUEUE : null;
+  if (initialQueue && Array.isArray(initialQueue) && initialQueue.length > 0) {
+    if (isTauri()) {
+      info(
+        `Starting queue from file associations (${initialQueue.length} tracks)`,
+      ).catch(() => {});
+    }
     await player.start(initialQueue, initialQueue[0].id, {
       type: 'file_associations',
     });
@@ -84,22 +94,28 @@ const setLanguage = async (language: Config['language']): Promise<void> => {
 const setTheme = async (themeID: string): Promise<void> => {
   await ConfigBridge.set('theme', themeID);
 
-  switch (themeID) {
-    case '__system': {
-      await getCurrentWindow().setTheme(null);
-      break;
-    }
-    case 'light': {
-      await getCurrentWindow().setTheme('light');
-      break;
-    }
-    case 'dark': {
-      await getCurrentWindow().setTheme('dark');
-      break;
+  if (isTauri()) {
+    try {
+      switch (themeID) {
+        case '__system': {
+          await getCurrentWindow().setTheme(null);
+          break;
+        }
+        case 'light': {
+          await getCurrentWindow().setTheme('light');
+          break;
+        }
+        case 'dark': {
+          await getCurrentWindow().setTheme('dark');
+          break;
+        }
+      }
+    } catch {
+      // Ignored outside native window
     }
   }
 
-  const theme = (await getCurrentWindow().theme()) ?? 'light';
+  const theme = isTauri() ? ((await getCurrentWindow().theme().catch(() => null)) ?? 'dark') : 'dark';
 
   applyThemeToUI(theme);
 };
@@ -146,7 +162,14 @@ async function checkForUpdate(
     return;
   }
 
-  const currentVersion = await getVersion();
+  let currentVersion = '0.5.0';
+  if (isTauri()) {
+    try {
+      currentVersion = await getVersion();
+    } catch {
+      currentVersion = '0.5.0';
+    }
+  }
 
   try {
     const response = await fetch(

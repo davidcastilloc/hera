@@ -5,9 +5,14 @@ import useLibraryStore from './store';
 export const allTracksQuery = {
   queryKey: ['all_tracks'],
   queryFn: async () => {
-    const tracks = await DatabaseBridge.getAllTracks();
-    useLibraryStore.setState({ tracks });
-    return tracks;
+    try {
+      const tracks = await DatabaseBridge.getAllTracks();
+      useLibraryStore.setState({ tracks });
+      return tracks;
+    } catch {
+      useLibraryStore.setState({ tracks: [] });
+      return [];
+    }
   },
   staleTime: Infinity,
   refetchOnWindowFocus: false,
@@ -17,7 +22,7 @@ export const allTracksQuery = {
 export const configQuery = {
   queryKey: ['config'],
   queryFn: () => ConfigBridge.getAll(),
-  initialData: window.__MUSEEKS_INITIAL_CONFIG,
+  initialData: typeof window !== 'undefined' ? window.__MUSEEKS_INITIAL_CONFIG : undefined,
   staleTime: Infinity,
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
