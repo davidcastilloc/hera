@@ -2051,5 +2051,26 @@ mod tests {
         assert!(report.coordinator_signaling_bytes < 200);
         assert!(report.sha256_verified);
         assert_eq!(report.expected_sha256, report.received_sha256);
+
+        // Also test the persistent Desktop UDP P2P Seeder Daemon + Multi-STUN NAT Classifier + Port-Spray Client
+        let state = std::sync::Arc::new(P2PMeshState::new("hera-desktop-daemon-test"));
+        let (daemon_status, served_counter) =
+            crate::p2p::spawn_desktop_udp_p2p_daemon(state).expect("spawn UDP daemon");
+        println!(
+            "\n=== HERA DESKTOP UDP P2P DAEMON + MULTI-STUN NAT DIAGNOSIS ===\n{}\n==============================================================\n",
+            serde_json::to_string_pretty(&daemon_status).unwrap()
+        );
+        for chunk_idx in 0..4u32 {
+            let chunk = crate::p2p::request_chunk_from_peer_with_spray(
+                &daemon_status.daemon_listen_socket,
+                daemon_status.nat_diagnosis.observed_port_delta,
+                daemon_status.nat_diagnosis.spray_window_ports,
+                "hera-seed-001",
+                chunk_idx,
+            )
+            .expect("request chunk from daemon");
+            assert_eq!(chunk.len(), 8192);
+        }
+        assert!(served_counter.load(std::sync::atomic::Ordering::Relaxed) >= 4);
     }
 }

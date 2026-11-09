@@ -8,24 +8,29 @@ use hera_node_rs::dj_brain::{
 };
 use hera_node_rs::export::{export_crate_bundle, ExportCrateRequest, ExportCrateResponse};
 use hera_node_rs::p2p::{
-    probe_stun_public_endpoint, ConnectDjDriveRequest, DjDriveTrackInput, P2PMeshState,
-    StunPublicEndpointReport,
+    spawn_desktop_udp_p2p_daemon, ConnectDjDriveRequest, DesktopP2PDaemonStatus, DjDriveTrackInput,
+    P2PMeshState,
 };
 use hera_node_rs::router::BuildCrateRequest;
 use hera_node_rs::synergy::{optimize_crate_with_spine, OptimizedCrateResult, SetSpineConfig};
 use serde::{Deserialize, Serialize};
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::Runtime;
 
-fn shared_desktop_p2p_state() -> &'static P2PMeshState {
-    static STATE: OnceLock<P2PMeshState> = OnceLock::new();
-    STATE.get_or_init(|| P2PMeshState::new("hera-desktop-local-node"))
+fn shared_desktop_p2p_state() -> &'static Arc<P2PMeshState> {
+    static STATE: OnceLock<Arc<P2PMeshState>> = OnceLock::new();
+    STATE.get_or_init(|| Arc::new(P2PMeshState::new("hera-desktop-local-node")))
 }
 
-fn shared_stun_endpoint() -> Option<StunPublicEndpointReport> {
-    static STUN: OnceLock<Option<StunPublicEndpointReport>> = OnceLock::new();
-    STUN.get_or_init(|| probe_stun_public_endpoint("stun.cloudflare.com:3478").ok())
+fn shared_desktop_udp_daemon() -> Option<DesktopP2PDaemonStatus> {
+    static DAEMON: OnceLock<Option<DesktopP2PDaemonStatus>> = OnceLock::new();
+    DAEMON
+        .get_or_init(|| {
+            spawn_desktop_udp_p2p_daemon(Arc::clone(shared_desktop_p2p_state()))
+                .ok()
+                .map(|(status, _counter)| status)
+        })
         .clone()
 }
 
@@ -343,7 +348,14 @@ pub fn resolve_harmonic_bridge(
         });
     }
 
-    let stun_public_endpoint = shared_stun_endpoint().map(|s| s.public_mapped_endpoint);
+    let stun_public_endpoint = shared_desktop_udp_daemon().map(|d| {
+        format!(
+            "{} · {} (LAN {})",
+            d.nat_diagnosis.primary_stun_endpoint,
+            d.nat_diagnosis.nat_topology,
+            d.nat_diagnosis.lan_direct_endpoint
+        )
+    });
 
     Ok(ResolveHarmonicBridgeResponse {
         origin_summary: format!(
