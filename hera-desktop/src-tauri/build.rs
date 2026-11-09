@@ -65,6 +65,20 @@ fn main() {
                 ]),
             )
             .plugin(
+                "hera-agent",
+                tauri_build::InlinedPlugin::new().commands(&[
+                    "get_agent_runtime_status",
+                    "list_agent_sessions",
+                    "create_agent_session",
+                    "update_agent_session",
+                    "delete_agent_session",
+                    "get_agent_session_messages",
+                    "start_agent_turn",
+                    "cancel_agent_turn",
+                    "resolve_agent_approval",
+                ]),
+            )
+            .plugin(
                 "sleepblocker",
                 tauri_build::InlinedPlugin::new().commands(&["enable", "disable"]),
             ),

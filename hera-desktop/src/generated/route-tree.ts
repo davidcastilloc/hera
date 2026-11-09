@@ -15,6 +15,7 @@ import { Route as LibraryRouteImport } from './../routes/library'
 import { Route as DnaRouteImport } from './../routes/dna'
 import { Route as BridgeRouteImport } from './../routes/bridge'
 import { Route as ArtistsRouteImport } from './../routes/artists'
+import { Route as AgentRouteImport } from './../routes/agent'
 import { Route as TracksTrackIDRouteImport } from './../routes/tracks.$trackID'
 import { Route as SettingsUiRouteImport } from './../routes/settings.ui'
 import { Route as SettingsLibraryRouteImport } from './../routes/settings.library'
@@ -52,6 +53,11 @@ const BridgeRoute = BridgeRouteImport.update({
 const ArtistsRoute = ArtistsRouteImport.update({
   id: '/artists',
   path: '/artists',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentRoute = AgentRouteImport.update({
+  id: '/agent',
+  path: '/agent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TracksTrackIDRoute = TracksTrackIDRouteImport.update({
@@ -97,6 +103,7 @@ const ArtistsPresetsCompilationsRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
+  '/agent': typeof AgentRoute
   '/artists': typeof ArtistsRouteWithChildren
   '/bridge': typeof BridgeRoute
   '/dna': typeof DnaRoute
@@ -113,6 +120,7 @@ export interface FileRoutesByFullPath {
   '/artists/presets/compilations': typeof ArtistsPresetsCompilationsRoute
 }
 export interface FileRoutesByTo {
+  '/agent': typeof AgentRoute
   '/artists': typeof ArtistsRouteWithChildren
   '/bridge': typeof BridgeRoute
   '/dna': typeof DnaRoute
@@ -130,6 +138,7 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/agent': typeof AgentRoute
   '/artists': typeof ArtistsRouteWithChildren
   '/bridge': typeof BridgeRoute
   '/dna': typeof DnaRoute
@@ -148,6 +157,7 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
+    | '/agent'
     | '/artists'
     | '/bridge'
     | '/dna'
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/artists/presets/compilations'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/agent'
     | '/artists'
     | '/bridge'
     | '/dna'
@@ -180,6 +191,7 @@ export interface FileRouteTypes {
     | '/artists/presets/compilations'
   id:
     | '__root__'
+    | '/agent'
     | '/artists'
     | '/bridge'
     | '/dna'
@@ -197,6 +209,7 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  AgentRoute: typeof AgentRoute
   ArtistsRoute: typeof ArtistsRouteWithChildren
   BridgeRoute: typeof BridgeRoute
   DnaRoute: typeof DnaRoute
@@ -248,6 +261,13 @@ declare module '@tanstack/react-router' {
       path: '/artists'
       fullPath: '/artists'
       preLoaderRoute: typeof ArtistsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent': {
+      id: '/agent'
+      path: '/agent'
+      fullPath: '/agent'
+      preLoaderRoute: typeof AgentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/tracks/$trackID': {
@@ -353,6 +373,7 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
 )
 
 const rootRouteChildren: RootRouteChildren = {
+  AgentRoute: AgentRoute,
   ArtistsRoute: ArtistsRouteWithChildren,
   BridgeRoute: BridgeRoute,
   DnaRoute: DnaRoute,

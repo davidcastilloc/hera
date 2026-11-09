@@ -24,6 +24,7 @@ pub mod db;
  * Settings-related plugins
  */
 pub mod default_view;
+pub mod hera_agent;
 pub mod hera_dj;
 pub mod sleepblocker;
 pub mod stream_server;

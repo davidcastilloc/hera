@@ -22,7 +22,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, Runtime};
 
-fn shared_desktop_p2p_state() -> &'static Arc<P2PMeshState> {
+pub(crate) fn shared_desktop_p2p_state() -> &'static Arc<P2PMeshState> {
     static STATE: OnceLock<Arc<P2PMeshState>> = OnceLock::new();
     STATE.get_or_init(|| Arc::new(P2PMeshState::new("hera-desktop-local-node")))
 }

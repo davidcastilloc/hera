@@ -717,6 +717,15 @@ function ViewHarmonicBridgeP2P() {
               <div {...stylex.props(styles.headerActions)}>
                 <button
                   type="button"
+                  onClick={() => void navigate({ to: '/agent' })}
+                  {...stylex.props(styles.secondaryBtn)}
+                >
+                  <Icon name="sparkles" size={14} />
+                  <span>Abrir en Agente</span>
+                </button>
+
+                <button
+                  type="button"
                   disabled={Boolean(busyAction)}
                   onClick={() => void handleExportBridgeVirtualDj()}
                   {...stylex.props(

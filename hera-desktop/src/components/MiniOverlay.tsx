@@ -1,4 +1,5 @@
 import * as stylex from '@stylexjs/stylex';
+import { useNavigate } from '@tanstack/react-router';
 import {
   startTransition,
   useCallback,
@@ -190,6 +191,22 @@ const EXPAND_WINDOW_SVG = (
   </svg>
 );
 
+const SPARKLE_MINI_SVG = (
+  <svg
+    width="13"
+    height="13"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.6"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z" />
+  </svg>
+);
+
 const SWAP_ARROWS_SVG = (
   <svg
     width="14"
@@ -374,6 +391,12 @@ export default function MiniOverlay() {
   const tracks = useLibraryStore((s) => s.tracks);
   const playingTrack = usePlayingTrack();
   const invalidate = useInvalidate();
+  const navigate = useNavigate();
+
+  const handleOpenAgentFull = useCallback(async () => {
+    await restoreFullWindow();
+    void navigate({ to: '/agent' });
+  }, [navigate, restoreFullWindow]);
 
   const [selectedCurrentId, setSelectedCurrentId] = useState<string>('');
   const [vdjLiveTrack, setVdjLiveTrack] = useState<{
@@ -998,6 +1021,16 @@ export default function MiniOverlay() {
         </div>
 
         <div {...stylex.props(styles.windowControls)}>
+          <button
+            type="button"
+            aria-label="Abrir en Agente"
+            title="Abrir en Agente"
+            onClick={() => void handleOpenAgentFull()}
+            {...stylex.props(styles.headerIconBtn)}
+          >
+            {SPARKLE_MINI_SVG}
+          </button>
+
           <button
             type="button"
             aria-label="Fijar encima"

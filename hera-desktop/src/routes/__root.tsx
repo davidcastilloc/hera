@@ -1,6 +1,11 @@
 import { useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
-import { createRootRoute, Outlet, useLocation } from '@tanstack/react-router';
+import {
+  createRootRoute,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from '@tanstack/react-router';
 import { isTauri } from '@tauri-apps/api/core';
 import { info } from '@tauri-apps/plugin-log';
 import { lazy, Suspense, useEffect } from 'react';
@@ -18,6 +23,7 @@ import Navigation from '../components/Navigation';
 import PlayerEvents from '../components/PlayerEvents';
 import Toasts from '../components/Toasts';
 import useInvalidate from '../hooks/useInvalidate';
+import { bindAgentGlobalBridge } from '../lib/agent-store';
 import DatabaseBridge from '../lib/bridge-database';
 import { useMiniModeStore } from '../lib/mini-mode-store';
 import { configQuery } from '../lib/queries';
@@ -51,6 +57,7 @@ export const Route = createRootRoute({
 
 function ViewRoot() {
   const invalidate = useInvalidate();
+  const navigate = useNavigate();
   const { t } = useLingui();
 
   useEffect(() => {
@@ -60,7 +67,13 @@ function ViewRoot() {
         useLibraryStore.setState({ tracks });
       })
       .catch(() => {});
-  }, [invalidate]);
+    bindAgentGlobalBridge({
+      invalidate,
+      navigate: (to) => {
+        void navigate({ to: to as '/library' });
+      },
+    });
+  }, [invalidate, navigate]);
 
   const location = useLocation();
   const layoutMode = useMiniModeStore((s) => s.layoutMode);
@@ -75,13 +88,23 @@ function ViewRoot() {
       ) {
         e.preventDefault();
         void toggleMiniMode();
+        return;
+      }
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === 'j'
+      ) {
+        e.preventDefault();
+        void navigate({ to: '/agent' });
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [toggleMiniMode]);
+  }, [navigate, toggleMiniMode]);
 
   useEffect(() => {
     if (isTauri()) {

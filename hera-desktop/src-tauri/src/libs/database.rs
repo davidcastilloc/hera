@@ -1,5 +1,6 @@
 use indexmap::IndexMap;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{Connection, SqliteConnection};
 use std::path::PathBuf;
@@ -508,4 +509,204 @@ impl DB {
 
         Ok(())
     }
+
+    /** List all persisted agent chat sessions ordered by most recently updated */
+    pub async fn list_agent_sessions(&mut self) -> AnyResult<Vec<AgentSessionSummary>> {
+        let sessions = sqlx::query_as::<_, AgentSessionSummary>(
+            r#"
+            SELECT id, title, backend_id, execution_policy, agy_conversation_id, created_at, updated_at
+            FROM agent_sessions
+            ORDER BY updated_at DESC, created_at DESC
+            "#,
+        )
+        .fetch_all(&mut self.connection)
+        .await?;
+        Ok(sessions)
+    }
+
+    /** Get a single agent chat session by ID */
+    pub async fn get_agent_session(&mut self, id: &str) -> AnyResult<Option<AgentSessionSummary>> {
+        let session = sqlx::query_as::<_, AgentSessionSummary>(
+            r#"
+            SELECT id, title, backend_id, execution_policy, agy_conversation_id, created_at, updated_at
+            FROM agent_sessions
+            WHERE id = ?
+            "#,
+        )
+        .bind(id)
+        .fetch_optional(&mut self.connection)
+        .await?;
+        Ok(session)
+    }
+
+    /** Create a new persisted agent chat session */
+    pub async fn create_agent_session(
+        &mut self,
+        title: String,
+        backend_id: String,
+        execution_policy: String,
+    ) -> AnyResult<AgentSessionSummary> {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0);
+        let session = AgentSessionSummary {
+            id: uuid::Uuid::new_v4().to_string(),
+            title,
+            backend_id,
+            execution_policy,
+            agy_conversation_id: None,
+            created_at: now_ms,
+            updated_at: now_ms,
+        };
+        sqlx::query(
+            r#"
+            INSERT INTO agent_sessions (id, title, backend_id, execution_policy, agy_conversation_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            "#,
+        )
+        .bind(&session.id)
+        .bind(&session.title)
+        .bind(&session.backend_id)
+        .bind(&session.execution_policy)
+        .bind(&session.agy_conversation_id)
+        .bind(session.created_at)
+        .bind(session.updated_at)
+        .execute(&mut self.connection)
+        .await?;
+        Ok(session)
+    }
+
+    /** Update agent session metadata (title, agy_conversation_id, backend, or policy) */
+    pub async fn update_agent_session_meta(
+        &mut self,
+        id: &str,
+        title: Option<&str>,
+        agy_conversation_id: Option<&str>,
+        backend_id: Option<&str>,
+        execution_policy: Option<&str>,
+    ) -> AnyResult<Option<AgentSessionSummary>> {
+        let Some(existing) = self.get_agent_session(id).await? else {
+            return Ok(None);
+        };
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(existing.updated_at + 1)
+            .max(existing.updated_at + 1);
+        let next_title = title.unwrap_or(&existing.title);
+        let next_agy_id = agy_conversation_id.or(existing.agy_conversation_id.as_deref());
+        let next_backend = backend_id.unwrap_or(&existing.backend_id);
+        let next_policy = execution_policy.unwrap_or(&existing.execution_policy);
+
+        sqlx::query(
+            r#"
+            UPDATE agent_sessions
+            SET title = ?, agy_conversation_id = ?, backend_id = ?, execution_policy = ?, updated_at = ?
+            WHERE id = ?
+            "#,
+        )
+        .bind(next_title)
+        .bind(next_agy_id)
+        .bind(next_backend)
+        .bind(next_policy)
+        .bind(now_ms)
+        .bind(id)
+        .execute(&mut self.connection)
+        .await?;
+
+        self.get_agent_session(id).await
+    }
+
+    /** Delete an agent session (cascades to agent_messages when foreign keys are enabled, plus explicit cleanup) */
+    pub async fn delete_agent_session(&mut self, id: &str) -> AnyResult<()> {
+        sqlx::query("DELETE FROM agent_messages WHERE session_id = ?")
+            .bind(id)
+            .execute(&mut self.connection)
+            .await?;
+        sqlx::query("DELETE FROM agent_sessions WHERE id = ?")
+            .bind(id)
+            .execute(&mut self.connection)
+            .await?;
+        Ok(())
+    }
+
+    /** Fetch all messages for a given agent session in chronological order */
+    pub async fn get_agent_messages(
+        &mut self,
+        session_id: &str,
+    ) -> AnyResult<Vec<AgentStoredMessage>> {
+        let msgs = sqlx::query_as::<_, AgentStoredMessage>(
+            r#"
+            SELECT id, session_id, role, content, attachments_json, tool_steps_json, status, created_at
+            FROM agent_messages
+            WHERE session_id = ?
+            ORDER BY created_at ASC, rowid ASC
+            "#,
+        )
+        .bind(session_id)
+        .fetch_all(&mut self.connection)
+        .await?;
+        Ok(msgs)
+    }
+
+    /** Insert or update an agent message and bump parent session's updated_at */
+    pub async fn upsert_agent_message(&mut self, msg: &AgentStoredMessage) -> AnyResult<()> {
+        sqlx::query(
+            r#"
+            INSERT INTO agent_messages (id, session_id, role, content, attachments_json, tool_steps_json, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                content = excluded.content,
+                attachments_json = excluded.attachments_json,
+                tool_steps_json = excluded.tool_steps_json,
+                status = excluded.status
+            "#,
+        )
+        .bind(&msg.id)
+        .bind(&msg.session_id)
+        .bind(&msg.role)
+        .bind(&msg.content)
+        .bind(&msg.attachments_json)
+        .bind(&msg.tool_steps_json)
+        .bind(&msg.status)
+        .bind(msg.created_at)
+        .execute(&mut self.connection)
+        .await?;
+
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(msg.created_at);
+        sqlx::query("UPDATE agent_sessions SET updated_at = MAX(updated_at + 1, ?) WHERE id = ?")
+            .bind(now_ms)
+            .bind(&msg.session_id)
+            .execute(&mut self.connection)
+            .await?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::FromRow)]
+pub struct AgentSessionSummary {
+    pub id: String,
+    pub title: String,
+    pub backend_id: String,
+    pub execution_policy: String,
+    pub agy_conversation_id: Option<String>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::FromRow)]
+pub struct AgentStoredMessage {
+    pub id: String,
+    pub session_id: String,
+    pub role: String,
+    pub content: String,
+    pub attachments_json: String,
+    pub tool_steps_json: String,
+    pub status: String,
+    pub created_at: i64,
 }

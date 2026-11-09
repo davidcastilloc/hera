@@ -3,6 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 import { Link } from '@tanstack/react-router';
 import type { LinkProps } from '@tanstack/react-router';
 
+import { useAgentStore } from '../lib/agent-store';
 import useLibraryStore from '../lib/store';
 import Icon, { type IconName } from './Icon';
 import ProgressBar from './ProgressBar';
@@ -12,9 +13,10 @@ type NavItemProps = {
   to: LinkProps['to'];
   label: string;
   icon: IconName;
+  isLiveRunning?: boolean;
 };
 
-function NavItem({ to, label, icon }: NavItemProps) {
+function NavItem({ to, label, icon, isLiveRunning = false }: NavItemProps) {
   return (
     <NavigationMenu.Item {...stylex.props(styles.navigationItem)}>
       <NavigationMenu.Link
@@ -29,6 +31,12 @@ function NavItem({ to, label, icon }: NavItemProps) {
           >
             <Icon name={icon} size={16} xstyle={styles.navIcon} />
             <span {...stylex.props(styles.navLabel)}>{label}</span>
+            {isLiveRunning ? (
+              <span
+                aria-label="Agente trabajando en segundo plano"
+                {...stylex.props(styles.liveRunDot)}
+              />
+            ) : null}
           </Link>
         )}
       />
@@ -37,6 +45,10 @@ function NavItem({ to, label, icon }: NavItemProps) {
 }
 
 export default function Navigation() {
+  const isAgentRunning = useAgentStore(
+    (state) => state.runningSessionIds.length > 0,
+  );
+
   return (
     <aside {...stylex.props(styles.rail)} aria-label="Navegación principal">
       <div {...stylex.props(styles.topSection)}>
@@ -82,6 +94,12 @@ export default function Navigation() {
         >
           <NavigationMenu.List {...stylex.props(styles.viewLinks)}>
             <NavItem to="/library" label="Biblioteca" icon="disc" />
+            <NavItem
+              to="/agent"
+              label="Agente"
+              icon="sparkles"
+              isLiveRunning={isAgentRunning}
+            />
             <NavItem to="/artists" label="Artistas" icon="artists" />
             <NavItem to="/playlists" label="Playlists" icon="crateList" />
             <NavItem to="/bridge" label="Transición" icon="bridge" />
@@ -258,6 +276,14 @@ const styles = stylex.create({
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+  },
+  liveRunDot: {
+    marginLeft: 'auto',
+    width: '6px',
+    height: '6px',
+    borderRadius: '999px',
+    backgroundColor: '#14b8a6',
+    flexShrink: 0,
   },
   footerSection: {
     display: 'flex',

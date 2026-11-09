@@ -79,6 +79,7 @@ fn main() {
         .plugin(plugins::debug::init())
         .plugin(plugins::default_view::init())
         .plugin(plugins::hera_dj::init())
+        .plugin(plugins::hera_agent::init())
         .plugin(plugins::file_associations::init())
         .plugin(plugins::sleepblocker::init())
         // Tauri integrations with the Operating System

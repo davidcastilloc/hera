@@ -909,6 +909,29 @@ pub struct CloudflareFreeAiTurnResponse {
     pub iterations_executed: usize,
 }
 
+pub fn build_cli_agent_args(bin_name: &str, combined_prompt: &str, raw_prompt: &str) -> Vec<String> {
+    match bin_name {
+        "agy" => vec![
+            "--disable-slash-commands".to_string(),
+            "--effort".to_string(),
+            "low".to_string(),
+            "--print-timeout".to_string(),
+            "25s".to_string(),
+            "-p".to_string(),
+            combined_prompt.to_string(),
+        ],
+        "claude" => vec!["-p".to_string(), combined_prompt.to_string()],
+        "codex" => vec!["exec".to_string(), combined_prompt.to_string()],
+        "gemini" => vec!["--prompt".to_string(), combined_prompt.to_string()],
+        "ollama" => vec![
+            "run".to_string(),
+            "llama3.3".to_string(),
+            combined_prompt.to_string(),
+        ],
+        _ => vec![raw_prompt.to_string()],
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub fn execute_cli_agent_turn(
     cli_id: &str,
@@ -940,36 +963,9 @@ pub fn execute_cli_agent_turn(
     let exec_target = path_hint.as_deref().unwrap_or(bin_name);
     let mut cmd = std::process::Command::new(exec_target);
     let combined_prompt = format!("{system_prompt}\n\nUsuario: {prompt}");
-    match bin_name {
-        "agy" => {
-            cmd.args([
-                "-p",
-                "--disable-slash-commands",
-                "--effort",
-                "low",
-                "--print-timeout",
-                "8s",
-            ])
-            .arg(&combined_prompt);
-        }
-        "claude" => {
-            cmd.args(["-p"]).arg(&combined_prompt);
-        }
-        "codex" => {
-            cmd.args(["exec"]).arg(&combined_prompt);
-        }
-        "gemini" => {
-            cmd.args(["--prompt"]).arg(&combined_prompt);
-        }
-        "ollama" => {
-            cmd.args(["run", "llama3.3"]).arg(&combined_prompt);
-        }
-        _ => {
-            cmd.arg(prompt);
-        }
-    }
+    cmd.args(build_cli_agent_args(bin_name, &combined_prompt, prompt));
 
-    let out = run_command_with_timeout(cmd, std::time::Duration::from_secs(10)).map_err(|e| {
+    let out = run_command_with_timeout(cmd, std::time::Duration::from_secs(26)).map_err(|e| {
         format!(
             "Fallo al ejecutar binario `{bin_name}` (path {:?}): {e}",
             path_hint
@@ -1901,5 +1897,15 @@ mod tests {
             timeout_start.elapsed() < std::time::Duration::from_millis(2000),
             "run_command_with_timeout did not terminate slow child quickly enough"
         );
+    }
+
+    #[test]
+    fn test_build_cli_agent_args_places_print_flag_immediately_before_prompt() {
+        let prompt = "Sistema\n\nUsuario: Arma una playlist 8A";
+        let args = build_cli_agent_args("agy", prompt, "Arma una playlist 8A");
+        assert!(args.len() >= 2);
+        assert_eq!(args[args.len() - 2], "-p");
+        assert_eq!(args[args.len() - 1], prompt);
+        assert!(args.contains(&"--disable-slash-commands".to_string()));
     }
 }

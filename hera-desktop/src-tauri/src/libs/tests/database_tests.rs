@@ -239,3 +239,88 @@ async fn test_playlists_db() {
         vec!["Playlist b".to_string()]
     );
 }
+
+#[tokio::test]
+async fn test_agent_sessions_and_messages_db() {
+    use super::database::AgentStoredMessage;
+
+    let mut db = get_test_db().await;
+
+    assert!(db.list_agent_sessions().await.unwrap().is_empty());
+
+    let s1 = db
+        .create_agent_session(
+            "Nueva sesión".to_string(),
+            "cli_agy".to_string(),
+            "auto".to_string(),
+        )
+        .await
+        .unwrap();
+    let s2 = db
+        .create_agent_session(
+            "Warmup Viernes".to_string(),
+            "local_fast".to_string(),
+            "confirm".to_string(),
+        )
+        .await
+        .unwrap();
+
+    let updated = db
+        .update_agent_session_meta(
+            &s1.id,
+            Some("Set Club 124-128"),
+            Some("agy-conv-123"),
+            None,
+            None,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(updated.title, "Set Club 124-128");
+    assert_eq!(updated.agy_conversation_id.as_deref(), Some("agy-conv-123"));
+
+    let msg_user = AgentStoredMessage {
+        id: "msg-1".to_string(),
+        session_id: s1.id.clone(),
+        role: "user".to_string(),
+        content: "Arma una playlist 8A".to_string(),
+        attachments_json: r#"[{"kind":"track","label":"Opus"}]"#.to_string(),
+        tool_steps_json: "[]".to_string(),
+        status: "done".to_string(),
+        created_at: 1000,
+    };
+    db.upsert_agent_message(&msg_user).await.unwrap();
+
+    let mut msg_assistant = AgentStoredMessage {
+        id: "msg-2".to_string(),
+        session_id: s1.id.clone(),
+        role: "assistant".to_string(),
+        content: "Creando...".to_string(),
+        attachments_json: "[]".to_string(),
+        tool_steps_json: r#"[{"id":"step-1","tool_name":"create_playlist","status":"running"}]"#
+            .to_string(),
+        status: "streaming".to_string(),
+        created_at: 1001,
+    };
+    db.upsert_agent_message(&msg_assistant).await.unwrap();
+
+    msg_assistant.content = "Lista creada y enviada a VirtualDJ.".to_string();
+    msg_assistant.status = "done".to_string();
+    db.upsert_agent_message(&msg_assistant).await.unwrap();
+
+    let msgs = db.get_agent_messages(&s1.id).await.unwrap();
+    assert_eq!(msgs.len(), 2);
+    assert_eq!(msgs[0].role, "user");
+    assert_eq!(msgs[1].content, "Lista creada y enviada a VirtualDJ.");
+    assert_eq!(msgs[1].status, "done");
+
+    let listed = db.list_agent_sessions().await.unwrap();
+    assert_eq!(listed.len(), 2);
+    assert_eq!(listed[0].id, s1.id);
+
+    db.delete_agent_session(&s1.id).await.unwrap();
+    assert!(db.get_agent_messages(&s1.id).await.unwrap().is_empty());
+    let remaining = db.list_agent_sessions().await.unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0].id, s2.id);
+}
