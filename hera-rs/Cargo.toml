@@ -21,11 +21,13 @@ required-features = ["native"]
 default = ["native"]
 native = ["dep:tokio", "axum/tokio", "axum/http1"]
 cloudflare = ["dep:worker"]
+ts = ["dep:ts-rs"]
 
 [dependencies]
 axum = { version = "0.7", default-features = false, features = ["json", "query", "matched-path"] }
 serde.workspace = true
 serde_json.workspace = true
+ts-rs = { workspace = true, optional = true }
 rustfft = "6.2"
 symphonia = { version = "0.5", default-features = false, features = ["pcm", "wav", "flac", "mp3", "ogg", "vorbis", "isomp4", "aac", "alac"] }
 http = "1.1"

@@ -5,6 +5,9 @@
 //! across Windows, macOS, and headless Linux environments.
 
 pub mod acl_guard;
+pub mod agent_types;
+pub mod dj_types;
+pub mod typegen;
 
 /// Canonical workspace crate version exposed by `hera-ipc`.
 pub const HERA_IPC_VERSION: &str = env!("CARGO_PKG_VERSION");

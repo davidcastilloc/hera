@@ -205,7 +205,10 @@ pub struct VectorizeMatchResponse {
     pub matches: Vec<VectorizeMatchCandidate>,
 }
 
+pub type SwarmMoqHarmonicEvent = SwarmSemanticPubSubEvent;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CloudflareServicePrimitive {
     pub id: String,
     pub name: String,
@@ -216,10 +219,13 @@ pub struct CloudflareServicePrimitive {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CloudflareEdgeCapabilities {
     pub control_plane: String,
     pub motto: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub active_swarm_nodes: usize,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub kv_forensic_cache_entries: usize,
     pub estimated_laptop_cpu_seconds_saved: f32,
     pub d1_free_storage_gb: f32,

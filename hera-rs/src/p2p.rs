@@ -769,6 +769,8 @@ pub struct SwarmTopicSubscription {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
+#[cfg_attr(feature = "ts", ts(rename = "SwarmMoqHarmonicEvent"))]
 pub struct SwarmSemanticPubSubEvent {
     pub event_id: String,
     pub topic_uri: String,
@@ -778,9 +780,11 @@ pub struct SwarmSemanticPubSubEvent {
     pub title: String,
     pub bpm: f32,
     pub camelot_key: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub style_simhash_u64: u64,
     pub merkle_root_sha256: String,
     pub opaque_blob_key: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub hot_cues_count: usize,
     pub prefetch_recommended: bool,
 }

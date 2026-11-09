@@ -7,12 +7,15 @@ pub const CF_LLAMA_8B_FAST_NEURONS_PER_TURN: f64 = 6.6;
 pub const CF_D1_FREE_STORAGE_BYTES: u64 = 5 * 1024 * 1024 * 1024; // 5 GB
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AnchorArtistStat {
     pub artist: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub track_count: usize,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct MediaMixProfile {
     pub audio_pct: f32,
     pub video_pct: f32,
@@ -20,18 +23,24 @@ pub struct MediaMixProfile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DjStyleDnaRequest {
     pub tracks: Vec<ExportTrackItem>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub dj_handle: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub preferred_dj_software: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub golden_rules: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DjStyleDnaProfile {
     pub dj_handle: String,
     pub preferred_dj_software: String,
     pub golden_rules: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub total_tracks: usize,
     pub dominant_bpm_zone: String,
     pub overall_average_bpm: f32,
@@ -167,6 +176,7 @@ pub fn compute_dj_style_dna(req: &DjStyleDnaRequest) -> DjStyleDnaProfile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AiBackendOption {
     pub id: String,
     pub display_name: String,
@@ -176,39 +186,47 @@ pub struct AiBackendOption {
     pub is_default_free: bool,
     pub zero_laptop_cpu_ram: bool,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub category: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DetectedCliAgent {
     pub id: String,
     pub binary_name: String,
     pub display_name: String,
     pub installed: bool,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub version_hint: Option<String>,
     pub command_preview: String,
     pub zero_api_key_needed: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct DetectedLocalServer {
     pub id: String,
     pub display_name: String,
     pub base_url: String,
     pub reachable: bool,
     pub active_models: Vec<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable, as = "Option<u32>"))]
     pub latency_ms: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct McpHostIntegrationGuide {
     pub stdio_command: String,
     pub http_endpoint: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub tools_count: usize,
     pub sample_config_json: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct SwarmProtectionStatus {
     pub quarantine_first_enforced: bool,
     pub p2p_seeding_active: bool,
@@ -218,6 +236,7 @@ pub struct SwarmProtectionStatus {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AiConnectivityOnboardingReport {
     pub recommended_mode: String,
     pub recommended_backend_id: String,
@@ -859,41 +878,56 @@ pub fn auto_detect_local_backend() -> Option<(String, String, String)> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct AgentToolExecutionStep {
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub step: usize,
     pub tool_name: String,
+    #[cfg_attr(feature = "ts", ts(type = "unknown"))]
     pub arguments: serde_json::Value,
     pub result_preview: String,
     pub is_error: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CloudflareFreeAiTurnRequest {
     pub dj_handle: String,
     pub message: String,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub session_id: Option<String>,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub style_dna: Option<DjStyleDnaProfile>,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub daily_neurons_used_so_far: f64,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub cache_hit: bool,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub backend: Option<String>,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub base_url: Option<String>,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub model: Option<String>,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub api_key: Option<String>,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable, as = "Option<u32>"))]
     pub max_tool_iterations: Option<usize>,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub commander_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct CloudflareFreeAiTurnResponse {
     pub backend_used: String,
     pub model_used: String,
@@ -901,11 +935,14 @@ pub struct CloudflareFreeAiTurnResponse {
     pub neurons_consumed_this_turn: f64,
     pub daily_neurons_remaining: f64,
     pub estimated_cost_usd: f64,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub d1_synced_bytes: usize,
     pub assistant_reply: String,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub tool_calls_trace: Vec<AgentToolExecutionStep>,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<u32>"))]
     pub iterations_executed: usize,
 }
 

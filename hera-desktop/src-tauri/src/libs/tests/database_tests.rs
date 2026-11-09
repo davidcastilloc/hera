@@ -317,10 +317,13 @@ async fn test_agent_sessions_and_messages_db() {
     let listed = db.list_agent_sessions().await.unwrap();
     assert_eq!(listed.len(), 2);
     assert_eq!(listed[0].id, s1.id);
+    assert_eq!(listed[0].message_count, 2);
+    assert_eq!(listed[1].message_count, 0);
 
     db.delete_agent_session(&s1.id).await.unwrap();
     assert!(db.get_agent_messages(&s1.id).await.unwrap().is_empty());
     let remaining = db.list_agent_sessions().await.unwrap();
     assert_eq!(remaining.len(), 1);
     assert_eq!(remaining[0].id, s2.id);
+    assert_eq!(remaining[0].message_count, 0);
 }

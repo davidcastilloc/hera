@@ -2,10 +2,12 @@ use rustfft::{num_complex::Complex, FftPlanner};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct HotCuePoint {
     pub num: u8,
     pub name: String,
     pub seconds: f32,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub bar_index: usize,
     pub role: String,
     pub confidence: f32,

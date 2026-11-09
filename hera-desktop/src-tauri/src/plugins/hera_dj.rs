@@ -16,11 +16,12 @@ use hera_node_rs::p2p::{
 };
 use hera_node_rs::router::BuildCrateRequest;
 use hera_node_rs::synergy::{optimize_crate_with_spine, OptimizedCrateResult, SetSpineConfig};
-use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, Runtime};
+
+pub use hera_ipc::dj_types::*;
 
 pub(crate) fn shared_desktop_p2p_state() -> &'static Arc<P2PMeshState> {
     static STATE: OnceLock<Arc<P2PMeshState>> = OnceLock::new();
@@ -115,72 +116,6 @@ fn compute_camelot_step_and_distance(origin: &str, target: &str) -> (String, u8)
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct HarmonicBridgeStep {
-    pub step_number: u8,
-    pub track_id: String,
-    pub artist: String,
-    pub title: String,
-    pub bpm: f32,
-    pub camelot: String,
-    pub owner_dj: String,
-    pub hera_seal: String,
-    pub cue_in_seconds: f32,
-    pub cue_out_seconds: f32,
-    pub synergy_score: f32,
-    pub transition_tip: String,
-    #[serde(default)]
-    pub p2p_boost_free_promo: bool,
-    #[serde(default)]
-    pub boost_credit_cost_mb: f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SwarmCatalogItem {
-    pub cas_fingerprint: String,
-    pub artist: String,
-    pub title: String,
-    pub bpm: f32,
-    pub camelot: String,
-    pub subgenre: String,
-    pub hera_seal: String,
-    pub opaque_blob_key: String,
-    pub swarm_replicas_count: usize,
-    pub seeders: Vec<String>,
-    pub p2p_boost_ready: bool,
-    #[serde(default)]
-    pub p2p_boost_free_promo: bool,
-    #[serde(default)]
-    pub effective_bandwidth_hz: f32,
-    #[serde(default)]
-    pub quality_score: f32,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResolveHarmonicBridgeRequest {
-    pub origin_title: String,
-    pub origin_artist: String,
-    pub origin_bpm: f32,
-    pub origin_camelot: String,
-    pub target_title: String,
-    pub target_artist: String,
-    pub target_bpm: f32,
-    pub target_camelot: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ResolveHarmonicBridgeResponse {
-    pub origin_summary: String,
-    pub target_summary: String,
-    pub harmonic_distance_steps: u8,
-    pub bridge_steps: Vec<HarmonicBridgeStep>,
-    pub preview_mix_window_seconds: u8,
-    #[serde(default)]
-    pub swarm_catalog: Vec<SwarmCatalogItem>,
-    #[serde(default)]
-    pub stun_public_endpoint: Option<String>,
-}
-
 #[tauri::command]
 pub async fn compute_style_dna(request: DjStyleDnaRequest) -> Result<DjStyleDnaProfile, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -270,14 +205,6 @@ pub async fn get_cloudflare_edge_radar() -> Result<CloudflareEdgeCapabilities, S
     })
     .await
     .map_err(|e| format!("Fallo en tarea get_cloudflare_edge_radar: {e}"))?
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProbeAiBackendResponse {
-    pub reachable: bool,
-    pub backend: String,
-    pub base_url: String,
-    pub models: Vec<String>,
 }
 
 #[tauri::command]
@@ -497,31 +424,6 @@ pub async fn resolve_harmonic_bridge(
     })
     .await
     .map_err(|e| format!("Fallo en tarea resolve_harmonic_bridge: {e}"))?
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DownloadP2PTrackRequest {
-    pub track_id: String,
-    pub artist: String,
-    pub title: String,
-    pub bpm: f32,
-    pub camelot: String,
-    pub hera_seal: String,
-    pub peer_endpoint: Option<String>,
-    pub turn_relay_endpoint: Option<String>,
-    pub chunk_count: Option<u32>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DownloadP2PTrackResponse {
-    pub track_id: String,
-    pub saved_path: String,
-    pub quarantine_verified: bool,
-    pub bytes_written: usize,
-    pub chunks_verified: u32,
-    pub stage_used: String,
-    pub sha256_hex: String,
-    pub r2_bytes_used: usize,
 }
 
 fn sanitize_filename_part(input: &str) -> String {
@@ -802,25 +704,6 @@ fn live_vdj_crate_slot() -> &'static Mutex<Vec<ExportTrackItem>> {
     CRATE.get_or_init(|| Mutex::new(Vec::new()))
 }
 
-fn default_pinned_true() -> bool {
-    true
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetMiniOverlayModeRequest {
-    pub mode: String,
-    #[serde(default = "default_pinned_true")]
-    pub pinned: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SetMiniOverlayModeResponse {
-    pub mode: String,
-    pub pinned: bool,
-    pub width: f64,
-    pub height: f64,
-}
-
 #[tauri::command]
 pub async fn set_mini_overlay_mode<R: Runtime>(
     app: tauri::AppHandle<R>,
@@ -957,29 +840,6 @@ pub async fn set_mini_overlay_mode<R: Runtime>(
         width: target_w,
         height: target_h,
     })
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PushVirtualDjLiveCrateRequest {
-    pub tracks: Vec<ExportTrackItem>,
-    #[serde(default = "default_pinned_true")]
-    pub append: bool,
-    pub crate_name: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PushVirtualDjLiveCrateResponse {
-    pub crate_name: String,
-    pub total_tracks: usize,
-    pub written_files: Vec<String>,
-    pub synced_to_virtualdj_home: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VirtualDjNowPlaying {
-    pub artist: String,
-    pub title: String,
-    pub source_path: String,
 }
 
 fn candidate_virtualdj_homes() -> Vec<std::path::PathBuf> {

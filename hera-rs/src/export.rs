@@ -2,26 +2,34 @@ use crate::structure::HotCuePoint;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ExportTrackItem {
     pub track_id: String,
     pub artist: String,
     pub title: String,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub version: Option<String>,
     pub file_path: String,
     pub bpm: f32,
     pub camelot: String,
     pub duration_seconds: f32,
     #[serde(default = "default_bitrate")]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub bitrate_kbps: u32,
     #[serde(default = "default_energy")]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub energy: f32,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<u32>"))]
     pub file_size_bytes: u64,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub is_video: bool,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub is_own_production: bool,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub hot_cues: Vec<HotCuePoint>,
 }
 
@@ -33,13 +41,17 @@ fn default_energy() -> f32 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ExportCrateRequest {
     pub crate_name: String,
     #[serde(default)]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub brief: String,
     pub tracks: Vec<ExportTrackItem>,
     #[serde(default = "default_export_formats")]
+    #[cfg_attr(feature = "ts", ts(optional, as = "Option<_>"))]
     pub formats: Vec<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub output_dir: Option<String>,
 }
 
@@ -53,13 +65,20 @@ fn default_export_formats() -> Vec<String> {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "ts", derive(ts_rs::TS))]
 pub struct ExportCrateResponse {
     pub crate_name: String,
+    #[cfg_attr(feature = "ts", ts(type = "number"))]
     pub track_count: usize,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub m3u8_content: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub rekordbox_xml_content: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub virtualdj_folder_xml: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub virtualdj_database_xml: Option<String>,
+    #[cfg_attr(feature = "ts", ts(optional = nullable))]
     pub traktor_nml_content: Option<String>,
     pub written_files: Vec<String>,
 }

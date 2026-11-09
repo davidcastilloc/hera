@@ -44,3 +44,5 @@ export type Track = { id: string, path: string, title: string, album: string, al
 export type TrackGroup = { label: string, genres: Array<string>, duration: number, year: number | null, tracks: Array<Track>, };
 
 export type TrackViewDensity = "normal" | "compact";
+
+export * from './hera-typings';

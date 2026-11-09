@@ -10,23 +10,20 @@ use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::post;
 use axum::{Json, Router};
-use hera_node_rs::dj_brain::{
-    check_binary_in_path, list_supported_ai_backends, AiBackendOption,
-};
+use hera_node_rs::dj_brain::{check_binary_in_path, list_supported_ai_backends};
 use hera_node_rs::error::constant_time_eq;
 use hera_node_rs::export::{export_crate_bundle, ExportCrateRequest, ExportTrackItem};
 use hera_node_rs::mcp::{dispatch_tool_call as dispatch_core_mcp_tool, list_mcp_tools as list_core_mcp_tools};
 use hera_node_rs::structure::HotCuePoint;
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{oneshot, Mutex};
 
-use crate::libs::database::{
-    AgentSessionSummary, AgentStoredMessage, DB, SUPPORTED_TRACKS_EXTENSIONS,
-};
+pub use hera_ipc::agent_types::*;
+
+use crate::libs::database::{AgentStoredMessage, DB, SUPPORTED_TRACKS_EXTENSIONS};
 use crate::libs::track::{get_track_from_file, Track};
 use crate::libs::utils::scan_dirs;
 use crate::plugins::db::DBState;
@@ -37,135 +34,6 @@ use crate::plugins::hera_dj::{
 };
 
 const MCP_LOOPBACK_HOST: &str = "127.0.0.1";
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AgentAttachment {
-    pub kind: String, // "track" | "playlist" | "folder" | "file"
-    pub id: String,
-    pub label: String,
-    #[serde(default)]
-    pub path: Option<String>,
-    #[serde(default)]
-    pub meta: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AgentFollowupAction {
-    pub kind: String, // "play_track" | "open_playlist" | "open_library" | "mini_mode"
-    pub label: String,
-    pub target_id: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AgentToolStepView {
-    pub id: String,
-    pub tool_name: String,
-    pub title: String,
-    pub summary: String,
-    pub status: String, // "running" | "awaiting_approval" | "done" | "error" | "cancelled"
-    pub arguments_preview: String,
-    pub receipt_text: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct AgentMessageView {
-    pub id: String,
-    pub session_id: String,
-    pub role: String,
-    pub content: String,
-    pub attachments: Vec<AgentAttachment>,
-    pub tool_steps: Vec<AgentToolStepView>,
-    #[serde(default)]
-    pub actions: Vec<AgentFollowupAction>,
-    pub status: String,
-    pub created_at: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentStreamEvent {
-    pub session_id: String,
-    pub message_id: String,
-    pub kind: String,
-    #[serde(default)]
-    pub text_delta: Option<String>,
-    #[serde(default)]
-    pub full_content: Option<String>,
-    #[serde(default)]
-    pub step: Option<AgentToolStepView>,
-    #[serde(default)]
-    pub session: Option<AgentSessionSummary>,
-    #[serde(default)]
-    pub actions: Option<Vec<AgentFollowupAction>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentUiSyncEvent {
-    pub kind: String, // "invalidate_library" | "player_control" | "navigate"
-    #[serde(default)]
-    pub action: Option<String>,
-    #[serde(default)]
-    pub track_id: Option<String>,
-    #[serde(default)]
-    pub seek_seconds: Option<f64>,
-    #[serde(default)]
-    pub route: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AgentRuntimeStatus {
-    pub mcp_port: u16,
-    pub tools_count: usize,
-    pub agy_installed: bool,
-    pub agy_path: Option<String>,
-    pub supported_backends: Vec<AiBackendOption>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateAgentSessionRequest {
-    #[serde(default)]
-    pub title: Option<String>,
-    #[serde(default)]
-    pub backend_id: Option<String>,
-    #[serde(default)]
-    pub execution_policy: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateAgentSessionRequest {
-    pub session_id: String,
-    #[serde(default)]
-    pub title: Option<String>,
-    #[serde(default)]
-    pub backend_id: Option<String>,
-    #[serde(default)]
-    pub execution_policy: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StartAgentTurnRequest {
-    #[serde(default)]
-    pub session_id: Option<String>,
-    pub message: String,
-    #[serde(default)]
-    pub attachments: Vec<AgentAttachment>,
-    #[serde(default)]
-    pub backend_id: Option<String>,
-    #[serde(default)]
-    pub execution_policy: Option<String>,
-    #[serde(default)]
-    pub base_url: Option<String>,
-    #[serde(default)]
-    pub model: Option<String>,
-    #[serde(default)]
-    pub api_key: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StartAgentTurnResponse {
-    pub session: AgentSessionSummary,
-    pub user_message: AgentMessageView,
-    pub assistant_message: AgentMessageView,
-}
 
 pub struct ActiveTurnTracker {
     pub message_id: String,

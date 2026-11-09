@@ -1,130 +1,39 @@
 import { invoke, isTauri } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 
-export type AgentAttachmentKind = 'track' | 'playlist' | 'folder' | 'file';
+import type {
+  AgentAttachment,
+  AgentMessageView,
+  AgentRuntimeStatus,
+  AgentSessionSummary,
+  AgentStreamEvent,
+  AgentToolStepView,
+  AgentUiSyncEvent,
+  AiBackendOption,
+  CreateAgentSessionRequest,
+  StartAgentTurnRequest,
+  StartAgentTurnResponse,
+  UpdateAgentSessionRequest,
+} from '../generated/typings';
 
-export interface AgentAttachment {
-  kind: AgentAttachmentKind;
-  id: string;
-  label: string;
-  path?: string;
-  meta?: string;
-}
+export type {
+  AgentAttachment,
+  AgentFollowupAction,
+  AgentMessageView,
+  AgentRuntimeStatus,
+  AgentSessionSummary,
+  AgentStreamEvent,
+  AgentToolStepView,
+  AgentUiSyncEvent,
+} from '../generated/typings';
 
-export interface AgentFollowupAction {
-  kind: 'play_track' | 'open_playlist' | 'open_library' | 'mini_mode';
-  label: string;
-  target_id: string;
-}
-
-export type AgentStepStatus =
-  | 'running'
-  | 'awaiting_approval'
-  | 'done'
-  | 'error'
-  | 'cancelled';
-
-export interface AgentToolStepView {
-  id: string;
-  tool_name: string;
-  title: string;
-  summary: string;
-  status: AgentStepStatus;
-  arguments_preview: string;
-  receipt_text: string;
-}
-
-export interface AgentMessageView {
-  id: string;
-  session_id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  attachments: AgentAttachment[];
-  tool_steps: AgentToolStepView[];
-  actions: AgentFollowupAction[];
-  status: 'streaming' | 'done' | 'error';
-  created_at: number;
-}
-
-export interface AgentSessionSummary {
-  id: string;
-  title: string;
-  agy_conversation_id: string | null;
-  backend_id: string;
-  execution_policy: 'auto' | 'confirm';
-  created_at: number;
-  updated_at: number;
-  message_count: number;
-}
-
-export interface AgentBackendDescriptor {
-  id: string;
-  label: string;
-  category: string;
-  requires_internet: boolean;
-  installed: boolean;
-  default_model: string;
-  description: string;
-}
-
-export interface AgentRuntimeStatus {
-  mcp_port: number;
-  tools_count: number;
-  agy_installed: boolean;
-  agy_path: string | null;
-  supported_backends: AgentBackendDescriptor[];
-}
-
-export interface AgentStreamEvent {
-  session_id: string;
-  message_id: string;
-  kind:
-    | 'turn_started'
-    | 'step_upsert'
-    | 'text_delta'
-    | 'turn_completed'
-    | 'turn_error';
-  text_delta?: string | null;
-  full_content?: string | null;
-  step?: AgentToolStepView | null;
-  session?: AgentSessionSummary | null;
-  actions?: AgentFollowupAction[] | null;
-}
-
-export interface AgentUiSyncEvent {
-  kind: 'invalidate_library' | 'player_control' | 'navigate';
-  action?: string | null;
-  track_id?: string | null;
-  seek_seconds?: number | null;
-  route?: string | null;
-}
-
-export interface CreateAgentSessionInput {
-  title?: string;
-  backend_id?: string;
-  execution_policy?: string;
-}
-
-export interface UpdateAgentSessionInput {
-  session_id: string;
-  title?: string;
-  backend_id?: string;
-  execution_policy?: string;
-}
-
-export interface StartAgentTurnInput {
-  session_id?: string | null;
-  message: string;
-  attachments?: AgentAttachment[];
-  backend_id?: string;
-  execution_policy?: string;
-}
-
-export interface StartAgentTurnOutput {
-  session: AgentSessionSummary;
-  user_message: AgentMessageView;
-  assistant_message: AgentMessageView;
-}
+export type AgentAttachmentKind = AgentAttachment['kind'];
+export type AgentStepStatus = AgentToolStepView['status'];
+export type AgentBackendDescriptor = AiBackendOption;
+export type CreateAgentSessionInput = CreateAgentSessionRequest;
+export type UpdateAgentSessionInput = UpdateAgentSessionRequest;
+export type StartAgentTurnInput = StartAgentTurnRequest;
+export type StartAgentTurnOutput = StartAgentTurnResponse;
 
 export async function getAgentRuntimeStatus(): Promise<AgentRuntimeStatus> {
   if (!isTauri()) {

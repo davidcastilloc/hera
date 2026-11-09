@@ -512,23 +512,39 @@ impl DB {
 
     /** List all persisted agent chat sessions ordered by most recently updated */
     pub async fn list_agent_sessions(&mut self) -> AnyResult<Vec<AgentSessionSummary>> {
-        let sessions = sqlx::query_as::<_, AgentSessionSummary>(
+        let rows = sqlx::query_as::<_, AgentSessionRow>(
             r#"
-            SELECT id, title, backend_id, execution_policy, agy_conversation_id, created_at, updated_at
+            SELECT
+                id,
+                title,
+                backend_id,
+                execution_policy,
+                agy_conversation_id,
+                created_at,
+                updated_at,
+                (SELECT COUNT(*) FROM agent_messages m WHERE m.session_id = agent_sessions.id) AS message_count
             FROM agent_sessions
             ORDER BY updated_at DESC, created_at DESC
             "#,
         )
         .fetch_all(&mut self.connection)
         .await?;
-        Ok(sessions)
+        Ok(rows.into_iter().map(map_agent_session_row).collect())
     }
 
     /** Get a single agent chat session by ID */
     pub async fn get_agent_session(&mut self, id: &str) -> AnyResult<Option<AgentSessionSummary>> {
-        let session = sqlx::query_as::<_, AgentSessionSummary>(
+        let row = sqlx::query_as::<_, AgentSessionRow>(
             r#"
-            SELECT id, title, backend_id, execution_policy, agy_conversation_id, created_at, updated_at
+            SELECT
+                id,
+                title,
+                backend_id,
+                execution_policy,
+                agy_conversation_id,
+                created_at,
+                updated_at,
+                (SELECT COUNT(*) FROM agent_messages m WHERE m.session_id = agent_sessions.id) AS message_count
             FROM agent_sessions
             WHERE id = ?
             "#,
@@ -536,7 +552,7 @@ impl DB {
         .bind(id)
         .fetch_optional(&mut self.connection)
         .await?;
-        Ok(session)
+        Ok(row.map(map_agent_session_row))
     }
 
     /** Create a new persisted agent chat session */
@@ -558,6 +574,7 @@ impl DB {
             agy_conversation_id: None,
             created_at: now_ms,
             updated_at: now_ms,
+            message_count: 0,
         };
         sqlx::query(
             r#"
@@ -688,15 +705,40 @@ impl DB {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::FromRow)]
-pub struct AgentSessionSummary {
-    pub id: String,
-    pub title: String,
-    pub backend_id: String,
-    pub execution_policy: String,
-    pub agy_conversation_id: Option<String>,
-    pub created_at: i64,
-    pub updated_at: i64,
+pub use hera_ipc::agent_types::AgentSessionSummary;
+
+type AgentSessionRow = (
+    String,
+    String,
+    String,
+    String,
+    Option<String>,
+    i64,
+    i64,
+    i64,
+);
+
+fn map_agent_session_row(row: AgentSessionRow) -> AgentSessionSummary {
+    let (
+        id,
+        title,
+        backend_id,
+        execution_policy,
+        agy_conversation_id,
+        created_at,
+        updated_at,
+        message_count,
+    ) = row;
+    AgentSessionSummary {
+        id,
+        title,
+        backend_id,
+        execution_policy,
+        agy_conversation_id,
+        created_at,
+        updated_at,
+        message_count,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, sqlx::FromRow)]
