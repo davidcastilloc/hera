@@ -159,3 +159,19 @@
      - **Desktop DSP Enhancement:** Expand `enrich_track_with_hera_dsp` in `hera-desktop/src-tauri/src/libs/track.rs` to run partial `Symphonia` spectral decoding on `.flac`/`.mp3`/`.m4a` files alongside the existing `.wav` pipeline.
 
 
+
+### [2026-11-09] ADR-015: Human-First DJ Cabina Redesign (`✨ Vista Simple` vs `🎛️ Vista Pro`) + 5 Universal AI Connectivity Modes
+- **Context:** Advanced technical parameters (Camelot Wheel keys, 2-Opt TSP optimization, FFT spectral cutoff in kHz, u64 SimHash, subprocess stdio) overwhelmed non-technical DJs. Users requested a clean, accessible interface that speaks real DJ booth language ("Mezcla fluida", "Sin choque de voces", "Puntos 1 al 4") without losing the underlying Pure-Rust DSP engine.
+- **Decision:**
+  1. **Dual-Mode Architectural Toggle (`useHeraViewStore` in `hera-human-language.ts`):** Added a persistent Zustand store (`viewMode: 'simple' | 'pro'`) with `'simple'` as the default mode.
+  2. **Harmonic & Cue Translation Layer:**
+     - 4 Hot Cues mapped in human terms: `🟢 1: Entrada`, `🔵 2: Calma`, `🔴 3: Explosión`, `🟡 4: Salida limpia`.
+     - Key transitions mapped to natural affinity: `💚 Mezcla Perfecta (99%)`, `💚 Mezcla Fluida (98%)`, `Sube suave (+1.5 BPM)`.
+     - Audio quality mapped to `✨ Sonido de Estudio (Puro)`.
+  3. **Universal AI Connectivity Onboarding Drawer (`bridge.tsx`):**
+     - Integrated a slide-out drawer supporting all 5 AI modes (`Detected System CLI Agents` [Antigravity `agy`, `claude`, `gemini`, `codex`], `Cloudflare Workers AI Free $0.00`, `Local Offline Servers` [Ollama :11434, LM Studio :1234, Intel NPU], `HERA MCP Server`, and `BYOK Cloud`).
+     - Added Commander Authority selector: `👑 Tú eres El Jefe` (executive 1-click approvals), `⚡ Piloto Automático`, `👀 Solo Consejos`.
+     - Enforced immutable Swarm Protection badge (`🤝 Comunidad HERA: Siempre Activo`).
+  4. **Human Vibe Profiler (`dna.tsx`):**
+     - Replaced the intimidating 24-cell Camelot matrix with human vibe distribution cards (`🌌 Melódico y Envolvente 62%`, `🔥 Energía de Hora Pico 24%`, `☀️ Cantado y Alegre 14%`) in Simple View while preserving the full matrix in Pro View.
+     - Added the conversational AI understanding card (*"💬 Así te entiende tu Copiloto IA ahora mismo..."*).

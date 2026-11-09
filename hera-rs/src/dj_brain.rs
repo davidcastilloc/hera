@@ -175,27 +175,83 @@ pub struct AiBackendOption {
     pub requires_api_key: bool,
     pub is_default_free: bool,
     pub zero_laptop_cpu_ram: bool,
+    #[serde(default)]
+    pub category: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DetectedCliAgent {
+    pub id: String,
+    pub binary_name: String,
+    pub display_name: String,
+    pub installed: bool,
+    pub version_hint: Option<String>,
+    pub command_preview: String,
+    pub zero_api_key_needed: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DetectedLocalServer {
+    pub id: String,
+    pub display_name: String,
+    pub base_url: String,
+    pub reachable: bool,
+    pub active_models: Vec<String>,
+    pub latency_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct McpHostIntegrationGuide {
+    pub stdio_command: String,
+    pub http_endpoint: String,
+    pub tools_count: usize,
+    pub sample_config_json: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SwarmProtectionStatus {
+    pub quarantine_first_enforced: bool,
+    pub p2p_seeding_active: bool,
+    pub deterministic_hot_cues_enabled: bool,
+    pub turbo_credit_multiplier: f32,
+    pub commander_mode: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AiConnectivityOnboardingReport {
+    pub recommended_mode: String,
+    pub recommended_backend_id: String,
+    pub summary_badge: String,
+    pub cli_agents: Vec<DetectedCliAgent>,
+    pub local_servers: Vec<DetectedLocalServer>,
+    pub cloud_free_available: bool,
+    pub mcp_integration: McpHostIntegrationGuide,
+    pub swarm_protection: SwarmProtectionStatus,
 }
 
 pub fn list_supported_ai_backends() -> Vec<AiBackendOption> {
-    const SPECS: &[(&str, &str, &str, &str, bool, bool, bool)] = &[
-        ("cloudflare_free", "⚡ Hera Cloud Free (Cloudflare Workers AI + AI Gateway)", "@cf/meta/llama-3.1-8b-instruct-fp8-fast", "https://cloud.hera.audio/api/v1/ai/v1", false, true, true),
-        ("lmstudio", "🖥️ LM Studio (Local OpenAI Server :1234)", "default", "http://localhost:1234/v1", false, false, false),
-        ("ollama", "💻 Ollama (Local :11434)", "llama3.3", "http://localhost:11434/v1", false, false, false),
-        ("openrouter", "🌐 OpenRouter (:free & Pro Models)", "meta-llama/llama-3.3-70b-instruct:free", "https://openrouter.ai/api/v1", true, false, true),
-        ("gemini", "✨ Google Gemini API", "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai", true, false, true),
-        ("vertex", "☁️ Google Vertex AI", "gemini-2.5-flash", "https://aiplatform.googleapis.com/v1beta1/openai", true, false, true),
-        ("openai", "🧠 OpenAI", "gpt-4o", "https://api.openai.com/v1", true, false, true),
-        ("anthropic", "🎭 Anthropic Claude", "claude-sonnet-4-20250514", "https://api.anthropic.com/v1", true, false, true),
-        ("jan", "🤖 Jan (Local :1337)", "default", "http://localhost:1337/v1", false, false, false),
-        ("llamacpp", "⚡ llama.cpp Server (Local :8080)", "default", "http://localhost:8080/v1", false, false, false),
-        ("vllm", "🚀 vLLM (Local :8000)", "default", "http://localhost:8000/v1", false, false, false),
-        ("custom", "🔌 Custom OpenAI-Compatible Endpoint", "default", "http://localhost:1234/v1", false, false, false),
+    const SPECS: &[(&str, &str, &str, &str, bool, bool, bool, &str)] = &[
+        ("cloudflare_free", "⚡ Hera Cloud Free (Cloudflare Workers AI + AI Gateway)", "@cf/meta/llama-3.1-8b-instruct-fp8-fast", "https://cloud.hera.audio/api/v1/ai/v1", false, true, true, "cloud_free"),
+        ("cli_agy", "⌨️ Antigravity CLI (agy)", "inherit", "local://agy", false, true, false, "cli_agent"),
+        ("cli_claude", "⌨️ Claude Code CLI (claude)", "inherit", "local://claude", false, true, false, "cli_agent"),
+        ("cli_codex", "⌨️ OpenAI Codex CLI (codex)", "inherit", "local://codex", false, true, false, "cli_agent"),
+        ("cli_gemini", "⌨️ Google Gemini CLI (gemini)", "inherit", "local://gemini", false, true, false, "cli_agent"),
+        ("lmstudio", "🖥️ LM Studio (Local OpenAI Server :1234)", "default", "http://localhost:1234/v1", false, false, false, "local_server"),
+        ("ollama", "💻 Ollama (Local :11434)", "llama3.3", "http://localhost:11434/v1", false, false, false, "local_server"),
+        ("openrouter", "🌐 OpenRouter (:free & Pro Models)", "meta-llama/llama-3.3-70b-instruct:free", "https://openrouter.ai/api/v1", true, false, true, "byok_cloud"),
+        ("gemini", "✨ Google Gemini API", "gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta/openai", true, false, true, "byok_cloud"),
+        ("vertex", "☁️ Google Vertex AI", "gemini-2.5-flash", "https://aiplatform.googleapis.com/v1beta1/openai", true, false, true, "byok_cloud"),
+        ("openai", "🧠 OpenAI", "gpt-4o", "https://api.openai.com/v1", true, false, true, "byok_cloud"),
+        ("anthropic", "🎭 Anthropic Claude", "claude-sonnet-4-20250514", "https://api.anthropic.com/v1", true, false, true, "byok_cloud"),
+        ("jan", "🤖 Jan (Local :1337)", "default", "http://localhost:1337/v1", false, false, false, "local_server"),
+        ("llamacpp", "⚡ llama.cpp Server (Local :8080)", "default", "http://localhost:8080/v1", false, false, false, "local_server"),
+        ("vllm", "🚀 vLLM (Local :8000)", "default", "http://localhost:8000/v1", false, false, false, "local_server"),
+        ("custom", "🔌 Custom OpenAI-Compatible Endpoint", "default", "http://localhost:1234/v1", false, false, false, "byok_cloud"),
     ];
     SPECS
         .iter()
         .map(
-            |&(id, display_name, default_model, base_url, requires_api_key, is_default_free, zero_laptop_cpu_ram)| {
+            |&(id, display_name, default_model, base_url, requires_api_key, is_default_free, zero_laptop_cpu_ram, category)| {
                 AiBackendOption {
                     id: id.to_string(),
                     display_name: display_name.to_string(),
@@ -204,10 +260,161 @@ pub fn list_supported_ai_backends() -> Vec<AiBackendOption> {
                     requires_api_key,
                     is_default_free,
                     zero_laptop_cpu_ram,
+                    category: Some(category.to_string()),
                 }
             },
         )
         .collect()
+}
+
+pub fn check_binary_in_path(bin_name: &str) -> (bool, Option<String>) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = bin_name;
+        (false, None)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let probe_cmd = if cfg!(windows) { "where" } else { "which" };
+        if let Ok(out) = std::process::Command::new(probe_cmd).arg(bin_name).output() {
+            if out.status.success() {
+                let first_line = String::from_utf8_lossy(&out.stdout)
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .trim()
+                    .to_string();
+                return (true, Some(first_line));
+            }
+        }
+        (false, None)
+    }
+}
+
+pub fn scan_system_cli_agents() -> Vec<DetectedCliAgent> {
+    const CANDIDATES: &[(&str, &str, &str, &str)] = &[
+        ("cli_agy", "agy", "Antigravity CLI (agy)", "agy run --non-interactive <prompt>"),
+        ("cli_claude", "claude", "Claude Code (claude)", "claude -p <prompt>"),
+        ("cli_codex", "codex", "OpenAI Codex CLI (codex)", "codex exec <prompt>"),
+        ("cli_gemini", "gemini", "Google Gemini CLI (gemini)", "gemini --prompt <prompt>"),
+        ("cli_ollama", "ollama", "Ollama CLI (ollama)", "ollama run llama3.3 <prompt>"),
+    ];
+
+    CANDIDATES
+        .iter()
+        .map(|&(id, bin, display_name, cmd_preview)| {
+            let (installed, path_hint) = check_binary_in_path(bin);
+            DetectedCliAgent {
+                id: id.to_string(),
+                binary_name: bin.to_string(),
+                display_name: display_name.to_string(),
+                installed,
+                version_hint: path_hint,
+                command_preview: cmd_preview.to_string(),
+                zero_api_key_needed: true,
+            }
+        })
+        .collect()
+}
+
+pub fn scan_local_ai_servers() -> Vec<DetectedLocalServer> {
+    let candidates = [
+        ("lmstudio", "LM Studio (:1234)", "http://localhost:1234/v1"),
+        ("ollama", "Ollama (:11434)", "http://localhost:11434/v1"),
+        ("jan", "Jan (:1337)", "http://localhost:1337/v1"),
+        ("llamacpp", "llama.cpp (:8080)", "http://localhost:8080/v1"),
+        ("vllm", "vLLM (:8000)", "http://localhost:8000/v1"),
+    ];
+
+    candidates
+        .into_iter()
+        .map(|(id, display_name, url)| {
+            let start = std::time::Instant::now();
+            let models = probe_backend_models(url, None).unwrap_or_default();
+            let reachable = !models.is_empty();
+            let latency_ms = if reachable {
+                Some(start.elapsed().as_millis() as u64)
+            } else {
+                None
+            };
+            DetectedLocalServer {
+                id: id.to_string(),
+                display_name: display_name.to_string(),
+                base_url: url.to_string(),
+                reachable,
+                active_models: models,
+                latency_ms,
+            }
+        })
+        .collect()
+}
+
+pub fn scan_ai_connectivity_onboarding(
+    commander_mode: Option<&str>,
+) -> AiConnectivityOnboardingReport {
+    let cli_agents = scan_system_cli_agents();
+    let local_servers = scan_local_ai_servers();
+
+    let active_local = local_servers.iter().find(|s| s.reachable);
+    let active_cli = cli_agents.iter().find(|c| c.installed);
+
+    let (recommended_mode, recommended_backend_id, summary_badge) = if let Some(local) = active_local {
+        (
+            "local_server".to_string(),
+            local.id.clone(),
+            format!("🖥️ Local Detectado: {} (100% Offline & $0.00)", local.display_name),
+        )
+    } else if let Some(cli) = active_cli {
+        (
+            "cli_agent".to_string(),
+            cli.id.clone(),
+            format!("⌨️ Agente CLI Detectado: {} (Suscripción Local Activa)", cli.display_name),
+        )
+    } else {
+        (
+            "cloud_free".to_string(),
+            "cloudflare_free".to_string(),
+            "⚡ Cloud Free Activo: Cloudflare Workers AI (10,000 Neurons/día a $0.00)".to_string(),
+        )
+    };
+
+    let sample_config_json = serde_json::json!({
+        "mcpServers": {
+            "hera": {
+                "command": "hera-node",
+                "args": ["--mcp"],
+                "env": {
+                    "HERA_P2P_SHARING": "true"
+                }
+            }
+        }
+    }).to_string();
+
+    let mcp_integration = McpHostIntegrationGuide {
+        stdio_command: "hera-node --mcp".to_string(),
+        http_endpoint: "http://localhost:8787/mcp".to_string(),
+        tools_count: 21,
+        sample_config_json,
+    };
+
+    let mode_str = commander_mode.unwrap_or("executive_boss");
+
+    AiConnectivityOnboardingReport {
+        recommended_mode,
+        recommended_backend_id,
+        summary_badge,
+        cli_agents,
+        local_servers,
+        cloud_free_available: true,
+        mcp_integration,
+        swarm_protection: SwarmProtectionStatus {
+            quarantine_first_enforced: true,
+            p2p_seeding_active: true,
+            deterministic_hot_cues_enabled: true,
+            turbo_credit_multiplier: 1.5,
+            commander_mode: mode_str.to_string(),
+        },
+    }
 }
 
 pub fn build_openai_tools_catalog() -> Vec<serde_json::Value> {
@@ -278,7 +485,24 @@ pub fn build_agent_harness_system_prompt(
     dj_handle: &str,
     style_dna: Option<&DjStyleDnaProfile>,
     state: &crate::p2p::P2PMeshState,
+    commander_mode: Option<&str>,
 ) -> String {
+    let mode = commander_mode.unwrap_or("executive_boss");
+    let commander_instruction = match mode {
+        "autonomous_operator" => {
+            "[PROTOCOLO COMANDANTE DE CABINA: OPERADOR AUTÓNOMO]\n\
+             El usuario es el JEFE y DIRECTOR MUSICAL. Tienes autorización para ejecutar toda la cadena de herramientas de forma autónoma. Al terminar entrega siempre un recibo de ejecución detallado con BPM, tonalidad Camelot, corte espectral FFT y 4 Hot Cues."
+        }
+        "advisor_only" => {
+            "[PROTOCOLO COMANDANTE DE CABINA: AUDITOR Y CONSEJERO]\n\
+             El usuario es el JEFE. Proporciona asesoría técnica, diagnóstico armónico y sugerencias de mezcla. No ejecutes descargas ni exportes crates a menos que se te ordene explícitamente."
+        }
+        _ => {
+            "[PROTOCOLO COMANDANTE DE CABINA: COPILOTO EJECUTIVO CON APROBACIÓN (RECOMENDADO)]\n\
+             El usuario es el JEFE SUPREMO de cabina. Tu deber es obedecer y preparar opciones impecables con atención quirúrgica a los detalles (BPM, Camelot, frecuencias y 4 Hot Cues). Presenta siempre propuestas estructuradas para que el Jefe elija y apruebe con 1 clic."
+        }
+    };
+
     let verified_count = state
         .search(&crate::p2p::P2PSearchQuery {
             q: None,
@@ -301,11 +525,13 @@ pub fn build_agent_harness_system_prompt(
     let swarm_catalog_section = summarize_swarm_downloadable_catalog(state);
     format!(
         "You are HERA Agentic Copilot (100% Pure-Rust ReAct Harness) assisting DJ `{dj_handle}` on node `{}` ({verified_count} verified Studio Masters online).\n\
+         {commander_instruction}\n\
          Operational Invariants:\n\
          1. Quarantine-First & Zero-Trust Spectral Forensics: only admit/recommend verified tracks passing FFT bandwidth, fake-lossless, synthetic-sine, and <120Hz sub-bass mono phase correlation checks.\n\
          2. 4-Layer Holistic Synergy + Global 2-Opt TSP: sequence crates using Camelot wheel harmony, gradual BPM / 3:4 polyrhythmic bridges, vocal clash avoidance, and 64D style embeddings (`build_dj_crate`).\n\
-         3. Multi-Step Pipeline Efficiency: use `hera_code_mode` to chain multi-step filtering + crate building in a single turn when appropriate, and `export_dj_crate` for VirtualDJ, Rekordbox, Traktor, and M3U8 exports.\n\
-         4. Always rely on live tool observations over assumptions.\n\n\
+         3. Swarm-First Invariant: P2P sharing is ALWAYS enabled on community nodes. Every track admitted to library/ must be announced to the swarm.\n\
+         4. Multi-Step Pipeline Efficiency: use `hera_code_mode` to chain multi-step filtering + crate building in a single turn when appropriate, and `export_dj_crate` for VirtualDJ, Rekordbox, Traktor, and M3U8 exports.\n\
+         5. Always rely on live tool observations over assumptions.\n\n\
          {dna_section}\n\n\
          {swarm_catalog_section}",
         state.node_id
@@ -485,6 +711,8 @@ pub struct CloudflareFreeAiTurnRequest {
     pub api_key: Option<String>,
     #[serde(default)]
     pub max_tool_iterations: Option<usize>,
+    #[serde(default)]
+    pub commander_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -501,6 +729,77 @@ pub struct CloudflareFreeAiTurnResponse {
     pub tool_calls_trace: Vec<AgentToolExecutionStep>,
     #[serde(default)]
     pub iterations_executed: usize,
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn execute_cli_agent_turn(
+    cli_id: &str,
+    prompt: &str,
+    system_prompt: &str,
+) -> Result<String, String> {
+    let bin_name = match cli_id {
+        "cli_agy" => "agy",
+        "cli_claude" => "claude",
+        "cli_codex" => "codex",
+        "cli_gemini" => "gemini",
+        "cli_ollama" => "ollama",
+        _ => return Err(format!("Unknown CLI agent ID `{cli_id}`")),
+    };
+
+    let (installed, path_hint) = check_binary_in_path(bin_name);
+    if !installed {
+        return Err(format!(
+            "El binario `{bin_name}` no fue encontrado en el PATH del sistema operativo."
+        ));
+    }
+
+    let mut cmd = std::process::Command::new(bin_name);
+    match bin_name {
+        "agy" => {
+            cmd.args(["run", "--non-interactive"])
+                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+        }
+        "claude" => {
+            cmd.args(["-p"])
+                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+        }
+        "codex" => {
+            cmd.args(["exec"])
+                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+        }
+        "gemini" => {
+            cmd.args(["--prompt"])
+                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+        }
+        "ollama" => {
+            cmd.args(["run", "llama3.3"])
+                .arg(format!("{}\n\nUsuario: {}", system_prompt, prompt));
+        }
+        _ => {
+            cmd.arg(prompt);
+        }
+    }
+
+    let out = cmd.output().map_err(|e| {
+        format!(
+            "Fallo al ejecutar binario `{bin_name}` (path {:?}): {e}",
+            path_hint
+        )
+    })?;
+
+    if out.status.success() {
+        let stdout_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if !stdout_str.is_empty() {
+            return Ok(stdout_str);
+        }
+    }
+
+    let stderr_str = String::from_utf8_lossy(&out.stderr).trim().to_string();
+    if !stderr_str.is_empty() {
+        Err(format!("Error desde `{bin_name}`: {stderr_str}"))
+    } else {
+        Err(format!("Salida vacía desde `{bin_name}`"))
+    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -721,6 +1020,61 @@ pub fn evaluate_agent_harness_turn(
         "lmstudio" | "ollama" | "jan" | "llamacpp" | "vllm" | "custom"
     );
 
+    let is_cli_agent = matches!(
+        resolved_backend_id.as_str(),
+        "cli_agy" | "cli_claude" | "cli_codex" | "cli_gemini" | "cli_ollama"
+    );
+
+    #[cfg(not(target_arch = "wasm32"))]
+    if is_cli_agent {
+        let sys_prompt = build_agent_harness_system_prompt(
+            &req.dj_handle,
+            req.style_dna.as_ref(),
+            state,
+            req.commander_mode.as_deref(),
+        );
+        match execute_cli_agent_turn(&resolved_backend_id, &req.message, &sys_prompt) {
+            Ok(reply) => {
+                let d1_bytes = req.message.len() + reply.len() + 64;
+                return CloudflareFreeAiTurnResponse {
+                    backend_used: resolved_backend_id,
+                    model_used: "cli_subshell".to_string(),
+                    cf_aig_cache_status: "CLI_LOCAL_EXEC".to_string(),
+                    neurons_consumed_this_turn: 0.0,
+                    daily_neurons_remaining: (CF_WORKERS_AI_FREE_DAILY_NEURONS
+                        - req.daily_neurons_used_so_far)
+                        .max(0.0),
+                    estimated_cost_usd: 0.0,
+                    d1_synced_bytes: d1_bytes,
+                    assistant_reply: reply,
+                    tool_calls_trace: Vec::new(),
+                    iterations_executed: 1,
+                };
+            }
+            Err(cli_err) => {
+                let fallback_reply = format!(
+                    "⚠️ [Aviso del Sistema - Agente CLI {}]: {}. Fallback a modo determinista seguro activado.",
+                    resolved_backend_id, cli_err
+                );
+                let d1_bytes = req.message.len() + fallback_reply.len() + 64;
+                return CloudflareFreeAiTurnResponse {
+                    backend_used: resolved_backend_id,
+                    model_used: "cli_fallback_deterministic".to_string(),
+                    cf_aig_cache_status: "CLI_ERROR_FALLBACK".to_string(),
+                    neurons_consumed_this_turn: 0.0,
+                    daily_neurons_remaining: (CF_WORKERS_AI_FREE_DAILY_NEURONS
+                        - req.daily_neurons_used_so_far)
+                        .max(0.0),
+                    estimated_cost_usd: 0.0,
+                    d1_synced_bytes: d1_bytes,
+                    assistant_reply: fallback_reply,
+                    tool_calls_trace: Vec::new(),
+                    iterations_executed: 1,
+                };
+            }
+        }
+    }
+
     let model = req
         .model
         .as_deref()
@@ -753,8 +1107,12 @@ pub fn evaluate_agent_harness_turn(
     #[cfg(not(target_arch = "wasm32"))]
     if should_call_live_http {
         let max_iters = req.max_tool_iterations.unwrap_or(6).clamp(1, 10);
-        let sys_prompt =
-            build_agent_harness_system_prompt(&req.dj_handle, req.style_dna.as_ref(), state);
+        let sys_prompt = build_agent_harness_system_prompt(
+            &req.dj_handle,
+            req.style_dna.as_ref(),
+            state,
+            req.commander_mode.as_deref(),
+        );
         let tools = build_openai_tools_catalog();
         let mut messages = vec![
             serde_json::json!({ "role": "system", "content": sys_prompt }),
@@ -983,11 +1341,14 @@ mod tests {
     #[test]
     fn test_12_backend_registry_and_openai_tools_catalog() {
         let backends = list_supported_ai_backends();
-        assert_eq!(backends.len(), 12);
+        assert_eq!(backends.len(), 16);
         let lmstudio = backends.iter().find(|b| b.id == "lmstudio").unwrap();
         assert_eq!(lmstudio.base_url, "http://localhost:1234/v1");
         let ollama = backends.iter().find(|b| b.id == "ollama").unwrap();
         assert_eq!(ollama.base_url, "http://localhost:11434/v1");
+
+        let agy = backends.iter().find(|b| b.id == "cli_agy").unwrap();
+        assert_eq!(agy.category.as_deref(), Some("cli_agent"));
 
         let tools = build_openai_tools_catalog();
         assert_eq!(tools.len(), 20);
@@ -999,10 +1360,11 @@ mod tests {
         }
 
         let state = crate::p2p::P2PMeshState::new("hera-test-node");
-        let prompt = build_agent_harness_system_prompt("DaviDJ", None, &state);
+        let prompt = build_agent_harness_system_prompt("DaviDJ", None, &state, None);
         assert!(prompt.contains("Quarantine-First"));
         assert!(prompt.contains("hera_code_mode"));
         assert!(prompt.contains("hera-test-node"));
+        assert!(prompt.contains("PROTOCOLO COMANDANTE DE CABINA"));
     }
 
     #[test]
@@ -1162,6 +1524,7 @@ mod tests {
             model: Some("qwen2.5-coder-14b-instruct".to_string()),
             api_key: None,
             max_tool_iterations: Some(6),
+            commander_mode: None,
         };
 
         let resp = evaluate_agent_harness_turn(&req, &state);
@@ -1262,6 +1625,7 @@ mod tests {
             model: Some("qwen2.5-coder-14b-instruct".to_string()),
             api_key: None,
             max_tool_iterations: Some(6),
+            commander_mode: None,
         };
 
         let resp = evaluate_agent_harness_turn(&req, &state);
@@ -1272,5 +1636,45 @@ mod tests {
         assert!(resp.tool_calls_trace[0].is_error);
         assert!(!resp.tool_calls_trace[1].is_error);
         assert!(resp.assistant_reply.contains("Fixed_Set"));
+    }
+
+    #[test]
+    fn test_ai_connectivity_onboarding_scan_and_5_modes() {
+        let report = scan_ai_connectivity_onboarding(Some("autonomous_operator"));
+        assert!(report.cloud_free_available);
+        assert_eq!(report.mcp_integration.tools_count, 21);
+        assert!(report.mcp_integration.sample_config_json.contains("hera-node"));
+        assert_eq!(report.swarm_protection.commander_mode, "autonomous_operator");
+        assert!(report.swarm_protection.quarantine_first_enforced);
+        assert!(report.swarm_protection.p2p_seeding_active);
+
+        assert!(!report.cli_agents.is_empty());
+        let agy = report.cli_agents.iter().find(|c| c.id == "cli_agy").unwrap();
+        assert_eq!(agy.binary_name, "agy");
+        assert!(agy.zero_api_key_needed);
+
+        assert!(!report.local_servers.is_empty());
+        let lm = report.local_servers.iter().find(|s| s.id == "lmstudio").unwrap();
+        assert_eq!(lm.base_url, "http://localhost:1234/v1");
+
+        let state = crate::p2p::P2PMeshState::new("hera-cli-test-node");
+        let req = CloudflareFreeAiTurnRequest {
+            dj_handle: "DaviDJ".to_string(),
+            message: "Diagnostica mi sesión DJ".to_string(),
+            session_id: None,
+            style_dna: None,
+            daily_neurons_used_so_far: 0.0,
+            cache_hit: false,
+            backend: Some("cli_agy".to_string()),
+            base_url: None,
+            model: None,
+            api_key: None,
+            max_tool_iterations: Some(3),
+            commander_mode: Some("executive_boss".to_string()),
+        };
+
+        let resp = evaluate_agent_harness_turn(&req, &state);
+        assert_eq!(resp.backend_used, "cli_agy");
+        assert!(resp.assistant_reply.len() > 10);
     }
 }

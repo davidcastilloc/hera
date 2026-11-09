@@ -56,6 +56,7 @@ fn main() {
                     "chat_copilot",
                     "probe_ai_backend",
                     "list_ai_backends",
+                    "scan_ai_connectivity",
                     "resolve_harmonic_bridge",
                     "download_p2p_track",
                 ]),

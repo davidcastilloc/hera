@@ -3,7 +3,8 @@ use hera_node_rs::cloudflare_edge::{
 };
 use hera_node_rs::dj_brain::{
     auto_detect_local_backend, compute_dj_style_dna, evaluate_agent_harness_turn,
-    list_supported_ai_backends, probe_backend_models, AiBackendOption, CloudflareFreeAiTurnRequest,
+    list_supported_ai_backends, probe_backend_models, scan_ai_connectivity_onboarding,
+    AiBackendOption, AiConnectivityOnboardingReport, CloudflareFreeAiTurnRequest,
     CloudflareFreeAiTurnResponse, DjStyleDnaProfile, DjStyleDnaRequest,
 };
 use hera_node_rs::export::{export_crate_bundle, ExportCrateRequest, ExportCrateResponse};
@@ -232,6 +233,13 @@ pub fn probe_ai_backend(
 #[tauri::command]
 pub fn list_ai_backends() -> Result<Vec<AiBackendOption>, String> {
     Ok(list_supported_ai_backends())
+}
+
+#[tauri::command]
+pub fn scan_ai_connectivity(
+    commander_mode: Option<String>,
+) -> Result<AiConnectivityOnboardingReport, String> {
+    Ok(scan_ai_connectivity_onboarding(commander_mode.as_deref()))
 }
 
 #[tauri::command]
@@ -511,6 +519,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             chat_copilot,
             probe_ai_backend,
             list_ai_backends,
+            scan_ai_connectivity,
             resolve_harmonic_bridge,
             download_p2p_track
         ])

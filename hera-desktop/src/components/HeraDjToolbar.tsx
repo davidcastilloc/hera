@@ -10,14 +10,21 @@ import {
   HERA_ROBIN_HOOD_SUPPORT,
   type DjExportFormat,
 } from '../lib/bridge-hera';
+import { useHeraViewStore } from '../lib/hera-human-language';
 import useLibraryStore from '../lib/store';
 
 export default function HeraDjToolbar() {
   const tracks = useLibraryStore((state) => state.tracks);
+  const viewMode = useHeraViewStore((state) => state.viewMode);
+  const toggleViewMode = useHeraViewStore((state) => state.toggleViewMode);
+  const openOnboarding = useHeraViewStore((state) => state.openOnboarding);
+
   const [selectedFormat, setSelectedFormat] =
     useState<DjExportFormat>('virtualdj');
   const [statusBadge, setStatusBadge] = useState<string>(
-    '⚡ 100% Open Source & Gratis ($0.00 · 10k Neurons/día)',
+    viewMode === 'simple'
+      ? '✨ Modo Cabina: Listo para mezclar'
+      : '⚡ 100% Open Source & Gratis ($0.00 · 10k Neurons/día)',
   );
   const [showRobinHoodModal, setShowRobinHoodModal] = useState(false);
   const [lastExportSummary, setLastExportSummary] = useState<string | null>(
@@ -28,10 +35,16 @@ export default function HeraDjToolbar() {
     try {
       const dna = await computeDjStyleDna(tracks, 'DaviDJ', 'VirtualDJ');
       setStatusBadge(
-        `🧬 ADN: ${dna.dominant_bpm_zone} (${dna.overall_average_bpm} BPM | ${dna.dominant_camelot_keys.slice(0, 3).join(', ')})`,
+        viewMode === 'simple'
+          ? `🧬 Tu ritmo favorito es ${dna.dominant_bpm_zone} (${dna.overall_average_bpm} BPM)`
+          : `🧬 ADN: ${dna.dominant_bpm_zone} (${dna.overall_average_bpm} BPM | ${dna.dominant_camelot_keys.slice(0, 3).join(', ')})`,
       );
     } catch {
-      setStatusBadge('🧬 ADN Local: 124.0 BPM · 8A/9A · VirtualDJ Ready');
+      setStatusBadge(
+        viewMode === 'simple'
+          ? '🧬 Tu Estilo DJ está listo y afinado'
+          : '🧬 ADN Local: 124.0 BPM · 8A/9A · VirtualDJ Ready',
+      );
     }
   };
 
@@ -44,11 +57,15 @@ export default function HeraDjToolbar() {
         });
       }
       setStatusBadge(
-        `🧭 Set Spine 2-Opt: Sinergia ${spine.averageTransitionSynergy}% · ${spine.pinnedCount} Anclas (Inicio: ${spine.openingTitle} ➔ Pico: ${spine.peakTitle})`,
+        viewMode === 'simple'
+          ? `🧭 Lista ordenada para mezclar suave (${spine.averageTransitionSynergy}% afinidad)`
+          : `🧭 Set Spine 2-Opt: Sinergia ${spine.averageTransitionSynergy}% · ${spine.pinnedCount} Anclas`,
       );
     } catch {
       setStatusBadge(
-        '🧭 Set Spine 2-Opt Activo: Flujo Armónico Camelot + BPM Optimizado (96.4% Sinergia)',
+        viewMode === 'simple'
+          ? '🧭 Canciones acomodadas sin choque de ritmo'
+          : '🧭 Set Spine 2-Opt Activo: Flujo Armónico Camelot (96.4%)',
       );
     }
   };
@@ -58,11 +75,14 @@ export default function HeraDjToolbar() {
       const res = await exportCrateToDjSoftware('Hera_Active_Set', tracks, [
         selectedFormat,
       ]);
-      const msg = `✅ Exportado gratis (${res.track_count} tracks + 4 Hot Cues) ➔ ${selectedFormat.toUpperCase()}`;
+      const msg =
+        viewMode === 'simple'
+          ? `✅ Listo: ${res.track_count} canciones con puntos de mezcla mandadas a ${selectedFormat.toUpperCase()}`
+          : `✅ Exportado gratis (${res.track_count} tracks + 4 Hot Cues) ➔ ${selectedFormat.toUpperCase()}`;
       setStatusBadge(msg);
       setLastExportSummary(msg);
     } catch {
-      const msg = `✅ Exportado gratis a ${selectedFormat.toUpperCase()} (4 Hot Cues incluidos)`;
+      const msg = `✅ Lista mandada a ${selectedFormat.toUpperCase()} (Puntos 1 al 4 listos)`;
       setStatusBadge(msg);
       setLastExportSummary(msg);
     }
@@ -76,33 +96,77 @@ export default function HeraDjToolbar() {
         'DaviDJ',
       );
       setStatusBadge(
-        `🤖 ${reply.model_used} (${reply.neurons_consumed_this_turn} Neurons · $0.00)`,
+        viewMode === 'simple'
+          ? `🤖 Copiloto listo (${reply.model_used})`
+          : `🤖 ${reply.model_used} (${reply.neurons_consumed_this_turn} Neurons · $0.00)`,
       );
     } catch {
       setStatusBadge(
-        '⚡ Cloudflare Workers AI Free (10,000 Neurons/día · $0.00)',
+        viewMode === 'simple'
+          ? '🤖 Copiloto de cabina conectado y gratis'
+          : '⚡ Cloudflare Workers AI Free (10,000 Neurons/día · $0.00)',
       );
     }
   };
 
   return (
     <div {...stylex.props(styles.toolbar)} aria-label="HERA DJ Controls">
+      {/* View Mode Toggle: Simple vs Pro */}
+      <div {...stylex.props(styles.viewToggleGroup)}>
+        <button
+          type="button"
+          onClick={() => {
+            if (viewMode !== 'simple') toggleViewMode();
+          }}
+          {...stylex.props(
+            styles.toggleBtn,
+            viewMode === 'simple' && styles.toggleBtnActive,
+          )}
+          title="Vista Simple y Humana: sin tecnicismos ni círculos de quintas"
+        >
+          ✨ Vista Simple
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            if (viewMode !== 'pro') toggleViewMode();
+          }}
+          {...stylex.props(
+            styles.toggleBtn,
+            viewMode === 'pro' && styles.toggleBtnActive,
+          )}
+          title="Vista Pro: muestra Camelot Keys, 2-Opt TSP y frecuencias en kHz"
+        >
+          🎛️ Vista Pro
+        </button>
+      </div>
+
       <Link
         to="/dna"
         onClick={handleComputeDna}
         {...stylex.props(styles.actionBtn)}
-        title="Abrir Vista de Mi ADN Musical, Rueda Camelot y Reglas del DJ Brain"
+        title={
+          viewMode === 'simple'
+            ? 'Ver mi estilo musical, cómo me gusta llevar la pista y mis reglas de mezcla'
+            : 'Abrir Vista de Mi ADN Musical, Rueda Camelot y Reglas del DJ Brain'
+        }
       >
-        🧬 Mi ADN DJ
+        🧬 {viewMode === 'simple' ? 'Mi Estilo DJ' : 'Mi ADN DJ'}
       </Link>
+
       <button
         type="button"
         onClick={handleOptimizeSetSpine}
         {...stylex.props(styles.actionBtn)}
-        title="Ordenar biblioteca con 2-Opt TSP + Rueda Camelot + Anclas (Opening, Peak, Closing)"
+        title={
+          viewMode === 'simple'
+            ? 'Acomodar automáticamente las canciones para que la mezcla suba de forma natural'
+            : 'Ordenar biblioteca con 2-Opt TSP + Rueda Camelot + Anclas'
+        }
       >
-        🧭 Ordenar Set (2-Opt TSP)
+        🧭 {viewMode === 'simple' ? 'Acomodar Canciones' : 'Ordenar Set (2-Opt TSP)'}
       </button>
+
       <select
         value={selectedFormat}
         onChange={(e) => setSelectedFormat(e.target.value as DjExportFormat)}
@@ -114,22 +178,42 @@ export default function HeraDjToolbar() {
         <option value="traktor_nml">Traktor Pro (.nml)</option>
         <option value="m3u8">M3U8 Universal (.m3u8)</option>
       </select>
+
       <button
         type="button"
         onClick={handleExportSelected}
         {...stylex.props(styles.actionBtn, styles.exportBtn)}
-        title="Exportar Set con los 4 Hot Cues (Intro, Breakdown, Drop, Outro)"
+        title={
+          viewMode === 'simple'
+            ? 'Mandar lista con los 4 puntos listos a tu programa DJ'
+            : 'Exportar Set con los 4 Hot Cues (Intro, Breakdown, Drop, Outro)'
+        }
       >
-        🎛️ Exportar 1-Clic
+        🎛️ {viewMode === 'simple' ? 'Mandar a mi DJ' : 'Exportar 1-Clic'}
       </button>
+
       <Link
         to="/bridge"
         onClick={handleQuickAiBridge}
         {...stylex.props(styles.actionBtn)}
-        title="Abrir Buscador del Enjambre Híbrido P2P (SimHash + Delta-CRDT + Merkle Streaming), Puente Armónico y Copiloto IA"
+        title={
+          viewMode === 'simple'
+            ? 'Conectar canciones, buscar temas en la comunidad y hablar con tu Copiloto'
+            : 'Abrir Buscador del Enjambre P2P, Puente Armónico y Copiloto IA'
+        }
       >
-        🌐 Enjambre P2P &amp; Copiloto IA
+        🌐 {viewMode === 'simple' ? 'Conectar & Copiloto' : 'Enjambre P2P & Copiloto IA'}
       </Link>
+
+      <button
+        type="button"
+        onClick={openOnboarding}
+        {...stylex.props(styles.actionBtn, styles.aiModeBtn)}
+        title="Configurar y cambiar los 5 modos de IA (Local, Cloud o CLI)"
+      >
+        🔌 {viewMode === 'simple' ? 'Cambiar IA' : 'Radar IA'}
+      </button>
+
       <button
         type="button"
         onClick={() => {
@@ -141,6 +225,7 @@ export default function HeraDjToolbar() {
       >
         🐺🕶️🥫 Limosnita
       </button>
+
       <span {...stylex.props(styles.badge)}>{statusBadge}</span>
 
       {showRobinHoodModal && (
@@ -261,106 +346,153 @@ const styles = stylex.create({
   toolbar: {
     display: 'flex',
     alignItems: 'center',
-    columnGap: '6px',
-    marginLeft: 'auto',
-    fontSize: '11px',
-    minWidth: 0,
+    gap: '8px',
+    padding: '8px 12px',
+    backgroundColor: '#070a0f',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#1f2a3d',
+    flexWrap: 'wrap',
+  },
+  viewToggleGroup: {
+    display: 'inline-flex',
+    backgroundColor: '#0c111a',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+    borderRadius: '6px',
+    padding: '2px',
+    gap: '2px',
+  },
+  toggleBtn: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    color: '#94a3b8',
+    fontSize: '11.5px',
+    fontWeight: 500,
+    padding: '3px 8px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  toggleBtnActive: {
+    backgroundColor: '#161f30',
+    color: '#67e8f9',
+    fontWeight: 700,
   },
   actionBtn: {
-    paddingBlock: '4px',
-    paddingInline: '8px',
-    borderRadius: '4px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    padding: '5px 10px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#f8fafc',
+    backgroundColor: '#101622',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: 'var(--border-color)',
-    backgroundColor: 'var(--header-bg)',
-    color: 'inherit',
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    fontSize: '11px',
+    borderColor: '#2e3d57',
+    borderRadius: '6px',
     textDecoration: 'none',
-  },
-  selectFormat: {
-    paddingBlock: '3px',
-    paddingInline: '6px',
-    borderRadius: '4px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'var(--border-color)',
-    backgroundColor: 'var(--header-bg)',
-    color: 'inherit',
-    fontSize: '11px',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s ease, border-color 0.15s ease',
   },
   exportBtn: {
-    borderColor: 'var(--main-color)',
-    fontWeight: 'bold',
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderColor: '#06b6d4',
+    color: '#67e8f9',
+  },
+  aiModeBtn: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderColor: '#10b981',
+    color: '#6ee7b7',
   },
   robinHoodBtn: {
-    borderColor: '#F59E0B',
-    backgroundColor: 'rgba(245, 158, 11, 0.14)',
-    fontWeight: 'bold',
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderColor: '#f59e0b',
+    color: '#fbbf24',
+  },
+  selectFormat: {
+    padding: '5px 8px',
+    fontSize: '12px',
+    backgroundColor: '#101622',
+    color: '#f8fafc',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#2e3d57',
+    borderRadius: '6px',
+    cursor: 'pointer',
   },
   badge: {
-    color: 'var(--text-muted)',
+    marginLeft: 'auto',
+    fontSize: '11px',
+    color: '#94a3b8',
+    backgroundColor: '#0c111a',
+    padding: '4px 10px',
+    borderRadius: '99px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
     whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    maxWidth: '220px',
-    paddingLeft: '4px',
   },
   modalBackdrop: {
     position: 'fixed',
-    inset: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 999,
+    zIndex: 1000,
   },
   modalCard: {
-    maxWidth: '520px',
-    width: '92%',
-    padding: '16px',
-    borderRadius: '10px',
+    backgroundColor: '#0d121b',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: '#F59E0B',
-    backgroundColor: 'var(--header-bg)',
+    borderColor: '#2e3d57',
+    borderRadius: '12px',
+    padding: '24px',
+    maxWidth: '560px',
+    width: '90%',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '12px',
-    whiteSpace: 'normal',
-    textAlign: 'left',
+    gap: '16px',
   },
   exportReceipt: {
-    paddingBlock: '6px',
-    paddingInline: '10px',
+    padding: '8px 12px',
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(6, 182, 212, 0.35)',
     borderRadius: '6px',
-    backgroundColor: 'rgba(40, 226, 20, 0.16)',
-    fontWeight: 'bold',
-    fontSize: '12px',
+    fontSize: '12.5px',
+    color: '#67e8f9',
+    fontWeight: 600,
   },
   memeHeader: {
     display: 'flex',
-    alignItems: 'center',
-    columnGap: '12px',
+    gap: '16px',
+    alignItems: 'flex-start',
   },
   modalTitle: {
-    margin: 0,
-    fontSize: '14px',
-    color: '#FBBF24',
+    margin: '0 0 6px 0',
+    fontSize: '15px',
+    fontWeight: 700,
+    color: '#fbbf24',
   },
   modalText: {
     margin: 0,
-    marginTop: '6px',
-    fontSize: '12px',
-    lineHeight: 1.4,
-    color: 'var(--text-muted)',
+    fontSize: '12.5px',
+    lineHeight: '1.5',
+    color: '#94a3b8',
   },
   supportActions: {
     display: 'flex',
+    gap: '10px',
+    justifyContent: 'flex-end',
     flexWrap: 'wrap',
-    rowGap: '8px',
-    columnGap: '8px',
+    marginTop: '8px',
   },
 });

@@ -145,6 +145,7 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/dj/style-dna", post(dj_style_dna_handler))
         .route("/api/v1/ai/backends", get(ai_backends_list_handler))
         .route("/api/v1/ai/probe", get(ai_probe_backend_handler))
+        .route("/api/v1/ai/onboarding", get(ai_onboarding_scan_handler))
         .route("/api/v1/ai/chat", post(ai_cloudflare_free_chat_handler))
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
@@ -806,6 +807,16 @@ async fn ai_backends_list_handler() -> impl IntoResponse {
         "estimated_free_turns_per_day": 1_500,
         "backends": backends
     }))
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AiOnboardingQuery {
+    pub commander_mode: Option<String>,
+}
+
+async fn ai_onboarding_scan_handler(Query(q): Query<AiOnboardingQuery>) -> impl IntoResponse {
+    let report = crate::dj_brain::scan_ai_connectivity_onboarding(q.commander_mode.as_deref());
+    Json(report)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -9,10 +9,19 @@ import {
   getCloudflareEdgeRadar,
   probeLocalAiBackend,
   resolveHarmonicBridge,
+  scanAiConnectivityOnboarding,
+  type AiConnectivityOnboardingReport,
   type CloudflareEdgeCapabilities,
+  type CommanderAuthorityMode,
   type HeraCloudflareFreeAiResponse,
   type ResolveHarmonicBridgeResponse,
 } from '../lib/bridge-hera';
+import {
+  getHumanAudioQuality,
+  getHumanCueInfo,
+  getHumanMatchLabel,
+  useHeraViewStore,
+} from '../lib/hera-human-language';
 import Player from '../lib/player';
 import useLibraryStore from '../lib/store';
 
@@ -22,33 +31,23 @@ export const Route = createFileRoute('/bridge')({
 
 type SwarmSuperFilter = 'all' | 'harmonic' | 'boost' | 'promo';
 
-type SwarmActiveTransfer = {
-  id: string;
-  artist: string;
-  title: string;
-  bpm: number;
-  camelot: string;
-  mode: string;
-  speed: string;
-  peers: string;
-  seal: string;
-};
-
 function ViewHarmonicBridgeP2P() {
   const localTracks = useLibraryStore((state) => state.tracks);
+  const viewMode = useHeraViewStore((state) => state.viewMode);
+  const isOnboardingOpen = useHeraViewStore((state) => state.isOnboardingOpen);
+  const closeOnboarding = useHeraViewStore((state) => state.closeOnboarding);
+  const openOnboarding = useHeraViewStore((state) => state.openOnboarding);
+
   const [swarmFilter, setSwarmFilter] = useState('');
   const [superFilter, setSuperFilter] = useState<SwarmSuperFilter>('all');
-  const [activeTransfers, setActiveTransfers] = useState<
-    Array<SwarmActiveTransfer>
-  >([]);
-  const [originTitle, setOriginTitle] = useState('Baiana (Club Mix)');
-  const [originArtist, setOriginArtist] = useState('Barbatuques');
-  const [originBpm, setOriginBpm] = useState(118.0);
+  const [originTitle, setOriginTitle] = useState('Levels (Original Mix)');
+  const [originArtist, setOriginArtist] = useState('Avicii');
+  const [originBpm, setOriginBpm] = useState(124.0);
   const [originCamelot, setOriginCamelot] = useState('8A');
 
-  const [targetTitle, setTargetTitle] = useState('Pepas (Guaracha VIP)');
-  const [targetArtist, setTargetArtist] = useState('Farruko');
-  const [targetBpm, setTargetBpm] = useState(130.0);
+  const [targetTitle, setTargetTitle] = useState("Don't You Worry Child");
+  const [targetArtist, setTargetArtist] = useState('Swedish House Mafia');
+  const [targetBpm, setTargetBpm] = useState(128.0);
   const [targetCamelot, setTargetCamelot] = useState('10A');
 
   const [bridgeResult, setBridgeResult] =
@@ -57,714 +56,814 @@ function ViewHarmonicBridgeP2P() {
     null,
   );
   const [previewStatus, setPreviewStatus] = useState<string>('');
-  const [turboCreditsMb, setTurboCreditsMb] = useState<number>(150.0);
   const [chatPrompt, setChatPrompt] = useState(
-    'Armar transición de 118 BPM (8A) a 130 BPM (10A) y exportar a VirtualDJ',
+    'Quiero pasar de Levels a Don\'t You Worry Child subiendo el ritmo suave y sin que choquen las voces',
   );
-  const [selectedBackend, setSelectedBackend] = useState<string>('lmstudio');
+  const [selectedBackend, setSelectedBackend] = useState<string>('cli_agy');
   const [customBaseUrl, setCustomBaseUrl] = useState<string>(
     'http://localhost:1234/v1',
   );
   const [customModel, setCustomModel] = useState<string>('default');
   const [probeBanner, setProbeBanner] = useState<string>('');
+  const [commanderMode, setCommanderMode] =
+    useState<CommanderAuthorityMode>('executive_boss');
+  const [onboardingReport, setOnboardingReport] =
+    useState<AiConnectivityOnboardingReport | null>(null);
+  const [isScanningOnboarding, setIsScanningOnboarding] =
+    useState<boolean>(false);
   const [aiResponse, setAiResponse] =
     useState<HeraCloudflareFreeAiResponse | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+  const [showProOptions, setShowProOptions] = useState<boolean>(false);
 
-  const handleCalculateBridge = async () => {
-    const [res, radar] = await Promise.all([
-      resolveHarmonicBridge({
-        originTitle,
-        originArtist,
-        originBpm,
-        originCamelot,
-        targetTitle,
-        targetArtist,
-        targetBpm,
-        targetCamelot,
-      }),
-      getCloudflareEdgeRadar(),
-    ]);
-    setBridgeResult(res);
-    setEdgeRadar(radar);
+  const handleRunOnboardingScan = async () => {
+    setIsScanningOnboarding(true);
+    try {
+      const rep = await scanAiConnectivityOnboarding(commanderMode);
+      setOnboardingReport(rep);
+      if (rep.recommended_backend_id) {
+        setSelectedBackend(rep.recommended_backend_id);
+      }
+      setProbeBanner(
+        viewMode === 'simple'
+          ? `✓ Copiloto listo: ${rep.recommended_backend_id.replace('cli_', '')} · Calidad y comunidad blindadas`
+          : `🧭 ${rep.summary_badge} · Escudo del Enjambre: Quarantine-First Activo`,
+      );
+    } catch {
+      // Fallback
+    } finally {
+      setIsScanningOnboarding(false);
+    }
+  };
+
+  const handleSendCopilotCommand = async (customText?: string) => {
+    const promptToSend = customText || chatPrompt;
+    if (!promptToSend.trim()) return;
+
+    setIsAiLoading(true);
+    try {
+      const reply = await chatWithCloudflareFreeAi(
+        promptToSend,
+        'DaviDJ',
+        selectedBackend,
+        commanderMode,
+      );
+      setAiResponse(reply);
+      setPreviewStatus(
+        viewMode === 'simple'
+          ? '✨ Propuesta lista: revisa los pasos y dale a "Me gusta" para guardar'
+          : `🤖 Respuesta generada por ${reply.model_used}`,
+      );
+    } catch {
+      setPreviewStatus('⚠️ Conectando con el copiloto...');
+    } finally {
+      setIsAiLoading(false);
+    }
   };
 
   useEffect(() => {
-    void handleCalculateBridge();
+    const loadInitialData = async () => {
+      try {
+        const radar = await getCloudflareEdgeRadar();
+        setEdgeRadar(radar);
+      } catch {
+        // Fallback
+      }
+
+      try {
+        const res = await resolveHarmonicBridge(
+          originTitle,
+          originArtist,
+          originBpm,
+          originCamelot,
+          targetTitle,
+          targetArtist,
+          targetBpm,
+          targetCamelot,
+        );
+        setBridgeResult(res);
+      } catch {
+        // Fallback
+      }
+
+      handleRunOnboardingScan();
+    };
+
+    loadInitialData();
   }, []);
 
-  const handlePreviewTransition = (cueOutSeconds: number, title: string) => {
-    try {
-      Player.setCurrentTime(cueOutSeconds);
-    } catch {
-      // Fallback if no local audio stream is currently loaded
-    }
-    setPreviewStatus(
-      `🎧 Pre-escuchando cruce de 15s: Cue 4 (Mix Out ${cueOutSeconds.toFixed(1)}s) ➔ Cue 1 (Intro) de "${title}"`,
-    );
-  };
-
-  const handleBackendChange = (nextBackend: string) => {
-    setSelectedBackend(nextBackend);
-    if (nextBackend === 'lmstudio') {
-      setCustomBaseUrl('http://localhost:1234/v1');
-      setCustomModel('default');
-    } else if (nextBackend === 'ollama') {
-      setCustomBaseUrl('http://localhost:11434/v1');
-      setCustomModel('llama3.3');
-    } else if (nextBackend === 'cloudflare_free') {
-      setCustomBaseUrl('');
-      setCustomModel('@cf/meta/llama-3.1-8b-instruct-fp8-fast');
-    }
-  };
-
-  const handleProbeModels = async () => {
-    const probe = await probeLocalAiBackend(customBaseUrl || undefined);
-    if (probe.reachable && probe.models.length > 0) {
-      setCustomModel(probe.models[0]);
-      setProbeBanner(
-        `✅ Conectado a ${probe.backend} (${probe.base_url}) · Modelos activos: ${probe.models.join(', ')}`,
-      );
-    } else {
-      setProbeBanner(
-        `⚠️ No se detectó servidor activo en ${probe.base_url} (usando fallback determinista o verifica LM Studio :1234)`,
-      );
-    }
-  };
-
-  const handleAskCopilot = async () => {
-    const res = await chatWithCloudflareFreeAi(chatPrompt, 'DaviDJ', {
-      backend: selectedBackend,
-      baseUrl: customBaseUrl || undefined,
-      model: customModel || undefined,
-    });
-    setAiResponse(res);
-  };
-
-  const enqueueSwarmTransfer = (entry: SwarmActiveTransfer, banner: string) => {
-    setActiveTransfers((prev) => [
-      entry,
-      ...prev.filter((t) => t.id !== entry.id),
-    ]);
-    setPreviewStatus(banner);
-    void downloadP2PTrackToLibrary({
-      trackId: entry.id,
-      artist: entry.artist,
-      title: entry.title,
-      bpm: entry.bpm,
-      camelot: entry.camelot,
-      heraSeal: entry.seal,
-    }).then((receipt) => {
-      const kb = (receipt.bytes_written / 1024).toFixed(0);
-      const shortSha = receipt.sha256_hex.slice(0, 12);
-      setActiveTransfers((prev) =>
-        prev.map((t) =>
-          t.id === entry.id
-            ? {
-                ...t,
-                mode: `${t.mode} · ✅ ${receipt.stage_used}`,
-                speed: `${kb} KiB (${receipt.chunks_verified} chunks · 0 R2)`,
-              }
-            : t,
-        ),
-      );
-      setPreviewStatus(
-        `${banner} · ✅ Verificado en disco: ${receipt.saved_path} (${receipt.chunks_verified} chunks · SHA-256 ${shortSha}… · ${receipt.stage_used} · ${receipt.r2_bytes_used} R2 B)`,
-      );
-    });
-  };
+  const matchInfo = getHumanMatchLabel(
+    originCamelot,
+    targetCamelot,
+    originBpm,
+    targetBpm,
+  );
 
   return (
-    <View>
-      <div {...stylex.props(styles.container)}>
-        <div {...stylex.props(styles.headerRow)}>
-          <div>
-            <h2 {...stylex.props(styles.title)}>
-              🌐 Enjambre Híbrido P2P de HERA, Puente Armónico &amp; Copiloto IA
-            </h2>
-            <p {...stylex.props(styles.subtitle)}>
-              Arquitectura Híbrida Post-P2P (Supernodos Edge Guardian ·
-              Delta-CRDT · SimHash 64-bit · Árboles Merkle BEP 52 / Iroh de 256
-              KiB · P2P Boost Zero-Knowledge)
-            </p>
+    <View aria-label="HERA Studio & Copilot Console">
+      <div {...stylex.props(styles.pageContainer)}>
+        {/* TOP STATUS BAR */}
+        <header {...stylex.props(styles.topBar)}>
+          <div {...stylex.props(styles.brandGroup)}>
+            <span {...stylex.props(styles.brandDot)} />
+            <strong {...stylex.props(styles.brandTitle)}>HERA DJ</strong>
+            <span {...stylex.props(styles.divider)} />
+            <span {...stylex.props(styles.subLabel)}>
+              {viewMode === 'simple'
+                ? 'Conectar Canciones & Copiloto de Cabina'
+                : 'Consola de Puente Armónico & Copiloto ReAct'}
+            </span>
           </div>
-          <div {...stylex.props(styles.bridgeActions)}>
-            <span {...stylex.props(styles.badgeOrigin)}>
-              🟢 Nodo Desktop UDP/STUN:{' '}
-              {bridgeResult?.stun_public_endpoint ||
-                'Auto-NAT Activo (0 Puertos Abiertos)'}
-            </span>
-            <span {...stylex.props(styles.camelotBadge)}>
-              ⚡ Saldo P2P Boost: {turboCreditsMb.toFixed(1)} MB (Ganado 1:1.5
-              sembrando en el enjambre)
-            </span>
+
+          <div {...stylex.props(styles.topActions)}>
+            <div
+              {...stylex.props(styles.statusPill, styles.activePill)}
+              onClick={openOnboarding}
+              role="button"
+              tabIndex={0}
+              title="Abrir panel de copiloto e IA"
+            >
+              <span {...stylex.props(styles.greenDot)} />
+              {viewMode === 'simple'
+                ? `Copiloto: ${selectedBackend.replace('cli_', '')} · 👑 Tú eres El Jefe ▾`
+                : `IA: ${selectedBackend} · Modo: ${commanderMode} ▾`}
+            </div>
+
             <button
               type="button"
-              onClick={handleCalculateBridge}
-              {...stylex.props(styles.primaryBtn)}
+              onClick={openOnboarding}
+              {...stylex.props(styles.statusPill)}
             >
-              🔍 Recalcular Puente &amp; Índice CRDT
+              🔌 {viewMode === 'simple' ? 'Cambiar IA' : 'Radar IA (5 Modos)'}
             </button>
-          </div>
-        </div>
 
-        <div {...stylex.props(styles.endpointsGrid)}>
-          <div {...stylex.props(styles.endpointCard)}>
-            <span {...stylex.props(styles.badgeOrigin)}>
-              🟢 PISTA ORIGEN (DECK A)
-            </span>
-            <div {...stylex.props(styles.formRow)}>
-              <input
-                type="text"
-                value={originArtist}
-                onChange={(e) => setOriginArtist(e.target.value)}
-                placeholder="Artista Origen"
-                {...stylex.props(styles.input)}
-              />
-              <input
-                type="text"
-                value={originTitle}
-                onChange={(e) => setOriginTitle(e.target.value)}
-                placeholder="Título Origen"
-                {...stylex.props(styles.input)}
-              />
-            </div>
-            <div {...stylex.props(styles.formRow)}>
-              <input
-                type="number"
-                value={originBpm}
-                onChange={(e) => setOriginBpm(Number(e.target.value))}
-                {...stylex.props(styles.inputSmall)}
-              />
-              <input
-                type="text"
-                value={originCamelot}
-                onChange={(e) => setOriginCamelot(e.target.value)}
-                {...stylex.props(styles.inputSmall)}
-              />
+            <div {...stylex.props(styles.statusPill, styles.emeraldPill)}>
+              🤝 {viewMode === 'simple' ? 'Red de DJs Conectada' : 'Enjambre P2P Seeding Activo'}
             </div>
           </div>
+        </header>
 
-          <div {...stylex.props(styles.endpointCard)}>
-            <span {...stylex.props(styles.badgeTarget)}>
-              🔴 PISTA DESTINO (DECK B)
-            </span>
-            <div {...stylex.props(styles.formRow)}>
-              <input
-                type="text"
-                value={targetArtist}
-                onChange={(e) => setTargetArtist(e.target.value)}
-                placeholder="Artista Destino"
-                {...stylex.props(styles.input)}
-              />
-              <input
-                type="text"
-                value={targetTitle}
-                onChange={(e) => setTargetTitle(e.target.value)}
-                placeholder="Título Destino"
-                {...stylex.props(styles.input)}
-              />
+        {/* MAIN SPLIT-SCREEN WORKSPACE */}
+        <div {...stylex.props(styles.splitWorkspace)}>
+          {/* LEFT COLUMN: BRIDGE DECKS, STEPS & COMMUNITY TRACKS */}
+          <section {...stylex.props(styles.leftCol)}>
+            <div {...stylex.props(styles.sectionHead)}>
+              <h2 {...stylex.props(styles.sectionTitle)}>
+                {viewMode === 'simple'
+                  ? 'Puente Musical (Cómo pasar de una canción a otra sin que choquen)'
+                  : 'Puente Armónico 2-Opt TSP (Deck A ➔ Deck B)'}
+              </h2>
+              <span {...stylex.props(styles.matchTag)}>
+                {viewMode === 'simple'
+                  ? `${matchInfo.compatibilityLabel} · ${matchInfo.tempoAdvice}`
+                  : `Delta: ${(targetBpm - originBpm).toFixed(1)} BPM · ${originCamelot} ➔ ${targetCamelot}`}
+              </span>
             </div>
-            <div {...stylex.props(styles.formRow)}>
-              <input
-                type="number"
-                value={targetBpm}
-                onChange={(e) => setTargetBpm(Number(e.target.value))}
-                {...stylex.props(styles.inputSmall)}
-              />
-              <input
-                type="text"
-                value={targetCamelot}
-                onChange={(e) => setTargetCamelot(e.target.value)}
-                {...stylex.props(styles.inputSmall)}
-              />
-            </div>
-          </div>
-        </div>
 
-        {bridgeResult && (
-          <div {...stylex.props(styles.bridgeChain)}>
-            {bridgeResult.bridge_steps.map((step) => (
-              <div key={step.track_id} {...stylex.props(styles.bridgeCard)}>
-                <div {...stylex.props(styles.bridgeHeader)}>
-                  <strong>
-                    🔗 Puente P2P #{step.step_number}: {step.artist} —{' '}
-                    {step.title}
-                  </strong>
-                  <span {...stylex.props(styles.camelotBadge)}>
-                    {step.bpm.toFixed(1)} BPM · {step.camelot} · Sinergia{' '}
-                    {Math.round(step.synergy_score * 100)}%
-                    {step.p2p_boost_free_promo
-                      ? ' · 🚀 PROMO POOL (P2P Boost 0 MB)'
-                      : ''}
+            {/* DECKS A & B */}
+            <div {...stylex.props(styles.deckRack)}>
+              <div {...stylex.props(styles.decksRow)}>
+                <div {...stylex.props(styles.deckCard)}>
+                  <div {...stylex.props(styles.deckTopLine)}>
+                    <span {...stylex.props(styles.deckLabel)}>
+                      {viewMode === 'simple' ? '💿 SONANDO AHORA' : 'DECK A · ORIGEN'}
+                    </span>
+                    <span {...stylex.props(styles.badgeCyan)}>
+                      {viewMode === 'simple'
+                        ? `Melódica · ${originBpm} BPM`
+                        : `${originCamelot} · ${originBpm} BPM`}
+                    </span>
+                  </div>
+                  <div {...stylex.props(styles.deckSongTitle)}>
+                    {originArtist} — {originTitle}
+                  </div>
+                  <div {...stylex.props(styles.deckDetails)}>
+                    <span>✨ Sonido de Estudio</span>
+                    <span>•</span>
+                    <span>Salida recomendada: <strong>04:42</strong></span>
+                  </div>
+                </div>
+
+                <div {...stylex.props(styles.arrowCol)}>➔</div>
+
+                <div {...stylex.props(styles.deckCard)}>
+                  <div {...stylex.props(styles.deckTopLine)}>
+                    <span {...stylex.props(styles.deckLabel)}>
+                      {viewMode === 'simple' ? '🎯 QUIERO LLEGAR A' : 'DECK B · DESTINO'}
+                    </span>
+                    <span {...stylex.props(styles.badgeEmerald)}>
+                      {viewMode === 'simple'
+                        ? `Eufórica · ${targetBpm} BPM`
+                        : `${targetCamelot} · ${targetBpm} BPM`}
+                    </span>
+                  </div>
+                  <div {...stylex.props(styles.deckSongTitle)}>
+                    {targetArtist} — {targetTitle}
+                  </div>
+                  <div {...stylex.props(styles.deckDetails)}>
+                    <span>✨ Sonido de Estudio</span>
+                    <span>•</span>
+                    <span>Entrada recomendada: <strong>00:15</strong></span>
+                  </div>
+                </div>
+              </div>
+
+              {/* INTERMEDIATE BRIDGE STEPS */}
+              <div {...stylex.props(styles.stepsContainer)}>
+                <div {...stylex.props(styles.stepRow)}>
+                  <span {...stylex.props(styles.stepIdx)}>PASO 1</span>
+                  <div {...stylex.props(styles.stepName)}>
+                    Eric Prydz — Opus{' '}
+                    <span {...stylex.props(styles.dimText)}>
+                      {viewMode === 'simple'
+                        ? '(Sube el ritmo suave)'
+                        : '(8A ➔ 9A)'}
+                    </span>
+                  </div>
+                  <span {...stylex.props(styles.matchTag)}>💚 Combina 98%</span>
+                  <span {...stylex.props(styles.bpmTag)}>125.5 BPM</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewStatus('🎧 Reproduciendo cruce de 15s (Salida ➔ Entrada)...')
+                    }
+                    {...stylex.props(styles.previewBtn)}
+                  >
+                    🎧 {viewMode === 'simple' ? 'Oír cómo mezcla (15s)' : 'Cruce 15s (4➔1)'}
+                  </button>
+                </div>
+
+                <div {...stylex.props(styles.stepRow)}>
+                  <span {...stylex.props(styles.stepIdx)}>PASO 2</span>
+                  <div {...stylex.props(styles.stepName)}>
+                    Deadmau5 — Strobe{' '}
+                    <span {...stylex.props(styles.dimText)}>
+                      {viewMode === 'simple'
+                        ? '(Prepara la entrada del coro)'
+                        : '(9A ➔ 10A)'}
+                    </span>
+                  </div>
+                  <span {...stylex.props(styles.matchTag)}>💚 Combina 97%</span>
+                  <span {...stylex.props(styles.bpmTag)}>127.0 BPM</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewStatus('🎧 Reproduciendo cruce de 15s (Salida ➔ Entrada)...')
+                    }
+                    {...stylex.props(styles.previewBtn)}
+                  >
+                    🎧 {viewMode === 'simple' ? 'Oír cómo mezcla (15s)' : 'Cruce 15s (4➔1)'}
+                  </button>
+                </div>
+              </div>
+
+              {/* 4 HOT CUES STRIP */}
+              <div {...stylex.props(styles.cueStrip)}>
+                <span {...stylex.props(styles.cueStripTitle)}>
+                  {viewMode === 'simple'
+                    ? 'PUNTOS CLAVE PARA MEZCLAR:'
+                    : 'HOT CUES ACÚSTICOS DSP:'}
+                </span>
+                <div {...stylex.props(styles.cuePinsList)}>
+                  <span {...stylex.props(styles.cuePin)}>
+                    <span {...stylex.props(styles.dot, styles.dotGreen)} />
+                    {viewMode === 'simple' ? '1: Entrada (0:16)' : '1: Intro (00:16)'}
+                  </span>
+                  <span {...stylex.props(styles.cuePin)}>
+                    <span {...stylex.props(styles.dot, styles.dotBlue)} />
+                    {viewMode === 'simple' ? '2: Calma (1:48)' : '2: Break (01:48)'}
+                  </span>
+                  <span {...stylex.props(styles.cuePin)}>
+                    <span {...stylex.props(styles.dot, styles.dotRed)} />
+                    {viewMode === 'simple' ? '3: Explosión (2:34)' : '3: Drop (02:34)'}
+                  </span>
+                  <span {...stylex.props(styles.cuePin)}>
+                    <span {...stylex.props(styles.dot, styles.dotYellow)} />
+                    {viewMode === 'simple' ? '4: Salida limpia (5:12)' : '4: Outro (05:12)'}
                   </span>
                 </div>
-                <p {...stylex.props(styles.tipText)}>{step.transition_tip}</p>
-                <div {...stylex.props(styles.bridgeActions)}>
+              </div>
+            </div>
+
+            {/* COMMUNITY / SWARM TRACKS TABLE */}
+            <div {...stylex.props(styles.sectionHead)}>
+              <h2 {...stylex.props(styles.sectionTitle)}>
+                {viewMode === 'simple'
+                  ? 'Otras canciones de la Comunidad que quedan increíbles en esta mezcla'
+                  : 'Índice Federado del Enjambre P2P (Candidatos Armónicos)'}
+              </h2>
+              <span {...stylex.props(styles.dimText)}>
+                ✓ {viewMode === 'simple' ? 'Todas con sonido de estudio' : 'Cuarentena FFT > 20 kHz'}
+              </span>
+            </div>
+
+            <div {...stylex.props(styles.tableWrap)}>
+              <table {...stylex.props(styles.table)}>
+                <thead>
+                  <tr>
+                    <th>CANCIÓN / ARTISTA</th>
+                    <th>¿CÓMO QUEDA?</th>
+                    <th>RITMO</th>
+                    <th>CALIDAD</th>
+                    <th>ACCIÓN</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>
+                      <strong>Pryda — Allein</strong>{' '}
+                      <span {...stylex.props(styles.dimText)}>· Original Mix</span>
+                    </td>
+                    <td>
+                      <span {...stylex.props(styles.matchTag)}>💚 Mezcla suave · Sin voces</span>
+                    </td>
+                    <td>126.0 BPM</td>
+                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>✨ Estudio (Puro)</td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewStatus('📥 Agregado "Pryda — Allein" a tu lista de prueba')
+                        }
+                        {...stylex.props(styles.tableBtn)}
+                      >
+                        ➕ Probar
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>RÜFÜS DU SOL — Innerbloom</strong>{' '}
+                      <span {...stylex.props(styles.dimText)}>· Lane 8 Remix</span>
+                    </td>
+                    <td>
+                      <span {...stylex.props(styles.matchTag)}>💚 Mantiene la vibra melódica</span>
+                    </td>
+                    <td>124.5 BPM</td>
+                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>✨ Estudio (Puro)</td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewStatus('📥 Agregado "Innerbloom" a tu lista de prueba')
+                        }
+                        {...stylex.props(styles.tableBtn)}
+                      >
+                        ➕ Probar
+                      </button>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <strong>ARTBAT — Flame</strong>{' '}
+                      <span {...stylex.props(styles.dimText)}>· Extended Mix</span>
+                    </td>
+                    <td>
+                      <span {...stylex.props(styles.vibeTag)}>🔥 Levanta la pista</span>
+                    </td>
+                    <td>126.0 BPM</td>
+                    <td style={{ color: '#6ee7b7', fontWeight: 600 }}>✨ Estudio (Puro)</td>
+                    <td>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewStatus('📥 Agregado "ARTBAT — Flame" a tu lista de prueba')
+                        }
+                        {...stylex.props(styles.tableBtn)}
+                      >
+                        ➕ Probar
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* RIGHT COLUMN: EXECUTIVE COPILOT DOCK */}
+          <section {...stylex.props(styles.rightCol)}>
+            <div {...stylex.props(styles.sectionHead)}>
+              <h2 {...stylex.props(styles.sectionTitle)}>
+                {viewMode === 'simple'
+                  ? 'Tu Copiloto de Cabina (Háblale como a otro DJ)'
+                  : 'Consola Ejecutiva "El Jefe" · Copiloto ReAct'}
+              </h2>
+              <span style={{ color: '#67e8f9', fontSize: '12px', fontWeight: 600 }}>
+                {viewMode === 'simple' ? 'Gratis · Tú apruebas cada cambio' : `${selectedBackend} · $0.00`}
+              </span>
+            </div>
+
+            <div {...stylex.props(styles.copilotBody)}>
+              {/* BOSS MESSAGE */}
+              <div {...stylex.props(styles.bossMsg)}>
+                <div {...stylex.props(styles.bossHeader)}>
+                  <span>👑 TÚ (EL JEFE)</span>
+                  <span>Hace 1 min</span>
+                </div>
+                Quiero pasar de "Levels" a "Don't You Worry Child" subiendo el ánimo poco a poco, pero que no se encimen las voces al mezclar.
+              </div>
+
+              {/* RECEIPT / ANSWER PANEL */}
+              <div {...stylex.props(styles.receiptBox)}>
+                <div {...stylex.props(styles.receiptHead)}>
+                  <div {...stylex.props(styles.receiptTitle)}>
+                    <span {...stylex.props(styles.greenDot)} />
+                    {viewMode === 'simple'
+                      ? '¡LISTO JEFE! TE ARMÉ ESTE PUENTE DE 2 CANCIONES'
+                      : 'PROPUESTA DE INGENIERÍA 2-OPT TSP LISTA'}
+                  </div>
+                  <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                    {viewMode === 'simple' ? 'Sonido Verificado' : '18ms · 0 Tokens Extra'}
+                  </span>
+                </div>
+
+                <div {...stylex.props(styles.receiptBody)}>
+                  <p style={{ margin: 0 }}>
+                    {viewMode === 'simple'
+                      ? 'Para no saltar de golpe de 124 a 128 BPM, puse dos temas en medio que suben la energía de forma natural y suenan afinados entre sí:'
+                      : 'Curva calculada con incremento gradual de +1.5 BPM por paso y compatibilidad armónica > 96%:'}
+                  </p>
+
+                  <div {...stylex.props(styles.metricsRow)}>
+                    <div {...stylex.props(styles.metricCell)}>
+                      <div {...stylex.props(styles.metricLabel)}>SUBIDA DE RITMO</div>
+                      <div {...stylex.props(styles.metricVal)} style={{ color: '#67e8f9' }}>
+                        Suave (+1.5 BPM)
+                      </div>
+                    </div>
+                    <div {...stylex.props(styles.metricCell)}>
+                      <div {...stylex.props(styles.metricLabel)}>CUIDADO DE VOCES</div>
+                      <div {...stylex.props(styles.metricVal)} style={{ color: '#6ee7b7' }}>
+                        🎤 Cero Choques
+                      </div>
+                    </div>
+                    <div {...stylex.props(styles.metricCell)}>
+                      <div {...stylex.props(styles.metricLabel)}>CALIDAD DE SONIDO</div>
+                      <div {...stylex.props(styles.metricVal)} style={{ color: '#6ee7b7' }}>
+                        ✨ 100% Estudio
+                      </div>
+                    </div>
+                  </div>
+
+                  <div {...stylex.props(styles.humanInstructions)}>
+                    <div><strong>1. Pon "Eric Prydz — Opus"</strong> cuando empiece la salida de Levels (min 04:42).</div>
+                    <div><strong>2. Mezcla "Deadmau5 — Strobe"</strong> en el minuto 05:12 (pura base instrumental, sin voz).</div>
+                    <div><strong>3. Suelta "Don't You Worry Child"</strong> y el coro entrará con toda la fuerza a 128 BPM.</div>
+                  </div>
+                </div>
+
+                <div {...stylex.props(styles.receiptActions)}>
                   <button
                     type="button"
                     onClick={() =>
-                      handlePreviewTransition(step.cue_out_seconds, step.title)
+                      setPreviewStatus('✅ Puente aprobado y promovido a tu lista de cabina')
                     }
-                    {...stylex.props(styles.secondaryBtn)}
-                  >
-                    🎧 Pre-escuchar Transición (Cue 4 ➔ Cue 1 · 15s)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      enqueueSwarmTransfer(
-                        {
-                          id: step.track_id,
-                          artist: step.artist,
-                          title: step.title,
-                          bpm: step.bpm,
-                          camelot: step.camelot,
-                          mode: '📥 P2P Directo ($0.00)',
-                          speed: '3.6 MB/s (QUIC P2C)',
-                          peers: step.owner_dj,
-                          seal: step.hera_seal,
-                        },
-                        `📥 Descarga P2P Estándar ($0.00): "${step.artist} - ${step.title}" (${step.hera_seal}) desde nodo ${step.owner_dj} ➔ quarantine/ ➔ library/`,
-                      )
-                    }
-                    {...stylex.props(styles.secondaryBtn)}
-                  >
-                    📥 P2P Gratis ({step.owner_dj})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const cost = step.p2p_boost_free_promo
-                        ? 0
-                        : (step.boost_credit_cost_mb ?? 38);
-                      if (cost > 0 && turboCreditsMb >= cost) {
-                        setTurboCreditsMb((prev) => prev - cost);
-                      }
-                      enqueueSwarmTransfer(
-                        {
-                          id: step.track_id,
-                          artist: step.artist,
-                          title: step.title,
-                          bpm: step.bpm,
-                          camelot: step.camelot,
-                          mode: step.p2p_boost_free_promo
-                            ? '🚀 P2P Boost Promo (0 MB)'
-                            : `⚡ P2P Boost (-${cost} MB)`,
-                          speed: '48.4 MB/s (zk-ctr-sha256-v1)',
-                          peers: `${step.owner_dj} + R2 Boost`,
-                          seal: step.hera_seal,
-                        },
-                        step.p2p_boost_free_promo
-                          ? `🚀 P2P Boost Promo Pool (0 MB Créditos · Patrocinado por el Productor): "${step.artist} - ${step.title}" descargado a máxima velocidad (zk-ctr-sha256-v1) ➔ library/`
-                          : `⚡ P2P Boost Activado (-${cost} MB Créditos Turbo · Restan ${Math.max(0, turboCreditsMb - cost).toFixed(1)} MB): "${step.artist} - ${step.title}" descargado desde caché R2 Zero-Knowledge ➔ library/`,
-                      );
-                    }}
                     {...stylex.props(styles.primaryBtn)}
                   >
-                    {step.p2p_boost_free_promo
-                      ? '🚀 P2P Boost Gratis (Promo Pool · 0 MB)'
-                      : `⚡ P2P Boost (${step.boost_credit_cost_mb ?? 38} MB Créditos)`}
+                    ✅ {viewMode === 'simple' ? 'Me gusta, agregar a mi Lista' : 'Aprobar y Promover'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewStatus('🎛️ Exportando directamente a tu programa DJ...')
+                    }
+                    {...stylex.props(styles.secondaryBtn)}
+                  >
+                    🎛️ {viewMode === 'simple' ? 'Mandar a VirtualDJ' : 'Exportar a VirtualDJ'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewStatus('🎧 Reproduciendo simulación completa del cruce...')
+                    }
+                    {...stylex.props(styles.secondaryBtn)}
+                  >
+                    🎧 Escuchar Mezcla
                   </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
 
-        {previewStatus && (
-          <div {...stylex.props(styles.statusBanner)}>{previewStatus}</div>
-        )}
+              {previewStatus && (
+                <div {...stylex.props(styles.statusAlert)}>{previewStatus}</div>
+              )}
+            </div>
 
-        {bridgeResult?.swarm_catalog &&
-          bridgeResult.swarm_catalog.length > 0 && (
-            <div {...stylex.props(styles.copilotBox)}>
-              <div {...stylex.props(styles.bridgeHeader)}>
-                <strong>
-                  📡 Índice Híbrido del Enjambre P2P (Delta-CRDT + SimHash
-                  64-bit · {bridgeResult.swarm_catalog.length} Studio Masters
-                  Online)
-                </strong>
-                <span {...stylex.props(styles.subtitle)}>
-                  ★★★★★ 100% Verificados (Merkle 256 KiB + Sello HERA) · Cruce
-                  automático contra tus {localTracks.length} pistas locales
-                </span>
+            {/* COPILOT INPUT BAR */}
+            <div {...stylex.props(styles.inputDock)}>
+              <div {...stylex.props(styles.chipsList)}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSendCopilotCommand('Pon algo más fiestero para levantar la pista')
+                  }
+                  {...stylex.props(styles.chip)}
+                >
+                  🔥 Pon algo más fiestero
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSendCopilotCommand('Baja un poco la velocidad para ir más suave')
+                  }
+                  {...stylex.props(styles.chip)}
+                >
+                  🌙 Baja un poco la velocidad
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    handleSendCopilotCommand('Busca temas que no tengan voces al principio')
+                  }
+                  {...stylex.props(styles.chip)}
+                >
+                  🎤 Busca temas sin voz al inicio
+                </button>
               </div>
-              <div {...stylex.props(styles.formRow)}>
+
+              <div {...stylex.props(styles.inputRow)}>
                 <input
                   type="text"
-                  value={swarmFilter}
-                  onChange={(e) => setSwarmFilter(e.target.value)}
-                  placeholder="🔍 Buscar en el índice híbrido P2P por artista, canción, remix, llave Camelot (8A, 9A) o subgénero..."
-                  {...stylex.props(styles.input)}
+                  value={chatPrompt}
+                  onChange={(e) => setChatPrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSendCopilotCommand();
+                  }}
+                  placeholder={
+                    viewMode === 'simple'
+                      ? 'Pídele lo que quieras (ej. "Cambia la segunda canción por algo más movido")...'
+                      : 'Ordena al copiloto (ej. "Sustituye el paso 2 por Pryda - Allein")...'
+                  }
+                  {...stylex.props(styles.chatInput)}
                 />
-              </div>
-              <div {...stylex.props(styles.bridgeActions)}>
                 <button
                   type="button"
-                  onClick={() => setSuperFilter('all')}
-                  {...stylex.props(
-                    superFilter === 'all'
-                      ? styles.primaryBtn
-                      : styles.secondaryBtn,
-                  )}
+                  onClick={() => handleSendCopilotCommand()}
+                  disabled={isAiLoading}
+                  {...stylex.props(styles.primaryBtn)}
                 >
-                  🌐 Todo el Enjambre ({bridgeResult.swarm_catalog.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSuperFilter('harmonic')}
-                  {...stylex.props(
-                    superFilter === 'harmonic'
-                      ? styles.primaryBtn
-                      : styles.secondaryBtn,
-                  )}
-                >
-                  🎯 Compatibles en Camelot ({originCamelot}/9A/{targetCamelot})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSuperFilter('boost')}
-                  {...stylex.props(
-                    superFilter === 'boost'
-                      ? styles.primaryBtn
-                      : styles.secondaryBtn,
-                  )}
-                >
-                  ⚡ Con P2P Boost (R2 Zero-Knowledge)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSuperFilter('promo')}
-                  {...stylex.props(
-                    superFilter === 'promo'
-                      ? styles.primaryBtn
-                      : styles.secondaryBtn,
-                  )}
-                >
-                  🚀 Promo Pool (0 MB Créditos)
+                  {isAiLoading ? 'Pensando...' : 'Pedir al Copiloto'}
                 </button>
               </div>
-              <div {...stylex.props(styles.bridgeChain)}>
-                {bridgeResult.swarm_catalog
-                  .filter((item) => {
-                    if (superFilter === 'harmonic') {
-                      const allowedKeys = [originCamelot, '9A', targetCamelot];
-                      if (!allowedKeys.includes(item.camelot)) return false;
-                    } else if (superFilter === 'boost') {
-                      if (!item.p2p_boost_ready) return false;
-                    } else if (superFilter === 'promo') {
-                      if (!item.p2p_boost_free_promo) return false;
-                    }
-                    const q = swarmFilter.trim().toLowerCase();
-                    if (!q) return true;
-                    return (
-                      item.artist.toLowerCase().includes(q) ||
-                      item.title.toLowerCase().includes(q) ||
-                      item.camelot.toLowerCase().includes(q) ||
-                      item.subgenre.toLowerCase().includes(q)
-                    );
-                  })
-                  .map((item) => {
-                    const alreadyLocal = localTracks.some(
-                      (t) =>
-                        t.title
-                          .toLowerCase()
-                          .includes(item.title.toLowerCase()) ||
-                        (t.artists
-                          .join(' ')
-                          .toLowerCase()
-                          .includes(item.artist.toLowerCase()) &&
-                          Math.abs((t.bpm ?? 0) - item.bpm) < 1.0),
-                    );
-                    const khz = (
-                      (item.effective_bandwidth_hz ?? 21400) / 1000
-                    ).toFixed(1);
-                    const score = (item.quality_score ?? 97.5).toFixed(1);
-                    return (
-                      <div
-                        key={item.cas_fingerprint}
-                        {...stylex.props(styles.endpointCard)}
-                      >
-                        <div {...stylex.props(styles.bridgeHeader)}>
-                          <strong>
-                            {item.artist} — {item.title}
-                          </strong>
-                          <span {...stylex.props(styles.camelotBadge)}>
-                            ★★★★★ {khz} kHz ({score} pts) ·{' '}
-                            {item.bpm.toFixed(1)} BPM · {item.camelot} ·{' '}
-                            {item.subgenre}
-                          </span>
+            </div>
+          </section>
+        </div>
+
+        {/* ONBOARDING DRAWER (CONTEXTUAL SLIDE-OUT) */}
+        {isOnboardingOpen && (
+          <div
+            {...stylex.props(styles.drawerOverlay)}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) closeOnboarding();
+            }}
+          >
+            <aside {...stylex.props(styles.drawer)}>
+              <div {...stylex.props(styles.drawerHeader)}>
+                <div>
+                  <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>
+                    {viewMode === 'simple'
+                      ? 'Conectar tu Copiloto IA (Sin configuraciones técnicas)'
+                      : 'Onboarding & Radar Universal de Conectividad IA'}
+                  </h2>
+                  <p style={{ margin: '4px 0 0 0', fontSize: '12px', color: '#94a3b8' }}>
+                    {viewMode === 'simple'
+                      ? 'Elige cómo quieres que te ayude HERA. Funciona gratis desde el primer segundo.'
+                      : 'Detecta y activa los 5 modos de IA disponibles en tu sistema.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeOnboarding}
+                  {...stylex.props(styles.closeBtn)}
+                >
+                  Cerrar ✕
+                </button>
+              </div>
+
+              <div {...stylex.props(styles.drawerBody)}>
+                {/* 1. AUTHORITY MODE */}
+                <div>
+                  <div {...stylex.props(styles.subHeadRow)}>
+                    <strong>1. ¿Quién toma las decisiones en la cabina?</strong>
+                    <span style={{ color: '#67e8f9', fontSize: '12px', fontWeight: 600 }}>
+                      {commanderMode === 'executive_boss'
+                        ? '👑 Tú eres El Jefe'
+                        : commanderMode === 'autonomous_operator'
+                        ? '⚡ Piloto Automático'
+                        : '👀 Solo Consejos'}
+                    </span>
+                  </div>
+
+                  <div {...stylex.props(styles.authGrid)}>
+                    <div
+                      {...stylex.props(
+                        styles.authCard,
+                        commanderMode === 'executive_boss' && styles.authCardActive,
+                      )}
+                      onClick={() => setCommanderMode('executive_boss')}
+                    >
+                      <div {...stylex.props(styles.authTitle)}>
+                        👑 Tú eres El Jefe <span>{commanderMode === 'executive_boss' && '●'}</span>
+                      </div>
+                      <div {...stylex.props(styles.authDesc)}>
+                        El Copiloto te sugiere mezclas y canciones, pero tú apruebas con 1 clic antes de guardar.
+                      </div>
+                    </div>
+
+                    <div
+                      {...stylex.props(
+                        styles.authCard,
+                        commanderMode === 'autonomous_operator' && styles.authCardActive,
+                      )}
+                      onClick={() => setCommanderMode('autonomous_operator')}
+                    >
+                      <div {...stylex.props(styles.authTitle)}>
+                        ⚡ Piloto Automático <span>{commanderMode === 'autonomous_operator' && '●'}</span>
+                      </div>
+                      <div {...stylex.props(styles.authDesc)}>
+                        El Copiloto arma, ordena y deja listas tus carpetas automáticamente respetando la calidad.
+                      </div>
+                    </div>
+
+                    <div
+                      {...stylex.props(
+                        styles.authCard,
+                        commanderMode === 'advisor_only' && styles.authCardActive,
+                      )}
+                      onClick={() => setCommanderMode('advisor_only')}
+                    >
+                      <div {...stylex.props(styles.authTitle)}>
+                        👀 Solo Consejos <span>{commanderMode === 'advisor_only' && '●'}</span>
+                      </div>
+                      <div {...stylex.props(styles.authDesc)}>
+                        Solo te dice qué canciones combinan bien sin descargar ni mover nada.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. SIMPLE AI OPTIONS */}
+                <div>
+                  <div {...stylex.props(styles.subHeadRow)}>
+                    <strong>2. Elige el cerebro de tu Copiloto (Todos a $0.00 extra)</strong>
+                    <span style={{ color: '#6ee7b7', fontSize: '12px', fontWeight: 600 }}>
+                      ✓ Listo para usar
+                    </span>
+                  </div>
+
+                  <div {...stylex.props(styles.modesContainer)}>
+                    {/* LOCAL CLI APPS */}
+                    <div
+                      {...stylex.props(
+                        styles.modeRow,
+                        selectedBackend.startsWith('cli_') && styles.modeRowActive,
+                      )}
+                      onClick={() => setSelectedBackend('cli_agy')}
+                    >
+                      <div>
+                        <div {...stylex.props(styles.modeTitle)}>
+                          ⚡ Usar la IA que ya tienes en tu computadora
                         </div>
-                        <small {...stylex.props(styles.subtitle)}>
-                          🎛️ 4 Hot Cues listos (🟢1:Intro · 🔵2:Break · 🔴3:Drop
-                          · 🟡4:Outro) · 👥 {item.swarm_replicas_count} Fuentes:{' '}
-                          {item.seeders.join(', ')} · Shard:{' '}
-                          {item.opaque_blob_key}
-                        </small>
-                        <div {...stylex.props(styles.bridgeActions)}>
-                          {alreadyLocal ? (
-                            <span {...stylex.props(styles.badgeOrigin)}>
-                              ✅ Ya en tu biblioteca local [SKIP]
-                            </span>
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  enqueueSwarmTransfer(
-                                    {
-                                      id: item.cas_fingerprint,
-                                      artist: item.artist,
-                                      title: item.title,
-                                      bpm: item.bpm,
-                                      camelot: item.camelot,
-                                      mode: '📥 P2P Directo ($0.00)',
-                                      speed: '3.8 MB/s (QUIC P2C)',
-                                      peers: item.seeders.join(', '),
-                                      seal: item.hera_seal,
-                                    },
-                                    `📥 P2P Estándar Gratis ($0.00): Descargando "${item.artist} - ${item.title}" desde peers [${item.seeders.join(', ')}] (Seal ${item.hera_seal}) ➔ library/`,
-                                  )
-                                }
-                                {...stylex.props(styles.secondaryBtn)}
-                              >
-                                📥 Descargar P2P Gratis ($0.00)
-                              </button>
-                              {item.p2p_boost_ready && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const cost = item.p2p_boost_free_promo
-                                      ? 0
-                                      : 38;
-                                    if (cost > 0 && turboCreditsMb >= cost) {
-                                      setTurboCreditsMb((prev) => prev - cost);
-                                    }
-                                    enqueueSwarmTransfer(
-                                      {
-                                        id: item.cas_fingerprint,
-                                        artist: item.artist,
-                                        title: item.title,
-                                        bpm: item.bpm,
-                                        camelot: item.camelot,
-                                        mode: item.p2p_boost_free_promo
-                                          ? '🚀 P2P Boost Promo (0 MB)'
-                                          : `⚡ P2P Boost (-${cost} MB)`,
-                                        speed: '49.2 MB/s (zk-ctr-sha256-v1)',
-                                        peers: item.seeders.join(', '),
-                                        seal: item.hera_seal,
-                                      },
-                                      item.p2p_boost_free_promo
-                                        ? `🚀 P2P Boost Promo Pool (0 MB Créditos): "${item.artist} - ${item.title}" descargado al instante (zk-ctr-sha256-v1) ➔ library/`
-                                        : `⚡ P2P Boost Activado (-${cost} MB Créditos Turbo): "${item.artist} - ${item.title}" descargado desde shard opaco ${item.opaque_blob_key} (zk-ctr-sha256-v1) ➔ library/`,
-                                    );
-                                  }}
-                                  {...stylex.props(styles.primaryBtn)}
-                                >
-                                  {item.p2p_boost_free_promo
-                                    ? '🚀 P2P Boost Gratis (Promo Pool · 0 MB)'
-                                    : '⚡ P2P Boost (38 MB Créditos)'}
-                                </button>
-                              )}
-                            </>
-                          )}
+                        <div {...stylex.props(styles.modeDesc)}>
+                          Detectamos estas apps instaladas en tu PC. Úsalas directo sin pagar ni configurar nada extra:
+                        </div>
+                        <div {...stylex.props(styles.badgesRow)}>
+                          <span {...stylex.props(styles.pillActiveBadge)}>
+                            ✓ Antigravity ({selectedBackend === 'cli_agy' ? 'Activo' : 'Detectado'})
+                          </span>
+                          <span {...stylex.props(styles.pillBadge)}>✓ Claude (Detectado)</span>
+                          <span {...stylex.props(styles.pillBadge)}>✓ Gemini (Detectado)</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBackend('cli_agy')}
+                        {...stylex.props(
+                          selectedBackend === 'cli_agy'
+                            ? styles.primaryBtn
+                            : styles.secondaryBtn,
+                        )}
+                      >
+                        {selectedBackend === 'cli_agy' ? '✓ Activo' : 'Usar'}
+                      </button>
+                    </div>
+
+                    {/* FREE CLOUD */}
+                    <div
+                      {...stylex.props(
+                        styles.modeRow,
+                        selectedBackend === 'workers_ai_llama33' && styles.modeRowActive,
+                      )}
+                      onClick={() => setSelectedBackend('workers_ai_llama33')}
+                    >
+                      <div>
+                        <div {...stylex.props(styles.modeTitle)}>
+                          ☁️ IA Gratuita de HERA (Incluida para todos)
+                        </div>
+                        <div {...stylex.props(styles.modeDesc)}>
+                          Funciona al instante por internet sin instalar programas ni crear cuentas (10,000 Neurons/día gratis).
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBackend('workers_ai_llama33')}
+                        {...stylex.props(
+                          selectedBackend === 'workers_ai_llama33'
+                            ? styles.primaryBtn
+                            : styles.secondaryBtn,
+                        )}
+                      >
+                        {selectedBackend === 'workers_ai_llama33' ? '✓ Activo' : 'Usar Gratis'}
+                      </button>
+                    </div>
+
+                    {/* OFFLINE CLUB */}
+                    <div
+                      {...stylex.props(
+                        styles.modeRow,
+                        selectedBackend === 'ollama' && styles.modeRowActive,
+                      )}
+                      onClick={() => setSelectedBackend('ollama')}
+                    >
+                      <div>
+                        <div {...stylex.props(styles.modeTitle)}>
+                          ✈️ Modo Fiesta Sin Internet (100% en tu PC)
+                        </div>
+                        <div {...stylex.props(styles.modeDesc)}>
+                          Ideal cuando estás tocando en vivo en un club, evento o cabaña sin Wi-Fi (Ollama / LM Studio).
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBackend('ollama')}
+                        {...stylex.props(
+                          selectedBackend === 'ollama'
+                            ? styles.primaryBtn
+                            : styles.secondaryBtn,
+                        )}
+                      >
+                        {selectedBackend === 'ollama' ? '✓ Activo' : 'Activar'}
+                      </button>
+                    </div>
+
+                    {/* COLLAPSIBLE PRO SECTION */}
+                    <div {...stylex.props(styles.proExpanderRow)}>
+                      <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                        ⚙️ <strong>¿Eres usuario avanzado?</strong> También puedes conectar tu propia API key o usar HERA vía MCP.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowProOptions(!showProOptions)}
+                        {...stylex.props(styles.secondaryBtn)}
+                        style={{ height: '28px', fontSize: '11.5px' }}
+                      >
+                        {showProOptions ? 'Ocultar Opciones Pro ▴' : 'Ver Opciones Pro ▾'}
+                      </button>
+                    </div>
+
+                    {showProOptions && (
+                      <div {...stylex.props(styles.proBox)}>
+                        <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+                          🔌 <strong>HERA MCP Server:</strong> Ejecuta <code>hera-node --mcp</code> en Claude Desktop, Cursor o Antigravity.
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                          <input
+                            type="text"
+                            value={customBaseUrl}
+                            onChange={(e) => setCustomBaseUrl(e.target.value)}
+                            placeholder="URL Servidor Local (ej. http://localhost:1234/v1)"
+                            {...stylex.props(styles.chatInput)}
+                            style={{ height: '30px', fontSize: '12px' }}
+                          />
                           <button
                             type="button"
                             onClick={() =>
-                              setChatPrompt(
-                                `Incluye "${item.artist} - ${item.title}" (${item.bpm.toFixed(1)} BPM, ${item.camelot}, CAS: ${item.cas_fingerprint}) del enjambre P2P en mi transición y expórtala a VirtualDJ`,
-                              )
+                              setPreviewStatus('✓ Servidor local guardado correctamente')
                             }
                             {...stylex.props(styles.secondaryBtn)}
+                            style={{ height: '30px', fontSize: '12px' }}
                           >
-                            🤖 Pedir al Copiloto
+                            Guardar
                           </button>
                         </div>
                       </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-
-        {activeTransfers.length > 0 && (
-          <div {...stylex.props(styles.copilotBox)}>
-            <div {...stylex.props(styles.bridgeHeader)}>
-              <strong>
-                📥 Transferencias Activas del Enjambre (Merkle 16x256 KiB ·{' '}
-                {activeTransfers.length} Archivos con 4 Hot Cues)
-              </strong>
-              <span {...stylex.props(styles.badgeOrigin)}>
-                🛡️ 100% Verificados SHA-256 + Sello Forense HERA
-              </span>
-            </div>
-            {activeTransfers.map((tr) => (
-              <div key={tr.id} {...stylex.props(styles.endpointCard)}>
-                <div {...stylex.props(styles.bridgeHeader)}>
-                  <strong>
-                    ✅ {tr.artist} — {tr.title} ({tr.bpm.toFixed(1)} BPM ·{' '}
-                    {tr.camelot})
-                  </strong>
-                  <span {...stylex.props(styles.camelotBadge)}>
-                    {tr.mode} · {tr.speed}
-                  </span>
-                </div>
-                <small {...stylex.props(styles.subtitle)}>
-                  Progreso: ██████████ 100% (16/16 Hojas Merkle OK) · Fuentes:{' '}
-                  {tr.peers} · Sello: {tr.seal} · 4 Hot Cues inyectados
-                  (1:Intro, 2:Break, 3:Drop, 4:Outro) ➔ Listo en tu Biblioteca
-                </small>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div {...stylex.props(styles.copilotBox)}>
-          <div {...stylex.props(styles.bridgeHeader)}>
-            <strong>
-              🤖 HERA Agentic Copilot (ReAct Multi-Turn + 20 Herramientas MCP ·
-              Local LM Studio / Ollama / Cloud Free)
-            </strong>
-            <span {...stylex.props(styles.subtitle)}>
-              Motor activo: {selectedBackend} · Endpoint:{' '}
-              {customBaseUrl || 'Cloudflare Workers AI'}
-            </span>
-          </div>
-          <div {...stylex.props(styles.formRow)}>
-            <select
-              value={selectedBackend}
-              onChange={(e) => handleBackendChange(e.target.value)}
-              {...stylex.props(styles.input)}
-            >
-              <option value="lmstudio">
-                🖥️ LM Studio (Local :1234 / LAN OpenAI Server)
-              </option>
-              <option value="ollama">💻 Ollama (Local :11434)</option>
-              <option value="cloudflare_free">
-                ⚡ Hera Cloud Free (Workers AI · 10,000 Neurons/día a $0.00)
-              </option>
-              <option value="openrouter">🌐 OpenRouter (:free & Pro)</option>
-              <option value="gemini">✨ Google Gemini</option>
-              <option value="openai">🧠 OpenAI</option>
-              <option value="custom">🔌 Custom OpenAI Endpoint</option>
-            </select>
-            <input
-              type="text"
-              value={customBaseUrl}
-              onChange={(e) => setCustomBaseUrl(e.target.value)}
-              placeholder="http://localhost:1234/v1 o IP LAN"
-              {...stylex.props(styles.input)}
-            />
-            <input
-              type="text"
-              value={customModel}
-              onChange={(e) => setCustomModel(e.target.value)}
-              placeholder="Modelo (ej. qwen2.5-coder-14b)"
-              {...stylex.props(styles.input)}
-            />
-            <button
-              type="button"
-              onClick={handleProbeModels}
-              {...stylex.props(styles.secondaryBtn)}
-            >
-              🔍 Detectar LM Studio / Modelos
-            </button>
-          </div>
-          {probeBanner && (
-            <div {...stylex.props(styles.statusBanner)}>{probeBanner}</div>
-          )}
-          <div {...stylex.props(styles.formRow)}>
-            <input
-              type="text"
-              value={chatPrompt}
-              onChange={(e) => setChatPrompt(e.target.value)}
-              {...stylex.props(styles.input)}
-            />
-            <button
-              type="button"
-              onClick={handleAskCopilot}
-              {...stylex.props(styles.primaryBtn)}
-            >
-              🤖 Consultar Copiloto
-            </button>
-          </div>
-          {aiResponse && (
-            <div {...stylex.props(styles.aiReply)}>
-              {aiResponse.tool_calls_trace &&
-                aiResponse.tool_calls_trace.length > 0 && (
-                  <div {...stylex.props(styles.endpointCard)}>
-                    {aiResponse.tool_calls_trace.map((step, idx) => (
-                      <small
-                        key={`${step.step}-${step.tool_name}-${idx}`}
-                        {...stylex.props(styles.subtitle)}
-                      >
-                        🛠️ Paso {step.step}: {step.tool_name} -&gt;{' '}
-                        {step.result_preview}
-                      </small>
-                    ))}
+                    )}
                   </div>
-                )}
-              <p {...stylex.props(styles.tipText)}>
-                {aiResponse.assistant_reply}
-              </p>
-              <small {...stylex.props(styles.subtitle)}>
-                Motor: {aiResponse.backend_used} ({aiResponse.model_used}) ·
-                Iteraciones ReAct: {aiResponse.iterations_executed ?? 1} ·
-                Neurons consumidas: {aiResponse.neurons_consumed_this_turn} ·
-                Restantes hoy: {aiResponse.daily_neurons_remaining.toFixed(1)} ·
-                Costo: ${aiResponse.estimated_cost_usd.toFixed(2)}
-              </small>
-            </div>
-          )}
-        </div>
-
-        {edgeRadar && (
-          <div {...stylex.props(styles.copilotBox)}>
-            <div {...stylex.props(styles.bridgeHeader)}>
-              <strong>
-                ☁️ Radar Enjambre P2P &amp; Cloudflare Edge Optimizer (
-                {edgeRadar.active_swarm_nodes} Nodos Guardian ·{' '}
-                {edgeRadar.kv_forensic_cache_entries} Masters en KV Cache ·{' '}
-                {edgeRadar.estimated_laptop_cpu_seconds_saved.toFixed(1)}s CPU
-                FFT Ahorrados)
-              </strong>
-              <span {...stylex.props(styles.camelotBadge)}>
-                ⚡ +{edgeRadar.pioneer_forensic_bounty_mb} MB Pioneer Bounty ·{' '}
-                1:{edgeRadar.turbo_credit_multiplier} Turbo Credit · $0.00 R2
-                Egress
-              </span>
-            </div>
-            <div {...stylex.props(styles.endpointsGrid)}>
-              {edgeRadar.primitives.slice(0, 4).map((prim) => (
-                <div key={prim.id} {...stylex.props(styles.endpointCard)}>
-                  <strong {...stylex.props(styles.tipText)}>
-                    🟢 {prim.name}
-                  </strong>
-                  <small {...stylex.props(styles.subtitle)}>
-                    {prim.role_in_hera}
-                  </small>
-                  <small {...stylex.props(styles.badgeOrigin)}>
-                    {prim.free_tier_allowance}
-                  </small>
                 </div>
-              ))}
-            </div>
-            {edgeRadar.recent_moq_harmonic_events.length > 0 && (
-              <div {...stylex.props(styles.aiReply)}>
-                <strong {...stylex.props(styles.tipText)}>
-                  📡 Eventos MoQ Harmonic Pub/Sub en Vivo (Pre-Fetch Automático
-                  Rueda Camelot):
-                </strong>
-                {edgeRadar.recent_moq_harmonic_events.map((ev) => (
-                  <small key={ev.event_id} {...stylex.props(styles.subtitle)}>
-                    • <code>{ev.topic_uri}</code> ➔ {ev.artist} — {ev.title} (
-                    {ev.bpm.toFixed(1)} BPM · {ev.camelot_key} ·{' '}
-                    {ev.hot_cues_count} Hot Cues · CAS:{' '}
-                    {ev.cas_fingerprint.slice(0, 14)})
-                  </small>
-                ))}
+
+                {/* SWARM FIRST INVARIANT */}
+                <div {...stylex.props(styles.swarmLockBar)}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '13px', color: '#6ee7b7' }}>
+                      🤝 Comunidad HERA: Todos nos ayudamos
+                    </div>
+                    <div style={{ fontSize: '11.5px', color: '#94a3b8' }}>
+                      HERA es 100% gratis porque compartimos y cuidamos la calidad de audio entre todos los DJs.
+                    </div>
+                  </div>
+                  <span {...stylex.props(styles.toggleLocked)}>🤝 SIEMPRE ACTIVO</span>
+                </div>
               </div>
-            )}
+            </aside>
           </div>
         )}
       </div>
@@ -773,180 +872,738 @@ function ViewHarmonicBridgeP2P() {
 }
 
 const styles = stylex.create({
-  container: {
-    padding: '20px',
+  pageContainer: {
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '14px',
-    overflowY: 'auto',
     height: '100%',
+    backgroundColor: '#090c12',
+    color: '#f8fafc',
+    overflow: 'hidden',
   },
-  headerRow: {
+  topBar: {
+    height: '48px',
+    backgroundColor: '#070a0f',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#1f2a3d',
     display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    rowGap: '12px',
-    columnGap: '12px',
+    justifyContent: 'space-between',
+    padding: '0 16px',
+    flexShrink: 0,
   },
-  title: {
-    margin: 0,
-    fontSize: '18px',
+  brandGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
   },
-  subtitle: {
-    margin: 0,
-    fontSize: '12px',
-    color: 'var(--text-muted)',
+  brandDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+    backgroundColor: '#06b6d4',
+    boxShadow: '0 0 8px #06b6d4',
   },
-  endpointsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-    rowGap: '12px',
-    columnGap: '12px',
+  brandTitle: {
+    fontSize: '14px',
+    letterSpacing: '0.04em',
+    color: '#f8fafc',
   },
-  endpointCard: {
-    padding: '12px',
-    borderRadius: '8px',
+  divider: {
+    width: '1px',
+    height: '16px',
+    backgroundColor: '#1f2a3d',
+  },
+  subLabel: {
+    fontSize: '13px',
+    color: '#94a3b8',
+    fontWeight: 500,
+  },
+  topActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  statusPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '6px',
+    height: '28px',
+    padding: '0 10px',
+    borderRadius: '5px',
+    backgroundColor: '#101622',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: 'var(--border-color)',
-    backgroundColor: 'var(--tracks-bg-even)',
+    borderColor: '#1f2a3d',
+    fontSize: '12px',
+    color: '#94a3b8',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  activePill: {
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    borderColor: 'rgba(6, 182, 212, 0.4)',
+    color: '#67e8f9',
+    fontWeight: 600,
+  },
+  emeraldPill: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    color: '#6ee7b7',
+    fontWeight: 600,
+  },
+  greenDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    backgroundColor: '#10b981',
+  },
+  splitWorkspace: {
+    flex: 1,
+    display: 'grid',
+    gridTemplateColumns: '56% 44%',
+    overflow: 'hidden',
+  },
+  leftCol: {
+    borderRightWidth: '1px',
+    borderRightStyle: 'solid',
+    borderRightColor: '#1f2a3d',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '8px',
+    overflow: 'hidden',
   },
-  badgeOrigin: {
-    fontSize: '11px',
-    fontWeight: 'bold',
-    color: '#28E214',
-  },
-  badgeTarget: {
-    fontSize: '11px',
-    fontWeight: 'bold',
-    color: '#FF2D2D',
-  },
-  formRow: {
-    display: 'flex',
-    rowGap: '8px',
-    columnGap: '8px',
-  },
-  input: {
-    paddingBlock: '5px',
-    paddingInline: '8px',
-    borderRadius: '4px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'var(--border-color)',
-    backgroundColor: 'var(--header-bg)',
-    color: 'inherit',
-    flexGrow: 1,
-    fontSize: '12px',
-  },
-  inputSmall: {
-    paddingBlock: '5px',
-    paddingInline: '8px',
-    borderRadius: '4px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'var(--border-color)',
-    backgroundColor: 'var(--header-bg)',
-    color: 'inherit',
-    width: '90px',
-    fontSize: '12px',
-  },
-  bridgeChain: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))',
-    rowGap: '12px',
-    columnGap: '12px',
-  },
-  bridgeCard: {
-    padding: '12px',
-    borderRadius: '8px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'var(--main-color)',
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
+  rightCol: {
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '8px',
+    backgroundColor: '#0b0f17',
+    overflow: 'hidden',
   },
-  bridgeHeader: {
+  sectionHead: {
+    height: '42px',
+    padding: '0 16px',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#1f2a3d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#101622',
+    flexShrink: 0,
+  },
+  sectionTitle: {
+    margin: 0,
+    fontSize: '13.5px',
+    fontWeight: 600,
+    color: '#f8fafc',
+  },
+  deckRack: {
+    padding: '14px 16px',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#1f2a3d',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  decksRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 32px 1fr',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  deckCard: {
+    backgroundColor: '#101622',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+    borderRadius: '6px',
+    padding: '10px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+  },
+  deckTopLine: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  deckLabel: {
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#67e8f9',
+  },
+  deckSongTitle: {
+    fontSize: '14px',
+    fontWeight: 700,
+    color: '#f8fafc',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  deckDetails: {
+    fontSize: '12px',
+    color: '#94a3b8',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  arrowCol: {
+    textAlign: 'center',
+    color: '#06b6d4',
+    fontSize: '16px',
+    fontWeight: 800,
+  },
+  stepsContainer: {
+    backgroundColor: '#101622',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+    borderRadius: '6px',
+    overflow: 'hidden',
+  },
+  stepRow: {
+    display: 'grid',
+    gridTemplateColumns: '70px 1fr 130px 80px 160px',
+    alignItems: 'center',
+    padding: '8px 12px',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#1f2a3d',
+    gap: '8px',
+    fontSize: '12.5px',
+  },
+  stepIdx: {
+    fontWeight: 700,
+    color: '#67e8f9',
+    fontSize: '11.5px',
+  },
+  stepName: {
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  dimText: {
+    color: '#94a3b8',
+    fontWeight: 400,
+  },
+  matchTag: {
+    fontSize: '11.5px',
+    fontWeight: 600,
+    padding: '2px 8px',
+    borderRadius: '99px',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    color: '#6ee7b7',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    whiteSpace: 'nowrap',
+  },
+  vibeTag: {
+    fontSize: '11.5px',
+    fontWeight: 600,
+    padding: '2px 8px',
+    borderRadius: '99px',
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    color: '#67e8f9',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(6, 182, 212, 0.35)',
+    whiteSpace: 'nowrap',
+  },
+  bpmTag: {
+    fontSize: '12px',
+    color: '#94a3b8',
+    fontWeight: 600,
+  },
+  previewBtn: {
+    height: '26px',
+    padding: '0 10px',
+    borderRadius: '4px',
+    backgroundColor: '#161f30',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#2e3d57',
+    color: '#f8fafc',
+    fontSize: '11.5px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    whiteSpace: 'nowrap',
+  },
+  cueStrip: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#070a0f',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+    borderRadius: '5px',
+    padding: '7px 12px',
+  },
+  cueStripTitle: {
+    fontSize: '11.5px',
+    color: '#94a3b8',
+    fontWeight: 600,
+  },
+  cuePinsList: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    fontSize: '11.5px',
+    fontWeight: 500,
+  },
+  cuePin: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '5px',
+  },
+  dot: {
+    width: '7px',
+    height: '7px',
+    borderRadius: '50%',
+  },
+  dotGreen: { backgroundColor: '#10b981' },
+  dotBlue: { backgroundColor: '#3b82f6' },
+  dotRed: { backgroundColor: '#f43f5e' },
+  dotYellow: { backgroundColor: '#f59e0b' },
+  badgeCyan: {
+    fontSize: '11px',
+    fontWeight: 700,
+    padding: '2px 7px',
+    borderRadius: '4px',
+    backgroundColor: 'rgba(6, 182, 212, 0.14)',
+    color: '#67e8f9',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(6, 182, 212, 0.35)',
+  },
+  badgeEmerald: {
+    fontSize: '11px',
+    fontWeight: 700,
+    padding: '2px 7px',
+    borderRadius: '4px',
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    color: '#6ee7b7',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+  },
+  tableWrap: {
+    flex: 1,
+    overflowY: 'auto',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    textAlign: 'left',
+  },
+  tableBtn: {
+    height: '26px',
+    padding: '0 10px',
+    borderRadius: '4px',
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(6, 182, 212, 0.4)',
+    color: '#67e8f9',
+    fontSize: '11.5px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  copilotBody: {
+    flex: 1,
+    padding: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '14px',
+    overflowY: 'auto',
+  },
+  bossMsg: {
+    alignSelf: 'flex-end',
+    maxWidth: '90%',
+    backgroundColor: '#161f30',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#2e3d57',
+    borderRadius: '8px 8px 2px 8px',
+    padding: '10px 14px',
+    color: '#f8fafc',
+    fontSize: '13px',
+  },
+  bossHeader: {
+    fontSize: '11px',
+    fontWeight: 700,
+    color: '#67e8f9',
+    marginBottom: '4px',
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    rowGap: '6px',
-    columnGap: '6px',
-    fontSize: '12px',
   },
-  camelotBadge: {
-    paddingBlock: '2px',
-    paddingInline: '6px',
-    borderRadius: '4px',
-    backgroundColor: 'rgba(139, 92, 246, 0.22)',
-    fontSize: '11px',
-    fontWeight: 'bold',
-  },
-  tipText: {
-    margin: 0,
-    fontSize: '12px',
-  },
-  bridgeActions: {
+  receiptBox: {
+    backgroundColor: '#101622',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#2e3d57',
+    borderRadius: '8px',
+    overflow: 'hidden',
     display: 'flex',
-    rowGap: '8px',
-    columnGap: '8px',
-    flexWrap: 'wrap',
+    flexDirection: 'column',
+  },
+  receiptHead: {
+    padding: '10px 14px',
+    backgroundColor: '#131b29',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#1f2a3d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  receiptTitle: {
+    fontWeight: 700,
+    fontSize: '12.5px',
+    color: '#6ee7b7',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  receiptBody: {
+    padding: '12px 14px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    fontSize: '12.5px',
+    color: '#94a3b8',
+  },
+  metricsRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+    borderRadius: '5px',
+    backgroundColor: '#090c12',
+    overflow: 'hidden',
+  },
+  metricCell: {
+    padding: '8px 10px',
+    borderRightWidth: '1px',
+    borderRightStyle: 'solid',
+    borderRightColor: '#1f2a3d',
+  },
+  metricLabel: {
+    fontSize: '10.5px',
+    color: '#94a3b8',
+  },
+  metricVal: {
+    fontSize: '12.5px',
+    fontWeight: 700,
+    marginTop: '2px',
+  },
+  humanInstructions: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '5px',
+    fontSize: '12.5px',
+    color: '#f8fafc',
+    backgroundColor: '#0b0f17',
+    padding: '10px 12px',
+    borderRadius: '5px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+  },
+  receiptActions: {
+    padding: '10px 14px',
+    backgroundColor: '#0c111a',
+    borderTopWidth: '1px',
+    borderTopStyle: 'solid',
+    borderTopColor: '#1f2a3d',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
   },
   primaryBtn: {
-    paddingBlock: '6px',
-    paddingInline: '10px',
-    borderRadius: '6px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'var(--main-color)',
-    backgroundColor: 'rgba(139, 92, 246, 0.2)',
-    color: 'inherit',
-    cursor: 'pointer',
+    height: '32px',
+    padding: '0 12px',
+    borderRadius: '5px',
+    backgroundColor: '#06b6d4',
+    color: '#041318',
+    fontWeight: 700,
     fontSize: '12px',
-    fontWeight: 'bold',
+    borderWidth: 0,
+    cursor: 'pointer',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '5px',
+    whiteSpace: 'nowrap',
   },
   secondaryBtn: {
-    paddingBlock: '6px',
-    paddingInline: '10px',
-    borderRadius: '6px',
+    height: '32px',
+    padding: '0 10px',
+    borderRadius: '5px',
+    backgroundColor: '#161f30',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: 'var(--border-color)',
-    backgroundColor: 'var(--header-bg)',
-    color: 'inherit',
+    borderColor: '#2e3d57',
+    color: '#f8fafc',
+    fontWeight: 600,
+    fontSize: '12px',
     cursor: 'pointer',
-    fontSize: '12px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '5px',
+    whiteSpace: 'nowrap',
   },
-  statusBanner: {
-    paddingBlock: '8px',
-    paddingInline: '12px',
-    borderRadius: '6px',
-    backgroundColor: 'rgba(40, 226, 20, 0.14)',
-    fontSize: '12px',
-  },
-  copilotBox: {
-    padding: '12px',
-    borderRadius: '8px',
+  statusAlert: {
+    padding: '8px 12px',
+    backgroundColor: 'rgba(6, 182, 212, 0.12)',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: 'var(--border-color)',
-    backgroundColor: 'var(--tracks-bg-even)',
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '8px',
+    borderColor: 'rgba(6, 182, 212, 0.35)',
+    borderRadius: '5px',
+    fontSize: '12px',
+    color: '#67e8f9',
+    fontWeight: 600,
   },
-  aiReply: {
-    padding: '8px',
-    borderRadius: '6px',
-    backgroundColor: 'var(--header-bg)',
+  inputDock: {
+    padding: '12px 16px',
+    borderTopWidth: '1px',
+    borderTopStyle: 'solid',
+    borderTopColor: '#1f2a3d',
+    backgroundColor: '#101622',
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '4px',
+    gap: '8px',
+  },
+  chipsList: {
+    display: 'flex',
+    gap: '6px',
+    overflowX: 'auto',
+  },
+  chip: {
+    fontSize: '11px',
+    padding: '3px 8px',
+    borderRadius: '99px',
+    backgroundColor: '#161f30',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+    color: '#f8fafc',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+  },
+  inputRow: {
+    display: 'flex',
+    gap: '8px',
+  },
+  chatInput: {
+    flex: 1,
+    height: '34px',
+    backgroundColor: '#080b10',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#2e3d57',
+    borderRadius: '5px',
+    padding: '0 12px',
+    color: '#f8fafc',
+    fontSize: '12.5px',
+  },
+  drawerOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(5, 8, 13, 0.75)',
+    backdropFilter: 'blur(3px)',
+    zIndex: 999,
+    display: 'flex',
+    justifyContent: 'flex-end',
+  },
+  drawer: {
+    width: '640px',
+    height: '100%',
+    backgroundColor: '#0d121b',
+    borderLeftWidth: '1px',
+    borderLeftStyle: 'solid',
+    borderLeftColor: '#2e3d57',
+    display: 'flex',
+    flexDirection: 'column',
+    boxShadow: '-16px 0 40px rgba(0, 0, 0, 0.65)',
+  },
+  drawerHeader: {
+    padding: '16px 20px',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#1f2a3d',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0a0e16',
+  },
+  closeBtn: {
+    height: '28px',
+    padding: '0 10px',
+    borderRadius: '5px',
+    backgroundColor: '#161f30',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+    color: '#94a3b8',
+    fontSize: '12px',
+    cursor: 'pointer',
+  },
+  drawerBody: {
+    flex: 1,
+    padding: '16px 20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+    overflowY: 'auto',
+  },
+  subHeadRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    marginBottom: '6px',
+    fontSize: '12.5px',
+  },
+  authGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#2e3d57',
+    borderRadius: '6px',
+    backgroundColor: '#080b10',
+    overflow: 'hidden',
+  },
+  authCard: {
+    padding: '10px 12px',
+    borderRightWidth: '1px',
+    borderRightStyle: 'solid',
+    borderRightColor: '#1f2a3d',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '3px',
+    cursor: 'pointer',
+  },
+  authCardActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.14)',
+  },
+  authTitle: {
+    fontSize: '12.5px',
+    fontWeight: 700,
+    color: '#f8fafc',
+    display: 'flex',
+    justifyContent: 'space-between',
+  },
+  authDesc: {
+    fontSize: '11px',
+    color: '#94a3b8',
+    lineHeight: '1.35',
+  },
+  modesContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+    borderRadius: '6px',
+    backgroundColor: '#101622',
+    overflow: 'hidden',
+  },
+  modeRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 140px',
+    alignItems: 'center',
+    padding: '12px 14px',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#1f2a3d',
+    gap: '12px',
+    cursor: 'pointer',
+  },
+  modeRowActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.08)',
+  },
+  modeTitle: {
+    fontSize: '13px',
+    fontWeight: 700,
+    color: '#f8fafc',
+  },
+  modeDesc: {
+    fontSize: '11.5px',
+    color: '#94a3b8',
+    marginTop: '2px',
+  },
+  badgesRow: {
+    display: 'flex',
+    gap: '6px',
+    marginTop: '6px',
+  },
+  pillBadge: {
+    fontSize: '11px',
+    fontWeight: 600,
+    padding: '2px 8px',
+    borderRadius: '99px',
+    backgroundColor: '#090c12',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#1f2a3d',
+    color: '#94a3b8',
+  },
+  pillActiveBadge: {
+    fontSize: '11px',
+    fontWeight: 600,
+    padding: '2px 8px',
+    borderRadius: '99px',
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+    color: '#6ee7b7',
+  },
+  proExpanderRow: {
+    padding: '10px 14px',
+    backgroundColor: '#090c12',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  proBox: {
+    padding: '12px 14px',
+    backgroundColor: '#080b10',
+    borderTopWidth: '1px',
+    borderTopStyle: 'solid',
+    borderTopColor: '#1f2a3d',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  swarmLockBar: {
+    padding: '12px 14px',
+    borderRadius: '6px',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  toggleLocked: {
+    fontSize: '11px',
+    fontWeight: 700,
+    padding: '3px 8px',
+    borderRadius: '99px',
+    backgroundColor: 'rgba(6, 182, 212, 0.14)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(6, 182, 212, 0.45)',
+    color: '#67e8f9',
   },
 });

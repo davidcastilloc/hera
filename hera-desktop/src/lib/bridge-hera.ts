@@ -44,11 +44,62 @@ export type HeraToolExecutionStep = {
   is_error: boolean;
 };
 
+export type CommanderAuthorityMode =
+  | 'executive_boss'
+  | 'autonomous_operator'
+  | 'advisor_only';
+
+export type DetectedCliAgent = {
+  id: string;
+  binary_name: string;
+  display_name: string;
+  installed: boolean;
+  version_hint?: string | null;
+  command_preview: string;
+  zero_api_key_needed: boolean;
+};
+
+export type DetectedLocalServer = {
+  id: string;
+  display_name: string;
+  base_url: string;
+  reachable: boolean;
+  active_models: Array<string>;
+  latency_ms?: number | null;
+};
+
+export type McpHostIntegrationGuide = {
+  stdio_command: string;
+  http_endpoint: string;
+  tools_count: number;
+  sample_config_json: string;
+};
+
+export type SwarmProtectionStatus = {
+  quarantine_first_enforced: boolean;
+  p2p_seeding_active: boolean;
+  deterministic_hot_cues_enabled: boolean;
+  turbo_credit_multiplier: number;
+  commander_mode: string;
+};
+
+export type AiConnectivityOnboardingReport = {
+  recommended_mode: string;
+  recommended_backend_id: string;
+  summary_badge: string;
+  cli_agents: Array<DetectedCliAgent>;
+  local_servers: Array<DetectedLocalServer>;
+  cloud_free_available: boolean;
+  mcp_integration: McpHostIntegrationGuide;
+  swarm_protection: SwarmProtectionStatus;
+};
+
 export type HeraAiBackendParams = {
   backend?: string;
   baseUrl?: string;
   model?: string;
   apiKey?: string;
+  commanderMode?: CommanderAuthorityMode;
 };
 
 export type HeraProbeAiBackendResponse = {
@@ -347,6 +398,7 @@ export async function chatWithCloudflareFreeAi(
           base_url: options?.baseUrl ?? null,
           model: options?.model ?? null,
           api_key: options?.apiKey ?? null,
+          commander_mode: options?.commanderMode ?? null,
         },
       },
     );
@@ -363,9 +415,99 @@ export async function chatWithCloudflareFreeAi(
     daily_neurons_remaining: 9993.4,
     estimated_cost_usd: 0.0,
     d1_synced_bytes: 348,
-    assistant_reply: `Transición armónica recomendada para ${djHandle}: sube progresivamente con 2 pistas puente en 9A (122.2 BPM -> 126.6 BPM) entrando en Cue 1 (Intro) y saliendo en Cue 4 (Mix Out). Listo para exportar a VirtualDJ (.vdjfolder).`,
+    assistant_reply: `[Comandante: ${options?.commanderMode || 'executive_boss'}] Transición armónica recomendada para ${djHandle}: sube progresivamente con 2 pistas puente en 9A (122.2 BPM -> 126.6 BPM) entrando en Cue 1 (Intro) y saliendo en Cue 4 (Mix Out). Listo para exportar a VirtualDJ (.vdjfolder).`,
     tool_calls_trace: [],
     iterations_executed: 1,
+  };
+}
+
+export async function scanAiConnectivityOnboarding(
+  commanderMode: CommanderAuthorityMode = 'executive_boss',
+): Promise<AiConnectivityOnboardingReport> {
+  try {
+    const res = await invoke<AiConnectivityOnboardingReport>(
+      'plugin:hera-dj|scan_ai_connectivity',
+      {
+        commanderMode,
+      },
+    );
+    if (res && res.recommended_mode) return res;
+  } catch {
+    // Fallback when running outside native Tauri IPC
+  }
+
+  return {
+    recommended_mode: 'cloud_free',
+    recommended_backend_id: 'cloudflare_free',
+    summary_badge:
+      '⚡ Cloud Free Activo: Cloudflare Workers AI (10,000 Neurons/día a $0.00)',
+    cli_agents: [
+      {
+        id: 'cli_agy',
+        binary_name: 'agy',
+        display_name: 'Antigravity CLI (agy)',
+        installed: false,
+        command_preview: 'agy run --non-interactive <prompt>',
+        zero_api_key_needed: true,
+      },
+      {
+        id: 'cli_claude',
+        binary_name: 'claude',
+        display_name: 'Claude Code (claude)',
+        installed: false,
+        command_preview: 'claude -p <prompt>',
+        zero_api_key_needed: true,
+      },
+      {
+        id: 'cli_ollama',
+        binary_name: 'ollama',
+        display_name: 'Ollama CLI (ollama)',
+        installed: false,
+        command_preview: 'ollama run llama3.3 <prompt>',
+        zero_api_key_needed: true,
+      },
+    ],
+    local_servers: [
+      {
+        id: 'lmstudio',
+        display_name: 'LM Studio (:1234)',
+        base_url: 'http://localhost:1234/v1',
+        reachable: false,
+        active_models: [],
+      },
+      {
+        id: 'ollama',
+        display_name: 'Ollama (:11434)',
+        base_url: 'http://localhost:11434/v1',
+        reachable: false,
+        active_models: [],
+      },
+    ],
+    cloud_free_available: true,
+    mcp_integration: {
+      stdio_command: 'hera-node --mcp',
+      http_endpoint: 'http://localhost:8787/mcp',
+      tools_count: 21,
+      sample_config_json: JSON.stringify(
+        {
+          mcpServers: {
+            hera: {
+              command: 'hera-node',
+              args: ['--mcp'],
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    },
+    swarm_protection: {
+      quarantine_first_enforced: true,
+      p2p_seeding_active: true,
+      deterministic_hot_cues_enabled: true,
+      turbo_credit_multiplier: 1.5,
+      commander_mode: commanderMode,
+    },
   };
 }
 
