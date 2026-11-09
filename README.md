@@ -7,16 +7,17 @@
 
 **«Todo es posible si lo imaginas: De la intención musical al booth del DJ en segundos»**
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![Pure Rust](https://img.shields.io/badge/Rust-100%25%20Pure%20Rust-dea584.svg?style=flat&logo=rust)](hera-rs/)
+[![Tauri v2](https://img.shields.io/badge/Desktop-Tauri%20v2%20%2B%20React%2019-24C8D8.svg?style=flat&logo=tauri)](hera-desktop/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Protocol: MCP](https://img.shields.io/badge/protocol-MCP%20stdio-FF6B6B.svg)](https://modelcontextprotocol.io/)
-[![Cloud: rclone Powered](https://img.shields.io/badge/cloud-Google%20Drive%20%7C%20S3%20%7C%20R2-brightgreen.svg)](https://rclone.org/)
-[![P2P: 800 Mbps Super-Seed](https://img.shields.io/badge/P2P-800%20Mbps%20Fiber%20Super--Seed-cyan.svg)](AGENTS.md)
+[![Protocol: MCP](https://img.shields.io/badge/protocol-MCP%20stdio%20%7C%20HTTP-FF6B6B.svg)](https://modelcontextprotocol.io/)
+[![Cloud: Cloudflare Edge](https://img.shields.io/badge/Cloud-D1%20%7C%20R2%20%7C%20KV%20%7C%20Vectorize%20%7C%20Workers%20AI-orange.svg)](https://workers.cloudflare.com/)
+[![P2P: 5-Stage Zero-Config Cascade](https://img.shields.io/badge/P2P-LAN%20%7C%20STUN%20%7C%20Spray%20%7C%20TURN%20%7C%20R2-cyan.svg)](AGENTS.md)
 [![Philosophy: Local--First](https://img.shields.io/badge/philosophy-Local--First-orange.svg)](MANIFESTO.md)
 
 <p align="center">
   <b>Hera</b> is an intelligent, cross-platform audio curation and asset orchestrator designed for real human DJs.<br/>
-  It discovers studio-grade audio across authorized networks, executes deep acoustic & harmonic analysis (BPM, Camelot Wheel, LUFS), embeds native metadata tags, organizes physical DJ crates, and syncs seamlessly with Google Drive and cloud storage.
+  100% Pure-Rust + Tauri v2 native engine (zero Python). Analyzes audio with Symphonia + rustfft (BPM, Camelot Wheel, 4 Hot Cues, Sub-bass phase safety), arranges crates via 2-Opt TSP, exports directly to VirtualDJ, Rekordbox and Traktor, and shares Lossless Masters across a 5-stage zero-config P2P swarm.
 </p>
 
 [✨ Read Manifesto](MANIFESTO.md) • [🤖 Agent Guide (AGENTS.md)](AGENTS.md) • [🚀 Quickstart](#-quickstart--installation) • [🎛️ CLI Reference](#️-cli-reference) • [📋 Roadmap](#-wishlist--roadmap-board-dj--human-centric)
@@ -189,143 +190,90 @@ hera chat -b vertex               # Use Google Vertex AI
 
 ---
 
-## 🚀 Quickstart & Installation
+---
 
-Hera requires **Python 3.11+** and can be installed in 1 click or manually via [`uv`](https://github.com/astral-sh/uv).
+## 🚀 Quickstart & Architecture (100% Pure Rust + Tauri v2, Zero Python)
 
-### Option A: Automated 1-Click Installer (Linux / VPS / WSL / macOS)
-Installs system dependencies (`ffmpeg`, `fpcalc`), `slskd`, `uv`, virtual environment, and systemd service in 30 seconds:
+HERA is now completely native with **zero Python dependencies**. The repository consists of:
+- **`hera-rs/`**: Pure-Rust Universal Audio DSP, 2-Opt TSP Set Spine Curator, DJ Exporters, and 5-stage P2P Swarm Node.
+- **`hera-desktop/`**: High-performance Native DJ Desktop App built with Tauri v2 + React 19 + StyleX + Virtualized Table.
+
+### 1. Fast Build & Tests (Rust Native Engine)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/davidcastilloc/hera/main/install.sh | bash
+# Check and run full test suite (DSP, 4 Hot Cues, 2-Opt TSP, Multi-STUN, RFC 5766 TURN)
+cargo check --manifest-path hera-rs/Cargo.toml
+cargo test --manifest-path hera-rs/Cargo.toml
+```
+
+### 2. Run the Native Pure-Rust MCP Server
+
+Exposes HERA's 21 native Rust tools via stdio for AI coding agents (Claude, Codex, Antigravity, Cursor):
+
+```bash
+cargo run --release --manifest-path hera-rs/Cargo.toml -- --mcp
+```
+
+### 3. Run HERA Desktop (Tauri v2 + Bun)
+
+```bash
+cd hera-desktop
+bun install
+bun run tauri dev
 ```
 
 ---
 
-### Option B: Manual Setup with `uv` (Windows / macOS / Linux)
+## 🎛️ CLI Reference (`hera-node`)
 
-#### 1. Clone Repository
 ```bash
-git clone https://github.com/davidcastilloc/hera.git
-cd hera
-```
+# Run local HERA P2P & DSP Node (Native Tokio VPS / Laptop Daemon)
+cargo run --release --manifest-path hera-rs/Cargo.toml -- --port 8080
 
-#### 2. Turnkey Setup
-Run the automated setup command. It will detect your operating system (**Linux**, **macOS**, or **Windows**), download the necessary standalone binaries (`slskd`, `fpcalc`, `rclone`), and initialize the SQLite database:
-```bash
-uv run hera setup
-```
+# Run in MCP Server Mode (stdio JSON-RPC for Copilots)
+cargo run --release --manifest-path hera-rs/Cargo.toml -- --mcp
 
-#### 3. Verify System Health
-```bash
-uv run hera doctor
-```
-```text
-[*] Running Hera health diagnostic...
-[OK] Operating System: Linux / Windows / macOS
-[OK] Python: 3.11+
-[OK] SQLite Database: hera.db accessible
-[OK] Binary ffmpeg: available
-[OK] Binary ffprobe: available
-[OK] Binary fpcalc: installed in bin/
-[OK] Daemon Soulseek (slskd): installed in bin/
-[OK] Cloud Engine (rclone): available (v1.69.1)
-[OK] DSP Acoustic Engine (librosa): installed
-[OK] Tagging Engine (mutagen): installed
-[OK] MCP Python SDK: installed
-[SUCCESS] All critical systems and tools are ready.
+# Build DJ Set Spine via 2-Opt TSP directly via HTTP
+curl -X POST http://localhost:8080/api/v1/crates/build \
+  -H "Content-Type: application/json" \
+  -d '{"brief":"Club Primetime","energy_arc":"steady_climb","candidates":[]}'
+
+# Analyze audio file with Symphonia & rustfft forensics
+curl -X POST "http://localhost:8080/api/v1/audio/analyze-file?ext=flac" \
+  --data-binary "@my_master.flac"
 ```
 
 ---
 
-## 🎛️ CLI Reference
+## 🧠 Supported AI Copilot Backends (`hera-rs/src/dj_brain.rs`)
 
-```bash
-# General Setup and Diagnostics
-uv run hera setup                  # Initialize directories, DB, and auto-download binaries
-uv run hera doctor                 # Check health of all tools, engines, and remotes
+HERA's AI Copilot defaults out-of-the-box to **Cloudflare Workers AI (`10,000 Neurons/day` free)** without requiring an API key, alongside full support for local LLMs and BYOK providers:
 
-# P2P Soulseek Daemon
-uv run hera slskd                  # Start the local Soulseek daemon at http://localhost:5030
+### Free Cloud & Gateway Defaults
 
-# Cloud & Google Drive Sync
-uv run hera sync login             # 1-Click Direct OAuth web login for Google Drive
-uv run hera sync status            # Check connection status and configured remotes
-uv run hera sync push              # Upload & sync local sets/ to Google Drive (gdrive:Hera_Music/sets)
-uv run hera sync pull              # Download sets from cloud to local machine
-uv run hera sync config            # Advanced interactive assistant (S3, Cloudflare R2, Dropbox)
+| Backend | Endpoint / ID | Description | Cost |
+|---------|---------------|-------------|------|
+| **Cloudflare Workers AI Free** | `@cf/meta/llama-3.1-8b-instruct-fp8-fast` | Copilot ReAct nativo por defecto en HERA Desktop | **$0.00** (10k Neurons/día) |
+| **Cloudflare AI Gateway** | `/api/v1/ai/chat` | Caché global de consultas repetidas y rate-limiting | **$0.00** |
 
-# AI Agent Server (MCP — for external agents)
-uv run hera serve                  # Start Model Context Protocol (MCP) stdio server
+### Local Offline Engines (100% Free & Private)
 
-# Standalone DJ Tools (No LLM Required)
-uv run hera library                # Show inventory of all tracks and sets
-uv run hera search "Artist Title"  # Search & download from Soulseek P2P
-uv run hera set "Name" "track1"    # Build a DJ set from library tracks
-uv run hera camelot 8A 128.0       # Harmonic mixing recommendations (Camelot Wheel)
-
-# AI Conversational Agent (Multi-Backend)
-uv run hera chat                   # Auto-detect best available backend
-uv run hera chat -b ollama         # Use local Ollama
-uv run hera chat -b vertex         # Use Google Vertex AI
-uv run hera chat -b openai -m gpt-4o  # Use OpenAI GPT-4o
-uv run hera chat -b lmstudio       # Use LM Studio desktop
-uv run hera chat -b jan            # Use Jan desktop app
-uv run hera chat -b llamacpp       # Use llama.cpp server
-uv run hera chat -b anthropic      # Use Anthropic Claude
-```
+| Backend | Default Port | Model Example | Installation |
+|---------|-------------|---------------|--------------|
+| [LM Studio](https://lmstudio.ai) | `http://localhost:1234/v1` | `meta-llama-3.1-8b-instruct` | Desktop app |
+| [Ollama](https://ollama.com) | `http://localhost:11434/v1` | `llama3.2:3b` | `curl -fsSL https://ollama.com/install.sh \| sh` |
+| [llama.cpp](https://github.com/ggerganov/llama.cpp) | `http://localhost:8080/v1` | Custom GGUF | Standalone binary |
+| [LocalAI](https://localai.io) | `http://localhost:8080/v1` | Custom local models | Docker / binary |
+| Custom | `http://localhost:PORT/v1` | Any OpenAI-compatible endpoint | BYOK (OpenRouter, Gemini, OpenAI) |
 
 ---
 
-## 🧠 Supported AI Backends
+## ☁️ Zero-OAuth Cloud Onboarding (`hera-rs/src/p2p/cloud_links.rs`)
 
-Hera's AI agent supports **12 backends** — 4 cloud providers and 8 local engines. All connect through the [Google Antigravity SDK](https://github.com/google-antigravity/antigravity-sdk-python) with full tool calling support.
-
-### Cloud Providers
-
-| Backend | Flag | Env Var | Default Model |
-|---------|------|---------|--------------|
-| Google Gemini API | `--backend gemini` | `GEMINI_API_KEY` | `gemini-2.5-flash` |
-| Google Vertex AI | `--backend vertex` | `VERTEX_PROJECT` | `gemini-2.5-flash` |
-| OpenAI | `--backend openai` | `OPENAI_API_KEY` | `gpt-4o` |
-| Anthropic Claude | `--backend anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` |
-
-### Local Engines (100% Free & Private)
-
-| Backend | Flag | Default Port | Install |
-|---------|------|-------------|---------|
-| [Ollama](https://ollama.com) | `--backend ollama` | `11434` | `curl -fsSL https://ollama.com/install.sh \| sh` |
-| [LM Studio](https://lmstudio.ai) | `--backend lmstudio` | `1234` | Desktop app download |
-| [Jan](https://jan.ai) | `--backend jan` | `1337` | Desktop app download |
-| [llama.cpp](https://github.com/ggerganov/llama.cpp) | `--backend llamacpp` | `8080` | Build from source |
-| [vLLM](https://github.com/vllm-project/vllm) | `--backend vllm` | `8000` | `pip install vllm` |
-| [LocalAI](https://localai.io) | `--backend localai` | `8080` | Docker / binary |
-| [MLX](https://github.com/ml-explore/mlx) | `--backend mlx` | `8080` | `pip install mlx-lm` (Apple Silicon) |
-| Custom | `--backend custom` | — | Any OpenAI-compatible endpoint |
-
-### Auto-Detection
-
-When no `--backend` flag is provided, Hera automatically detects the best available backend by checking environment variables and probing local ports. No configuration needed — just start your preferred engine and run `hera chat`.
-
----
-
-## ☁️ Cloud & Google Drive Sync
-
-Connecting your Google Drive is designed to be **100% human-friendly** without tedious manual JSON credentials or multi-step question prompts.
-
-### 1-Click Direct OAuth
-```bash
-uv run hera sync login
-```
-1. Hera automatically opens your default web browser to the Google OAuth consent screen.
-2. Select your Google account and click **"Allow"**.
-3. The terminal instantly confirms authorization.
-
-### Sync Local Sets to the Cloud
-```bash
-uv run hera sync push
-```
-All curated folders in `sets/` will be uploaded to `Hera_Music/sets` on your Google Drive, complete with all embedded BPM, Key, and Camelot tags.
+Connecting external cloud storage (Google Drive, Dropbox, OneDrive, Cloudflare R2) is **100% Zero-OAuth**:
+- DJs do not need to register Google Cloud console projects or generate API keys.
+- Simply paste the folder share link in HERA Desktop (`/bridge` or `/dna`) or via `POST /api/v1/dj/connect-drive`.
+- HERA resolves direct lossless binary streams and bypasses the 25 MB Google Drive virus warning automatically (`&confirm=t`).
 
 ---
 
