@@ -22,7 +22,7 @@
      - Adds **`🧭 Ordenar Set (2-Opt TSP)`** in `HeraDjToolbar.tsx` and anchor pin indicators (`📌 Opening`, `🔥 Peak`, `🌙 Closing`) in `TrackRow.tsx` so DJs can sort their active crate in `< 5 ms` using the 4-layer Holistic Synergy + `2-Opt TSP` engine.
    - **Pillar 2 — Real Parallel Spectral Forensics + 4 Hot Cues on Folder Import (`src-tauri/src/libs/track.rs` & `db.rs`):**
      - Extends `Track` in Rust (`track.rs`, SQLite `tracks` table in `db.rs`) and TypeScript (`src/types/museeks.ts`) with `bpm`, `camelot_key`, `energy`, `cue_intro`, `cue_breakdown`, `cue_drop`, `cue_outro`, and `hera_seal`.
-     - Wires `track.rs` during `rayon` parallel folder scanning to invoke `hera_node_rs::forensics` + `hera_node_rs::structure` on `.wav` files and deterministic acoustic extraction on `.flac`/`.mp3`/`.m4a`.
+     - Wires `track.rs` during `rayon` parallel folder scanning to invoke `hera_node_rs::forensics` + `hera_node_rs::structure` streaming the first 45s with Symphonia across all formats (`.flac`, `.mp3`, `.m4a`, `.aac`, `.alac`, `.ogg`, `.wav`).
    - **Pillar 3 — Automated Multi-OS Native Installer Pipeline (`.github/workflows/release.yml`):**
      - Builds and publishes `~8 MB` native installers (`.exe`/`.msi`, `.dmg`, `.deb`/`.AppImage`) on `v*` tags via `tauri-apps/tauri-action` + `Bun 1.4.4`.
    - **Pillar 4 — Live P2P Swarm & Cloudflare Edge Radar (`bridge.tsx` & `HeraDjToolbar.tsx`):**
