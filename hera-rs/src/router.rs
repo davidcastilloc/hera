@@ -1,7 +1,8 @@
 use crate::cloudflare_edge::{
-    get_cloudflare_edge_capabilities, lookup_edge_forensic_cache, query_edge_vectorize_matches,
-    store_edge_forensic_cache, sync_d1_dj_dna, D1DnaSyncRequest, EdgeForensicLookupRequest,
-    EdgeForensicStoreRequest, VectorizeMatchRequest,
+    get_cloudflare_edge_capabilities, issue_cloudflare_turn_credentials,
+    lookup_edge_forensic_cache, query_edge_vectorize_matches, store_edge_forensic_cache,
+    sync_d1_dj_dna, D1DnaSyncRequest, EdgeForensicLookupRequest, EdgeForensicStoreRequest,
+    TurnCredentialsRequest, VectorizeMatchRequest,
 };
 use crate::code_mode::{
     execute_code_mode, get_openapi_3_1_spec, get_typescript_sdk_definitions, CodeModeRequest,
@@ -163,6 +164,8 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/p2p/export-federation", get(p2p_export_federation_handler))
         .route("/api/v1/p2p/stream/:track_id", get(p2p_stream_handler))
         .route("/api/v1/p2p/download/:track_id", get(p2p_download_local_file_handler))
+        .route("/api/v1/p2p/turn-credentials", post(p2p_turn_credentials_handler))
+        .route("/api/v1/p2p/turn-relay-proof", post(p2p_turn_relay_proof_handler))
         .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
         .with_state(state)
 }
@@ -882,5 +885,22 @@ async fn edge_vectorize_match_handler(
     Json(req): Json<VectorizeMatchRequest>,
 ) -> impl IntoResponse {
     Json(query_edge_vectorize_matches(&state, &req))
+}
+
+async fn p2p_turn_credentials_handler(
+    State(state): State<P2PMeshState>,
+    Json(req): Json<TurnCredentialsRequest>,
+) -> impl IntoResponse {
+    Json(issue_cloudflare_turn_credentials(&state, &req))
+}
+
+async fn p2p_turn_relay_proof_handler() -> Result<Json<crate::p2p::TurnRelayTransferReport>, HeraError> {
+    let mut audio_bytes = Vec::with_capacity(262_144);
+    for i in 0..262_144usize {
+        audio_bytes.push(((i.wrapping_mul(73) ^ (i >> 3)) & 0xFF) as u8);
+    }
+    crate::p2p::run_live_turn_channel_relay_p2p_proof(&audio_bytes)
+        .map(Json)
+        .map_err(HeraError::Internal)
 }
 

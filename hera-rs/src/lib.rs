@@ -1922,7 +1922,12 @@ mod tests {
         .unwrap();
         assert_eq!(j_cap["r2_egress_fee_usd_per_gb"], 0.0);
         assert_eq!(j_cap["pioneer_forensic_bounty_mb"], 5.0);
-        assert_eq!(j_cap["primitives"].as_array().unwrap().len(), 6);
+        assert_eq!(j_cap["primitives"].as_array().unwrap().len(), 7);
+        assert!(j_cap["primitives"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|p| p["id"] == "cf_calls_managed_turn"));
         assert!(!j_cap["recent_moq_harmonic_events"].as_array().unwrap().is_empty());
 
         // 2. Verify POST /api/v1/edge/forensic-cache/lookup hits on seeded track (< 2 ms, saves 420 ms laptop FFT CPU)
@@ -2041,6 +2046,54 @@ mod tests {
         );
         assert!(j_vec["matches_count"].as_u64().unwrap() >= 3);
         assert_eq!(j_vec["matches"][0]["camelot_compatible"], true);
+
+        // 6. Verify POST /api/v1/p2p/turn-credentials issues Stage 3.5 Cloudflare Calls Managed TURN RFC 5766 credentials
+        let req_turn = Request::builder()
+            .method("POST")
+            .uri("/api/v1/p2p/turn-credentials")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({
+                    "dj_handle": "DaviDJ",
+                    "node_id": "hera-mobile-cgnat-01",
+                    "ttl_seconds": 3600
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp_turn = app.call(req_turn).await.unwrap();
+        assert_eq!(resp_turn.status(), StatusCode::OK);
+        let j_turn: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_turn.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(j_turn["provider"], "cloudflare_calls_managed_turn_anycast");
+        assert_eq!(j_turn["protocol"], "rfc5766_channel_data_binary_chunk_relay");
+        assert_eq!(j_turn["channel_number"], 0x4000);
+        assert_eq!(j_turn["r2_bytes_used"], 0);
+        assert_eq!(j_turn["free_tier_allowance_gb"], 1000.0);
+        assert!(!j_turn["ice_servers"].as_array().unwrap().is_empty());
+
+        // 7. Verify POST /api/v1/p2p/turn-relay-proof executes live Stage 3.5 RFC 5766 ChannelData 0x4000 relay proof
+        let req_turn_proof = Request::builder()
+            .method("POST")
+            .uri("/api/v1/p2p/turn-relay-proof")
+            .body(Body::empty())
+            .unwrap();
+        let resp_turn_proof = app.call(req_turn_proof).await.unwrap();
+        assert_eq!(resp_turn_proof.status(), StatusCode::OK);
+        let j_turn_proof: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_turn_proof.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            j_turn_proof["stage_used"],
+            "STAGE_3_5_CLOUDFLARE_TURN_CHANNEL_RELAY"
+        );
+        assert_eq!(j_turn_proof["r2_bytes_used"], 0);
+        assert_eq!(j_turn_proof["audio_bytes_transferred"], 262_144);
+        assert_eq!(j_turn_proof["chunks_transferred"], 32);
+        assert_eq!(j_turn_proof["sha256_verified"], true);
     }
 
     #[test]
@@ -2084,5 +2137,39 @@ mod tests {
             assert_eq!(chunk.len(), 8192);
         }
         assert!(served_counter.load(std::sync::atomic::Ordering::Relaxed) >= 4);
+
+        // Verify Stage 3.5: RFC 5766 TURN ChannelData (0x4000) binary chunk relay when Symmetric CGNAT blocks direct spray
+        let turn_report = crate::p2p::run_live_turn_channel_relay_p2p_proof(&audio_bytes)
+            .expect("Stage 3.5 TURN ChannelData P2P proof");
+        println!(
+            "\n=== HERA STAGE 3.5 RFC 5766 TURN CHANNEL-DATA BINARY RELAY PROOF ===\n{}\n====================================================================\n",
+            serde_json::to_string_pretty(&turn_report).unwrap()
+        );
+        assert_eq!(
+            turn_report.stage_used,
+            "STAGE_3_5_CLOUDFLARE_TURN_CHANNEL_RELAY"
+        );
+        assert_eq!(turn_report.bound_channel_number, 0x4000);
+        assert_eq!(turn_report.r2_bytes_used, 0);
+        assert_eq!(turn_report.audio_bytes_transferred, 262_144);
+        assert_eq!(turn_report.chunks_transferred, 32);
+        assert!(turn_report.turn_relay_frames_forwarded >= 64);
+        assert!(turn_report.sha256_verified);
+        assert_eq!(turn_report.expected_sha256, turn_report.received_sha256);
+
+        // Verify automatic cascade from Stage 3 (blocked blackhole UDP port) -> Stage 3.5 (RFC 5766 TURN ChannelData)
+        let blackhole = std::net::UdpSocket::bind("127.0.0.1:0").expect("bind blackhole");
+        let blackhole_addr = blackhole.local_addr().unwrap().to_string();
+        let (fallback_chunk, stage_label) = crate::p2p::request_chunk_with_turn_fallback(
+            &blackhole_addr,
+            1,
+            2,
+            Some(&daemon_status.daemon_listen_socket),
+            "hera-seed-001",
+            0,
+        )
+        .expect("cascade to Stage 3.5 TURN relay");
+        assert_eq!(fallback_chunk.len(), 8192);
+        assert_eq!(stage_label, "STAGE_3_5_CLOUDFLARE_TURN_CHANNEL_RELAY");
     }
 }
