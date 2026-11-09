@@ -39,11 +39,11 @@ msgstr "La lista \"{name}\" fue creada"
 #. placeholder {0}: newRelease.tag_name
 #: src/api/SettingsAPI.ts:175
 msgid "HERA {0} is available at https://github.com/davidcastilloc/hera/releases!"
-msgstr ""
+msgstr "¡HERA {0} está disponible en https://github.com/davidcastilloc/hera/releases!"
 
 #: src/api/SettingsAPI.ts:177
 msgid "HERA {currentVersion} is the latest version available."
-msgstr ""
+msgstr "HERA {currentVersion} es la versión más reciente disponible."
 
 #: src/components/ButtonRepeat.tsx:18
 msgid "Repeat"
@@ -97,7 +97,7 @@ msgstr "o si vuelve a ocurrir, por favor <0>reporta un problema</0>."
 
 #: src/components/Header.tsx:24
 msgid "Header"
-msgstr ""
+msgstr "Cabecera"
 
 #: src/components/Header.tsx:53
 msgid "Queue"
@@ -105,7 +105,7 @@ msgstr "Cola"
 
 #: src/components/Navigation.tsx:49
 msgid "Main navigation"
-msgstr ""
+msgstr "Navegación principal"
 
 #: src/components/Navigation.tsx:52
 #: src/routes/settings.tsx:33
@@ -130,7 +130,7 @@ msgstr "Configuración"
 
 #: src/components/Navigation.tsx:67
 msgid "Library status"
-msgstr ""
+msgstr "Estado de la biblioteca"
 
 #: src/components/Navigation.tsx:92
 msgid "scanning tracks..."
@@ -170,11 +170,11 @@ msgstr "buscar..."
 
 #: src/components/Search.tsx:49
 msgid "Search library"
-msgstr ""
+msgstr "Buscar en la biblioteca"
 
 #: src/components/Search.tsx:61
 msgid "Clear search"
-msgstr ""
+msgstr "Limpiar búsqueda"
 
 #: src/components/SideNavLink.tsx:62
 msgid "Rename"
@@ -259,7 +259,7 @@ msgstr "Eliminar"
 #: src/components/TrackListDefault.tsx:124
 #: src/components/TrackListGrouped.tsx:58
 msgid "Track list"
-msgstr ""
+msgstr "Lista de pistas"
 
 #. placeholder {0}: props.count
 #. placeholder {0}: tracks.length
@@ -270,7 +270,7 @@ msgstr "{0, plural, one {# pista} other {# pistas}}"
 
 #: src/components/TrackListHeader.tsx:17
 msgid "Track list sorting options"
-msgstr ""
+msgstr "Opciones de orden de pistas"
 
 #: src/components/TrackListHeader.tsx:26
 #: src/routes/tracks.$trackID.tsx:88
@@ -328,11 +328,11 @@ msgstr "Volumen"
 
 #: src/routes/__root.tsx:82
 msgid "Application main content"
-msgstr ""
+msgstr "Contenido principal de la aplicación"
 
 #: src/routes/artists.tsx:70
 msgid "Compilations"
-msgstr ""
+msgstr "Recopilaciones"
 
 #: src/routes/playlists.$playlistID.tsx:72
 msgid "Remove from playlist"
@@ -378,7 +378,7 @@ msgstr "Nueva Lista"
 
 #: src/routes/settings.about.tsx:36
 msgid "About HERA"
-msgstr ""
+msgstr "Acerca de HERA"
 
 #: src/routes/settings.about.tsx:48
 msgid "release notes"
@@ -398,7 +398,7 @@ msgstr "Colaboradores"
 
 #: src/routes/settings.about.tsx:72
 msgid "Created with <0/> by David Castillo (<1>@davidcastilloc</1>) and <2>HERA contributors</2> (UI foundation adapted from martpie/museeks MIT)"
-msgstr ""
+msgstr "Desarrollado por David Castillo (<1>@davidcastilloc</1>) y los <2>colaboradores de HERA</2> (base de interfaz adaptada de martpie/museeks MIT)"
 
 #: src/routes/settings.about.tsx:89
 msgid "Translations:"
@@ -454,7 +454,7 @@ msgstr "Escanear"
 
 #: src/routes/settings.library.tsx:96
 msgid "All track data will be updated from the base files, but your original files won't be modified. Any HERA-specific edits you may have done will be reset."
-msgstr ""
+msgstr "Se actualizarán los metadatos de todas las pistas desde los archivos originales sin modificar tus archivos de audio."
 
 #: src/routes/settings.library.tsx:98
 msgid "Refresh all tracks?"
@@ -483,7 +483,7 @@ msgstr "Zona de peligro"
 
 #: src/routes/settings.library.tsx:132
 msgid "Delete all tracks and playlists from HERA."
-msgstr ""
+msgstr "Elimina todas las pistas y listas de reproducción registradas en HERA."
 
 #: src/routes/settings.library.tsx:137
 msgid "Fully reset the library"
@@ -491,7 +491,7 @@ msgstr "Reiniciar totalmente la biblioteca"
 
 #: src/routes/settings.library.tsx:141
 msgid "All your tracks and playlists will be deleted from HERA."
-msgstr ""
+msgstr "Se eliminarán todas tus pistas y listas de reproducción de la base de datos de HERA."
 
 #: src/routes/settings.library.tsx:143
 msgid "Reset library?"
@@ -638,11 +638,11 @@ msgstr "Nº de Disco"
 
 #: src/routes/tracks.$trackID.tsx:231
 msgid "Compilation"
-msgstr ""
+msgstr "Recopilación"
 
 #: src/routes/tracks.$trackID.tsx:232
 msgid "Group this track with other tracks from the same compilation, regardless of the artist names."
-msgstr ""
+msgstr "Agrupar esta pista con otras del mismo álbum recopilatorio sin importar el artista."
 
 #: src/routes/tracks.$trackID.tsx:249
 msgid "Path"

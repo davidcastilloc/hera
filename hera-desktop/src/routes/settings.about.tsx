@@ -10,7 +10,6 @@ import DefinitionList from '../elements/DefinitionList';
 import ExternalButton from '../elements/ExternalButton';
 import ExternalLink from '../elements/ExternalLink';
 import Flexbox from '../elements/Flexbox';
-import Heart from '../elements/Heart';
 import useInvalidate, { useInvalidateCallback } from '../hooks/useInvalidate';
 import { HERA_ROBIN_HOOD_SUPPORT } from '../lib/bridge-hera';
 import { configQuery } from '../lib/queries';
@@ -57,9 +56,7 @@ function ViewSettingsAbout() {
         </Flexbox>
       </Setting.Section>
       <Setting.Section>
-        <Setting.Title>
-          <Trans>About HERA</Trans>
-        </Setting.Title>
+        <Setting.Title>Acerca de HERA</Setting.Title>
         <Setting.Description>
           HERA {version}
           {' - '}
@@ -97,21 +94,18 @@ function ViewSettingsAbout() {
           <Trans>Contributors</Trans>
         </Setting.Title>
         <Setting.Description>
-          <Trans>
-            Created with <Heart /> by David Castillo (
-            <ExternalLink href="https://github.com/davidcastilloc" type="url">
-              @davidcastilloc
-            </ExternalLink>
-            ) and{' '}
-            <ExternalLink
-              href="https://github.com/davidcastilloc/hera/graphs/contributors"
-              type="url"
-            >
-              HERA contributors
-            </ExternalLink>{' '}
-            (UI foundation adapted from martpie/museeks MIT)
-          </Trans>
-          .
+          Desarrollado por David Castillo (
+          <ExternalLink href="https://github.com/davidcastilloc" type="url">
+            @davidcastilloc
+          </ExternalLink>
+          ) junto a los{' '}
+          <ExternalLink
+            href="https://github.com/davidcastilloc/hera/graphs/contributors"
+            type="url"
+          >
+            colaboradores de HERA
+          </ExternalLink>{' '}
+          (base de interfaz adaptada de martpie/museeks bajo licencia MIT).
         </Setting.Description>
         <Setting.Description>
           <Trans>Translations:</Trans>

@@ -36,9 +36,9 @@ function ToastList() {
 const styles = stylex.create({
   viewport: {
     position: 'fixed',
-    top: '56px',
-    right: '12px',
-    width: '260px',
+    top: '108px',
+    right: '16px',
+    width: '280px',
     zIndex: 1000,
     display: 'flex',
     flexDirection: 'column',

@@ -1251,74 +1251,6 @@ function ViewHarmonicBridgeP2P() {
                     </div>
                   </div>
                 </div>
-
-                <div {...stylex.props(styles.receiptActions)}>
-                  <button
-                    type="button"
-                    disabled={Boolean(busyAction)}
-                    onClick={() => void handleApproveAndCreatePlaylist()}
-                    {...stylex.props(styles.primaryBtn)}
-                  >
-                    <Icon name="checkCircle" size={14} />
-                    <span>
-                      {busyAction === 'approve_set'
-                        ? 'Guardando Set...'
-                        : viewMode === 'simple'
-                          ? 'Agregar al Set'
-                          : 'Aprobar y Crear Lista'}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={Boolean(busyAction)}
-                    onClick={() => void handleExportBridgeVirtualDj()}
-                    {...stylex.props(styles.secondaryBtn)}
-                  >
-                    <Icon name="export" size={14} />
-                    <span>
-                      {busyAction === 'export_vdj'
-                        ? 'Exportando...'
-                        : 'Exportar a VirtualDJ'}
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const first = activeSteps[0];
-                      if (!first) return;
-                      const local = findMatchingLocalTrack(
-                        first.artist,
-                        first.title,
-                        first.track_id,
-                      );
-                      void handleAuditionStep(
-                        'bridge-main-preview',
-                        `${first.artist} — ${first.title}`,
-                        first.bpm,
-                        first.camelot,
-                        first.cue_in_seconds,
-                        local,
-                      );
-                    }}
-                    {...stylex.props(styles.secondaryBtn)}
-                  >
-                    <Icon
-                      name={
-                        activeAuditionId === 'bridge-main-preview'
-                          ? 'pause'
-                          : 'play'
-                      }
-                      size={12}
-                    />
-                    <span>
-                      {activeAuditionId === 'bridge-main-preview'
-                        ? 'Detener audio'
-                        : 'Escuchar puente'}
-                    </span>
-                  </button>
-                </div>
               </div>
 
               {previewStatus && (
@@ -1327,6 +1259,74 @@ function ViewHarmonicBridgeP2P() {
                   <span>{previewStatus}</span>
                 </div>
               )}
+            </div>
+
+            <div {...stylex.props(styles.receiptActions)}>
+              <button
+                type="button"
+                disabled={Boolean(busyAction)}
+                onClick={() => void handleApproveAndCreatePlaylist()}
+                {...stylex.props(styles.primaryBtn)}
+              >
+                <Icon name="checkCircle" size={14} />
+                <span>
+                  {busyAction === 'approve_set'
+                    ? 'Guardando Set...'
+                    : viewMode === 'simple'
+                      ? 'Agregar al Set'
+                      : 'Aprobar y Crear Lista'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                disabled={Boolean(busyAction)}
+                onClick={() => void handleExportBridgeVirtualDj()}
+                {...stylex.props(styles.secondaryBtn)}
+              >
+                <Icon name="export" size={14} />
+                <span>
+                  {busyAction === 'export_vdj'
+                    ? 'Exportando...'
+                    : 'Exportar a VirtualDJ'}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const first = activeSteps[0];
+                  if (!first) return;
+                  const local = findMatchingLocalTrack(
+                    first.artist,
+                    first.title,
+                    first.track_id,
+                  );
+                  void handleAuditionStep(
+                    'bridge-main-preview',
+                    `${first.artist} — ${first.title}`,
+                    first.bpm,
+                    first.camelot,
+                    first.cue_in_seconds,
+                    local,
+                  );
+                }}
+                {...stylex.props(styles.secondaryBtn)}
+              >
+                <Icon
+                  name={
+                    activeAuditionId === 'bridge-main-preview'
+                      ? 'pause'
+                      : 'play'
+                  }
+                  size={12}
+                />
+                <span>
+                  {activeAuditionId === 'bridge-main-preview'
+                    ? 'Detener audio'
+                    : 'Escuchar puente'}
+                </span>
+              </button>
             </div>
 
             <div {...stylex.props(styles.inputDock)}>
@@ -2158,6 +2158,7 @@ const styles = stylex.create({
     rowGap: '12px',
   },
   bossMsg: {
+    flexShrink: 0,
     backgroundColor: '#12161d',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -2177,6 +2178,7 @@ const styles = stylex.create({
     color: '#8e98a8',
   },
   receiptBox: {
+    flexShrink: 0,
     backgroundColor: '#12161d',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -2254,10 +2256,15 @@ const styles = stylex.create({
     fontVariantNumeric: 'tabular-nums',
   },
   receiptActions: {
+    flexShrink: 0,
     display: 'flex',
     flexWrap: 'wrap',
     rowGap: '8px',
     columnGap: '8px',
+    paddingTop: '10px',
+    borderTopWidth: '1px',
+    borderTopStyle: 'solid',
+    borderTopColor: '#232a36',
   },
   primaryBtn: {
     display: 'inline-flex',

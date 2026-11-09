@@ -64,7 +64,8 @@
     "hera-dj:allow-resolve-harmonic-bridge",
     "hera-dj:allow-download-p2p-track",
     "sleepblocker:allow-enable",
-    "sleepblocker:allow-disable"
+    "sleepblocker:allow-disable",
+    "mcp-bridge:default"
   ],
   "platforms": ["linux", "macOS", "windows"]
 }

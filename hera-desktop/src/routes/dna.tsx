@@ -83,14 +83,35 @@ function ViewDjStyleDna() {
   }, [tracks, djHandle, preferredSoftware, goldenRulesString]);
 
   const analyzedCount = tracks.length;
-  const averageBpm = dnaProfile?.overall_average_bpm
-    ? `${Math.round(dnaProfile.overall_average_bpm)} BPM`
-    : '125 BPM';
+  const numericAverageBpm = dnaProfile?.overall_average_bpm
+    ? Math.round(dnaProfile.overall_average_bpm)
+    : 124;
+  const averageBpm = `${numericAverageBpm} BPM`;
   const dominantKeys =
     dnaProfile?.dominant_camelot_keys &&
     dnaProfile.dominant_camelot_keys.length > 0
       ? dnaProfile.dominant_camelot_keys.slice(0, 3)
       : ['8A', '9A', '10A'];
+
+  const formattedBpmZone = useMemo(() => {
+    const raw = dnaProfile?.dominant_bpm_zone ?? '';
+    if (analyzedCount === 0 || numericAverageBpm >= 122) {
+      if (numericAverageBpm >= 133) {
+        return 'Peak Techno · Trance (133+ BPM)';
+      }
+      if (numericAverageBpm >= 122) {
+        return 'Club · Afro House · Guaracha (122–132 BPM)';
+      }
+    }
+    const labels: Record<string, string> = {
+      club_afro_guaracha_122_132: 'Club · Afro House · Guaracha (122–132 BPM)',
+      tropical_salsa_106_121: 'Tropical · Salsa · Deep (106–121 BPM)',
+      urbano_reggaeton_88_105: 'Urbano · Reggaetón (88–105 BPM)',
+      peak_techno_trance_133_plus: 'Peak Techno · Trance (133+ BPM)',
+      downtempo_chill_under_88: 'Downtempo · Warm-up (< 88 BPM)',
+    };
+    return labels[raw] || 'Zona progresiva de club (122–132 BPM)';
+  }, [analyzedCount, dnaProfile?.dominant_bpm_zone, numericAverageBpm]);
 
   return (
     <View aria-label="Perfil acústico y ADN DJ">
@@ -383,9 +404,9 @@ function ViewDjStyleDna() {
                 Al armar sets o puentes para{' '}
                 <strong>{preferredSoftware}</strong>, HERA priorizará
                 transiciones alrededor de <strong>{averageBpm}</strong> (
-                {dnaProfile?.dominant_bpm_zone || 'zona progresiva de club'}) y
-                llaves <strong>{dominantKeys.join(' · ')}</strong>. Reglas
-                activas: {goldenRulesString}.
+                {formattedBpmZone}) y llaves{' '}
+                <strong>{dominantKeys.join(' · ')}</strong>. Reglas activas:{' '}
+                {goldenRulesString}.
               </p>
               <div>
                 <Link to="/bridge" {...stylex.props(styles.applyBridgeLink)}>

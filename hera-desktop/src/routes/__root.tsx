@@ -18,8 +18,10 @@ import Navigation from '../components/Navigation';
 import PlayerEvents from '../components/PlayerEvents';
 import Toasts from '../components/Toasts';
 import useInvalidate from '../hooks/useInvalidate';
+import DatabaseBridge from '../lib/bridge-database';
 import { configQuery } from '../lib/queries';
 import queryClient from '../lib/query-client';
+import useLibraryStore from '../lib/store';
 import { logAndNotifyError } from '../lib/utils';
 
 type Search = {
@@ -50,6 +52,11 @@ function ViewRoot() {
 
   useEffect(() => {
     SettingsAPI.init(invalidate).catch(logAndNotifyError);
+    void DatabaseBridge.getAllTracks()
+      .then((tracks) => {
+        useLibraryStore.setState({ tracks });
+      })
+      .catch(() => {});
   }, [invalidate]);
 
   const location = useLocation();

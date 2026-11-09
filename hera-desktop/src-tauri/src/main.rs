@@ -110,6 +110,13 @@ fn main() {
         builder
     };
 
+    #[cfg(any(debug_assertions, feature = "mcp-bridge"))]
+    let builder = builder.plugin(
+        tauri_plugin_mcp_bridge::Builder::new()
+            .bind_address("127.0.0.1")
+            .build(),
+    );
+
     builder
         .setup(|app| {
             let config_manager = app.state::<ConfigManager>();

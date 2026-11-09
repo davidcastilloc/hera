@@ -169,6 +169,7 @@ function Status() {
   const refresh = useLibraryStore((state) => state.refresh);
   const refreshing = useLibraryStore((state) => state.refreshing);
   const status = useLibraryStore((state) => state.tracksStatus);
+  const tracks = useLibraryStore((state) => state.tracks);
 
   const { current, total } = refresh;
 
@@ -194,6 +195,14 @@ function Status() {
 
   if (status != null) {
     return <TrackListStatus {...status} />;
+  }
+
+  if (tracks.length > 0) {
+    const totalDuration = tracks.reduce(
+      (acc, track) => acc + (track.duration || 0),
+      0,
+    );
+    return <TrackListStatus count={tracks.length} duration={totalDuration} />;
   }
 
   return <span {...stylex.props(styles.emptyStatus)}>0 pistas · 00:00</span>;

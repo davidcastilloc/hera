@@ -232,8 +232,12 @@ const styles = stylex.create({
     fontWeight: 600,
     color: '#edeff3',
     whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    maxWidth: '250px',
   },
   budgetPill: {
+    flexShrink: 0,
     fontSize: '12px',
     fontWeight: 500,
     color: '#8e98a8',
