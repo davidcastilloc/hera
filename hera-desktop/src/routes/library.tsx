@@ -51,7 +51,7 @@ function ViewLibrary() {
   return (
     <View xstyle={styles.libraryView}>
       <HeraDjToolbar
-        title="Biblioteca de Cabina"
+        title="Biblioteca"
         tracksOverride={filteredTracks}
         crateName="Hera_Active_Set"
       />

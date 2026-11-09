@@ -1,48 +1,77 @@
 import * as stylex from '@stylexjs/stylex';
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 
-import Icon from '../components/Icon';
 import View from '../elements/View';
 import DatabaseBridge from '../lib/bridge-database';
 import {
   computeDjStyleDna,
   type HeraStyleDnaResponse,
 } from '../lib/bridge-hera';
-import { useHeraViewStore } from '../lib/hera-human-language';
 import useLibraryStore from '../lib/store';
-import toastManager from '../lib/toast-manager';
 
 export const Route = createFileRoute('/dna')({
   component: ViewDjStyleDna,
 });
 
-const DJ_SOFTWARES = ['VirtualDJ', 'Rekordbox', 'Traktor', 'Serato', 'Ableton'];
+const DJ_SOFTWARES = ['VirtualDJ', 'Rekordbox', 'Traktor', 'Serato'] as const;
 
-const PRO_CAMELOT_KEYS_MINOR = [
-  { code: '1A', note: 'Abm', pct: '1%' },
-  { code: '2A', note: 'Ebm', pct: '2%' },
-  { code: '3A', note: 'Bbm', pct: '1%' },
-  { code: '4A', note: 'Fm', pct: '3%' },
-  { code: '5A', note: 'Cm', pct: '4%' },
-  { code: '6A', note: 'Gm', pct: '5%' },
-  { code: '7A', note: 'Dm', pct: '8%' },
-  { code: '8A', note: 'Am', pct: '34%' },
-  { code: '9A', note: 'Em', pct: '28%' },
-  { code: '10A', note: 'Bm', pct: '19%' },
-  { code: '11A', note: 'F#m', pct: '7%' },
-  { code: '12A', note: 'Dbm', pct: '2%' },
+const CAMELOT_KEYS_MINOR = [
+  { code: '1A', pct: '1%' },
+  { code: '2A', pct: '2%' },
+  { code: '3A', pct: '1%' },
+  { code: '4A', pct: '3%' },
+  { code: '5A', pct: '4%' },
+  { code: '6A', pct: '5%' },
+  { code: '7A', pct: '8%' },
+  { code: '8A', pct: '34%' },
+  { code: '9A', pct: '28%' },
+  { code: '10A', pct: '19%' },
+  { code: '11A', pct: '7%' },
+  { code: '12A', pct: '2%' },
 ];
+
+type SwitchRowProps = {
+  label: string;
+  checked: boolean;
+  onToggle: () => void;
+  isLast?: boolean;
+};
+
+function PreferenceSwitchRow({
+  label,
+  checked,
+  onToggle,
+  isLast = false,
+}: SwitchRowProps) {
+  return (
+    <div {...stylex.props(styles.prefRow, !isLast && styles.prefRowDivider)}>
+      <span {...stylex.props(styles.prefLabel)}>{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={onToggle}
+        {...stylex.props(styles.switchTrack, checked && styles.switchTrackOn)}
+      >
+        <span
+          {...stylex.props(styles.switchThumb, checked && styles.switchThumbOn)}
+        />
+      </button>
+    </div>
+  );
+}
 
 function ViewDjStyleDna() {
   const tracks = useLibraryStore((state) => state.tracks);
-  const viewMode = useHeraViewStore((state) => state.viewMode);
 
-  const [djHandle] = useState('DaviDJ');
-  const [preferredSoftware, setPreferredSoftware] = useState('VirtualDJ');
+  const [preferredSoftware, setPreferredSoftware] =
+    useState<string>('VirtualDJ');
   const [ruleVocalClash, setRuleVocalClash] = useState(true);
   const [ruleSubBass, setRuleSubBass] = useState(true);
   const [ruleAudioQuality, setRuleAudioQuality] = useState(true);
+  const [showKeyGrid, setShowKeyGrid] = useState(false);
   const [dnaProfile, setDnaProfile] = useState<HeraStyleDnaResponse | null>(
     null,
   );
@@ -59,33 +88,28 @@ function ViewDjStyleDna() {
     }
   }, [tracks.length]);
 
-  const activeRulesList = useMemo(() => {
-    const list: string[] = [];
-    if (ruleVocalClash) list.push('Evitar cruce de voces (Cue 4 → Cue 1)');
-    if (ruleSubBass) list.push('Continuidad de sub-bajo');
-    if (ruleAudioQuality) list.push('Filtro forense lossless');
-    list.push('Enjambre P2P activo');
-    return list;
+  const goldenRulesString = useMemo(() => {
+    const active: string[] = [];
+    if (ruleVocalClash) active.push('Evitar choque de voces');
+    if (ruleSubBass) active.push('Mantener graves continuos');
+    if (ruleAudioQuality) active.push('Ocultar audio de baja calidad');
+    return active.join(' · ');
   }, [ruleAudioQuality, ruleSubBass, ruleVocalClash]);
-
-  const goldenRulesString = useMemo(
-    () => activeRulesList.join(' · '),
-    [activeRulesList],
-  );
 
   useEffect(() => {
     void computeDjStyleDna(
       tracks,
-      djHandle,
+      'DaviDJ',
       preferredSoftware,
       goldenRulesString,
-    ).then(setDnaProfile);
-  }, [tracks, djHandle, preferredSoftware, goldenRulesString]);
+    )
+      .then(setDnaProfile)
+      .catch(() => {});
+  }, [tracks, preferredSoftware, goldenRulesString]);
 
-  const analyzedCount = tracks.length;
   const numericAverageBpm = dnaProfile?.overall_average_bpm
     ? Math.round(dnaProfile.overall_average_bpm)
-    : 124;
+    : 125;
   const averageBpm = `${numericAverageBpm} BPM`;
   const dominantKeys =
     dnaProfile?.dominant_camelot_keys &&
@@ -93,327 +117,155 @@ function ViewDjStyleDna() {
       ? dnaProfile.dominant_camelot_keys.slice(0, 3)
       : ['8A', '9A', '10A'];
 
-  const formattedBpmZone = useMemo(() => {
-    const raw = dnaProfile?.dominant_bpm_zone ?? '';
-    if (analyzedCount === 0 || numericAverageBpm >= 122) {
-      if (numericAverageBpm >= 133) {
-        return 'Peak Techno · Trance (133+ BPM)';
-      }
-      if (numericAverageBpm >= 122) {
-        return 'Club · Afro House · Guaracha (122–132 BPM)';
-      }
-    }
-    const labels: Record<string, string> = {
-      club_afro_guaracha_122_132: 'Club · Afro House · Guaracha (122–132 BPM)',
-      tropical_salsa_106_121: 'Tropical · Salsa · Deep (106–121 BPM)',
-      urbano_reggaeton_88_105: 'Urbano · Reggaetón (88–105 BPM)',
-      peak_techno_trance_133_plus: 'Peak Techno · Trance (133+ BPM)',
-      downtempo_chill_under_88: 'Downtempo · Warm-up (< 88 BPM)',
-    };
-    return labels[raw] || 'Zona progresiva de club (122–132 BPM)';
-  }, [analyzedCount, dnaProfile?.dominant_bpm_zone, numericAverageBpm]);
-
   return (
-    <View aria-label="Perfil acústico y ADN DJ">
+    <View aria-label="Mi Estilo">
       <div {...stylex.props(styles.pageContainer)}>
-        <div {...stylex.props(styles.headerBar)}>
-          <div {...stylex.props(styles.titleBlock)}>
-            <div {...stylex.props(styles.titleRow)}>
-              <Icon name="dna" size={18} color="#2dd4bf" />
-              <h1 {...stylex.props(styles.pageTitle)}>
-                {viewMode === 'simple'
-                  ? 'Mi ADN Musical y Reglas de Mezcla'
-                  : 'Perfil Acústico DJ y Matriz Armónica Camelot'}
-              </h1>
-            </div>
-            <p {...stylex.props(styles.subDesc)}>
-              {analyzedCount > 0
-                ? `Calculado sobre ${analyzedCount} pistas locales en tu biblioteca`
-                : 'Perfil base de cabina listo · Importa tus pistas para calibrar tu huella musical'}
-            </p>
-          </div>
+        <div {...stylex.props(styles.centeredSheet)}>
+          <header {...stylex.props(styles.headerRow)}>
+            <h1 {...stylex.props(styles.pageTitle)}>Mi Estilo</h1>
 
-          <div {...stylex.props(styles.switchesGroup)}>
-            <span {...stylex.props(styles.deckLabel)}>Software principal:</span>
-            {DJ_SOFTWARES.map((sw) => (
+            <div
+              {...stylex.props(styles.segmentedBar)}
+              role="group"
+              aria-label="Programa DJ principal"
+            >
+              {DJ_SOFTWARES.map((sw) => {
+                const active = preferredSoftware === sw;
+                return (
+                  <button
+                    key={sw}
+                    type="button"
+                    onClick={() => setPreferredSoftware(sw)}
+                    {...stylex.props(
+                      styles.segmentBtn,
+                      active && styles.segmentBtnActive,
+                    )}
+                  >
+                    {sw}
+                  </button>
+                );
+              })}
+            </div>
+          </header>
+
+          <section
+            {...stylex.props(styles.statsStrip)}
+            aria-label="Resumen de estilo"
+          >
+            <div {...stylex.props(styles.statCol)}>
+              <div {...stylex.props(styles.statValue)}>{averageBpm}</div>
+              <div {...stylex.props(styles.statCaption)}>Ritmo habitual</div>
+            </div>
+
+            <div {...stylex.props(styles.statCol, styles.statColBorder)}>
+              <div {...stylex.props(styles.statValue)}>
+                {dominantKeys.join(' · ')}
+              </div>
+              <div {...stylex.props(styles.statCaption)}>Tonos principales</div>
+            </div>
+
+            <div {...stylex.props(styles.statCol, styles.statColBorder)}>
+              <div {...stylex.props(styles.statValue)}>Progresiva</div>
+              <div {...stylex.props(styles.statCaption)}>Mezcla</div>
+            </div>
+          </section>
+
+          <section {...stylex.props(styles.sectionBlock)}>
+            <div {...stylex.props(styles.sectionHeaderRow)}>
+              <h2 {...stylex.props(styles.sectionTitle)}>Balance musical</h2>
               <button
-                key={sw}
                 type="button"
-                onClick={() => {
-                  setPreferredSoftware(sw);
-                  toastManager.add({
-                    title: `Software principal configurado: ${sw}`,
-                    type: 'info',
-                    timeout: 2400,
-                  });
-                }}
-                {...stylex.props(
-                  styles.swBtn,
-                  preferredSoftware === sw && styles.swBtnActive,
-                )}
+                onClick={() => setShowKeyGrid((prev) => !prev)}
+                {...stylex.props(styles.quietLinkBtn)}
               >
-                {sw}
+                {showKeyGrid ? 'Ocultar tonos' : 'Tonos detallados'}
               </button>
-            ))}
-          </div>
-        </div>
-
-        <div {...stylex.props(styles.dnaWorkspace)}>
-          <section {...stylex.props(styles.dnaLeft)}>
-            <div {...stylex.props(styles.telemetryRow)}>
-              <div {...stylex.props(styles.telemetryCard)}>
-                <div {...stylex.props(styles.tVal, styles.tValEmerald)}>
-                  {averageBpm}
-                </div>
-                <div {...stylex.props(styles.tName)}>Ritmo dominante</div>
-                <div {...stylex.props(styles.tSub)}>
-                  Zona habitual entre 122 y 128 BPM
-                </div>
-              </div>
-
-              <div {...stylex.props(styles.telemetryCard)}>
-                <div {...stylex.props(styles.tVal)}>Subida progresiva</div>
-                <div {...stylex.props(styles.tName)}>Curva de mezcla</div>
-                <div {...stylex.props(styles.tSub)}>
-                  Transiciones graduales sin saltos bruscos
-                </div>
-              </div>
-
-              <div {...stylex.props(styles.telemetryCard)}>
-                <div {...stylex.props(styles.tVal)}>Melódica de club</div>
-                <div {...stylex.props(styles.tName)}>Identidad sonora</div>
-                <div {...stylex.props(styles.tSub)}>
-                  {dnaProfile?.dominant_camelot_keys?.slice(0, 3).join(' · ') ||
-                    '8A · 9A · 10A'}
-                </div>
-              </div>
             </div>
 
-            {viewMode === 'simple' ? (
-              <div {...stylex.props(styles.panelCard)}>
-                <div {...stylex.props(styles.panelHead)}>
-                  <h2 {...stylex.props(styles.panelTitle)}>
-                    Distribución de energía en tus sets
-                  </h2>
-                  <span {...stylex.props(styles.panelMeta)}>
-                    Perfilado automático
-                  </span>
-                </div>
+            <div {...stylex.props(styles.segmentedMeter)}>
+              <div
+                {...stylex.props(styles.meterSegment)}
+                style={{ width: '62%', backgroundColor: '#14b8a6' }}
+              />
+              <div
+                {...stylex.props(styles.meterSegment)}
+                style={{ width: '24%', backgroundColor: '#38bdf8' }}
+              />
+              <div
+                {...stylex.props(styles.meterSegment)}
+                style={{ width: '14%', backgroundColor: '#f59e0b' }}
+              />
+            </div>
 
-                <div {...stylex.props(styles.vibeRow)}>
-                  <div {...stylex.props(styles.vibeTopLine)}>
-                    <span {...stylex.props(styles.vibeName)}>
-                      Melódico, profundo y envolvente
-                    </span>
-                    <strong {...stylex.props(styles.vibePct)}>62%</strong>
-                  </div>
-                  <div {...stylex.props(styles.vibeDesc)}>
-                    Bases hipnóticas y progresivas que sostienen la pista sin
-                    fatiga auditiva.
-                  </div>
-                  <div {...stylex.props(styles.vibeBarBg)}>
-                    <div
-                      {...stylex.props(styles.vibeBarFill)}
-                      style={{ width: '62%', backgroundColor: '#14b8a6' }}
-                    />
-                  </div>
-                </div>
+            <div {...stylex.props(styles.legendRow)}>
+              <span {...stylex.props(styles.legendItem)}>
+                <span>Melódico</span>
+                <strong {...stylex.props(styles.legendTeal)}>62%</strong>
+              </span>
+              <span {...stylex.props(styles.legendDot)}>·</span>
+              <span {...stylex.props(styles.legendItem)}>
+                <span>Hora pico</span>
+                <strong {...stylex.props(styles.legendSky)}>24%</strong>
+              </span>
+              <span {...stylex.props(styles.legendDot)}>·</span>
+              <span {...stylex.props(styles.legendItem)}>
+                <span>Vocal</span>
+                <strong {...stylex.props(styles.legendAmber)}>14%</strong>
+              </span>
+            </div>
 
-                <div {...stylex.props(styles.vibeRow)}>
-                  <div {...stylex.props(styles.vibeTopLine)}>
-                    <span {...stylex.props(styles.vibeName)}>
-                      Energía de hora pico
-                    </span>
-                    <strong {...stylex.props(styles.vibePct)}>24%</strong>
-                  </div>
-                  <div {...stylex.props(styles.vibeDesc)}>
-                    Cortes con transientes marcados y sub-bajo firme para el
-                    clímax del set.
-                  </div>
-                  <div {...stylex.props(styles.vibeBarBg)}>
+            {showKeyGrid && (
+              <div {...stylex.props(styles.camelotGrid)}>
+                {CAMELOT_KEYS_MINOR.map((item) => {
+                  const active = dominantKeys.includes(item.code);
+                  return (
                     <div
-                      {...stylex.props(styles.vibeBarFill)}
-                      style={{ width: '24%', backgroundColor: '#22c55e' }}
-                    />
-                  </div>
-                </div>
-
-                <div {...stylex.props(styles.vibeRow)}>
-                  <div {...stylex.props(styles.vibeTopLine)}>
-                    <span {...stylex.props(styles.vibeName)}>
-                      Vocal y cierre melódico
-                    </span>
-                    <strong {...stylex.props(styles.vibePct)}>14%</strong>
-                  </div>
-                  <div {...stylex.props(styles.vibeDesc)}>
-                    Temas con presencia vocal pensados para aperturas o cierres
-                    memorables.
-                  </div>
-                  <div {...stylex.props(styles.vibeBarBg)}>
-                    <div
-                      {...stylex.props(styles.vibeBarFill)}
-                      style={{ width: '14%', backgroundColor: '#f59e0b' }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div {...stylex.props(styles.panelCard)}>
-                <div {...stylex.props(styles.panelHead)}>
-                  <h2 {...stylex.props(styles.panelTitle)}>
-                    Matriz armónica Camelot 1A–12A (escala menor)
-                  </h2>
-                  <span {...stylex.props(styles.panelAccentMeta)}>
-                    Dominantes: {dominantKeys.join(' · ')}
-                  </span>
-                </div>
-                <div {...stylex.props(styles.camelotGrid)}>
-                  {PRO_CAMELOT_KEYS_MINOR.map((k) => {
-                    const isDominant = dominantKeys.includes(k.code);
-                    return (
-                      <div
-                        key={k.code}
+                      key={item.code}
+                      {...stylex.props(
+                        styles.camelotCell,
+                        active && styles.camelotCellActive,
+                      )}
+                    >
+                      <span
                         {...stylex.props(
-                          styles.camelotCell,
-                          isDominant && styles.camelotCellActive,
+                          styles.camelotCode,
+                          active && styles.camelotCodeActive,
                         )}
                       >
-                        <span
-                          {...stylex.props(
-                            styles.camelotCode,
-                            isDominant && styles.camelotCodeActive,
-                          )}
-                        >
-                          {k.code}
-                        </span>
-                        <span {...stylex.props(styles.camelotNote)}>
-                          {k.note}
-                        </span>
-                        <span {...stylex.props(styles.camelotPct)}>
-                          {k.pct}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                        {item.code}
+                      </span>
+                      <span {...stylex.props(styles.camelotPct)}>
+                        {item.pct}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
 
-          <section {...stylex.props(styles.dnaRight)}>
-            <h2 {...stylex.props(styles.panelTitle)}>
-              {viewMode === 'simple'
-                ? 'Reglas activas al ordenar y sugerir mezclas'
-                : 'Invariantes de curaduría y motor DSP'}
+          <section {...stylex.props(styles.sectionBlock)}>
+            <h2 {...stylex.props(styles.sectionTitle)}>
+              Preferencias al ordenar
             </h2>
 
-            <div {...stylex.props(styles.rulesRack)}>
-              <div {...stylex.props(styles.ruleRow)}>
-                <div {...stylex.props(styles.ruleInfo)}>
-                  <div {...stylex.props(styles.ruleTitle)}>
-                    Evitar cruce de voces
-                  </div>
-                  <div {...stylex.props(styles.ruleDesc)}>
-                    Enlaza la salida instrumental (Cue 4) con la entrada limpia
-                    (Cue 1) del siguiente tema.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setRuleVocalClash(!ruleVocalClash)}
-                  {...stylex.props(
-                    styles.toggleBtn,
-                    ruleVocalClash && styles.toggleActive,
-                  )}
-                >
-                  {ruleVocalClash ? 'Activo' : 'Inactivo'}
-                </button>
-              </div>
-
-              <div {...stylex.props(styles.ruleRow)}>
-                <div {...stylex.props(styles.ruleInfo)}>
-                  <div {...stylex.props(styles.ruleTitle)}>
-                    Continuidad de sub-bajo
-                  </div>
-                  <div {...stylex.props(styles.ruleDesc)}>
-                    Mantiene presión sonora constante al encadenar bombos y
-                    líneas graves.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setRuleSubBass(!ruleSubBass)}
-                  {...stylex.props(
-                    styles.toggleBtn,
-                    ruleSubBass && styles.toggleActive,
-                  )}
-                >
-                  {ruleSubBass ? 'Activo' : 'Inactivo'}
-                </button>
-              </div>
-
-              <div {...stylex.props(styles.ruleRow)}>
-                <div {...stylex.props(styles.ruleInfo)}>
-                  <div {...stylex.props(styles.ruleTitle)}>
-                    Filtro forense de calidad de estudio
-                  </div>
-                  <div {...stylex.props(styles.ruleDesc)}>
-                    Descarta falsos lossless o rips comprimidos con corte
-                    espectral bajo.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setRuleAudioQuality(!ruleAudioQuality)}
-                  {...stylex.props(
-                    styles.toggleBtn,
-                    ruleAudioQuality && styles.toggleActive,
-                  )}
-                >
-                  {ruleAudioQuality ? 'Activo' : 'Inactivo'}
-                </button>
-              </div>
-
-              <div {...stylex.props(styles.ruleRow)}>
-                <div {...stylex.props(styles.ruleInfo)}>
-                  <div {...stylex.props(styles.ruleTitle)}>
-                    Nodo colaborativo del enjambre P2P
-                  </div>
-                  <div {...stylex.props(styles.ruleDesc)}>
-                    Mantiene activa la red comunitaria de masters verificados
-                    entre cabinas HERA.
-                  </div>
-                </div>
-                <span {...stylex.props(styles.toggleLocked)}>
-                  Siempre activo
-                </span>
-              </div>
-            </div>
-
-            <div {...stylex.props(styles.summaryBox)}>
-              <div {...stylex.props(styles.summaryHead)}>
-                <span {...stylex.props(styles.summaryTitle)}>
-                  Síntesis para el Copiloto de Cabina
-                </span>
-                <span {...stylex.props(styles.summaryStatus)}>
-                  {' '}
-                  Sincronizado
-                </span>
-              </div>
-              <p {...stylex.props(styles.summaryBody)}>
-                Al armar sets o puentes para{' '}
-                <strong>{preferredSoftware}</strong>, HERA priorizará
-                transiciones alrededor de <strong>{averageBpm}</strong> (
-                {formattedBpmZone}) y llaves{' '}
-                <strong>{dominantKeys.join(' · ')}</strong>. Reglas activas:{' '}
-                {goldenRulesString}.
-              </p>
-              <div>
-                <Link to="/bridge" {...stylex.props(styles.applyBridgeLink)}>
-                  <Icon name="bridge" size={14} />
-                  <span>Aplicar este ADN en Puente y Copiloto</span>
-                </Link>
-              </div>
+            <div {...stylex.props(styles.prefsBox)}>
+              <PreferenceSwitchRow
+                label="Evitar choque de voces"
+                checked={ruleVocalClash}
+                onToggle={() => setRuleVocalClash((v) => !v)}
+              />
+              <PreferenceSwitchRow
+                label="Mantener graves continuos"
+                checked={ruleSubBass}
+                onToggle={() => setRuleSubBass((v) => !v)}
+              />
+              <PreferenceSwitchRow
+                label="Ocultar audio de baja calidad"
+                checked={ruleAudioQuality}
+                onToggle={() => setRuleAudioQuality((v) => !v)}
+                isLast
+              />
             </div>
           </section>
         </div>
@@ -424,219 +276,182 @@ function ViewDjStyleDna() {
 
 const styles = stylex.create({
   pageContainer: {
-    display: 'flex',
-    flexDirection: 'column',
     height: '100%',
+    width: '100%',
     backgroundColor: '#0c0e12',
     color: '#edeff3',
-    overflow: 'hidden',
+    overflowY: 'auto',
+    paddingBlock: '36px',
+    paddingInline: '32px',
   },
-  headerBar: {
-    paddingBlock: '14px',
-    paddingInline: '20px',
-    backgroundColor: '#12161d',
-    borderBottomWidth: '1px',
-    borderBottomStyle: 'solid',
-    borderBottomColor: '#232a36',
+  centeredSheet: {
+    maxWidth: '720px',
+    marginInline: 'auto',
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '34px',
+  },
+  headerRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    rowGap: '10px',
+    rowGap: '12px',
     columnGap: '16px',
-    flexShrink: 0,
-  },
-  titleBlock: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '3px',
-  },
-  titleRow: {
-    display: 'flex',
-    alignItems: 'center',
-    columnGap: '8px',
+    paddingBottom: '20px',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#232a36',
   },
   pageTitle: {
     margin: 0,
-    fontSize: '15px',
-    fontWeight: 700,
+    fontSize: '22px',
+    fontWeight: 600,
+    letterSpacing: '-0.02em',
     color: '#edeff3',
   },
-  subDesc: {
-    margin: 0,
-    fontSize: '12px',
-    color: '#8e98a8',
-  },
-  switchesGroup: {
-    display: 'flex',
+  segmentedBar: {
+    display: 'inline-flex',
     alignItems: 'center',
-    flexWrap: 'wrap',
-    rowGap: '6px',
-    columnGap: '6px',
-  },
-  deckLabel: {
-    fontSize: '12px',
-    color: '#8e98a8',
-    marginRight: '4px',
-  },
-  swBtn: {
-    paddingBlock: '5px',
-    paddingInline: '10px',
-    borderRadius: '6px',
-    backgroundColor: '#171c24',
+    columnGap: '2px',
+    padding: '3px',
+    backgroundColor: '#12161d',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: '#232a36',
+    borderRadius: '999px',
+  },
+  segmentBtn: {
+    paddingBlock: '5px',
+    paddingInline: '12px',
+    borderRadius: '999px',
+    borderWidth: 0,
+    backgroundColor: 'transparent',
     color: '#8e98a8',
     fontSize: '12px',
     fontWeight: 500,
     cursor: 'pointer',
-    transition: 'border-color 0.14s ease, color 0.14s ease',
+    transition: 'background-color 0.15s ease-out, color 0.15s ease-out',
   },
-  swBtnActive: {
-    backgroundColor: 'rgba(20, 184, 166, 0.14)',
-    borderColor: 'rgba(20, 184, 166, 0.4)',
-    color: '#2dd4bf',
+  segmentBtnActive: {
+    backgroundColor: '#1b222d',
+    color: '#edeff3',
     fontWeight: 600,
   },
-  dnaWorkspace: {
-    flexGrow: 1,
-    flexShrink: 1,
-    flexBasis: '0%',
-    minHeight: 0,
-    display: 'grid',
-    gridTemplateColumns: '1.15fr 0.95fr',
-    columnGap: '18px',
-    padding: '20px',
-    overflowY: 'auto',
-  },
-  dnaLeft: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '16px',
-    minWidth: 0,
-  },
-  dnaRight: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '14px',
-    minWidth: 0,
-  },
-  telemetryRow: {
+  statsStrip: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',
-    columnGap: '12px',
+    paddingBottom: '28px',
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#232a36',
   },
-  telemetryCard: {
-    backgroundColor: '#12161d',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#232a36',
-    borderRadius: '8px',
-    padding: '14px',
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '4px',
-  },
-  tVal: {
-    fontSize: '18px',
-    fontWeight: 700,
-    color: '#edeff3',
-    fontVariantNumeric: 'tabular-nums',
-    lineHeight: 1.2,
-  },
-  tValEmerald: {
-    color: '#2dd4bf',
-  },
-  tName: {
-    fontSize: '12px',
-    fontWeight: 600,
-    color: '#edeff3',
-  },
-  tSub: {
-    fontSize: '11.5px',
-    color: '#8e98a8',
-    lineHeight: 1.35,
-  },
-  panelCard: {
-    backgroundColor: '#12161d',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#232a36',
-    borderRadius: '8px',
-    padding: '16px',
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '14px',
-  },
-  panelHead: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    columnGap: '12px',
-  },
-  panelTitle: {
-    margin: 0,
-    fontSize: '13.5px',
-    fontWeight: 600,
-    color: '#edeff3',
-  },
-  panelMeta: {
-    fontSize: '11.5px',
-    color: '#8e98a8',
-  },
-  panelAccentMeta: {
-    fontSize: '11.5px',
-    fontWeight: 600,
-    color: '#2dd4bf',
-    fontVariantNumeric: 'tabular-nums',
-  },
-  vibeRow: {
+  statCol: {
     display: 'flex',
     flexDirection: 'column',
     rowGap: '6px',
+    paddingRight: '20px',
   },
-  vibeTopLine: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  statColBorder: {
+    paddingLeft: '24px',
+    borderLeftWidth: '1px',
+    borderLeftStyle: 'solid',
+    borderLeftColor: '#232a36',
+  },
+  statValue: {
+    fontSize: '26px',
+    fontWeight: 600,
+    letterSpacing: '-0.02em',
+    color: '#edeff3',
+    fontVariantNumeric: 'tabular-nums',
+    lineHeight: 1.15,
+  },
+  statCaption: {
     fontSize: '12.5px',
+    color: '#8e98a8',
+    fontWeight: 400,
   },
-  vibeName: {
+  sectionBlock: {
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '14px',
+  },
+  sectionHeaderRow: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: '12px',
+  },
+  sectionTitle: {
+    margin: 0,
+    fontSize: '15px',
     fontWeight: 600,
     color: '#edeff3',
   },
-  vibePct: {
-    color: '#2dd4bf',
-    fontVariantNumeric: 'tabular-nums',
-  },
-  vibeDesc: {
+  quietLinkBtn: {
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    paddingBlock: '2px',
+    paddingInline: '4px',
     fontSize: '12px',
+    fontWeight: 500,
     color: '#8e98a8',
-    lineHeight: 1.4,
+    cursor: 'pointer',
   },
-  vibeBarBg: {
-    height: '6px',
+  segmentedMeter: {
+    display: 'flex',
     width: '100%',
-    backgroundColor: '#0c0e12',
+    height: '12px',
     borderRadius: '999px',
     overflow: 'hidden',
+    columnGap: '3px',
+    backgroundColor: '#12161d',
   },
-  vibeBarFill: {
+  meterSegment: {
     height: '100%',
-    borderRadius: '999px',
+  },
+  legendRow: {
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    columnGap: '10px',
+    rowGap: '6px',
+    fontSize: '12.5px',
+    color: '#8e98a8',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  legendItem: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '5px',
+  },
+  legendDot: {
+    color: '#4b5565',
+  },
+  legendTeal: {
+    color: '#2dd4bf',
+    fontWeight: 600,
+  },
+  legendSky: {
+    color: '#38bdf8',
+    fontWeight: 600,
+  },
+  legendAmber: {
+    color: '#f59e0b',
+    fontWeight: 600,
   },
   camelotGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(6, 1fr)',
     rowGap: '8px',
     columnGap: '8px',
+    paddingTop: '6px',
   },
   camelotCell: {
-    paddingBlock: '10px',
-    paddingInline: '8px',
+    paddingBlock: '8px',
+    paddingInline: '6px',
     borderRadius: '6px',
-    backgroundColor: '#0c0e12',
+    backgroundColor: '#12161d',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: '#232a36',
@@ -648,138 +463,76 @@ const styles = stylex.create({
   },
   camelotCellActive: {
     backgroundColor: 'rgba(20, 184, 166, 0.12)',
-    borderColor: 'rgba(20, 184, 166, 0.36)',
+    borderColor: 'rgba(20, 184, 166, 0.35)',
   },
   camelotCode: {
-    fontWeight: 700,
-    fontSize: '12.5px',
+    fontSize: '12px',
+    fontWeight: 600,
     color: '#edeff3',
   },
   camelotCodeActive: {
     color: '#2dd4bf',
   },
-  camelotNote: {
-    fontSize: '10.5px',
-    color: '#8e98a8',
-  },
   camelotPct: {
-    fontSize: '10.5px',
+    fontSize: '11px',
     color: '#8e98a8',
   },
-  rulesRack: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '8px',
-  },
-  ruleRow: {
+  prefsBox: {
     backgroundColor: '#12161d',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: '#232a36',
-    borderRadius: '8px',
-    paddingBlock: '11px',
-    paddingInline: '14px',
+    borderRadius: '10px',
+    overflow: 'hidden',
+  },
+  prefRow: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    columnGap: '14px',
+    columnGap: '16px',
+    paddingBlock: '14px',
+    paddingInline: '18px',
   },
-  ruleInfo: {
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '3px',
-    minWidth: 0,
+  prefRowDivider: {
+    borderBottomWidth: '1px',
+    borderBottomStyle: 'solid',
+    borderBottomColor: '#1d232e',
   },
-  ruleTitle: {
-    fontSize: '13px',
-    fontWeight: 600,
+  prefLabel: {
+    fontSize: '13.5px',
+    fontWeight: 500,
     color: '#edeff3',
   },
-  ruleDesc: {
-    fontSize: '12px',
-    color: '#8e98a8',
-    lineHeight: 1.4,
-  },
-  toggleBtn: {
-    flexShrink: 0,
-    paddingBlock: '5px',
-    paddingInline: '11px',
-    borderRadius: '6px',
-    fontSize: '11.5px',
-    fontWeight: 600,
+  switchTrack: {
+    position: 'relative',
+    width: '38px',
+    height: '22px',
+    borderRadius: '999px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#2c3545',
+    backgroundColor: '#1b212c',
+    padding: 0,
     cursor: 'pointer',
-    backgroundColor: '#171c24',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#232a36',
-    color: '#8e98a8',
-  },
-  toggleActive: {
-    backgroundColor: 'rgba(20, 184, 166, 0.14)',
-    borderColor: 'rgba(20, 184, 166, 0.38)',
-    color: '#2dd4bf',
-  },
-  toggleLocked: {
     flexShrink: 0,
-    paddingBlock: '5px',
-    paddingInline: '10px',
-    borderRadius: '6px',
-    fontSize: '11.5px',
-    fontWeight: 600,
-    backgroundColor: '#0c0e12',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#232a36',
-    color: '#2dd4bf',
+    transition: 'background-color 0.16s ease-out, border-color 0.16s ease-out',
   },
-  summaryBox: {
-    backgroundColor: '#12161d',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(20, 184, 166, 0.28)',
-    borderRadius: '8px',
-    padding: '15px',
-    display: 'flex',
-    flexDirection: 'column',
-    rowGap: '8px',
-  },
-  summaryHead: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  summaryTitle: {
-    fontSize: '13px',
-    fontWeight: 600,
-    color: '#edeff3',
-  },
-  summaryStatus: {
-    fontSize: '11.5px',
-    fontWeight: 600,
-    color: '#2dd4bf',
-  },
-  summaryBody: {
-    margin: 0,
-    fontSize: '12.5px',
-    lineHeight: 1.55,
-    color: '#8e98a8',
-  },
-  applyBridgeLink: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    columnGap: '8px',
-    marginTop: '4px',
-    paddingBlock: '7px',
-    paddingInline: '13px',
-    borderRadius: '6px',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#14b8a6',
+  switchTrackOn: {
     backgroundColor: '#14b8a6',
-    color: '#041311',
-    fontSize: '12px',
-    fontWeight: 700,
-    lineHeight: 1.2,
-    textDecoration: 'none',
+    borderColor: '#14b8a6',
+  },
+  switchThumb: {
+    position: 'absolute',
+    top: '2px',
+    left: '2px',
+    width: '16px',
+    height: '16px',
+    borderRadius: '999px',
+    backgroundColor: '#edeff3',
+    transition: 'transform 0.16s ease-out',
+  },
+  switchThumbOn: {
+    transform: 'translateX(16px)',
+    backgroundColor: '#ffffff',
   },
 });

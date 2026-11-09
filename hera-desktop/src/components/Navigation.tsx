@@ -1,9 +1,8 @@
 import { NavigationMenu } from '@base-ui/react/navigation-menu';
 import * as stylex from '@stylexjs/stylex';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import type { LinkProps } from '@tanstack/react-router';
 
-import { useHeraViewStore } from '../lib/hera-human-language';
 import useLibraryStore from '../lib/store';
 import Icon, { type IconName } from './Icon';
 import ProgressBar from './ProgressBar';
@@ -38,23 +37,13 @@ function NavItem({ to, label, icon }: NavItemProps) {
 }
 
 export default function Navigation() {
-  const viewMode = useHeraViewStore((state) => state.viewMode);
-  const setViewMode = useHeraViewStore((state) => state.setViewMode);
-  const openOnboarding = useHeraViewStore((state) => state.openOnboarding);
-  const navigate = useNavigate();
-
-  const handleOpenAiConfig = () => {
-    openOnboarding();
-    void navigate({ to: '/bridge' });
-  };
-
   return (
-    <aside {...stylex.props(styles.rail)} aria-label="Navegación de cabina">
+    <aside {...stylex.props(styles.rail)} aria-label="Navegación principal">
       <div {...stylex.props(styles.topSection)}>
         <div {...stylex.props(styles.brandBar)}>
           <svg
-            width="20"
-            height="20"
+            width="18"
+            height="18"
             viewBox="0 0 24 24"
             fill="none"
             aria-hidden="true"
@@ -82,68 +71,27 @@ export default function Navigation() {
           <span {...stylex.props(styles.brandTitle)}>HERA</span>
           <span
             {...stylex.props(styles.brandStatusDot)}
-            title="Motor DSP activo"
+            title="Motor de audio listo"
           />
         </div>
 
         <NavigationMenu.Root
           orientation="vertical"
-          aria-label="Navegación principal"
+          aria-label="Secciones"
           {...stylex.props(styles.navMenuRoot)}
         >
           <NavigationMenu.List {...stylex.props(styles.viewLinks)}>
             <NavItem to="/library" label="Biblioteca" icon="disc" />
             <NavItem to="/artists" label="Artistas" icon="artists" />
             <NavItem to="/playlists" label="Playlists" icon="crateList" />
-            <NavItem to="/bridge" label="Puente y Copiloto" icon="bridge" />
-            <NavItem to="/dna" label="Mi ADN" icon="dna" />
+            <NavItem to="/bridge" label="Transición" icon="bridge" />
+            <NavItem to="/dna" label="Mi Estilo" icon="dna" />
             <NavItem to="/settings" label="Ajustes" icon="sliders" />
           </NavigationMenu.List>
         </NavigationMenu.Root>
       </div>
 
       <div {...stylex.props(styles.footerSection)}>
-        <div
-          {...stylex.props(styles.modeSegment)}
-          role="group"
-          aria-label="Modo de lectura"
-        >
-          <button
-            type="button"
-            onClick={() => setViewMode('simple')}
-            {...stylex.props(
-              styles.modeBtn,
-              viewMode === 'simple' && styles.modeBtnActive,
-            )}
-            title="Lenguaje directo de cabina sin tecnicismos"
-          >
-            Simple
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('pro')}
-            {...stylex.props(
-              styles.modeBtn,
-              viewMode === 'pro' && styles.modeBtnActive,
-            )}
-            title="Métricas técnicas: Camelot, 2-Opt TSP y espectro en kHz"
-          >
-            Pro
-          </button>
-        </div>
-
-        <button
-          type="button"
-          onClick={handleOpenAiConfig}
-          {...stylex.props(styles.engineStatusBtn)}
-          title="Configurar motor de IA y conexión al enjambre P2P"
-        >
-          <Icon name="cpu" size={14} color="#2dd4bf" />
-          <span {...stylex.props(styles.engineStatusText)}>
-            {viewMode === 'simple' ? 'Copiloto y Red' : 'Motor IA · P2P'}
-          </span>
-        </button>
-
         <div
           {...stylex.props(styles.statusRow)}
           aria-label="Estado de biblioteca"
@@ -155,7 +103,7 @@ export default function Navigation() {
           to="/settings/about"
           draggable={false}
           {...stylex.props(styles.supportLink)}
-          title="Proyecto Open Source MIT · Apoyar desarrollo"
+          title="Acerca de HERA · Proyecto Open Source MIT"
         >
           <Icon name="heart" size={14} />
           <span>Apoyar proyecto</span>
@@ -210,10 +158,10 @@ function Status() {
 
 const styles = stylex.create({
   rail: {
-    width: '216px',
+    width: '196px',
     flexGrow: 0,
     flexShrink: 0,
-    flexBasis: '216px',
+    flexBasis: '196px',
     backgroundColor: '#10141b',
     borderRightWidth: '1px',
     borderRightStyle: 'solid',
@@ -221,21 +169,21 @@ const styles = stylex.create({
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    paddingBlock: '14px',
+    paddingBlock: '16px',
     paddingInline: '10px',
     userSelect: 'none',
   },
   topSection: {
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '14px',
+    rowGap: '18px',
   },
   brandBar: {
     display: 'flex',
     alignItems: 'center',
     columnGap: '8px',
-    paddingBlock: '4px',
-    paddingInline: '8px',
+    paddingBlock: '2px',
+    paddingInline: '10px',
   },
   brandMark: {
     flexShrink: 0,
@@ -243,16 +191,15 @@ const styles = stylex.create({
   brandTitle: {
     fontSize: '13.5px',
     fontWeight: 700,
-    letterSpacing: '0.06em',
+    letterSpacing: '0.08em',
     color: '#edeff3',
   },
   brandStatusDot: {
     marginLeft: 'auto',
-    width: '7px',
-    height: '7px',
+    width: '6px',
+    height: '6px',
     borderRadius: '999px',
     backgroundColor: '#14b8a6',
-    boxShadow: '0 0 0 3px rgba(20, 184, 166, 0.16)',
   },
   navMenuRoot: {
     width: '100%',
@@ -260,7 +207,7 @@ const styles = stylex.create({
   viewLinks: {
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '3px',
+    rowGap: '2px',
     listStyle: 'none',
     padding: 0,
     margin: 0,
@@ -288,7 +235,7 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: {
       default: 'transparent',
-      '[data-status="active"]': 'rgba(20, 184, 166, 0.28)',
+      '[data-status="active"]': 'rgba(20, 184, 166, 0.24)',
     },
     color: {
       default: '#8e98a8',
@@ -299,10 +246,10 @@ const styles = stylex.create({
     backgroundColor: {
       default: 'transparent',
       ':hover': 'rgba(237, 239, 243, 0.04)',
-      '[data-status="active"]': 'rgba(20, 184, 166, 0.12)',
+      '[data-status="active"]': 'rgba(20, 184, 166, 0.1)',
     },
     transition:
-      'background-color 0.14s ease, color 0.14s ease, border-color 0.14s ease',
+      'background-color 0.15s ease-out, color 0.15s ease-out, border-color 0.15s ease-out',
   },
   navIcon: {
     color: 'inherit',
@@ -315,65 +262,15 @@ const styles = stylex.create({
   footerSection: {
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '9px',
+    rowGap: '6px',
     paddingTop: '12px',
     borderTopWidth: '1px',
     borderTopStyle: 'solid',
     borderTopColor: '#232a36',
   },
-  modeSegment: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    columnGap: '3px',
-    padding: '3px',
-    backgroundColor: '#0c0e12',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#232a36',
-    borderRadius: '6px',
-  },
-  modeBtn: {
-    borderWidth: 0,
-    borderRadius: '4px',
-    paddingBlock: '5px',
-    paddingInline: '8px',
-    fontSize: '11.5px',
-    fontWeight: 600,
-    cursor: 'pointer',
-    backgroundColor: 'transparent',
-    color: '#8e98a8',
-    transition: 'background-color 0.14s ease, color 0.14s ease',
-  },
-  modeBtnActive: {
-    backgroundColor: '#171c24',
-    color: '#2dd4bf',
-  },
-  engineStatusBtn: {
-    display: 'flex',
-    alignItems: 'center',
-    columnGap: '8px',
-    width: '100%',
-    paddingBlock: '7px',
-    paddingInline: '10px',
-    backgroundColor: '#12161d',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#232a36',
-    borderRadius: '6px',
-    color: '#edeff3',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    textAlign: 'left',
-  },
-  engineStatusText: {
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
   statusRow: {
-    fontSize: '11.5px',
-    paddingInline: '6px',
+    fontSize: '12px',
+    paddingInline: '8px',
     color: '#8e98a8',
     display: 'flex',
     alignItems: 'center',
@@ -388,8 +285,8 @@ const styles = stylex.create({
     display: 'inline-flex',
     alignItems: 'center',
     columnGap: '7px',
-    paddingBlock: '5px',
-    paddingInline: '6px',
+    paddingBlock: '4px',
+    paddingInline: '8px',
     borderRadius: '5px',
     fontSize: '11.5px',
     fontWeight: 500,
@@ -398,7 +295,7 @@ const styles = stylex.create({
       default: '#8e98a8',
       ':hover': '#edeff3',
     },
-    transition: 'color 0.14s ease',
+    transition: 'color 0.15s ease-out',
   },
   statusLibraryRefresh: {
     display: 'flex',

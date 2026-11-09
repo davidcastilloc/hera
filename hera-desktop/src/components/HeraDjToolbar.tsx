@@ -1,152 +1,126 @@
 import * as stylex from '@stylexjs/stylex';
-import { isTauri } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import LibraryAPI from '../api/LibraryAPI';
 import type { Track } from '../generated/typings';
-import useFormattedDuration from '../hooks/useFormattedDuration';
-import useInvalidate from '../hooks/useInvalidate';
 import {
   buildSetSpineForLibrary,
   exportCrateToDjSoftware,
   type DjExportFormat,
 } from '../lib/bridge-hera';
-import { useHeraViewStore } from '../lib/hera-human-language';
 import useLibraryStore from '../lib/store';
-import toastManager from '../lib/toast-manager';
 import Icon from './Icon';
 
 type Props = {
   title?: string;
   tracksOverride?: Track[];
+  tracks?: Track[];
   crateName?: string;
 };
 
+const FORMAT_LABELS: Record<DjExportFormat, string> = {
+  virtualdj: 'VirtualDJ',
+  rekordbox_xml: 'Rekordbox',
+  traktor_nml: 'Traktor',
+  m3u8: 'M3U8',
+};
+
 export default function HeraDjToolbar({
-  title = 'Biblioteca de Cabina',
+  title = 'Biblioteca',
   tracksOverride,
-  crateName = 'Hera_Active_Set',
+  tracks: tracksProp,
+  crateName = 'Hera_Booth_Crate',
 }: Props) {
   const storeTracks = useLibraryStore((state) => state.tracks);
-  const refreshing = useLibraryStore((state) => state.refreshing);
-  const tracks = tracksOverride ?? storeTracks;
-  const viewMode = useHeraViewStore((state) => state.viewMode);
-  const invalidate = useInvalidate();
+  const tracks = tracksOverride ?? tracksProp ?? storeTracks;
 
   const [selectedFormat, setSelectedFormat] =
     useState<DjExportFormat>('virtualdj');
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<
-    'import' | 'sort' | 'export' | null
-  >(null);
+  const [busyAction, setBusyAction] = useState<'spine' | 'export' | null>(null);
+  const [inlineDone, setInlineDone] = useState<'spine' | 'export' | null>(null);
+  const refreshing = useLibraryStore((state) => state.refreshing);
+  const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const totalDurationSeconds = useMemo(
-    () => tracks.reduce((sum, track) => sum + (track.duration || 0), 0),
-    [tracks],
-  );
-  const formattedDuration = useFormattedDuration(totalDurationSeconds);
+  useEffect(() => {
+    return () => {
+      if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
+    };
+  }, []);
+
+  const flashDone = (which: 'spine' | 'export') => {
+    if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
+    setInlineDone(which);
+    doneTimerRef.current = setTimeout(() => {
+      setInlineDone(null);
+    }, 2400);
+  };
 
   const handleQuickImportFolder = async () => {
-    if (!isTauri() || busyAction !== null || refreshing) return;
-    setBusyAction('import');
-    try {
-      const selected = await open({
-        directory: true,
-        multiple: true,
-      });
-      if (selected != null) {
-        await LibraryAPI.addLibraryFolders(selected);
-        await LibraryAPI.scan();
-        await invalidate();
-      }
-    } finally {
-      setBusyAction(null);
+    const selected = await open({
+      directory: true,
+      multiple: true,
+      title: 'Seleccionar carpetas de música',
+    });
+    if (selected == null) return;
+    const paths = Array.isArray(selected) ? selected : [selected];
+    if (paths.length > 0) {
+      await LibraryAPI.addLibraryFolders(paths);
     }
   };
 
   const handleOptimizeSetSpine = async () => {
-    if (tracks.length === 0 || busyAction !== null) return;
-    setBusyAction('sort');
+    if (tracks.length === 0 || busyAction) return;
+    setBusyAction('spine');
     try {
-      const spine = await buildSetSpineForLibrary(tracks, 'steady_climb');
-      if (spine.orderedTrackIds.length > 0) {
-        useLibraryStore.setState({
-          setSpineOrderedIds: spine.orderedTrackIds,
-        });
+      const result = await buildSetSpineForLibrary(tracks);
+      if (result.orderedTrackIds.length > 0) {
+        const byId = new Map(tracks.map((t) => [t.id, t]));
+        const reordered = result.orderedTrackIds
+          .map((id) => byId.get(id))
+          .filter((t): t is Track => t !== undefined);
+        if (reordered.length > 0) {
+          useLibraryStore.setState({ tracks: reordered });
+        }
       }
-      const msg =
-        viewMode === 'simple'
-          ? `Set ordenado (${spine.averageTransitionSynergy}% fluidez)`
-          : `Set Spine 2-Opt · ${spine.averageTransitionSynergy}% sinergia`;
-      setFeedback(msg);
-      toastManager.add({ title: msg, type: 'success', timeout: 4000 });
-    } catch {
-      setFeedback(
-        viewMode === 'simple'
-          ? 'Set ordenado para transición progresiva'
-          : 'Set Spine 2-Opt · Flujo armónico aplicado',
-      );
+      flashDone('spine');
     } finally {
       setBusyAction(null);
     }
   };
 
-  const handleExportSelected = async () => {
-    if (tracks.length === 0 || busyAction !== null) return;
+  const handleExportCrate = async () => {
+    if (tracks.length === 0 || busyAction) return;
     setBusyAction('export');
     try {
-      const res = await exportCrateToDjSoftware(crateName, tracks, [
-        selectedFormat,
-      ]);
-      const firstFile = res.written_files[0] ?? 'exports/';
-      const msg =
-        viewMode === 'simple'
-          ? `Exportado a ${selectedFormat.toUpperCase()} (${res.track_count} pistas)`
-          : `${res.track_count} pistas + 4 Hot Cues exportados (${firstFile})`;
-      setFeedback(msg);
-      toastManager.add({
-        title: `Crate exportado: ${firstFile}`,
-        type: 'success',
-        timeout: 5500,
-      });
-    } catch {
-      setFeedback(
-        `Crate preparado para ${selectedFormat.toUpperCase()} (4 Hot Cues)`,
-      );
+      await exportCrateToDjSoftware(crateName, tracks, [selectedFormat]);
+      flashDone('export');
     } finally {
       setBusyAction(null);
     }
   };
 
-  const trackCountLabel =
-    tracks.length === 1 ? '1 pista' : `${tracks.length} pistas`;
+  const trackCountLabel = useMemo(
+    () => (tracks.length === 1 ? '1 pista' : `${tracks.length} pistas`),
+    [tracks.length],
+  );
 
   return (
     <div
       {...stylex.props(styles.crateBar)}
-      aria-label="Controles de crate y exportación DJ"
+      aria-label="Acciones de biblioteca y exportación"
     >
       <div {...stylex.props(styles.leftMeta)}>
         <h1 {...stylex.props(styles.crateTitle)}>{title}</h1>
-        <span {...stylex.props(styles.budgetPill)}>
-          {trackCountLabel} · {formattedDuration}
-        </span>
-        {feedback && (
-          <span {...stylex.props(styles.feedbackBadge)}>
-            <Icon name="checkCircle" size={14} color="#2dd4bf" />
-            <span>{feedback}</span>
-          </span>
-        )}
+        <span {...stylex.props(styles.budgetPill)}>{trackCountLabel}</span>
       </div>
 
       <div {...stylex.props(styles.rightActions)}>
         <button
           type="button"
-          onClick={handleQuickImportFolder}
+          onClick={() => void handleQuickImportFolder()}
           disabled={busyAction !== null || refreshing}
           {...stylex.props(styles.secondaryBtn)}
-          title="Añadir carpeta local de música a la biblioteca"
         >
           <Icon name="folderPlus" size={14} />
           <span>Importar</span>
@@ -154,48 +128,60 @@ export default function HeraDjToolbar({
 
         <button
           type="button"
-          onClick={handleOptimizeSetSpine}
+          onClick={() => void handleOptimizeSetSpine()}
           disabled={tracks.length === 0 || busyAction !== null}
           {...stylex.props(
             styles.secondaryBtn,
+            inlineDone === 'spine' && styles.secondaryBtnDone,
             tracks.length === 0 && styles.disabledControl,
           )}
-          title={
-            viewMode === 'simple'
-              ? 'Ordenar las pistas para que el ritmo y la armonía fluyan sin choques'
-              : 'Ejecutar secuenciación global 2-Opt TSP + Rueda Camelot'
-          }
         >
-          <Icon name="sparkles" size={14} />
+          <Icon
+            name={inlineDone === 'spine' ? 'checkCircle' : 'sparkles'}
+            size={14}
+            color={inlineDone === 'spine' ? '#2dd4bf' : undefined}
+          />
           <span>
-            {viewMode === 'simple' ? 'Ordenar Set' : 'Ordenar Set (2-Opt)'}
+            {busyAction === 'spine'
+              ? 'Ordenando...'
+              : inlineDone === 'spine'
+                ? 'Mezcla ordenada'
+                : 'Ordenar mezcla'}
           </span>
         </button>
 
         <select
           value={selectedFormat}
           onChange={(e) => setSelectedFormat(e.target.value as DjExportFormat)}
-          aria-label="Formato de exportación para software DJ"
+          aria-label="Programa DJ de destino"
           {...stylex.props(styles.selectFormat)}
         >
-          <option value="virtualdj">VirtualDJ (.vdjfolder)</option>
-          <option value="rekordbox_xml">Rekordbox (.xml)</option>
-          <option value="traktor_nml">Traktor Pro (.nml)</option>
-          <option value="m3u8">M3U8 Universal (.m3u8)</option>
+          <option value="virtualdj">VirtualDJ</option>
+          <option value="rekordbox_xml">Rekordbox</option>
+          <option value="traktor_nml">Traktor</option>
+          <option value="m3u8">M3U8</option>
         </select>
 
         <button
           type="button"
-          onClick={handleExportSelected}
+          onClick={() => void handleExportCrate()}
           disabled={tracks.length === 0 || busyAction !== null}
           {...stylex.props(
             styles.primaryExportBtn,
             tracks.length === 0 && styles.disabledControl,
           )}
-          title="Exportar crate con BPM, tono y los 4 Hot Cues de frase"
         >
-          <Icon name="export" size={14} />
-          <span>Exportar a Cabina</span>
+          <Icon
+            name={inlineDone === 'export' ? 'checkCircle' : 'export'}
+            size={14}
+          />
+          <span>
+            {busyAction === 'export'
+              ? 'Exportando...'
+              : inlineDone === 'export'
+                ? `Exportado a ${FORMAT_LABELS[selectedFormat]}`
+                : 'Exportar'}
+          </span>
         </button>
       </div>
     </div>
@@ -213,7 +199,7 @@ const styles = stylex.create({
     justifyContent: 'space-between',
     columnGap: '12px',
     paddingBlock: 0,
-    paddingInline: '16px',
+    paddingInline: '18px',
     backgroundColor: '#12161d',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -228,20 +214,20 @@ const styles = stylex.create({
   },
   crateTitle: {
     margin: 0,
-    fontSize: '13.5px',
+    fontSize: '14px',
     fontWeight: 600,
     color: '#edeff3',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    maxWidth: '250px',
+    maxWidth: '280px',
   },
   budgetPill: {
     flexShrink: 0,
     fontSize: '12px',
     fontWeight: 500,
     color: '#8e98a8',
-    backgroundColor: '#0c0e12',
+    backgroundColor: '#171c24',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: '#232a36',
@@ -250,17 +236,6 @@ const styles = stylex.create({
     paddingInline: '9px',
     fontVariantNumeric: 'tabular-nums',
     whiteSpace: 'nowrap',
-  },
-  feedbackBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    columnGap: '6px',
-    fontSize: '12px',
-    fontWeight: 500,
-    color: '#2dd4bf',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
   },
   rightActions: {
     display: 'flex',
@@ -275,7 +250,7 @@ const styles = stylex.create({
     paddingBlock: '6px',
     paddingInline: '11px',
     fontSize: '12px',
-    fontWeight: 600,
+    fontWeight: 500,
     color: '#edeff3',
     backgroundColor: '#171c24',
     borderWidth: '1px',
@@ -284,11 +259,15 @@ const styles = stylex.create({
     borderRadius: '6px',
     cursor: 'pointer',
     lineHeight: 1.2,
-    transition: 'background-color 0.14s ease, border-color 0.14s ease',
+    transition: 'background-color 0.15s ease-out, border-color 0.15s ease-out',
+  },
+  secondaryBtnDone: {
+    borderColor: 'rgba(20, 184, 166, 0.4)',
+    color: '#2dd4bf',
   },
   selectFormat: {
     paddingBlock: '6px',
-    paddingInline: '10px',
+    paddingInline: '9px',
     fontSize: '12px',
     fontWeight: 500,
     backgroundColor: '#171c24',
@@ -305,9 +284,9 @@ const styles = stylex.create({
     alignItems: 'center',
     columnGap: '6px',
     paddingBlock: '6px',
-    paddingInline: '12px',
+    paddingInline: '13px',
     fontSize: '12px',
-    fontWeight: 700,
+    fontWeight: 600,
     color: '#041311',
     backgroundColor: '#14b8a6',
     borderWidth: '1px',
@@ -316,7 +295,7 @@ const styles = stylex.create({
     borderRadius: '6px',
     cursor: 'pointer',
     lineHeight: 1.2,
-    transition: 'opacity 0.14s ease',
+    transition: 'opacity 0.15s ease-out',
   },
   disabledControl: {
     opacity: 0.45,

@@ -5,7 +5,7 @@ import toastManager from '../lib/toast-manager';
 
 export default function Toasts() {
   return (
-    <Toast.Provider toastManager={toastManager} timeout={2800} limit={5}>
+    <Toast.Provider toastManager={toastManager} timeout={3200} limit={1}>
       <Toast.Portal>
         <Toast.Viewport {...stylex.props(styles.viewport)}>
           <ToastList />
@@ -17,15 +17,18 @@ export default function Toasts() {
 
 function ToastList() {
   const { toasts } = Toast.useToastManager();
-  return toasts.map((toast) => (
+  const actionableToasts = toasts.filter(
+    (toast) => toast.type === 'warning' || toast.type === 'danger',
+  );
+
+  return actionableToasts.map((toast) => (
     <Toast.Root
       key={toast.id}
       toast={toast}
       onClick={() => toastManager.close(toast.id)}
       {...stylex.props(
         styles.toast,
-        typeVariantsStyles[toast.type as keyof typeof typeVariantsStyles] ??
-          typeVariantsStyles['info'],
+        toast.type === 'danger' ? styles.danger : styles.warning,
       )}
     >
       {toast.title}
@@ -36,47 +39,36 @@ function ToastList() {
 const styles = stylex.create({
   viewport: {
     position: 'fixed',
-    top: '108px',
+    bottom: '16px',
     right: '16px',
     width: '280px',
     zIndex: 1000,
     display: 'flex',
     flexDirection: 'column',
     rowGap: '8px',
-    columnGap: '8px',
     pointerEvents: 'none',
   },
   toast: {
     borderStyle: 'solid',
     borderWidth: '1px',
-    borderLeftWidth: '5px',
-    backgroundColor: 'var(--toasts-bg)',
-    borderTopColor: 'var(--border-color)',
-    borderRightColor: 'var(--border-color)',
-    borderBottomColor: 'var(--border-color)',
-    borderRadius: 'var(--border-radius)',
-    color: 'var(--text)',
+    backgroundColor: '#161b24',
+    borderColor: '#2a3342',
+    borderRadius: '8px',
+    boxShadow: '0 8px 24px rgba(0, 0, 0, 0.42)',
+    color: '#edeff3',
     paddingBlock: '10px',
     paddingInline: '12px',
     fontSize: '12px',
+    lineHeight: 1.4,
     cursor: 'pointer',
     pointerEvents: 'auto',
   },
-});
-
-const typeVariantsStyles = stylex.create({
-  success: {
-    borderLeftColor: 'var(--success-color)',
-  },
-  info: {
-    borderLeftColor: 'var(--info-color)',
-  },
   warning: {
-    borderLeftColor: 'var(--warning-color)',
+    borderColor: 'rgba(245, 158, 11, 0.45)',
   },
   danger: {
-    borderLeftColor: 'var(--danger-color)',
+    borderColor: 'rgba(239, 68, 68, 0.5)',
   },
 });
 
-export type ToastType = keyof typeof typeVariantsStyles;
+export type ToastType = 'success' | 'info' | 'warning' | 'danger';

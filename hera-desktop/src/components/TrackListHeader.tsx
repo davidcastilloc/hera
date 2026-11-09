@@ -35,7 +35,7 @@ export default function TrackListHeader({ sortable = true }: Props) {
       />
       <TrackListHeaderCell
         xstyle={styles.cellCues}
-        title="4 Cues"
+        title="Puntos"
         sortBy={null}
       />
       <TrackListHeaderCell
@@ -98,8 +98,8 @@ const styles = stylex.create({
     flexShrink: 0,
   },
   cellCues: {
-    width: '104px',
-    minWidth: '104px',
+    width: '76px',
+    minWidth: '76px',
     flexShrink: 0,
   },
   cellDuration: {

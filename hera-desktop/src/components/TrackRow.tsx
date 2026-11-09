@@ -132,17 +132,15 @@ export default function TrackRow(props: Props) {
           </div>
           <div
             {...stylex.props(cellStyles.cell, cellStyles.hotCues)}
-            title="4 Hot Cues: 1 Intro · 2 Quiebre · 3 Drop · 4 Salida"
+            title="Puntos: Entrada · Calma · Clímax · Salida"
           >
             <div {...stylex.props(cellStyles.cueRail)}>
               {CUE_SLOTS.map((cue) => (
-                <span key={cue.num} {...stylex.props(cellStyles.cueChip)}>
-                  <span
-                    {...stylex.props(cellStyles.cueDot)}
-                    style={{ backgroundColor: cue.color }}
-                  />
-                  <span {...stylex.props(cellStyles.cueNum)}>{cue.num}</span>
-                </span>
+                <span
+                  key={cue.num}
+                  {...stylex.props(cellStyles.cueDot)}
+                  style={{ backgroundColor: cue.color }}
+                />
               ))}
             </div>
           </div>
@@ -328,8 +326,8 @@ const cellStyles = stylex.create({
     color: '#2dd4bf',
   },
   hotCues: {
-    width: '104px',
-    minWidth: '104px',
+    width: '76px',
+    minWidth: '76px',
     flexShrink: 0,
     display: 'flex',
     alignItems: 'center',
@@ -337,31 +335,13 @@ const cellStyles = stylex.create({
   cueRail: {
     display: 'inline-flex',
     alignItems: 'center',
-    columnGap: '4px',
-    paddingBlock: '2px',
-    paddingInline: '5px',
-    borderRadius: '4px',
-    backgroundColor: '#0c0e12',
-    borderWidth: '1px',
-    borderStyle: 'solid',
-    borderColor: '#232a36',
+    columnGap: '6px',
     lineHeight: 1,
   },
-  cueChip: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    columnGap: '2px',
-  },
   cueDot: {
-    width: '5px',
-    height: '5px',
+    width: '6.5px',
+    height: '6.5px',
     borderRadius: '999px',
-  },
-  cueNum: {
-    fontSize: '9.5px',
-    fontWeight: 600,
-    color: '#8e98a8',
-    fontVariantNumeric: 'tabular-nums',
   },
   rightAligned: {
     textAlign: 'right',
