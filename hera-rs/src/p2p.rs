@@ -5500,9 +5500,8 @@ pub fn spawn_desktop_udp_p2p_daemon(
                     packet.extend_from_slice(&digest);
                     packet.extend_from_slice(slice);
 
-                    if socket.send_to(&packet, peer_addr).is_ok() {
-                        chunks_served_bg.fetch_add(1, Ordering::Relaxed);
-                    }
+                    chunks_served_bg.fetch_add(1, Ordering::SeqCst);
+                    let _ = socket.send_to(&packet, peer_addr);
                 }
             }
         })
@@ -5559,8 +5558,9 @@ pub fn request_chunk_from_peer_with_spray(
 
     for _attempt in 0..3 {
         let _ = sock.send_to(req_msg.as_bytes(), parsed);
-        if let Ok((n, _)) = sock.recv_from(&mut recv_buf) {
+        while let Ok((n, _)) = sock.recv_from(&mut recv_buf) {
             if n <= 36 {
+                // Ignore 14-byte HERA_PUNCH_ACK control packets without re-sending request
                 continue;
             }
             let r_idx = u32::from_be_bytes([recv_buf[0], recv_buf[1], recv_buf[2], recv_buf[3]]);
