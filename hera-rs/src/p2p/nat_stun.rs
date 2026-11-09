@@ -304,6 +304,7 @@ pub fn request_chunk_from_peer_with_spray(
     let sock = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
     let _ = sock.set_read_timeout(Some(Duration::from_millis(400)));
     let _ = sock.set_write_timeout(Some(Duration::from_millis(400)));
+    let local_port = sock.local_addr().map(|a| a.port()).unwrap_or(0);
 
     let parsed: SocketAddr = base_peer_addr
         .parse()
@@ -314,14 +315,17 @@ pub fn request_chunk_from_peer_with_spray(
     let count = spray_ports.clamp(1, 16) as i32;
     for step in 0..count {
         let candidate_port = ((base_port as i32) + step * port_delta).clamp(1024, 65535) as u16;
+        if candidate_port == local_port && (base_ip.is_loopback() || base_ip.is_unspecified()) {
+            continue;
+        }
         let target = SocketAddr::new(base_ip, candidate_port);
         let _ = sock.send_to(b"HERA_PUNCH_SYN", target);
     }
 
     let mut ack_buf = [0u8; 128];
     let mut active_peer_addr = match sock.recv_from(&mut ack_buf) {
-        Ok((_, ack_sender)) => ack_sender,
-        Err(_) => parsed,
+        Ok((n, ack_sender)) if ack_buf[..n].starts_with(b"HERA_PUNCH_ACK") => ack_sender,
+        _ => parsed,
     };
 
     let req_msg = format!("HERA_REQ_CHUNK:{track_id}:{chunk_idx}");
@@ -331,9 +335,11 @@ pub fn request_chunk_from_peer_with_spray(
         let _ = sock.send_to(req_msg.as_bytes(), active_peer_addr);
         while let Ok((n, sender)) = sock.recv_from(&mut recv_buf) {
             if n <= 36 {
-                // Late HERA_PUNCH_ACK on high-jitter mobile link: lock onto punched port and re-request
-                active_peer_addr = sender;
-                let _ = sock.send_to(req_msg.as_bytes(), active_peer_addr);
+                if recv_buf[..n].starts_with(b"HERA_PUNCH_ACK") && active_peer_addr != sender {
+                    // Late HERA_PUNCH_ACK on high-jitter mobile link: lock onto punched port and re-request
+                    active_peer_addr = sender;
+                    let _ = sock.send_to(req_msg.as_bytes(), active_peer_addr);
+                }
                 continue;
             }
             let r_idx = u32::from_be_bytes([recv_buf[0], recv_buf[1], recv_buf[2], recv_buf[3]]);

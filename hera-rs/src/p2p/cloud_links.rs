@@ -2,7 +2,6 @@
 //! 64-bit `SimHash` POPCNT Signatures, and Cloudflare SaaS Unit Economics (`src/p2p/cloud_links.rs`).
 
 use super::CloudReferralOption;
-use serde::{Deserialize, Serialize};
 
 /// Extract clean Google Drive File or Folder ID from any share link pasted by a non-technical DJ.
 pub fn extract_gdrive_id(url_or_id: &str) -> String {
