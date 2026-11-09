@@ -46,17 +46,17 @@
 **Interfaces:**
 - Produces: Root Cargo workspace (`members = ["hera-rs", "hera-desktop/src-ipc", "hera-desktop/src-tauri"]`, `default-members = ["hera-rs", "hera-desktop/src-ipc"]`) bumped to `version = "0.6.0"`, plus initial `hera-ipc` crate shell.
 
-- [ ] **Step 1: Update Section 1 & append `ADR-024` in `docs/superpowers/DECISIONS.md`**
+- [x] **Step 1: Update Section 1 & append `ADR-024` in `docs/superpowers/DECISIONS.md`**
   Replace the legacy Python (`uv`/`ruff`/`mypy`/`pytest`/`streamlit`/`librosa`) Section 1 with the `v0.6.0` Pure-Rust + Tauri v2 + `hera-ipc` + Bun `1.4.4` + Vite+ (`vp`) + `moon 2.6.5` baseline and canonical verification commands, and record `ADR-024` documenting the `v0.6.0` Agent-First Workspace, `hera-ipc` ACL/TS-RS separation, modularization, and lock-free `audio_engine`.
-- [ ] **Step 2: Create root `Cargo.toml` and `hera-desktop/src-ipc` skeleton, and align member `Cargo.toml` & `hera-rs/moon.yml`**
+- [x] **Step 2: Create root `Cargo.toml` and `hera-desktop/src-ipc` skeleton, and align member `Cargo.toml` & `hera-rs/moon.yml`**
   Define `[workspace]` (`resolver = "2"`, `members`, `default-members`), `[workspace.package]` (`version = "0.6.0"`, `license = "MIT"`), `[workspace.dependencies]` (`serde`, `serde_json`, `thiserror`, `ts-rs = "12.0.1"`), and root `[profile.release]`. Keep `axum = "0.7"` in `hera-rs/Cargo.toml` and `axum = "0.8.9"` in `hera-desktop/src-tauri/Cargo.toml`. Update `hera-rs/moon.yml` `inputs`/`outputs` for workspace-root `target/`.
-- [ ] **Step 3: Verify native workspace check, tests, and Cloudflare WASM target**
+- [x] **Step 3: Verify native workspace check, tests, and Cloudflare WASM target**
   Run:
   - `cargo check`
   - `cargo test -p hera-node-rs`
   - `cargo check --manifest-path hera-rs/Cargo.toml --target wasm32-unknown-unknown --features cloudflare --no-default-features`
   Expected: All exit `0` with zero errors.
-- [ ] **Step 4: Mark `[x]` and create atomic commit**
+- [x] **Step 4: Mark `[x]` and create atomic commit**
   Commit `build(workspace): establish v0.6.0 root Cargo workspace, hera-ipc crate, and ADR-024`.
 
 ---

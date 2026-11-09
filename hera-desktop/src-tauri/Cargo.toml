@@ -2,11 +2,11 @@
 
 [package]
 name = "hera-desktop"
-version = "0.5.0"
+version.workspace = true
 description = "HERA Desktop — Pure-Rust DJ Curation, 4-Hot-Cue DSP, P2P Swarm & AI Copilot"
-authors = ["David Castillo <vikruzdavid@gmail.com>"]
-license = "MIT"
-repository = "https://github.com/davidcastilloc/hera"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 edition = "2024"
 
 [features]
@@ -52,24 +52,15 @@ memoize = "0.6.0"
 nosleep = "0.2.1"
 pathdiff = "0.2.3"
 rayon = "1.12.0"
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.150"
+serde.workspace = true
+serde_json.workspace = true
 sqlx = { version = "0.8.6", features = ["sqlite", "runtime-tokio", "macros"] }
-strum = { version = "0.28.0", features = ["derive"] }
+strum.workspace = true
 tokio = { version = "1.52.3", features = ["full"] }
 tokio-util = { version = "0.7.18", features = ["io"] }
-thiserror = "2.0.18"
-ts-rs = "12.0.1"
+thiserror.workspace = true
+ts-rs.workspace = true
 uuid = { version = "1.23.1", features = ["v3", "v4", "fast-rng"] }
 walkdir = "2.5.0"
+hera-ipc = { path = "../src-ipc" }
 hera-node-rs = { path = "../../hera-rs" }
-
-[profile.dev]
-incremental = true # Compile your binary in smaller steps.
-
-[profile.release]
-codegen-units = 1 # Allows LLVM to perform better optimization.
-lto = true # Enables link-time-optimizations.
-opt-level = "s" # Prioritizes small binary size. Use `3` if you prefer speed.
-panic = "abort" # Higher performance by disabling panic handlers.
-strip = true # Ensures debug symbols are removed.

@@ -6,6 +6,7 @@ layer: 'application'
 
 dependsOn:
   - 'hera-rs'
+  - 'hera-ipc'
 
 tasks:
   check:

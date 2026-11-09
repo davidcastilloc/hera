@@ -2,28 +2,31 @@ $schema: 'https://moonrepo.dev/schemas/project.json'
 
 language: 'rust'
 stack: 'backend'
-layer: 'application'
+layer: 'library'
 
 tasks:
   check:
-    command: 'cargo check'
+    command: 'cargo check -p hera-node-rs'
     inputs:
       - 'src/**/*'
       - 'Cargo.toml'
-      - 'Cargo.lock'
+      - '/Cargo.toml'
+      - '/Cargo.lock'
 
   test:
-    command: 'cargo test'
+    command: 'cargo test -p hera-node-rs'
     inputs:
       - 'src/**/*'
       - 'Cargo.toml'
-      - 'Cargo.lock'
+      - '/Cargo.toml'
+      - '/Cargo.lock'
 
   build:
-    command: 'cargo build --release'
+    command: 'cargo build --release -p hera-node-rs'
     inputs:
       - 'src/**/*'
       - 'Cargo.toml'
-      - 'Cargo.lock'
+      - '/Cargo.toml'
+      - '/Cargo.lock'
     outputs:
-      - 'target/release/hera-node'
+      - '/target/release/hera-node'

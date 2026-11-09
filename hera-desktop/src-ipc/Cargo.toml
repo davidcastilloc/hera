@@ -1,0 +1,19 @@
+[package]
+name = "hera-ipc"
+version.workspace = true
+edition = "2021"
+description = "HERA Desktop Pure-Rust Hexagonal IPC Contracts (ts-rs) & Tauri v2 ACL Triad Guardian"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "hera_ipc"
+path = "src/lib.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
+strum.workspace = true
+hera-node-rs = { path = "../../hera-rs", default-features = false }

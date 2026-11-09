@@ -2,6 +2,7 @@ $schema: 'https://moonrepo.dev/schemas/workspace.json'
 
 projects:
   hera-rs: 'hera-rs'
+  hera-ipc: 'hera-desktop/src-ipc'
   hera-desktop: 'hera-desktop'
 
 vcs:
