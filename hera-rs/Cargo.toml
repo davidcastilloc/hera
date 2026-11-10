@@ -26,6 +26,10 @@ native = [
   "dep:realfft",
   "dep:rubato",
   "dep:fundsp",
+  "dep:usearch",
+  "dep:iroh",
+  "dep:candle-core",
+  "dep:candle-nn",
   "axum/tokio",
   "axum/http1",
 ]
@@ -51,6 +55,10 @@ realfft = { workspace = true, optional = true }
 rubato = { workspace = true, optional = true }
 fundsp = { workspace = true, optional = true }
 cpal = { workspace = true, optional = true }
+usearch = { workspace = true, optional = true }
+iroh = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
 
 # Cloudflare Workers Serverless Edge WASM runtime (`npx wrangler deploy`)
 worker = { version = "0.8", features = ["http", "axum"], optional = true }

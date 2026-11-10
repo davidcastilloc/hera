@@ -1,4 +1,8 @@
 use crate::structure::HotCuePoint;
+pub use crate::synergy_hnsw::{
+    prefilter_candidates_hnsw, synthesize_or_normalize_64d_embedding, HNSW_DEFAULT_STAGE1_POOL,
+    HNSW_PREFILTER_THRESHOLD,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -328,17 +332,27 @@ pub fn compute_target_energy_curve(
         .collect()
 }
 
-/// Global 2-Opt Traveling Salesperson (TSP) Crate Optimizer with Energy Arcs.
+/// Global 2-Opt Traveling Salesperson (TSP) Crate Optimizer with Energy Arcs
+/// and Stage-1 `usearch` HNSW candidate retrieval for large libraries (`> 64` tracks).
 pub fn optimize_crate_2opt(
     brief: &str,
     energy_arc: &str,
     candidates: Vec<CrateTrackCandidate>,
     max_tracks: Option<usize>,
 ) -> OptimizedCrateResult {
+    let stage1_candidates = if candidates.len() > HNSW_PREFILTER_THRESHOLD {
+        let target_pool = max_tracks
+            .unwrap_or(HNSW_DEFAULT_STAGE1_POOL)
+            .saturating_mul(4)
+            .max(HNSW_DEFAULT_STAGE1_POOL);
+        prefilter_candidates_hnsw(&candidates, target_pool)
+    } else {
+        candidates
+    };
     optimize_crate_with_spine(
         brief,
         energy_arc,
-        candidates,
+        stage1_candidates,
         max_tracks,
         &SetSpineConfig::default(),
     )

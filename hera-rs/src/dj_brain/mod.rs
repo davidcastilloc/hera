@@ -1,4 +1,5 @@
 pub mod backends;
+pub mod candle_local;
 pub mod cli_runner;
 pub mod dna;
 pub mod harness;
@@ -20,6 +21,9 @@ pub use backends::{
     auto_detect_local_backend, list_supported_ai_backends, scan_local_ai_servers, AiBackendOption,
     DetectedLocalServer,
 };
+#[cfg(feature = "native")]
+pub use candle_local::CandleLocalDjModel;
+pub use candle_local::{score_transition_neural, CandleTransitionScore};
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli_runner::execute_cli_agent_turn;
 pub use cli_runner::{build_cli_agent_args, check_binary_in_path};

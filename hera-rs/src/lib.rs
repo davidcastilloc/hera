@@ -12,6 +12,7 @@ pub mod p2p_exchange;
 pub mod router;
 pub mod structure;
 pub mod synergy;
+pub mod synergy_hnsw;
 
 #[cfg(feature = "cloudflare")]
 use std::sync::OnceLock;

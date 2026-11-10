@@ -1,4 +1,5 @@
 use super::backends::{auto_detect_local_backend, list_supported_ai_backends};
+use super::candle_local::score_transition_neural;
 #[cfg(not(target_arch = "wasm32"))]
 use super::cli_runner::execute_cli_agent_turn;
 #[cfg(not(target_arch = "wasm32"))]
@@ -184,19 +185,35 @@ pub fn evaluate_agent_harness_turn(
         )
     };
 
+    let base_bpm = req
+        .style_dna
+        .as_ref()
+        .map(|d| d.overall_average_bpm)
+        .unwrap_or(124.0);
+    let neural_note = score_transition_neural(base_bpm, base_bpm + 1.5, 0.76, 0.84, 0.94, 0.04)
+        .map(|s| {
+            format!(
+                " · Sinergia Neural {:.0}% ({})",
+                s.neural_synergy * 100.0,
+                s.recommended_technique
+            )
+        })
+        .unwrap_or_default();
+
     let dna_ctx = req
         .style_dna
         .as_ref()
         .map(|d| {
             format!(
-                "zona {} ({:.1} BPM, {:?}, software {})",
+                "zona {} ({:.1} BPM, {:?}, software {}){}",
                 d.dominant_bpm_zone,
                 d.overall_average_bpm,
                 d.dominant_camelot_keys,
-                d.preferred_dj_software
+                d.preferred_dj_software,
+                neural_note
             )
         })
-        .unwrap_or_else(|| "perfil estándar 124 BPM (8A, VirtualDJ)".to_string());
+        .unwrap_or_else(|| format!("perfil estándar 124 BPM (8A, VirtualDJ){}", neural_note));
 
     let swarm_index = state.build_broker_swarm_index();
     let swarm_preview: Vec<String> = swarm_index
