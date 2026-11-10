@@ -1523,21 +1523,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6d5a32815ae3f33302d95fdcb2ce17862f8c65363dcfd29360480ba1001fc9c"
 
 [[package]]
-name = "futures"
-version = "0.3.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b147ee9d1f6d097cef9ce628cd2ee62288d963e16fb287bd9286455b241382d"
-dependencies = [
- "futures-channel",
- "futures-core",
- "futures-executor",
- "futures-io",
- "futures-sink",
- "futures-task",
- "futures-util",
-]
-
-[[package]]
 name = "futures-channel"
 version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1623,7 +1608,6 @@ version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "389ca41296e6190b48053de0321d02a77f32f8a5d2461dd38762c0593805c6d6"
 dependencies = [
- "futures-channel",
  "futures-core",
  "futures-io",
  "futures-macro",
@@ -2004,7 +1988,6 @@ dependencies = [
  "axum 0.8.9",
  "base64 0.22.1",
  "dirs 6.0.0",
- "futures",
  "hera-ipc",
  "hera-node-rs",
  "home-config",
@@ -2051,7 +2034,6 @@ dependencies = [
  "hera-node-rs",
  "serde",
  "serde_json",
- "strum 0.28.0",
  "ts-rs",
 ]
 
@@ -2060,7 +2042,6 @@ name = "hera-node-rs"
 version = "0.6.0"
 dependencies = [
  "axum 0.7.9",
- "bytes",
  "http",
  "rustfft",
  "serde",

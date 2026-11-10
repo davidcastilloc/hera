@@ -1,13 +1,35 @@
 #!/usr/bin/env sh
-# Hook pre-push de Hera: Asegurar suite 100% verde antes de subir a GitHub/remoto
+# Hook pre-push de HERA: Asegurar suite Pure-Rust + Frontend 100% verde antes de subir a remoto
+set -eu
+
 echo "[*] Ejecutando verificaciones pre-push de HERA..."
 
-if command -v uv >/dev/null 2>&1; then
-    echo "[+] Ejecutando suite completa de tests..."
-    uv run --no-sync pytest -v || {
-        echo "[!] Fallaron los tests. Push abortado."
+# 1. Verificación y suite completa de tests en el workspace Rust
+if command -v cargo >/dev/null 2>&1; then
+    echo "[+] Verificando compilación Rust (cargo check --workspace)..."
+    cargo check --workspace || {
+        echo "[!] Error en cargo check --workspace. Push abortado."
         exit 1
     }
+
+    echo "[+] Ejecutando suite completa de tests Rust (hera-node-rs + hera-ipc)..."
+    cargo test -p hera-node-rs -p hera-ipc || {
+        echo "[!] Fallaron los tests en hera-node-rs / hera-ipc. Push abortado."
+        exit 1
+    }
+else
+    echo "[!] 'cargo' no encontrado en PATH. Omitiendo tests Rust."
+fi
+
+# 2. Verificación estática del frontend (hera-desktop con Bun + Vite+)
+if command -v bun >/dev/null 2>&1; then
+    echo "[+] Verificando frontend en hera-desktop (bun run check)..."
+    (cd hera-desktop && bun run check) || {
+        echo "[!] Error en bun run check (hera-desktop). Push abortado."
+        exit 1
+    }
+else
+    echo "[!] 'bun' no encontrado en PATH. Omitiendo verificación frontend."
 fi
 
 echo "[OK] Todo listo para el push."

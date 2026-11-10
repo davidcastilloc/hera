@@ -1,0 +1,5 @@
+{
+  "ignore": ["src/generated/**"],
+  "ignoreDependencies": ["@babel/plugin-proposal-decorators", "playwright"],
+  "ignoreBinaries": ["knip"]
+}

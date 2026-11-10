@@ -196,7 +196,7 @@ function ViewSettingsUI() {
 /**
  * Get the theme name in the current language
  */
-export function getTranslatedThemeName(themeName: string) {
+function getTranslatedThemeName(themeName: string) {
   switch (themeName) {
     case 'Light':
       return tMacro`Light`;

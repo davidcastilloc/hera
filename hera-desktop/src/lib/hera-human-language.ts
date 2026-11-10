@@ -1,7 +1,3 @@
-import { create } from 'zustand';
-
-export type HeraViewMode = 'simple' | 'pro';
-
 export interface HeraHumanMatchInfo {
   compatibilityLabel: string;
   badgeClass: 'match' | 'vibe' | 'warning';
@@ -152,48 +148,3 @@ export function getHumanMatchLabel(
     harmonicConfidencePct: 91,
   };
 }
-
-interface HeraViewStore {
-  viewMode: HeraViewMode;
-  isOnboardingOpen: boolean;
-  setViewMode: (mode: HeraViewMode) => void;
-  toggleViewMode: () => void;
-  openOnboarding: () => void;
-  closeOnboarding: () => void;
-  toggleOnboarding: () => void;
-}
-
-const STORAGE_KEY = 'hera_view_mode_pref';
-
-function getStoredViewMode(): HeraViewMode {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved === 'simple' || saved === 'pro') {
-      return saved;
-    }
-  }
-  return 'simple';
-}
-
-export const useHeraViewStore = create<HeraViewStore>((set) => ({
-  viewMode: getStoredViewMode(),
-  isOnboardingOpen: false,
-  setViewMode: (mode: HeraViewMode) => {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem(STORAGE_KEY, mode);
-    }
-    set({ viewMode: mode });
-  },
-  toggleViewMode: () =>
-    set((state) => {
-      const next: HeraViewMode = state.viewMode === 'simple' ? 'pro' : 'simple';
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(STORAGE_KEY, next);
-      }
-      return { viewMode: next };
-    }),
-  openOnboarding: () => set({ isOnboardingOpen: true }),
-  closeOnboarding: () => set({ isOnboardingOpen: false }),
-  toggleOnboarding: () =>
-    set((state) => ({ isOnboardingOpen: !state.isOnboardingOpen })),
-}));

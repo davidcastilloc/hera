@@ -7,8 +7,6 @@ export type * from '../generated/typings';
 
 export type HeraStyleDnaResponse = T.DjStyleDnaProfile;
 export type HeraExportCrateResponse = T.ExportCrateResponse;
-export type HeraToolExecutionStep = T.AgentToolExecutionStep;
-export type HeraProbeAiBackendResponse = T.ProbeAiBackendResponse;
 export type HeraCloudflareFreeAiResponse = T.CloudflareFreeAiTurnResponse;
 export type MiniOverlayLayoutMode = T.SetMiniOverlayModeResponse['mode'];
 export type DjExportFormat =
@@ -157,22 +155,6 @@ export function exportCrateToDjSoftware(
   }));
 }
 
-export function probeLocalAiBackend(
-  baseUrl?: string,
-): Promise<HeraProbeAiBackendResponse> {
-  const fb = () => ({
-    reachable: false,
-    backend: 'lmstudio',
-    base_url: baseUrl || 'http://localhost:1234/v1',
-    models: [],
-  });
-  return invokeDj(
-    'probe_ai_backend',
-    { baseUrl: baseUrl || null, apiKey: null },
-    fb,
-  );
-}
-
 export function chatWithCloudflareFreeAi(
   msg: string,
   dj = 'DaviDJ',
@@ -257,14 +239,6 @@ export async function buildSetSpineForLibrary(
     pinnedCount: anchorCount,
     ...titles,
   };
-}
-
-export function getCloudflareEdgeRadar(): Promise<T.CloudflareEdgeCapabilities> {
-  return invokeDj(
-    'get_cloudflare_edge_radar',
-    undefined,
-    F.buildOfflineEdgeRadarFallback,
-  );
 }
 
 export function setMiniOverlayMode(
