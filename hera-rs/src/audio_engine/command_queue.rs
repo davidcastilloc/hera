@@ -31,25 +31,30 @@ pub enum TransportCommand {
     SetGain(DeckId, f32),
 }
 
-/// Lock-free Single-Producer Single-Consumer (SPSC) transport command ring buffer (`[AtomicU64; 64]`).
+/// Lock-free consumer, mutex-serialized producer transport command ring buffer (`[AtomicU64; 64]`).
 pub struct CommandQueue {
     slots: [AtomicU64; COMMAND_QUEUE_CAPACITY],
     write_idx: AtomicUsize,
     read_idx: AtomicUsize,
+    push_lock: std::sync::Mutex<()>,
 }
 
 impl CommandQueue {
-    /// Construct an empty lock-free 64-slot SPSC `CommandQueue`.
+    /// Construct an empty 64-slot `CommandQueue`.
     pub const fn new() -> Self {
         Self {
             slots: [const { AtomicU64::new(0) }; COMMAND_QUEUE_CAPACITY],
             write_idx: AtomicUsize::new(0),
             read_idx: AtomicUsize::new(0),
+            push_lock: std::sync::Mutex::new(()),
         }
     }
 
-    /// Push a [`TransportCommand`] without blocking or allocating. Returns `false` if full.
+    /// Push a [`TransportCommand`]. Multiple producers are serialized without blocking the audio reader. Returns `false` if full.
     pub fn try_push(&self, cmd: TransportCommand) -> bool {
+        let Ok(_guard) = self.push_lock.lock() else {
+            return false;
+        };
         let w = self.write_idx.load(Ordering::Acquire);
         let slot = &self.slots[w & RING_MASK];
         if slot.load(Ordering::Acquire) != 0 {

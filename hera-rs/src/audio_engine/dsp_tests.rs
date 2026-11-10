@@ -3,8 +3,8 @@
 
 use super::backend::{AudioBackend, AudioBackendKind, HeadlessClockAudioBackend};
 use super::dsp_chain::{
-    create_telemetry_ring, resample_deck_buffer_to_rate, MasterDspBus, RealTimeSpectrumAnalyzer,
-    SPECTRUM_BIN_COUNT,
+    create_telemetry_ring, resample_deck_buffer_to_rate, AudioTelemetryFrame, MasterDspBus,
+    RealTimeSpectrumAnalyzer, SPECTRUM_BIN_COUNT,
 };
 use super::{
     create_default_audio_backend, DeckId, PreallocatedDeckBuffer, TransportCommand, HOT_CUE_LABELS,
@@ -197,4 +197,29 @@ fn test_headless_backend_4_hot_cue_seek_shadow_parity_and_eof_completion() {
     // Also verify default factory never panics even on headless systems without ALSA hardware.
     let default_backend = create_default_audio_backend();
     assert!(default_backend.output_sample_rate() >= 8_000);
+}
+
+#[test]
+fn test_audio_telemetry_frame_schema_and_synthesized_values() {
+    let frame = AudioTelemetryFrame {
+        sequence: 99,
+        sample_rate: 48_000,
+        current_time_sec: 1.25,
+        duration_sec: 120.0,
+        is_playing: true,
+        rms_left: 0.45,
+        rms_right: 0.42,
+        peak_db: -6.0,
+        sub_bass: 0.70,
+        low_mid: 0.50,
+        high_mid: 0.30,
+        air_presence: 0.15,
+        spectrum_bins: [0.25; SPECTRUM_BIN_COUNT],
+    };
+    assert_eq!(frame.sequence, 99);
+    assert_eq!(frame.sample_rate, 48_000);
+    assert!(frame.is_playing);
+    assert_eq!(frame.spectrum_bins.len(), 32);
+    assert_eq!(frame.spectrum_bins[0], 0.25);
+    assert_eq!(frame.spectrum_bins[31], 0.25);
 }

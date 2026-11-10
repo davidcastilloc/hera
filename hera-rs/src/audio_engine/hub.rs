@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use rtrb::{Consumer, Producer, RingBuffer};
 
 use super::backend::{AudioBackendKind, AudioTransportSnapshot};
+use super::buffer_gc::{create_retired_buffer_channel, drain_retired_buffers};
 use super::dsp_chain::{
     create_telemetry_ring, resample_deck_buffer_to_rate, AudioTelemetryFrame, MasterDspBus,
     RealTimeSpectrumAnalyzer, TELEMETRY_RING_CAPACITY,
@@ -42,6 +43,7 @@ pub(crate) struct AudioControllerHub {
     deck_load_tx: Mutex<Producer<(DeckId, Arc<PreallocatedDeckBuffer>)>>,
     deck_a_meta: Mutex<LoadedDeckMeta>,
     telemetry_rx: Mutex<TelemetryReaderState>,
+    retired_buf_rx: Mutex<Consumer<Arc<PreallocatedDeckBuffer>>>,
 }
 
 /// Real-time render worker owned exclusively by the `cpal` callback or headless clock thread.
@@ -52,6 +54,7 @@ pub(crate) struct RealtimeRenderWorker {
     master_bus: MasterDspBus,
     analyzer: RealTimeSpectrumAnalyzer,
     telemetry_tx: Producer<AudioTelemetryFrame>,
+    retired_buf_tx: Producer<Arc<PreallocatedDeckBuffer>>,
 }
 
 pub(crate) fn create_controller_and_worker(
@@ -61,6 +64,7 @@ pub(crate) fn create_controller_and_worker(
     let sr = sample_rate.max(8_000);
     let (deck_load_tx, deck_load_rx) = RingBuffer::new(8);
     let (telemetry_tx, telemetry_rx) = create_telemetry_ring(TELEMETRY_RING_CAPACITY);
+    let (retired_buf_tx, retired_buf_rx) = create_retired_buffer_channel();
     let atomics = Arc::new(SharedAudioAtomics {
         sample_rate: sr,
         command_queue: CommandQueue::new(),
@@ -81,6 +85,7 @@ pub(crate) fn create_controller_and_worker(
             consumer: telemetry_rx,
             unread_latest: None,
         }),
+        retired_buf_rx,
     };
     let worker = RealtimeRenderWorker {
         atomics,
@@ -89,6 +94,7 @@ pub(crate) fn create_controller_and_worker(
         master_bus: MasterDspBus::new(sr),
         analyzer: RealTimeSpectrumAnalyzer::new(sr),
         telemetry_tx,
+        retired_buf_tx,
     };
     (hub, worker)
 }
@@ -177,7 +183,21 @@ impl AudioControllerHub {
         self.snapshot()
     }
 
+    #[cfg(test)]
+    pub(crate) fn deck_buffer(&self, deck: DeckId) -> Option<Arc<PreallocatedDeckBuffer>> {
+        if deck == DeckId::DeckA {
+            self.deck_a_meta.lock().ok().and_then(|m| m.buffer.clone())
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn drain_retired_buffers(&self) -> usize {
+        drain_retired_buffers(&self.retired_buf_rx)
+    }
+
     pub(crate) fn snapshot(&self) -> AudioTransportSnapshot {
+        let _ = self.drain_retired_buffers();
         self.drain_telemetry_into_slot();
         let sr = self.atomics.sample_rate;
         let sr_f64 = f64::from(sr.max(1));
@@ -217,6 +237,7 @@ impl AudioControllerHub {
     }
 
     pub(crate) fn poll_latest_telemetry(&self) -> Option<AudioTelemetryFrame> {
+        let _ = self.drain_retired_buffers();
         self.drain_telemetry_into_slot();
         self.telemetry_rx
             .lock()
@@ -238,18 +259,22 @@ impl RealtimeRenderWorker {
     pub(crate) fn render_stereo_block(&mut self, out_stereo: &mut [f32]) {
         let epoch_before = self.atomics.command_epoch.load(Ordering::Acquire);
         while let Ok((deck, buf)) = self.deck_load_rx.pop() {
-            self.engine.load_deck(deck, buf);
+            if let Some(old) = self.engine.replace_deck(deck, buf) {
+                let _ = self.retired_buf_tx.push(old);
+            }
         }
-        let started_or_was_playing = self.engine.is_deck_playing(DeckId::DeckA)
+        let any_deck_started_or_playing = self.engine.is_deck_playing(DeckId::DeckA)
+            || self.engine.is_deck_playing(DeckId::DeckB)
             || self.atomics.is_playing.load(Ordering::Acquire);
         self.engine
             .render_interleaved_stereo(&self.atomics.command_queue, out_stereo);
-        let is_playing = self.engine.is_deck_playing(DeckId::DeckA);
+        let is_playing_a = self.engine.is_deck_playing(DeckId::DeckA);
+        let is_playing_any = is_playing_a || self.engine.is_deck_playing(DeckId::DeckB);
         let playhead = self.engine.deck_playhead_frame(DeckId::DeckA);
         let total = self.atomics.total_frames.load(Ordering::Acquire);
         let master_vol = f32::from_bits(self.atomics.master_volume_bits.load(Ordering::Acquire));
 
-        if started_or_was_playing || is_playing {
+        if any_deck_started_or_playing || is_playing_any {
             self.master_bus
                 .process_interleaved_in_place(out_stereo, master_vol);
             let sr_f64 = f64::from(self.atomics.sample_rate.max(1));
@@ -257,15 +282,15 @@ impl RealtimeRenderWorker {
                 out_stereo,
                 (playhead as f64) / sr_f64,
                 (total as f64) / sr_f64,
-                is_playing,
+                is_playing_any,
             );
             let _ = self.telemetry_tx.push(frame);
         }
 
         if self.atomics.command_epoch.load(Ordering::Acquire) == epoch_before {
             self.atomics.playhead_frame.store(playhead, Ordering::Release);
-            self.atomics.is_playing.store(is_playing, Ordering::Release);
-            if started_or_was_playing && !is_playing && total > 0 && playhead >= total {
+            self.atomics.is_playing.store(is_playing_a, Ordering::Release);
+            if any_deck_started_or_playing && !is_playing_a && total > 0 && playhead >= total {
                 self.atomics.ended.store(true, Ordering::Release);
             }
         }

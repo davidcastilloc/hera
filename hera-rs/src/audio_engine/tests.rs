@@ -7,32 +7,22 @@ use super::{
 
 fn encode_stereo_pcm16_wav(left: &[f32], right: &[f32], sample_rate: u32) -> Vec<u8> {
     let n = left.len().min(right.len());
-    let num_channels: u16 = 2;
-    let bits_per_sample: u16 = 16;
-    let byte_rate = sample_rate * u32::from(num_channels) * (u32::from(bits_per_sample) / 8);
-    let block_align = num_channels * (bits_per_sample / 8);
-    let data_size = (n as u32) * u32::from(block_align);
+    let data_size = (n as u32) * 4;
     let riff_size = 36 + data_size;
-
-    let mut buf = Vec::with_capacity((44 + data_size) as usize);
+    let byte_rate = sample_rate * 4;
+    let mut buf = Vec::with_capacity(44 + data_size as usize);
     buf.extend_from_slice(b"RIFF");
     buf.extend_from_slice(&riff_size.to_le_bytes());
-    buf.extend_from_slice(b"WAVEfmt ");
-    buf.extend_from_slice(&16u32.to_le_bytes());
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&num_channels.to_le_bytes());
+    buf.extend_from_slice(b"WAVEfmt \x10\0\0\0\x01\0\x02\0");
     buf.extend_from_slice(&sample_rate.to_le_bytes());
     buf.extend_from_slice(&byte_rate.to_le_bytes());
-    buf.extend_from_slice(&block_align.to_le_bytes());
-    buf.extend_from_slice(&bits_per_sample.to_le_bytes());
-    buf.extend_from_slice(b"data");
+    buf.extend_from_slice(b"\x04\0\x10\0data");
     buf.extend_from_slice(&data_size.to_le_bytes());
-
     for i in 0..n {
-        let l_i16 = (left[i].clamp(-1.0, 1.0) * 32767.0) as i16;
-        let r_i16 = (right[i].clamp(-1.0, 1.0) * 32767.0) as i16;
-        buf.extend_from_slice(&l_i16.to_le_bytes());
-        buf.extend_from_slice(&r_i16.to_le_bytes());
+        let l = (left[i].clamp(-1.0, 1.0) * 32767.0) as i16;
+        let r = (right[i].clamp(-1.0, 1.0) * 32767.0) as i16;
+        buf.extend_from_slice(&l.to_le_bytes());
+        buf.extend_from_slice(&r.to_le_bytes());
     }
     buf
 }
@@ -304,4 +294,51 @@ fn test_decode_wav_bytes_into_preallocated_deck_buffer() {
         .iter()
         .all(|s| s.is_finite() && (-1.0..=1.0).contains(s)));
     assert!(out.iter().any(|s| s.abs() > 0.01));
+}
+
+#[test]
+fn command_queue_concurrent_mpsc_pushes_lose_zero_commands() {
+    let q = std::sync::Arc::new(CommandQueue::new());
+    std::thread::scope(|s| {
+        for t in 0..8u64 {
+            let q_ref = std::sync::Arc::clone(&q);
+            s.spawn(move || {
+                for i in 0..8u64 {
+                    while !q_ref.try_push(TransportCommand::SeekToSample(DeckId::DeckA, t * 100 + i)) {
+                        std::thread::yield_now();
+                    }
+                }
+            });
+        }
+    });
+    let mut popped = Vec::new();
+    while let Some(cmd) = q.try_pop() {
+        popped.push(cmd);
+    }
+    assert_eq!(popped.len(), 64);
+}
+
+#[test]
+fn realtime_worker_retires_replaced_deck_buffer_without_dropping_on_audio_thread() {
+    use super::hub::create_controller_and_worker;
+    use super::backend::AudioBackendKind;
+    let (hub, mut worker) = create_controller_and_worker(AudioBackendKind::HeadlessClockFallback, 48_000);
+    let buf1 = PreallocatedDeckBuffer::from_stereo_frames(vec![0.1; 512], 48_000, [0, 64, 128, 192]).unwrap();
+    let buf2 = PreallocatedDeckBuffer::from_stereo_frames(vec![0.2; 512], 48_000, [0, 64, 128, 192]).unwrap();
+
+    hub.install_buffer(DeckId::DeckA, buf1, None).unwrap();
+    let installed1 = hub.deck_buffer(DeckId::DeckA).unwrap();
+    let weak1 = Arc::downgrade(&installed1);
+    drop(installed1);
+
+    let mut out = [0.0f32; 128];
+    worker.render_stereo_block(&mut out);
+
+    hub.install_buffer(DeckId::DeckA, buf2, None).unwrap();
+    worker.render_stereo_block(&mut out);
+
+    assert!(weak1.upgrade().is_some(), "Buffer 1 must NOT be dropped on the audio thread!");
+    let drained = hub.drain_retired_buffers();
+    assert!(drained >= 1, "hub.drain_retired_buffers() must drain retired buffers");
+    assert!(weak1.upgrade().is_none(), "Buffer 1 must be dropped after drain_retired_buffers()");
 }

@@ -141,7 +141,9 @@ where
                     offset_frames += chunk;
                 }
             },
-            |_err| {},
+            |err| {
+                eprintln!("[hera-audio] cpal stream error: {err}");
+            },
             None,
         )
         .map_err(|e| format!("Failed to build shared cpal output stream: {e}"))

@@ -48,7 +48,7 @@
   - `pub(crate) fn create_retired_buffer_channel() -> (Producer<Arc<PreallocatedDeckBuffer>>, Mutex<Consumer<Arc<PreallocatedDeckBuffer>>>)` (`capacity = 16`)
   - `pub(crate) fn drain_retired_buffers(rx_mutex: &Mutex<Consumer<Arc<PreallocatedDeckBuffer>>>) -> usize`
 
-- [ ] **Step 1: Write failing concurrency, RT zero-drop, `DeckB` bus, and telemetry hold tests**
+- [x] **Step 1: Write failing concurrency, RT zero-drop, `DeckB` bus, and telemetry hold tests**
 
 Add to `hera-rs/src/audio_engine/tests.rs`:
 ```rust
@@ -83,24 +83,24 @@ fn realtime_worker_retires_replaced_deck_buffer_without_dropping_on_audio_thread
 ```
 And add a unit test in `audio_telemetry.rs` asserting `next_interpolated_or_real_frame` decays `rms_left` by `0.96` instead of calling `synthesize_telemetry_frame_from_snapshot` when `backend_kind == "cpal_shared"` and `last_real_frame.is_some()`.
 
-- [ ] **Step 2: Run tests to confirm failure**
+- [x] **Step 2: Run tests to confirm failure**
 
 Run: `cargo test -p hera-node-rs realtime_worker_retires`
 Expected: FAIL (`replace_deck` / `drain_retired_buffers` missing; `buf1` dropped inside `render_stereo_block`).
 
-- [ ] **Step 3: Implement producer-locked `CommandQueue`, `buffer_gc.rs`, `DeckB` `MasterDspBus` routing, and ballistic telemetry hold**
+- [x] **Step 3: Implement producer-locked `CommandQueue`, `buffer_gc.rs`, `DeckB` `MasterDspBus` routing, and ballistic telemetry hold**
 
 1. Add `push_lock: std::sync::Mutex<()>` to `CommandQueue` in `command_queue.rs`; acquire it only inside `try_push(&self)`.
 2. Add `replace_deck` in `audio_engine/mod.rs`, create `audio_engine/buffer_gc.rs`, and update `hub.rs` (`<= 349` LOC) so `RealtimeRenderWorker::render_stereo_block` pushes `old_buf` into `self.retired_buf_tx` and checks `DeckId::DeckA` OR `DeckId::DeckB` before running `self.master_bus.process_interleaved_in_place` + `self.analyzer.analyze_block`. Drain retired buffers inside `install_buffer`, `snapshot`, and `poll_latest_telemetry`.
 3. Log stream errors in `cpal_backend.rs:144` via `eprintln!("[hera-audio] cpal stream error: {err}")` instead of `|_err| {}`.
 4. Extract pure helper `resolve_tick_telemetry_frame(...)` in `audio_telemetry.rs` holding and decaying `last_real_frame` (`* 0.96`) on hardware backends when `poll_latest_telemetry()` is `None`.
 
-- [ ] **Step 4: Run verification & ratchet suite**
+- [x] **Step 4: Run verification & ratchet suite**
 
 Run: `wc -l hera-rs/src/audio_engine/*.rs hera-desktop/src-tauri/src/plugins/hera_dj/*.rs && cargo test -p hera-node-rs && cargo test -p hera-ipc`
 Expected: Every file `<= 349` LOC; all `hera-node-rs`, `golden_masters`, `architectural_ratchets`, and `hera-ipc` tests pass (`exit code 0`).
 
-- [ ] **Step 5: Mark `[x]` and commit**
+- [x] **Step 5: Mark `[x]` and commit**
 
 ```bash
 git add hera-rs/src/audio_engine/ hera-desktop/src-tauri/src/plugins/hera_dj/audio_telemetry.rs docs/superpowers/plans/

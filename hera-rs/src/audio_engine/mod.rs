@@ -6,6 +6,8 @@
 
 #[cfg(feature = "native")]
 pub mod backend;
+#[cfg(feature = "native")]
+mod buffer_gc;
 mod command_queue;
 #[cfg(feature = "audio-device")]
 pub mod cpal_backend;
@@ -85,10 +87,20 @@ impl DualDeckEngine {
 
     /// Pre-load a decoded [`PreallocatedDeckBuffer`] onto `deck` (called off the audio thread).
     pub fn load_deck(&mut self, deck: DeckId, buffer: Arc<PreallocatedDeckBuffer>) {
+        let _ = self.replace_deck(deck, buffer);
+    }
+
+    /// Replace the decoded buffer on `deck`, returning any previous buffer so it can be retired off-thread.
+    pub fn replace_deck(
+        &mut self,
+        deck: DeckId,
+        buffer: Arc<PreallocatedDeckBuffer>,
+    ) -> Option<Arc<PreallocatedDeckBuffer>> {
         let state = &mut self.decks[deck as usize];
-        state.buffer = Some(buffer);
+        let old = state.buffer.replace(buffer);
         state.playhead_frames = 0.0;
         state.playing = false;
+        old
     }
 
     /// Enable or disable headphone cue monitoring flag on `deck`.
