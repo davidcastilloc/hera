@@ -136,12 +136,22 @@ mod tests {
         ] {
             assert!(generated.contains(expected), "missing `{expected}`");
         }
-        assert!(!generated.contains("bigint"), "unexpected bigint in generated TS");
+        assert!(
+            !generated.contains("bigint"),
+            "unexpected bigint in generated TS"
+        );
 
         let typings = std::fs::read_to_string(generated_dir.join("typings.ts"))
             .expect("read src/generated/typings.ts");
-        for core_sym in ["export type Track =", "export type SortBy =", "hera-typings"] {
-            assert!(typings.contains(core_sym), "typings.ts missing `{core_sym}`");
+        for core_sym in [
+            "export type Track =",
+            "export type SortBy =",
+            "hera-typings",
+        ] {
+            assert!(
+                typings.contains(core_sym),
+                "typings.ts missing `{core_sym}`"
+            );
         }
     }
 }

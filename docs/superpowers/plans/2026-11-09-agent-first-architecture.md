@@ -166,13 +166,13 @@
 **Interfaces:**
 - Preserves `plugins::hera_dj::init()` (13 commands) and `plugins::hera_agent::init()` (9 commands) and moves pure stream-JSON parsing (`ParsedAgyStreamEvent`, `parse_agy_stream_json_line`) + unified tool metadata helpers into `hera-ipc` so they are unit-tested on every OS even without GTK headers.
 
-- [ ] **Step 1: Extract pure `agy_stream.rs` into `hera-ipc` with unit tests (`test_parse_agy_stream_json_events`)**
+- [x] **Step 1: Extract pure `agy_stream.rs` into `hera-ipc` with unit tests (`test_parse_agy_stream_json_events`)**
   Verify `cargo test -p hera-ipc` runs stream-JSON parsing tests cleanly.
-- [ ] **Step 2: Split `plugins/hera_dj.rs` (`1,276` LOC) and `plugins/hera_agent.rs` (`3,326` LOC) into `< 350` LOC submodules**
+- [x] **Step 2: Split `plugins/hera_dj.rs` (`1,276` LOC) and `plugins/hera_agent.rs` (`3,326` LOC) into `< 350` LOC submodules**
   Keep exact `#[tauri::command]` signatures and `tauri::plugin::Builder::new("hera-dj")` / `Builder::new("hera-agent")` registrations intact.
-- [ ] **Step 3: Upgrade `.github/workflows/ci.yml` to verify WASM, `hera-ipc` ACL/types, and full `src-tauri` build/tests (`libwebkit2gtk-4.1-dev`)**
+- [x] **Step 3: Upgrade `.github/workflows/ci.yml` to verify WASM, `hera-ipc` ACL/types, and full `src-tauri` build/tests (`libwebkit2gtk-4.1-dev`)**
   Ensure `verify_tauri_v2_acl_triad` passes over the new nested `plugins/hera_dj/*.rs` and `plugins/hera_agent/*.rs` directories (`cargo test -p hera-ipc`) and check `wc -l` across all new plugin files (`< 350` LOC each).
-- [ ] **Step 4: Mark `[x]` and create atomic commit**
+- [x] **Step 4: Mark `[x]` and create atomic commit**
   Commit `refactor(tauri): decompose hera_agent and hera_dj monoliths and add CI full-stack checks`.
 
 ---

@@ -30,19 +30,56 @@ jobs:
           fi
 
   rust-dsp-node:
-    name: Rust DSP & P2P Node (hera-rs)
+    name: Rust DSP, Cloudflare WASM & IPC Contracts (hera-rs + hera-ipc)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust stable toolchain
+      - name: Install Rust stable toolchain + wasm32 target
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
 
-      - name: Cargo Check & Test (hera-rs)
+      - name: Cargo Check & Test (hera-rs native)
         run: |
           cargo check --manifest-path hera-rs/Cargo.toml
           cargo test --manifest-path hera-rs/Cargo.toml
+
+      - name: Cloudflare Workers WASM Compilation Gate (hera-rs)
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo check --manifest-path hera-rs/Cargo.toml --target wasm32-unknown-unknown --features cloudflare --no-default-features
+
+      - name: Tauri v2 ACL Triad Parity & ts-rs IPC Contracts (hera-ipc)
+        run: |
+          cargo test -p hera-ipc
+
+  hera-desktop-tauri:
+    name: HERA Desktop Tauri v2 Native Check & Tests (src-tauri)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux WebKit2GTK & System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libdbus-1-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev librsvg2-dev patchelf
+          sudo apt-get install -y libappindicator3-dev || sudo apt-get install -y libayatana-appindicator3-dev
+
+      - name: Install Rust stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Prepare frontendDist placeholder for tauri::generate_context!()
+        run: |
+          mkdir -p hera-desktop/dist
+          printf '<!doctype html><html><body></body></html>\n' > hera-desktop/dist/index.html
+
+      - name: Full Workspace Cargo Check & src-tauri Test Suite
+        run: |
+          cargo check --workspace
+          cargo test --manifest-path hera-desktop/src-tauri/Cargo.toml
 
   hera-desktop-ui:
     name: HERA Desktop UI (Bun + moon + React 19 + StyleX + Vite+)
@@ -75,4 +112,3 @@ jobs:
 
       - name: Run Unit Tests (bun run test)
         run: bun run test
-

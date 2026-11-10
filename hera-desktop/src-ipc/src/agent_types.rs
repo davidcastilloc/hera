@@ -74,7 +74,9 @@ pub struct AgentSessionSummary {
 pub struct AgentStreamEvent {
     pub session_id: String,
     pub message_id: String,
-    #[ts(type = "\"turn_started\" | \"step_upsert\" | \"text_delta\" | \"turn_completed\" | \"turn_error\"")]
+    #[ts(
+        type = "\"turn_started\" | \"step_upsert\" | \"text_delta\" | \"turn_completed\" | \"turn_error\""
+    )]
     pub kind: String,
     #[serde(default)]
     #[ts(optional = nullable)]
