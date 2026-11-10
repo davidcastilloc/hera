@@ -287,7 +287,7 @@ git commit -m "feat(curator): wire cached multi-probe usearch HNSW into optimize
   - `nat_stun.rs` returns `"HERA_ERR_NOT_FOUND"` when `get_local_file_chunk_slice` is `None` instead of fabricating pseudo-random bytes with a valid SHA-256.
   - `p2p_download.rs` attempts `IrohQuicAdapter` when a QUIC peer ticket/address is present; if no real audio payload is retrieved, only generates `render_harmonic_preview_wav` when `request.peer_endpoint.is_none()` (offline demo preview) AND explicitly sets `quarantine_verified: false` and `stage_used = "OFFLINE_SYNTHETIC_PREVIEW_UNVERIFIED"`.
 
-- [ ] **Step 1: Write failing tests for remote two-adapter `fetch_verified_shard`, timeout enforcement on stalled peers, and `HERA_ERR_NOT_FOUND` on missing UDP chunks**
+- [x] **Step 1: Write failing tests for remote two-adapter `fetch_verified_shard`, timeout enforcement on stalled peers, and `HERA_ERR_NOT_FOUND` on missing UDP chunks**
 
 ```rust
 #[tokio::test]
@@ -297,23 +297,23 @@ async fn iroh_provider_and_separate_leecher_transfer_shard_with_reused_endpoint(
 }
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 Run: `cargo test -p hera-node-rs iroh_provider_and_separate_leecher`
 Expected: FAIL (`spawn_shard_provider` / `fetch_verified_shard` not yet defined).
 
-- [ ] **Step 3: Implement reusable `IrohQuicAdapter` with `5s` timeouts, wire into `p2p_download.rs`, and remove silent fake-byte masquerading in `nat_stun.rs`**
+- [x] **Step 3: Implement reusable `IrohQuicAdapter` with `5s` timeouts, wire into `p2p_download.rs`, and remove silent fake-byte masquerading in `nat_stun.rs`**
 
 1. Split `quic_iroh` into `mod.rs` + `peer_transfer.rs` (`<= 349` LOC each), wrapping every async network step in `tokio::time::timeout(QUIC_STEP_TIMEOUT, ...)` and keeping `transfer_verified_shard_loopback` implemented on top of `spawn_shard_provider` + `fetch_verified_shard`.
 2. In `nat_stun.rs:255-264`, reply `b"HERA_ERR_CHUNK_NOT_FOUND"` when `get_local_file_chunk_slice` returns `None` instead of synthesizing fake bytes.
 3. In `p2p_download.rs`, invoke QUIC shard transfer first when `peer_endpoint` uses `iroh://` or QUIC node addressing, return `Err` if an explicit `peer_endpoint` fails to deliver valid audio magic, and mark offline local demo previews with `quarantine_verified: false`.
 
-- [ ] **Step 4: Verify line counts, unit tests & ratchets**
+- [x] **Step 4: Verify line counts, unit tests & ratchets**
 
 Run: `wc -l hera-rs/src/p2p/quic_iroh/*.rs hera-rs/src/p2p/nat_stun.rs hera-desktop/src-tauri/src/plugins/hera_dj/p2p_download.rs && cargo test -p hera-node-rs && cargo test -p hera-ipc`
 Expected: All files within ceilings; all tests green (`exit code 0`).
 
-- [ ] **Step 5: Mark `[x]` and commit**
+- [x] **Step 5: Mark `[x]` and commit**
 
 ```bash
 git add hera-rs/ hera-desktop/src-tauri/src/plugins/hera_dj/p2p_download.rs docs/superpowers/plans/

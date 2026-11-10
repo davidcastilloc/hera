@@ -59,6 +59,7 @@ const SLICED_SUBMODULE_DIRS: &[(&str, usize)] = &[
     ("hera-rs/src/code_mode", 349),
     ("hera-rs/src/dj_brain", 349),
     ("hera-rs/src/p2p/swarm_custody", 349),
+    ("hera-rs/src/p2p/quic_iroh", 349),
     ("hera-rs/src/p2p", 349),
     ("hera-rs/src/audio_engine", 349),
     ("hera-desktop/src-ipc/src", 349),

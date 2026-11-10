@@ -2123,6 +2123,17 @@ mod tests {
 
         // Also test the persistent Desktop UDP P2P Seeder Daemon + Multi-STUN NAT Classifier + Port-Spray Client
         let state = std::sync::Arc::new(P2PMeshState::new("hera-desktop-daemon-test"));
+        let seed_tmp = std::env::temp_dir().join(format!("hera-seed-test-{}.bin", std::process::id()));
+        let seed_bytes: Vec<u8> = (0..32_768usize)
+            .map(|i| ((i.wrapping_mul(73) ^ (i >> 3)) & 0xFF) as u8)
+            .collect();
+        std::fs::write(&seed_tmp, &seed_bytes).expect("write temp seed file");
+        state
+            .local_files
+            .write()
+            .unwrap()
+            .insert("hera-seed-001".to_string(), seed_tmp.to_string_lossy().to_string());
+
         let (daemon_status, served_counter) =
             crate::p2p::spawn_desktop_udp_p2p_daemon(state).expect("spawn UDP daemon");
         println!(
@@ -2141,6 +2152,17 @@ mod tests {
             assert_eq!(chunk.len(), 8192);
         }
         assert!(served_counter.load(std::sync::atomic::Ordering::Relaxed) >= 4);
+
+        // Assert requesting a missing track returns HERA_ERR_CHUNK_NOT_FOUND error
+        let missing_res = crate::p2p::request_chunk_from_peer_with_spray(
+            &daemon_status.daemon_listen_socket,
+            daemon_status.nat_diagnosis.observed_port_delta,
+            daemon_status.nat_diagnosis.spray_window_ports,
+            "missing-track-404",
+            0,
+        );
+        assert!(missing_res.is_err());
+        assert!(missing_res.unwrap_err().contains("HERA_ERR_CHUNK_NOT_FOUND"));
 
         // Verify Stage 3.5: RFC 5766 TURN ChannelData (0x4000) binary chunk relay when Symmetric CGNAT blocks direct spray
         let turn_report = crate::p2p::run_live_turn_channel_relay_p2p_proof(&audio_bytes)
@@ -2175,6 +2197,8 @@ mod tests {
         .expect("cascade to Stage 3.5 TURN relay");
         assert_eq!(fallback_chunk.len(), 8192);
         assert_eq!(stage_label, "STAGE_3_5_CLOUDFLARE_TURN_CHANNEL_RELAY");
+
+        let _ = std::fs::remove_file(&seed_tmp);
     }
 
     #[tokio::test]
@@ -2348,5 +2372,56 @@ mod tests {
             crate::p2p::SWARM_SHARD_BLINDING_SECRET.to_string(),
         );
     }
+
+    #[cfg(feature = "native")]
+    #[tokio::test]
+    async fn iroh_provider_and_separate_leecher_transfer_shard_with_reused_endpoint() {
+        use std::collections::HashMap;
+        use std::sync::{Arc, RwLock};
+
+        let provider = crate::p2p::IrohQuicAdapter::new("hera-quic-provider-test", true);
+        let leecher = crate::p2p::IrohQuicAdapter::new("hera-quic-leecher-test", true);
+
+        let shard1_data = vec![0x42u8; 16384];
+        let shard2_data = vec![0x77u8; 8192];
+        let sha256_1 = crate::p2p::compute_sha256_hex(&shard1_data);
+        let sha256_2 = crate::p2p::compute_sha256_hex(&shard2_data);
+
+        let mut store_map = HashMap::new();
+        store_map.insert("shard-001".to_string(), shard1_data.clone());
+        store_map.insert("shard-002".to_string(), shard2_data.clone());
+        let store = Arc::new(RwLock::new(store_map));
+
+        let start_time = std::time::Instant::now();
+        let provider_addr = provider
+            .spawn_shard_provider(store)
+            .await
+            .expect("spawn provider endpoint");
+
+        let ticket = crate::p2p::IrohQuicAdapter::encode_endpoint_ticket(&provider_addr)
+            .expect("encode ticket");
+        assert!(ticket.starts_with("iroh://"));
+
+        // First transfer from ticket
+        let receipt1 = leecher
+            .fetch_verified_shard_from_ticket(&ticket, "shard-001", Some(&sha256_1))
+            .await
+            .expect("fetch shard 1");
+        assert_eq!(receipt1.shard_id, "shard-001");
+        assert_eq!(receipt1.payload, shard1_data);
+        assert_eq!(receipt1.verified_sha256, sha256_1);
+
+        // Second transfer reusing the leecher's underlying cached endpoint
+        let receipt2 = leecher
+            .fetch_verified_shard(provider_addr, "shard-002", Some(&sha256_2))
+            .await
+            .expect("fetch shard 2");
+        assert_eq!(receipt2.shard_id, "shard-002");
+        assert_eq!(receipt2.payload, shard2_data);
+        assert_eq!(receipt2.verified_sha256, sha256_2);
+
+        assert!(start_time.elapsed() < std::time::Duration::from_secs(5));
+    }
 }
+
 

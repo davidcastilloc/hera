@@ -153,43 +153,73 @@ pub async fn download_p2p_track<R: Runtime>(
         let daemon = ensure_desktop_udp_daemon()
             .ok_or_else(|| "No se pudo inicializar el daemon UDP P2P local".to_string())?;
 
-        let target_peer = request
+        let explicit_peer = request
             .peer_endpoint
             .as_deref()
             .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .unwrap_or(&daemon.daemon_listen_socket);
-
-        let turn_fallback = request
-            .turn_relay_endpoint
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .or(Some(daemon.daemon_listen_socket.as_str()));
+            .filter(|s| !s.is_empty());
 
         let total_chunks = request.chunk_count.unwrap_or(32).clamp(1, 512);
-        let mut assembled = Vec::with_capacity((total_chunks as usize) * 8192);
-        let mut stage_used = "STAGE_3_DIRECT_UDP_SPRAY".to_string();
 
-        for chunk_idx in 0..total_chunks {
-            let (chunk_bytes, stage_label) = request_chunk_with_turn_fallback(
-                target_peer,
-                daemon.nat_diagnosis.observed_port_delta,
-                daemon.nat_diagnosis.spray_window_ports,
-                turn_fallback,
-                &request.track_id,
-                chunk_idx,
-            )?;
-            stage_used = stage_label;
-            assembled.extend_from_slice(&chunk_bytes);
-        }
+        let (assembled, stage_used, is_real_p2p) = if let Some(peer) = explicit_peer {
+            if peer.starts_with("iroh://") || peer.starts_with('{') {
+                let adapter = IrohQuicAdapter::new("hera-desktop-leecher", false);
+                let ticket = peer;
+                let fetch_res = tauri::async_runtime::block_on(async {
+                    adapter
+                        .fetch_verified_shard_from_ticket(ticket, &request.track_id, None)
+                        .await
+                });
+                match fetch_res {
+                    Ok(receipt) => (receipt.payload, "STAGE_2_IROH_QUIC_STREAM".to_string(), true),
+                    Err(e) => return Err(format!("Fallo en transporte Iroh QUIC: {e}")),
+                }
+            } else {
+                let turn_fallback = request
+                    .turn_relay_endpoint
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .or(Some(daemon.daemon_listen_socket.as_str()));
 
-        let (payload_to_write, ext) = match has_valid_audio_magic(&assembled) {
-            Some(real_ext) => (assembled, real_ext),
-            None => (
-                render_harmonic_preview_wav(request.bpm, &request.camelot, &assembled),
-                "wav",
-            ),
+                let mut buf = Vec::with_capacity((total_chunks as usize) * 8192);
+                let mut last_stage = "STAGE_3_DIRECT_UDP_SPRAY".to_string();
+
+                for chunk_idx in 0..total_chunks {
+                    let (chunk_bytes, stage_label) = request_chunk_with_turn_fallback(
+                        peer,
+                        daemon.nat_diagnosis.observed_port_delta,
+                        daemon.nat_diagnosis.spray_window_ports,
+                        turn_fallback,
+                        &request.track_id,
+                        chunk_idx,
+                    )?;
+                    last_stage = stage_label;
+                    buf.extend_from_slice(&chunk_bytes);
+                }
+                (buf, last_stage, true)
+            }
+        } else {
+            // Local offline demo mode: no peer endpoint provided
+            let buf = render_harmonic_preview_wav(request.bpm, &request.camelot, &[]);
+            (buf, "OFFLINE_SYNTHETIC_PREVIEW_UNVERIFIED".to_string(), false)
+        };
+
+        let (payload_to_write, ext, quarantine_verified) = match has_valid_audio_magic(&assembled) {
+            Some(real_ext) => (assembled, real_ext, true),
+            None => {
+                if is_real_p2p {
+                    return Err(format!(
+                        "Pista P2P `{}` descargada no contiene cabecera de audio válida (magic check falló)",
+                        request.track_id
+                    ));
+                }
+                (
+                    render_harmonic_preview_wav(request.bpm, &request.camelot, &assembled),
+                    "wav",
+                    false,
+                )
+            }
         };
         let sha256_hex = compute_sha256_hex(&payload_to_write);
 
@@ -242,7 +272,7 @@ pub async fn download_p2p_track<R: Runtime>(
         Ok(DownloadP2PTrackResponse {
             track_id: request.track_id,
             saved_path: final_library_path.to_string_lossy().to_string(),
-            quarantine_verified: true,
+            quarantine_verified,
             bytes_written: payload_to_write.len(),
             chunks_verified: total_chunks,
             stage_used,

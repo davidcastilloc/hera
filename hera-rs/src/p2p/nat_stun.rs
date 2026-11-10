@@ -150,20 +150,9 @@ pub fn diagnose_multi_stun_nat_on_socket(
                 )
             }
         }
-        (Ok((ep1, _)), Err(_)) => (
-            ep1,
-            None,
-            "SINGLE_STUN_CONE_NAT_READY".to_string(),
-            0,
-            4,
-        ),
-        (Err(_), Ok((ep2, _))) => (
-            ep2,
-            None,
-            "SINGLE_STUN_CONE_NAT_READY".to_string(),
-            0,
-            4,
-        ),
+        (Ok((ep, _)), Err(_)) | (Err(_), Ok((ep, _))) => {
+            (ep, None, "SINGLE_STUN_CONE_NAT_READY".to_string(), 0, 4)
+        }
         (Err(_), Err(_)) => (
             lan_direct_endpoint.clone(),
             None,
@@ -252,15 +241,22 @@ pub fn spawn_desktop_udp_p2p_daemon(
                         .unwrap_or(0);
 
                     let chunk_size = 8192usize;
-                    let slice = state
-                        .get_local_file_chunk_slice(track_id, chunk_idx, chunk_size)
-                        .unwrap_or_else(|_| {
-                            let start = chunk_idx * chunk_size;
-                            let end = start + chunk_size;
-                            (start..end)
-                                .map(|i| ((i.wrapping_mul(73) ^ (i >> 3)) & 0xFF) as u8)
-                                .collect()
-                        });
+                    let slice = match state.get_local_file_chunk_slice(track_id, chunk_idx, chunk_size) {
+                        Ok(s) => s,
+                        Err(_) => {
+                            let err_msg = b"HERA_ERR_CHUNK_NOT_FOUND";
+                            if let Some(ch) = turn_channel {
+                                let mut packet = Vec::with_capacity(4 + err_msg.len());
+                                packet.extend_from_slice(&ch.to_be_bytes());
+                                packet.extend_from_slice(&(err_msg.len() as u16).to_be_bytes());
+                                packet.extend_from_slice(err_msg);
+                                let _ = socket.send_to(&packet, peer_addr);
+                            } else {
+                                let _ = socket.send_to(err_msg, peer_addr);
+                            }
+                            continue;
+                        }
+                    };
                     let digest = compute_sha256_bytes(&slice);
 
                     let body_len = 4 + 32 + slice.len();
@@ -334,6 +330,9 @@ pub fn request_chunk_from_peer_with_spray(
     for _attempt in 0..3 {
         let _ = sock.send_to(req_msg.as_bytes(), active_peer_addr);
         while let Ok((n, sender)) = sock.recv_from(&mut recv_buf) {
+            if recv_buf[..n].starts_with(b"HERA_ERR_CHUNK_NOT_FOUND") {
+                return Err(format!("HERA_ERR_CHUNK_NOT_FOUND for {track_id}:{chunk_idx}"));
+            }
             if n <= 36 {
                 if recv_buf[..n].starts_with(b"HERA_PUNCH_ACK") && active_peer_addr != sender {
                     // Late HERA_PUNCH_ACK on high-jitter mobile link: lock onto punched port and re-request
@@ -404,6 +403,9 @@ pub fn request_chunk_via_turn_channel_relay(
             } else {
                 &recv_buf[..n]
             };
+            if body.starts_with(b"HERA_ERR_CHUNK_NOT_FOUND") {
+                return Err(format!("HERA_ERR_CHUNK_NOT_FOUND for {track_id}:{chunk_idx}"));
+            }
             if body.len() <= 36 {
                 continue;
             }
@@ -679,6 +681,9 @@ pub fn run_live_turn_channel_relay_p2p_proof(
     use std::time::Duration;
 
     let state = Arc::new(P2PMeshState::new("hera-turn-seeder-node"));
+    let seed_tmp = std::env::temp_dir().join(format!("hera-turn-seed-{}.bin", std::process::id()));
+    let _ = std::fs::write(&seed_tmp, audio_payload);
+    state.local_files.write().unwrap().insert("hera-seed-001".to_string(), seed_tmp.to_string_lossy().to_string());
     let (daemon_status, _served_counter) = spawn_desktop_udp_p2p_daemon(state)?;
     let seeder_addr: SocketAddr = daemon_status
         .daemon_listen_socket
@@ -715,12 +720,7 @@ pub fn run_live_turn_channel_relay_p2p_proof(
                     resp.extend_from_slice(&buf[8..20]);
                     resp.extend_from_slice(&[0x00, 0x16, 0x00, 0x08, 0x00, 0x01]);
                     resp.extend_from_slice(&xport.to_be_bytes());
-                    resp.extend_from_slice(&[
-                        127 ^ 0x21,
-                        0 ^ 0x12,
-                        0 ^ 0xA4,
-                        1 ^ 0x42,
-                    ]);
+                    resp.extend_from_slice(&[127 ^ 0x21, 0x12, 0xA4, 1 ^ 0x42]);
                     let _ = turn_relay.send_to(&resp, sender);
                 } else if n >= 20 && buf[0] == 0x00 && buf[1] == 0x09 {
                     // RFC 5766 ChannelBind Request (0x0009) -> ChannelBind Success Response (0x0109)
@@ -753,10 +753,7 @@ pub fn run_live_turn_channel_relay_p2p_proof(
         .map(|a| a.to_string())
         .unwrap_or_else(|_| "127.0.0.1:0".to_string());
 
-    let alloc_req: [u8; 20] = [
-        0x00, 0x03, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x48, 0x45, 0x52, 0x41, 0x54, 0x55, 0x52,
-        0x4E, 0x41, 0x4C, 0x4C, 0x31,
-    ];
+    let alloc_req: [u8; 20] = [0x00, 0x03, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x48, 0x45, 0x52, 0x41, 0x54, 0x55, 0x52, 0x4E, 0x41, 0x4C, 0x4C, 0x31];
     handshake_sock
         .send_to(&alloc_req, relay_addr)
         .map_err(|e| e.to_string())?;
@@ -769,10 +766,7 @@ pub fn run_live_turn_channel_relay_p2p_proof(
         return Err("Invalid TURN Allocate Response".to_string());
     }
 
-    let bind_req: [u8; 20] = [
-        0x00, 0x09, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x48, 0x45, 0x52, 0x41, 0x54, 0x55, 0x52,
-        0x4E, 0x42, 0x4E, 0x44, 0x32,
-    ];
+    let bind_req: [u8; 20] = [0x00, 0x09, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x48, 0x45, 0x52, 0x41, 0x54, 0x55, 0x52, 0x4E, 0x42, 0x4E, 0x44, 0x32];
     handshake_sock
         .send_to(&bind_req, relay_addr)
         .map_err(|e| e.to_string())?;
@@ -801,6 +795,7 @@ pub fn run_live_turn_channel_relay_p2p_proof(
 
     stop_flag.store(true, Ordering::Relaxed);
     let _ = relay_thread.join();
+    let _ = std::fs::remove_file(&seed_tmp);
 
     let expected_sha256 = compute_sha256_hex(audio_payload);
     let received_sha256 = compute_sha256_hex(&received_audio);
