@@ -1,4 +1,6 @@
-use crate::synergy::{parse_camelot, CrateTrackCandidate};
+use crate::synergy::{parse_camelot, CrateTrackCandidate, SetSpineConfig};
+use crate::synergy_hnsw_cache::query_or_build_cached_hnsw;
+use std::collections::HashSet;
 
 /// Minimum candidate pool size before two-stage HNSW approximate nearest neighbor
 /// pre-filtering activates ahead of the $O(N^2)$ 2-Opt TSP solver.
@@ -85,17 +87,26 @@ fn l2_normalize_64d(v: &mut [f32; 64]) {
     }
 }
 
-/// Stage 1 HNSW Candidate Retrieval ($O(\log N)$ via `usearch::Index` on native builds).
+/// Stage 1 HNSW Candidate Retrieval without spine awareness (delegates to multi-probe centroid).
+pub fn prefilter_candidates_hnsw(
+    candidates: &[CrateTrackCandidate],
+    max_candidates: usize,
+) -> Vec<CrateTrackCandidate> {
+    prefilter_candidates_hnsw_for_spine(candidates, max_candidates, &SetSpineConfig::default())
+}
+
+/// Stage 1 HNSW Multi-Probe Candidate Retrieval with Set Spine Anchor Preservation.
 ///
 /// - When `candidates.len() <= max_candidates` or `candidates.len() <= HNSW_PREFILTER_THRESHOLD`,
 ///   returns `candidates.to_vec()` verbatim so small crates and Golden Master snapshots
 ///   preserve 100% bit-for-bit parity.
 /// - When `candidates.len() > max_candidates` and `candidates.len() > HNSW_PREFILTER_THRESHOLD`,
-///   indexes all 64-D candidate vectors into a `usearch::Index` (`MetricKind::Cos`, `ScalarKind::F32`)
-///   and retrieves the top `max_candidates` nearest neighbors to the harmonic/energy centroid.
-pub fn prefilter_candidates_hnsw(
+///   enriches embeddings, queries 3 diverse probes (opener 15th-pct BPM, bridge 50th-pct BPM, peak 85th-pct BPM),
+///   and unconditionally retains every `SpineAnchor.track_id` in `spine.anchors`.
+pub fn prefilter_candidates_hnsw_for_spine(
     candidates: &[CrateTrackCandidate],
     max_candidates: usize,
+    spine: &SetSpineConfig,
 ) -> Vec<CrateTrackCandidate> {
     let cap = max_candidates.max(1);
     if candidates.len() <= cap || candidates.len() <= HNSW_PREFILTER_THRESHOLD {
@@ -107,90 +118,75 @@ pub fn prefilter_candidates_hnsw(
         .map(synthesize_or_normalize_64d_embedding)
         .collect();
 
-    let mut centroid = [0.0_f32; 64];
-    for emb in &embeddings {
-        for (c, &v) in centroid.iter_mut().zip(emb.iter()) {
-            *c += v;
-        }
-    }
-    l2_normalize_64d(&mut centroid);
-
-    #[cfg(feature = "native")]
-    if let Ok(selected_indices) = query_usearch_hnsw_indices(&embeddings, &centroid, cap) {
-        if !selected_indices.is_empty() {
-            return selected_indices
-                .into_iter()
-                .map(|idx| candidates[idx].clone())
-                .collect();
+    // Collect all locked spine anchor indices to unconditionally retain them
+    let mut anchor_indices = HashSet::new();
+    for anchor in &spine.anchors {
+        if let Some(pos) = candidates.iter().position(|c| c.track_id == anchor.track_id) {
+            anchor_indices.insert(pos);
         }
     }
 
-    // Deterministic fallback for non-native (WASM) targets
-    let mut scored: Vec<(usize, f32)> = embeddings
+    // Determine 15th, 50th, and 85th percentile BPM indices for 3 diverse probes
+    let mut bpm_sorted: Vec<(usize, f32)> = candidates
         .iter()
         .enumerate()
-        .map(|(idx, emb)| {
-            let dot: f32 = emb.iter().zip(centroid.iter()).map(|(a, b)| a * b).sum();
-            (idx, dot)
-        })
+        .map(|(i, c)| (i, c.bpm))
         .collect();
-    scored.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.0.cmp(&b.0))
-    });
-    let mut indices: Vec<usize> = scored.into_iter().take(cap).map(|(idx, _)| idx).collect();
-    indices.sort_unstable();
-    indices
+    bpm_sorted.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let n = bpm_sorted.len();
+    let idx_opener = bpm_sorted[(n * 15 / 100).min(n - 1)].0;
+    let idx_bridge = bpm_sorted[(n * 50 / 100).min(n - 1)].0;
+    let idx_peak = bpm_sorted[(n * 85 / 100).min(n - 1)].0;
+
+    let probe_opener = embeddings[idx_opener];
+    let probe_bridge = embeddings[idx_bridge];
+    let probe_peak = embeddings[idx_peak];
+    let probes = [probe_opener, probe_bridge, probe_peak];
+
+    let per_probe_k = (cap / probes.len()).max(4) + 4;
+    let mut selected_indices = query_or_build_cached_hnsw(&embeddings, &probes, per_probe_k)
+        .unwrap_or_default();
+
+    // Union unconditionally every spine anchor track
+    for &anchor_idx in &anchor_indices {
+        if !selected_indices.contains(&anchor_idx) {
+            selected_indices.push(anchor_idx);
+        }
+    }
+
+    // If still below cap and library has more tracks, fill remaining slots
+    if selected_indices.len() < cap {
+        for i in 0..candidates.len() {
+            if !selected_indices.contains(&i) {
+                selected_indices.push(i);
+                if selected_indices.len() >= cap {
+                    break;
+                }
+            }
+        }
+    } else if selected_indices.len() > cap {
+        // Truncate non-anchor tracks if over cap, while strictly retaining all anchors
+        let mut final_indices: Vec<usize> = Vec::with_capacity(cap);
+        for &a in &anchor_indices {
+            final_indices.push(a);
+        }
+        for &idx in &selected_indices {
+            if final_indices.len() >= cap {
+                break;
+            }
+            if !final_indices.contains(&idx) {
+                final_indices.push(idx);
+            }
+        }
+        selected_indices = final_indices;
+    }
+
+    selected_indices.sort_unstable();
+    selected_indices
         .into_iter()
         .map(|idx| candidates[idx].clone())
         .collect()
-}
-
-#[cfg(feature = "native")]
-fn query_usearch_hnsw_indices(
-    embeddings: &[[f32; 64]],
-    query: &[f32; 64],
-    max_candidates: usize,
-) -> Result<Vec<usize>, String> {
-    use usearch::{Index, IndexOptions, MetricKind, ScalarKind};
-
-    let options = IndexOptions {
-        dimensions: 64,
-        metric: MetricKind::Cos,
-        quantization: ScalarKind::F32,
-        connectivity: 16,
-        expansion_add: 64,
-        expansion_search: 32,
-        multi: false,
-    };
-
-    let index = Index::new(&options).map_err(|e| format!("usearch Index::new failed: {e}"))?;
-    index
-        .reserve(embeddings.len())
-        .map_err(|e| format!("usearch Index::reserve failed: {e}"))?;
-
-    for (idx, emb) in embeddings.iter().enumerate() {
-        index
-            .add(idx as u64, emb)
-            .map_err(|e| format!("usearch Index::add failed at {idx}: {e}"))?;
-    }
-
-    let matches = index
-        .search(query, max_candidates)
-        .map_err(|e| format!("usearch Index::search failed: {e}"))?;
-
-    let mut selected: Vec<usize> = matches
-        .keys
-        .into_iter()
-        .filter_map(|k| {
-            let idx = k as usize;
-            (idx < embeddings.len()).then_some(idx)
-        })
-        .collect();
-    selected.sort_unstable();
-    selected.dedup();
-    Ok(selected)
 }
 
 #[cfg(test)]

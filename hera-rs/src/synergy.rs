@@ -1,7 +1,7 @@
 use crate::structure::HotCuePoint;
 pub use crate::synergy_hnsw::{
-    prefilter_candidates_hnsw, synthesize_or_normalize_64d_embedding, HNSW_DEFAULT_STAGE1_POOL,
-    HNSW_PREFILTER_THRESHOLD,
+    prefilter_candidates_hnsw, prefilter_candidates_hnsw_for_spine,
+    synthesize_or_normalize_64d_embedding, HNSW_DEFAULT_STAGE1_POOL, HNSW_PREFILTER_THRESHOLD,
 };
 use serde::{Deserialize, Serialize};
 
@@ -340,19 +340,10 @@ pub fn optimize_crate_2opt(
     candidates: Vec<CrateTrackCandidate>,
     max_tracks: Option<usize>,
 ) -> OptimizedCrateResult {
-    let stage1_candidates = if candidates.len() > HNSW_PREFILTER_THRESHOLD {
-        let target_pool = max_tracks
-            .unwrap_or(HNSW_DEFAULT_STAGE1_POOL)
-            .saturating_mul(4)
-            .max(HNSW_DEFAULT_STAGE1_POOL);
-        prefilter_candidates_hnsw(&candidates, target_pool)
-    } else {
-        candidates
-    };
     optimize_crate_with_spine(
         brief,
         energy_arc,
-        stage1_candidates,
+        candidates,
         max_tracks,
         &SetSpineConfig::default(),
     )
@@ -366,6 +357,16 @@ pub fn optimize_crate_with_spine(
     max_tracks: Option<usize>,
     spine: &SetSpineConfig,
 ) -> OptimizedCrateResult {
+    let candidates = if candidates.len() > HNSW_PREFILTER_THRESHOLD {
+        let target_pool = max_tracks
+            .unwrap_or(HNSW_DEFAULT_STAGE1_POOL)
+            .saturating_mul(4)
+            .max(HNSW_DEFAULT_STAGE1_POOL);
+        prefilter_candidates_hnsw_for_spine(&candidates, target_pool, spine)
+    } else {
+        candidates
+    };
+
     let limit = max_tracks.unwrap_or(candidates.len()).min(candidates.len());
     if limit == 0 {
         return OptimizedCrateResult {

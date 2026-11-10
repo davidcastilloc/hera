@@ -233,7 +233,7 @@ git commit -m "fix(security): enforce server-side ticket clocks, loopback-defaul
   - Queries 3 diverse probes (`opener` 15th-percentile BPM, `bridge` 50th-percentile BPM, `peak` 85th-percentile BPM) against `synergy_hnsw_cache::query_or_build_cached_hnsw(...)` (`Mutex<Option<CachedCatalogHnsw>>` keyed by 64-bit FNV-1a library fingerprint) and **unconditionally retains every `SpineAnchor.track_id` in `spine.anchors`**.
 - Wired at the top of `optimize_crate_with_spine` (`synergy.rs:362`) **only when `candidates.len() > HNSW_PREFILTER_THRESHOLD` (`64`)** (`optimize_crate_2opt` simply delegates directly to `optimize_crate_with_spine` so HNSW never runs twice).
 
-- [ ] **Step 1: Write failing tests for Spine anchor retention on a 200-track library and HNSW cache hit reuse**
+- [x] **Step 1: Write failing tests for Spine anchor retention on a 200-track library and HNSW cache hit reuse**
 
 ```rust
 #[test]
@@ -245,23 +245,23 @@ fn optimize_crate_with_spine_uses_cached_hnsw_above_64_tracks_and_retains_all_an
 }
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 Run: `cargo test -p hera-node-rs optimize_crate_with_spine_uses_cached_hnsw`
 Expected: FAIL (`synergy_hnsw_cache` not yet implemented; `optimize_crate_with_spine` currently bypasses HNSW).
 
-- [ ] **Step 3: Implement `synergy_hnsw_cache.rs`, multi-probe + anchor-preserving `prefilter_candidates_hnsw_for_spine`, and wire into `optimize_crate_with_spine`**
+- [x] **Step 3: Implement `synergy_hnsw_cache.rs`, multi-probe + anchor-preserving `prefilter_candidates_hnsw_for_spine`, and wire into `optimize_crate_with_spine`**
 
 1. Create `hera-rs/src/synergy_hnsw_cache.rs` (`<= 349` LOC) storing the reusable `usearch::Index` (`#[cfg(feature = "native")]`) keyed by library FNV-1a digest with atomic `cache_hits` telemetry counter for deterministic testing.
 2. Update `hera-rs/src/synergy_hnsw.rs` (`<= 349` LOC) to enrich existing `embedding_64d`, run 3-probe retrieval (opener/bridge/peak), and union `spine.anchors` `track_id`s before truncating to `max_candidates`.
 3. Call `prefilter_candidates_hnsw_for_spine` inside `optimize_crate_with_spine` when `candidates.len() > HNSW_PREFILTER_THRESHOLD` (`64`), and simplify `optimize_crate_2opt` to delegate directly to `optimize_crate_with_spine`.
 
-- [ ] **Step 4: Verify Golden Masters (`0` diffs!), Ratchets, WASM & Unit Tests**
+- [x] **Step 4: Verify Golden Masters (`0` diffs!), Ratchets, WASM & Unit Tests**
 
 Run: `wc -l hera-rs/src/synergy_hnsw*.rs && cargo check -p hera-node-rs --no-default-features --features cloudflare && cargo test -p hera-node-rs`
 Expected: `golden_2opt_tsp_and_set_spine_routes` passes with `0` snapshot changes; new 200-track HNSW cache + spine test passes; all line ceilings respected.
 
-- [ ] **Step 5: Mark `[x]` and commit**
+- [x] **Step 5: Mark `[x]` and commit**
 
 ```bash
 git add hera-rs/ docs/superpowers/plans/

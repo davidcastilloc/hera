@@ -36,6 +36,7 @@ const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
     ("hera-rs/src/p2p.rs", 349),
     ("hera-rs/src/p2p/swarm_custody.rs", 349),
     ("hera-rs/src/synergy_hnsw.rs", 349),
+    ("hera-rs/src/synergy_hnsw_cache.rs", 349),
     ("hera-rs/src/p2p/broker.rs", 481),
     ("hera-rs/src/p2p/cloud_links.rs", 272),
     ("hera-rs/src/p2p/crypto_merkle.rs", 628),

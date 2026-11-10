@@ -13,6 +13,7 @@ pub mod router;
 pub mod structure;
 pub mod synergy;
 pub mod synergy_hnsw;
+pub mod synergy_hnsw_cache;
 
 #[cfg(feature = "cloudflare")]
 use std::sync::OnceLock;

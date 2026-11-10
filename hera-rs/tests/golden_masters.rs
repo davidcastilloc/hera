@@ -508,3 +508,99 @@ fn golden_2opt_tsp_and_set_spine_routes() {
 
     insta::assert_json_snapshot!("curator_2opt_tsp_and_spine_routes", normalized);
 }
+
+#[test]
+fn optimize_crate_with_spine_uses_cached_hnsw_above_64_tracks_and_retains_all_anchors() {
+    use hera_node_rs::synergy_hnsw_cache::{cache_hits_count, reset_cache_hits};
+
+    reset_cache_hits();
+
+    // Build 200 synthetic CrateTrackCandidates spanning 118..134 BPM and opposite keys 2A / 8A
+    let mut candidates = Vec::with_capacity(200);
+    for i in 0..200 {
+        let bpm = 118.0 + (i as f32) * (16.0 / 199.0);
+        let key = if i % 2 == 0 { "2A" } else { "8A" };
+        let energy = 0.4 + (i as f32) * (0.55 / 199.0);
+        candidates.push(CrateTrackCandidate {
+            track_id: format!("track_{i}"),
+            title: format!("Synthetic Track {i}"),
+            artist: format!("Producer {}", i % 10),
+            file_path: format!("/library/track_{i}.flac"),
+            duration_seconds: 240.0,
+            bpm,
+            camelot_key: key.to_string(),
+            energy_score: energy,
+            punch_index: 0.7,
+            groove_type: "four_on_floor".to_string(),
+            top_subgenre: "Tech House".to_string(),
+            has_intro_vocals: false,
+            has_outro_vocals: false,
+            embedding_64d: vec![0.125; 64],
+            hot_cues: vec![],
+        });
+    }
+
+    // Pin track_0 (118 BPM, 2A) as opener and track_199 (134 BPM, 8A) as peak in SetSpineConfig
+    let spine = SetSpineConfig {
+        anchors: vec![
+            SpineAnchor {
+                track_id: "track_0".to_string(),
+                role: Some("opener".to_string()),
+                slot: None,
+                position: None,
+            },
+            SpineAnchor {
+                track_id: "track_199".to_string(),
+                role: Some("peak".to_string()),
+                slot: None,
+                position: None,
+            },
+        ],
+        custom_energy_curve: vec![],
+    };
+
+    // Call optimize_crate_with_spine(..., Some(12), &spine) twice
+    let res1 = optimize_crate_with_spine(
+        "200 Scale Spine Set 1",
+        "steady_climb",
+        candidates.clone(),
+        Some(12),
+        &spine,
+    );
+    let res2 = optimize_crate_with_spine(
+        "200 Scale Spine Set 2",
+        "steady_climb",
+        candidates,
+        Some(12),
+        &spine,
+    );
+
+    assert_eq!(res1.total_tracks, 12);
+    assert_eq!(res2.total_tracks, 12);
+
+    let res1_ids: Vec<&str> = res1.sequence.iter().map(|t| t.track_id.as_str()).collect();
+    let res2_ids: Vec<&str> = res2.sequence.iter().map(|t| t.track_id.as_str()).collect();
+
+    assert!(
+        res1_ids.contains(&"track_0"),
+        "result 1 must retain opener anchor track_0"
+    );
+    assert!(
+        res1_ids.contains(&"track_199"),
+        "result 1 must retain peak anchor track_199"
+    );
+    assert!(
+        res2_ids.contains(&"track_0"),
+        "result 2 must retain opener anchor track_0"
+    );
+    assert!(
+        res2_ids.contains(&"track_199"),
+        "result 2 must retain peak anchor track_199"
+    );
+
+    assert!(
+        cache_hits_count() >= 1,
+        "Second run on same 200-track library must hit HNSW cache (got {})",
+        cache_hits_count()
+    );
+}
