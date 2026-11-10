@@ -19,6 +19,7 @@ repository = "https://github.com/davidcastilloc/hera"
 [workspace.dependencies]
 axum = { version = "0.8.9", default-features = false }
 http = "1.3"
+insta = { version = "1.43", features = ["json", "redactions"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 strum = { version = "0.28.0", features = ["derive"] }

@@ -39,5 +39,8 @@ tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "sig
 # Cloudflare Workers Serverless Edge WASM runtime (`npx wrangler deploy`)
 worker = { version = "0.8", features = ["http", "axum"], optional = true }
 
+[dev-dependencies]
+insta = { workspace = true }
+
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false
