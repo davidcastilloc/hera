@@ -63,16 +63,16 @@
 **Interfaces:**
 - Produces: Complete `[0.6.0]` release notes and zero stale Python (`uv run`, `pytest`, `ruff`, `mypy`, `src/hera/`, `librosa`) or `v0.2.0` single-file monolith references in `AGENTS.md`, `CLAUDE.md`, `README.md`, and `CONTRIBUTING.md`.
 
-- [ ] **Step 1: Prepend `## [0.6.0] - 2026-11-09` to `CHANGELOG.md`**
+- [x] **Step 1: Prepend `## [0.6.0] - 2026-11-09` to `CHANGELOG.md`**
   Summarize `ADR-012`..`ADR-024`: 5-stage zero-config P2P + RFC 5766 TURN + streaming Symphonia multi-codec decoder, Dark Booth Studio UI, minimalist `Transición` & `Mi Estilo`, morphing `Modo Mini` + live `HERA En Vivo.vdjfolder`, autonomous 44-tool `/agent` tab + loopback HTTP MCP, root Cargo workspace + `hera-ipc` (`ts-rs` + ACL Triad guardian), `< 350` LOC modularization, and lock-free `DualDeckEngine` (`hera-rs/src/audio_engine/`).
-- [ ] **Step 2: Align `AGENTS.md`, `CLAUDE.md`, `README.md`, and `CONTRIBUTING.md` with `v0.6.0`**
+- [x] **Step 2: Align `AGENTS.md`, `CLAUDE.md`, `README.md`, and `CONTRIBUTING.md` with `v0.6.0`**
   Update crate versions (`v0.6.0`), modular directory layout (`hera-rs/src/{audio_engine,dj_brain,mcp,code_mode,p2p}/`, `hera-desktop/src-ipc/`, `hera-desktop/src-tauri/src/plugins/{hera_agent,hera_dj}/`), and Pure-Rust + Tauri v2 + Bun `1.4.4` + Vite+ (`vp`) + `moon` contributor commands.
-- [ ] **Step 3: Run full `hera` verification & ODD hygiene checks**
+- [x] **Step 3: Run full `hera` verification & ODD hygiene checks**
   Run:
   - `cargo check`
   - `cargo test -p hera-node-rs`
   - `cargo test -p hera-ipc`
   - `rg -n "uv run|pytest|ruff|mypy|src/hera/|librosa" README.md CONTRIBUTING.md AGENTS.md CLAUDE.md` (expect 0 matches)
   Expected: All checks exit `0` with zero stale Python instructions and zero OS absolute paths.
-- [ ] **Step 4: Mark `[x]` and commit atomically**
+- [x] **Step 4: Mark `[x]` and commit atomically**
   Commit `docs(release): prepare v0.6.0 changelog and align Pure-Rust workspace docs`.
