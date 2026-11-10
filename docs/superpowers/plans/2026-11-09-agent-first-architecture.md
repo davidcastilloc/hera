@@ -222,15 +222,15 @@
   - `PreallocatedDeckBuffer` (`from_stereo_frames`, `decode_from_bytes`, `decode_from_file` via Symphonia + automatic 4 Hot Cue frame calculation via `crate::structure::analyze_track_structure`)
   - `DualDeckEngine::render_interleaved_stereo(&mut self, queue: &CommandQueue, out_stereo: &mut [f32]) -> usize` (`#![forbid(unsafe_code)]`, zero `Mutex`, zero heap allocation)
 
-- [ ] **Step 1: Write deterministic TDD unit tests in `hera-rs/src/audio_engine.rs`**
+- [x] **Step 1: Write deterministic TDD unit tests in `hera-rs/src/audio_engine.rs`**
   Test cases:
   1. `test_lock_free_command_queue_pack_unpack_and_ring_wraparound`
   2. `test_sample_accurate_jump_to_four_hot_cues` (synthesizes distinct amplitude markers at `1:Intro`, `2:Breakdown`, `3:Drop`, `4:Outro` frame offsets, pushes `JumpToHotCue(DeckA, 1..=4)`, and asserts the very first rendered sample in `out_stereo` matches each cue's exact marker value)
   3. `test_dual_deck_mix_tempo_ratio_and_eof_clamp` (verifies `SetTempoRatio(DeckA, 1.25)`, simultaneous `DeckA + DeckB` summing, out-of-range cue index `0`/`9` clamping, and seek past EOF clamping without panic or NaN)
   4. `test_decode_wav_bytes_into_preallocated_deck_buffer` (decodes a real RIFF WAV via Symphonia into `PreallocatedDeckBuffer` with 4 Hot Cue sample markers)
-- [ ] **Step 2: Implement `hera-rs/src/audio_engine.rs` (`< 350` LOC) and export in `hera-rs/src/lib.rs`**
+- [x] **Step 2: Implement `hera-rs/src/audio_engine.rs` (`< 350` LOC) and export in `hera-rs/src/lib.rs`**
   Guard with `#[cfg(not(target_arch = "wasm32"))]` in `lib.rs` and `#![forbid(unsafe_code)]` inside `audio_engine.rs`.
-- [ ] **Step 3: Verify `cargo test -p hera-node-rs`, WASM build, and full monorepo `moon` suite**
+- [x] **Step 3: Verify `cargo test -p hera-node-rs`, WASM build, and full monorepo `moon` suite**
   Run:
   - `cargo check --manifest-path hera-rs/Cargo.toml`
   - `cargo test --manifest-path hera-rs/Cargo.toml`
@@ -239,5 +239,5 @@
   - `cd hera-desktop && bun run gen:types && bun run check && bun run test && bun run build`
   - `moon run :check :test hera-desktop:build`
   Expected: All commands exit `0` with green terminal receipts.
-- [ ] **Step 4: Mark `[x]` in plan and commit atomically**
+- [x] **Step 4: Mark `[x]` in plan and commit atomically**
   Commit `feat(audio): add lock-free DualDeckEngine transport with sample-accurate 4-Hot-Cue seek`.
