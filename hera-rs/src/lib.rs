@@ -2413,7 +2413,7 @@ mod tests {
 
         // Second transfer reusing the leecher's underlying cached endpoint
         let receipt2 = leecher
-            .fetch_verified_shard(provider_addr, "shard-002", Some(&sha256_2))
+            .fetch_verified_shard(provider_addr.clone(), "shard-002", Some(&sha256_2))
             .await
             .expect("fetch shard 2");
         assert_eq!(receipt2.shard_id, "shard-002");
@@ -2421,6 +2421,46 @@ mod tests {
         assert_eq!(receipt2.verified_sha256, sha256_2);
 
         assert!(start_time.elapsed() < std::time::Duration::from_secs(5));
+
+        // Test missing shard returns HERA_ERR_SHARD_NOT_FOUND
+        let missing_err = leecher
+            .fetch_verified_shard(provider_addr.clone(), "shard-missing-404", None)
+            .await;
+        assert!(missing_err.is_err());
+        assert!(missing_err.unwrap_err().contains("HERA_ERR_SHARD_NOT_FOUND"));
+    }
+
+    #[cfg(feature = "native")]
+    #[tokio::test]
+    async fn iroh_leecher_times_out_fast_on_stalled_or_unreachable_peer() {
+        let leecher = crate::p2p::IrohQuicAdapter::new("hera-quic-stalled-leecher", true);
+        let blackhole_socket = std::net::UdpSocket::bind("127.0.0.1:0").unwrap();
+        let blackhole_addr = blackhole_socket.local_addr().unwrap();
+
+        // Create a synthetic EndpointAddr pointing to the silent blackhole UDP socket
+        let fake_node_id = iroh::Endpoint::builder(iroh::endpoint::presets::Minimal)
+            .clear_address_lookup()
+            .bind()
+            .await
+            .unwrap()
+            .id();
+        let unreachable_addr = iroh::EndpointAddr::new(fake_node_id).with_ip_addr(blackhole_addr);
+
+        let start = std::time::Instant::now();
+        let result = leecher
+            .fetch_verified_shard_with_timeout(
+                unreachable_addr,
+                "shard-timeout-test",
+                None,
+                std::time::Duration::from_millis(250),
+            )
+            .await;
+
+        let elapsed = start.elapsed();
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("timed out") || err_msg.contains("failed"));
+        assert!(elapsed < std::time::Duration::from_secs(2));
     }
 }
 

@@ -161,8 +161,8 @@ pub async fn download_p2p_track<R: Runtime>(
 
         let total_chunks = request.chunk_count.unwrap_or(32).clamp(1, 512);
 
-        let (assembled, stage_used, is_real_p2p) = if let Some(peer) = explicit_peer {
-            if peer.starts_with("iroh://") || peer.starts_with('{') {
+        let (payload_to_write, ext, quarantine_verified, stage_used) = if let Some(peer) = explicit_peer {
+            let (assembled, stage_used) = if peer.starts_with("iroh://") || peer.starts_with('{') {
                 let adapter = IrohQuicAdapter::new("hera-desktop-leecher", false);
                 let ticket = peer;
                 let fetch_res = tauri::async_runtime::block_on(async {
@@ -171,7 +171,7 @@ pub async fn download_p2p_track<R: Runtime>(
                         .await
                 });
                 match fetch_res {
-                    Ok(receipt) => (receipt.payload, "STAGE_2_IROH_QUIC_STREAM".to_string(), true),
+                    Ok(receipt) => (receipt.payload, "STAGE_2_IROH_QUIC_STREAM".to_string()),
                     Err(e) => return Err(format!("Fallo en transporte Iroh QUIC: {e}")),
                 }
             } else {
@@ -197,29 +197,27 @@ pub async fn download_p2p_track<R: Runtime>(
                     last_stage = stage_label;
                     buf.extend_from_slice(&chunk_bytes);
                 }
-                (buf, last_stage, true)
-            }
-        } else {
-            // Local offline demo mode: no peer endpoint provided
-            let buf = render_harmonic_preview_wav(request.bpm, &request.camelot, &[]);
-            (buf, "OFFLINE_SYNTHETIC_PREVIEW_UNVERIFIED".to_string(), false)
-        };
+                (buf, last_stage)
+            };
 
-        let (payload_to_write, ext, quarantine_verified) = match has_valid_audio_magic(&assembled) {
-            Some(real_ext) => (assembled, real_ext, true),
-            None => {
-                if is_real_p2p {
+            match has_valid_audio_magic(&assembled) {
+                Some(real_ext) => (assembled, real_ext, true, stage_used),
+                None => {
                     return Err(format!(
                         "Pista P2P `{}` descargada no contiene cabecera de audio válida (magic check falló)",
                         request.track_id
                     ));
                 }
-                (
-                    render_harmonic_preview_wav(request.bpm, &request.camelot, &assembled),
-                    "wav",
-                    false,
-                )
             }
+        } else {
+            // Local offline demo mode: no peer endpoint provided
+            let preview_wav = render_harmonic_preview_wav(request.bpm, &request.camelot, &[]);
+            (
+                preview_wav,
+                "wav",
+                false,
+                "OFFLINE_SYNTHETIC_PREVIEW_UNVERIFIED".to_string(),
+            )
         };
         let sha256_hex = compute_sha256_hex(&payload_to_write);
 
