@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Zero OS-dependent absolute paths (`C:\`, `/Users/`, `/home/`) in tracked code, configs, specs, or plans.
+- Zero OS-dependent absolute host or drive paths in tracked code, configs, specs, or plans (strictly repository-relative paths only).
 - Swarm-First invariant: `beta_mvp`, `free`, and `local_unlimited` nodes always keep `p2p_sharing_enabled = true` and `can_disable_p2p_sharing = false`.
 - `hera-rs` must compile cleanly under `--target wasm32-unknown-unknown --features cloudflare --no-default-features` (`axum = "0.7"` retained in `hera-rs`; `ts-rs` strictly optional behind `feature = "ts"`).
 - `hera-desktop/src-tauri` retains `axum = "0.8.9"` for its loopback MCP server.
