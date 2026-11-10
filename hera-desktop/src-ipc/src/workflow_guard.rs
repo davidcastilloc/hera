@@ -63,15 +63,100 @@ pub fn verify_workspace_release_workflows(repo_root: &Path) -> Result<(), String
     }
 }
 
+fn major_minor(ver: &str) -> Option<&str> {
+    let clean = ver.trim().trim_start_matches(['^', '~', '=']);
+    let mut parts = clean.split('.');
+    let major = parts.next()?;
+    let minor = parts.next()?;
+    let end = major.len() + 1 + minor.len();
+    clean.get(..end)
+}
+
+fn extract_after<'a>(haystack: &'a str, needle: &str) -> Option<&'a str> {
+    let rest = haystack.split_once(needle)?.1;
+    rest.split_once('"').map(|(val, _)| val)
+}
+
+/// Verifies that Rust `tauri` (`Cargo.lock`) and NPM `@tauri-apps/{api,cli}` (`package.json`, `bun.lock`)
+/// share the exact same `major.minor` release required by `tauri build` pre-flight checks.
+pub fn verify_tauri_version_parity(repo_root: &Path) -> Result<(), String> {
+    let cargo_lock = fs::read_to_string(repo_root.join("Cargo.lock"))
+        .map_err(|e| format!("Cargo.lock: {e}"))?;
+    let rust_ver = extract_after(&cargo_lock, "name = \"tauri\"\nversion = \"")
+        .or_else(|| extract_after(&cargo_lock, "name = \"tauri\"\r\nversion = \""))
+        .ok_or_else(|| "Cargo.lock: missing `tauri` package entry".to_string())?;
+    let rust_mm = major_minor(rust_ver)
+        .ok_or_else(|| format!("Cargo.lock: invalid tauri semver '{rust_ver}'"))?;
+
+    let pkg_json = fs::read_to_string(repo_root.join("hera-desktop/package.json"))
+        .map_err(|e| format!("hera-desktop/package.json: {e}"))?;
+    let bun_lock = fs::read_to_string(repo_root.join("hera-desktop/bun.lock"))
+        .map_err(|e| format!("hera-desktop/bun.lock: {e}"))?;
+
+    let mut errs = Vec::new();
+    for pkg in ["@tauri-apps/api", "@tauri-apps/cli"] {
+        let pkg_needle = format!("\"{pkg}\": \"");
+        match extract_after(&pkg_json, &pkg_needle).and_then(major_minor) {
+            Some(mm) if mm == rust_mm => {}
+            Some(mm) => errs.push(format!(
+                "hera-desktop/package.json: {pkg} ({mm}.x) mismatches Rust tauri ({rust_ver})"
+            )),
+            None => errs.push(format!("hera-desktop/package.json: missing {pkg}")),
+        }
+        let lock_needle = format!("\"{pkg}@");
+        match extract_after(&bun_lock, &lock_needle).and_then(major_minor) {
+            Some(mm) if mm == rust_mm => {}
+            Some(mm) => errs.push(format!(
+                "hera-desktop/bun.lock: {pkg} ({mm}.x) mismatches Rust tauri ({rust_ver})"
+            )),
+            None => errs.push(format!("hera-desktop/bun.lock: missing resolved {pkg}")),
+        }
+    }
+
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        Err(errs.join("\n"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::verify_workspace_release_workflows;
+    use super::{verify_tauri_version_parity, verify_workspace_release_workflows};
     use std::{fs, path::Path};
 
     #[test]
     fn test_workspace_release_workflows_target_paths() {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         assert_eq!(verify_workspace_release_workflows(&repo_root), Ok(()));
+    }
+
+    #[test]
+    fn test_tauri_rust_and_npm_minor_versions_match() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        assert_eq!(verify_tauri_version_parity(&repo_root), Ok(()));
+    }
+
+    #[test]
+    fn test_tauri_version_parity_rejects_minor_mismatch() {
+        let tmp = std::env::temp_dir().join(format!("hera_tauri_ver_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        fs::create_dir_all(tmp.join("hera-desktop")).unwrap();
+        fs::write(tmp.join("Cargo.lock"), "[[package]]\nname = \"tauri\"\nversion = \"2.12.5\"\n").unwrap();
+        fs::write(
+            tmp.join("hera-desktop/package.json"),
+            "{\"dependencies\":{\"@tauri-apps/api\":\"2.11.0\"},\"devDependencies\":{\"@tauri-apps/cli\":\"2.11.2\"}}",
+        )
+        .unwrap();
+        fs::write(
+            tmp.join("hera-desktop/bun.lock"),
+            "[\"@tauri-apps/api@2.11.0\", \"@tauri-apps/cli@2.11.2\"]",
+        )
+        .unwrap();
+        let err = verify_tauri_version_parity(&tmp).unwrap_err();
+        assert!(err.contains("@tauri-apps/api (2.11.x)"), "{err}");
+        assert!(err.contains("@tauri-apps/cli (2.11.x)"), "{err}");
+        let _ = fs::remove_dir_all(&tmp);
     }
 
     #[test]
@@ -113,3 +198,4 @@ mod tests {
         let _ = fs::remove_dir_all(&tmp);
     }
 }
+

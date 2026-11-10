@@ -76,3 +76,26 @@
   Expected: All checks exit `0` with zero stale Python instructions and zero OS absolute paths.
 - [x] **Step 4: Mark `[x]` and commit atomically**
   Commit `docs(release): prepare v0.6.0 changelog and align Pure-Rust workspace docs`.
+
+---
+
+### Task 3: Tauri v2 Rust ↔ NPM Minor-Version Parity (`2.12.4`) & Multi-OS Bundler Hardening
+
+**Files:**
+- Modify: `hera-desktop/src-ipc/src/workflow_guard.rs`
+- Modify: `hera-desktop/package.json`
+- Modify: `hera-desktop/bun.lock`
+- Modify: `.github/workflows/release.yml`
+- Modify: `docs/superpowers/DECISIONS.md`
+
+**Interfaces:**
+- Produces: `verify_tauri_version_parity(repo_root: &Path) -> Result<(), String>` tested in `hera-ipc`, `@tauri-apps/api@2.12.4` + `@tauri-apps/cli@2.12.4` matching `tauri v2.12.5`, and hardened Multi-OS `release.yml`.
+
+- [x] **Step 1: Add failing test `test_tauri_rust_and_npm_minor_versions_match` in `hera-desktop/src-ipc/src/workflow_guard.rs`**
+  Capture RED receipt (`@tauri-apps/api 2.11.x` & `@tauri-apps/cli 2.11.x` mismatching `tauri 2.12.5`).
+- [x] **Step 2: Upgrade `@tauri-apps/api` and `@tauri-apps/cli` to `2.12.4` (`bun install --ignore-scripts`) and harden `.github/workflows/release.yml`**
+  Add Node 24 (`actions/setup-node@v4`), Linux GStreamer/AppImage/RPM dependencies (`bundleMediaFramework: true`), `NO_STRIP=true`, and `includeUpdaterJson: false`.
+- [x] **Step 3: Run full `cargo test -p hera-ipc`, `cargo test -p hera-node-rs`, and `bun run check && bun run test && bun run build`**
+  All checks pass (`11/11` `hera-ipc`, `23/23` `hera-node-rs`, `22/22` Vitest unit tests, production bundle `0` errors).
+- [x] **Step 4: Record `ADR-025` in `DECISIONS.md`, commit atomically, push `main`, and re-cut `v0.6.0` tag**
+
