@@ -135,6 +135,7 @@ function ViewDjStyleDna() {
                   <button
                     key={sw}
                     type="button"
+                    aria-pressed={active}
                     onClick={() => setPreferredSoftware(sw)}
                     {...stylex.props(
                       styles.segmentBtn,
@@ -175,6 +176,7 @@ function ViewDjStyleDna() {
               <h2 {...stylex.props(styles.sectionTitle)}>Balance musical</h2>
               <button
                 type="button"
+                aria-expanded={showKeyGrid}
                 onClick={() => setShowKeyGrid((prev) => !prev)}
                 {...stylex.props(styles.quietLinkBtn)}
               >

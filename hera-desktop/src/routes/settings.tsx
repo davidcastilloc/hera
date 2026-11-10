@@ -17,14 +17,14 @@ export const Route = createFileRoute('/settings')({
   async loader() {
     if (!isTauri()) {
       return {
-        version: '0.5.0',
+        version: '0.6.0',
         tauriVersion: '2.0.0',
         appStorageDir: '%APPDATA%/hera',
       };
     }
 
     const [version, tauriVersion, appStorageDir] = await Promise.all([
-      getVersion().catch(() => '0.5.0'),
+      getVersion().catch(() => '0.6.0'),
       getTauriVersion().catch(() => '2.0.0'),
       invoke<string>('plugin:config|get_storage_dir').catch(() => ''),
     ]);

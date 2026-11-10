@@ -125,9 +125,35 @@ pub fn verify_tauri_version_parity(repo_root: &Path) -> Result<(), String> {
     }
 }
 
+/// Verifies that `hera-desktop/src-tauri` enables `mcp-bridge` by default and binds strictly to loopback `127.0.0.1`.
+pub fn verify_qa_mcp_bridge_default(repo_root: &Path) -> Result<(), String> {
+    let cargo_toml = fs::read_to_string(repo_root.join("hera-desktop/src-tauri/Cargo.toml"))
+        .map_err(|e| format!("hera-desktop/src-tauri/Cargo.toml: {e}"))?;
+    let main_rs = fs::read_to_string(repo_root.join("hera-desktop/src-tauri/src/main.rs"))
+        .map_err(|e| format!("hera-desktop/src-tauri/src/main.rs: {e}"))?;
+
+    let mut errs = Vec::new();
+    if !cargo_toml.contains("default = [\"mcp-bridge\"]") {
+        errs.push("hera-desktop/src-tauri/Cargo.toml: missing `default = [\"mcp-bridge\"]` for release QA".to_string());
+    }
+    if !main_rs.contains("tauri_plugin_mcp_bridge::Builder::new()")
+        || !main_rs.contains(".bind_address(\"127.0.0.1\")")
+    {
+        errs.push("hera-desktop/src-tauri/src/main.rs: missing loopback 127.0.0.1 tauri_plugin_mcp_bridge binding".to_string());
+    }
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        Err(errs.join("\n"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{verify_tauri_version_parity, verify_workspace_release_workflows};
+    use super::{
+        verify_qa_mcp_bridge_default, verify_tauri_version_parity,
+        verify_workspace_release_workflows,
+    };
     use std::{fs, path::Path};
 
     #[test]
@@ -140,6 +166,12 @@ mod tests {
     fn test_tauri_rust_and_npm_minor_versions_match() {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         assert_eq!(verify_tauri_version_parity(&repo_root), Ok(()));
+    }
+
+    #[test]
+    fn test_qa_mcp_bridge_enabled_by_default_on_loopback() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        assert_eq!(verify_qa_mcp_bridge_default(&repo_root), Ok(()));
     }
 
     #[test]
