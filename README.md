@@ -1,33 +1,35 @@
 <div align="center">
 
-<img src="assets/hera_banner_y2k.jpg" alt="HERA Y2K Cyber DJ Banner" width="100%" />
+<img src="assets/hera_banner_y2k.jpg" alt="HERA v0.6.0 — Pure-Rust AI DJ Studio & Global P2P Swarm Banner" width="100%" />
 
-# 🎧 HERA
-### *The Autonomous, Local-First AI Super-Agent for DJs & Music Curators*
+# 🎧 HERA (`v0.6.0`)
+### *The Autonomous, Local-First AI DJ Studio & Symbiotic P2P Swarm*
 
-**«Todo es posible si lo imaginas: De la intención musical al booth del DJ en segundos»**
+**«Todo es posible si lo imaginas: De la intención musical al booth del DJ en segundos»**  
+**🐝 Lema del Enjambre: *«Mientras más nodos de Hera, más fuerte es el sistema de enjambres»***
 
 [![Pure Rust](https://img.shields.io/badge/Rust-100%25%20Pure%20Rust%20v0.6.0-dea584.svg?style=flat&logo=rust)](hera-rs/)
 [![Tauri v2](https://img.shields.io/badge/Desktop-Tauri%20v2%20%2B%20React%2019-24C8D8.svg?style=flat&logo=tauri)](hera-desktop/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Protocol: MCP](https://img.shields.io/badge/protocol-MCP%20stdio%20%7C%20HTTP-FF6B6B.svg)](https://modelcontextprotocol.io/)
+[![Protocol: MCP](https://img.shields.io/badge/protocol-MCP%2044%20Tools%20%7C%20Code%20Mode-14b8a6.svg)](https://modelcontextprotocol.io/)
 [![Cloud: Cloudflare Edge](https://img.shields.io/badge/Cloud-D1%20%7C%20R2%20%7C%20KV%20%7C%20Vectorize%20%7C%20Workers%20AI-orange.svg)](https://workers.cloudflare.com/)
-[![P2P: 5-Stage Zero-Config Cascade](https://img.shields.io/badge/P2P-LAN%20%7C%20STUN%20%7C%20Spray%20%7C%20TURN%20%7C%20R2-cyan.svg)](AGENTS.md)
-[![Philosophy: Local--First](https://img.shields.io/badge/philosophy-Local--First-orange.svg)](MANIFESTO.md)
+[![P2P: 5-Stage Zero-Config Cascade](https://img.shields.io/badge/P2P-LAN%20%7C%20STUN%20%7C%20Spray%20%7C%20TURN%20%7C%20R2%20Swarm-cyan.svg)](docs/FEDERATED_R2_SWARM.md)
+[![Philosophy: Local--First](https://img.shields.io/badge/philosophy-Swarm--First%20%26%20Local--First-14b8a6.svg)](MANIFESTO.md)
 
 <p align="center">
-  <b>Hera (`v0.6.0`)</b> is an intelligent, cross-platform audio curation and asset orchestrator designed for real human DJs.<br/>
-  100% Pure-Rust + Tauri v2 native engine (`~8 MB` installer, zero Python). Analyzes audio with Symphonia + rustfft (BPM, Camelot Wheel, 4 Hot Cues, Sub-bass phase safety), arranges crates via 2-Opt TSP, morphs into a live VirtualDJ `Modo Mini` overlay, exports directly to VirtualDJ, Rekordbox and Traktor, and shares Lossless Masters across a 5-stage zero-config P2P swarm.
+  <b>HERA (`v0.6.0`)</b> es un estudio de curaduría acústica, copiloto autónomo y enjambre P2P simbiótico diseñado para DJs reales.<br/>
+  Motor nativo <b>100% Pure Rust + Tauri v2 (`~8 MB`, cero Python)</b>. Analiza audio en <code>~0.08s</code> con <code>Symphonia + rustfft</code> (BPM, Rueda Camelot de 24 llaves, 4 Hot Cues acústicos, fase de subgraves), ordena sets con <code>2-Opt TSP</code>, se transforma en un overlay en vivo para VirtualDJ (<code>Modo Mini</code>), exporta en 1 clic a VirtualDJ / Rekordbox / Traktor y comparte Masters Lossless verificados a través de una cascada P2P Zero-Config de 5 etapas y nodos comunitarios <code>Edge Guardian</code>.
 </p>
 
-[✨ Read Manifesto](MANIFESTO.md) • [🤖 Agent Guide (AGENTS.md)](AGENTS.md) • [🚀 Quickstart](#-quickstart--installation) • [🎛️ CLI Reference](#️-cli-reference-hera-node) • [📋 Roadmap](#-wishlist--roadmap-board-dj--human-centric)
+[📸 Tour Visual (5 Pantallas)](#-tour-visual-del-producto-las-5-pantallas-de-hera-v060) • [🐝 Concepto de Enjambres](#-el-concepto-de-los-enjambres-p2p-por-el-bien-del-enjambre) • [✨ Manifiesto](MANIFESTO.md) • [📖 Modos de Uso](docs/MODOS_DE_USO.md) • [🚀 Quickstart](#-quickstart--installation)
 
 ---
 
 </div>
 
 ## 📑 Table of Contents
-- [🌟 Real-World Use Case: The Symbiotic P2P Super-Node](#-real-world-use-case-the-symbiotic-p2p-super-node)
+- [📸 Tour Visual del Producto: Las 5 Pantallas de HERA `v0.6.0`](#-tour-visual-del-producto-las-5-pantallas-de-hera-v060)
+- [🐝 El Concepto de los Enjambres P2P (*«Por el bien del enjambre»*)](#-el-concepto-de-los-enjambres-p2p-por-el-bien-del-enjambre)
 - [✨ Core Philosophy](#-core-philosophy)
 - [⚡ Key Features](#-key-features)
 - [🔌 3 Ways to Use Hera](#-3-ways-to-use-hera)
@@ -42,55 +44,81 @@
 
 ---
 
-## 🌟 Real-World Use Case: The Symbiotic P2P Super-Node
+## 📸 Tour Visual del Producto: Las 5 Pantallas de HERA `v0.6.0`
 
-> *"We just acquired and built 8 full 60+ minute DJ sets, and simultaneously we are enabling the entire global community to download our curated selection at gigabit fiber speeds."*
+HERA Desktop (`hera-desktop`) está construido bajo el sistema visual **Dark Booth Studio (`#0c0e12` pizarra de cabina + `#14b8a6` esmeralda estudio)** para operar sin fatiga visual en cabinas oscuras, con menos de 50 palabras de ruido de interfaz por pantalla y respuesta instantánea (`< 50 ms`).
 
-```text
-       [ Human / DJ Intention ]
-  ("Build 8 Sets: 2000-2005 Millennium Anthems & Deep Digs")
-                  │
-                  ▼
-         [ HERA Pure-Rust Engine ]
-  ├── 1. 5-Stage Zero-Config P2P Search (LAN -> Multi-STUN -> Spray -> TURN -> R2)
-  ├── 2. Zero-Trust Quarantine & rustfft Spectral Cutoff Audit
-  ├── 3. Symphonia Streaming DSP: BPM, Camelot Key (8A, 10B), 4 Hot Cues
-  ├── 4. Native ID3v2.4 / Vorbis Tag Injection (lofty) & KV Forensic Dedup
-  └── 5. 2-Opt TSP Harmonic Crate Sequencing & VirtualDJ / Rekordbox / Traktor Export
-                  │
-        ┌─────────┴─────────┐
-        ▼                   ▼
-[ 8 Curated DJ Sets ]  [ 800 Mbps Super-Seed ]
-(8.58h Lossless Mix)   (UDP + Edge Guardian Swarm)
-        │                   │
-        ▼                   ▼
- [ Zero-OAuth Cloud ]  [ Global P2P Peers ]
- (3.08 GB in Cloud)    (1:1.5 Turbo Credits, No Leech)
-```
+### 1. 🎧 Biblioteca DJ + 4 Pines de Hot Cues + Exportador de Cabina (`/library`)
+Importa tus carpetas locales (`WAV`, `FLAC`, `MP3`, `M4A`, `AAC`, `ALAC`, `OGG`, `AIFF`), salta en 1 clic a los **4 Hot Cues acústicos** en el reproductor superior (`🟢 Cue 1 Intro`, `🔵 Cue 2 Breakdown`, `🔴 Cue 3 Drop`, `🟡 Cue 4 Outro`), ordena la mezcla entera con **`2-Opt TSP`** y exporta con todos los cues inyectados directo a **VirtualDJ (`.vdjfolder`)**, **Rekordbox (`.xml`)**, **Traktor (`.nml`)** o **M3U8**.
 
-### 1. Zero-Trust Ingestion & Pure Studio Master Validation
-Incoming audio lands in `quarantine/`. Hera automatically executes **Symphonia + `rustfft` Peak Ratio and Spectral Flatness audits** (`hera-rs/src/forensics.rs`) to reject fake upscaled transcodes and synthetic sine wave tones. Only verified studio masters (FLAC / WAV / AIFF / 320k MP3) are promoted to `library/`.
+![HERA v0.6.0 — Pantalla 1: Biblioteca DJ y 4 Hot Cues](docs/superpowers/assets/hera_v060_1_library_1180x720.png)
 
-### 2. Autonomous 8-Crate Harmonic Construction (Side A & Side B)
-Hera builds physical DJ crates for club and festival performance:
-* **Side A (Peak-Time & Primetime Hits)**: French Touch, Electro Club, Eurodance/Trance, Vocal Divas.
-* **Side B (Deep Digging & Progressive Gems)**: Deep Disco, Dirty Electro, Progressive Trance, Soulful Underground.
-* **Strict 60+ Minute Rule**: Every single set contains 11–15 sequenced tracks spanning **60.2 to 73.3 minutes** with harmonic key progression.
+---
 
-### 3. Good P2P Citizen & 800 Mbps Dedicated Super-Node
-Instead of just taking from the community (*leeching*), Hera configures every free/local node (`p2p_sharing_enabled = true` — *"Por el bien del enjambre"*) as a high-speed swarm participant:
-* Exposes **143+ mastered audio files (3.13 GB)** across verified CAS fingerprints.
-* Traverses NATs automatically via **5-Stage Zero-Config P2P** (`LAN` -> `Multi-STUN` -> `16-port spray` -> `RFC 5766 TURN` -> `R2 Boost`) without router port forwarding.
-* Rewards active seeders with **`1 : 1.5` Turbo Credits** and **`+5.0 MB` Pioneer Forensic Bounties**.
+### 2. ✨ Agente Autónomo con 44 Herramientas MCP (`/agent` · `Ctrl+J`)
+Un espacio conversacional centrado y sin distracciones conectado a un servidor **MCP HTTP Loopback (`127.0.0.1:0` con Bearer secreto)** que expone **44 herramientas nativas en Rust** (análisis DSP, curaduría `2-Opt TSP`, búsqueda/descarga en el enjambre P2P, control del reproductor, escritura en vivo a VirtualDJ e inspección del sistema). Adjunta pistas o playlists con **`@ Contexto`**, dispara flujos rápidos con **`/set`** o **`/virtualdj`**, e inspecciona cada llamada en filas colapsables de `28 px` con modo **`Auto`** o **`Confirmar`**.
 
-### 4. Multi-Cloud Zero-OAuth Redundancy
-All curated sets, audio masters, and `.vdjfolder` / XML / NML cue sheets connect seamlessly to **Google Drive, Dropbox, OneDrive, and Cloudflare R2** with zero OAuth console setup, guaranteeing immediate access from any CDJ, VirtualDJ booth laptop, or standalone player.
+![HERA v0.6.0 — Pantalla 2: Agente Autónomo con 44 Tools MCP](docs/superpowers/assets/hera_v060_2_agent_1180x720.png)
 
-### 5. 🐝 Federated R2 Edge Swarm & `Edge Guardian` Nodes (*«Mientras más nodos de Hera, más fuerte es el sistema de enjambres»*)
-Any community member who deploys [`hera-rs`](hera-rs/README.md) on the **Cloudflare Workers + R2 Free Tier (`$0.00/month`)** automatically strengthens the global P2P swarm ([full guide in `docs/FEDERATED_R2_SWARM.md`](docs/FEDERATED_R2_SWARM.md)):
-* **Constrained Water-Filling (`$0.00` Billing Protection)**: The swarm dynamically calculates optimal shard allocations across all community nodes while strictly respecting `9.0 GB` R2 (`CF_WORKER_SAFE_R2_CAP_MB`) and `85,000 req/day` (`CF_WORKER_SAFE_REQ_CAP`) safety ceilings so collaborators never incur Cloudflare charges.
-* **Meritocratic `Edge Guardian` Autopilot (`1 : 1.5` Turbo Credits)**: Nodes passing random **64-byte `Proof-of-Custody` range audits** unlock unlimited R2 Fast Lane access (`EDGE_GUARDIAN_UNLIMITED_FAST_LANE`) while online and earn **`1.5 MB` of Turbo Credit per `1.0 MB` served** (`ProofOfDeliveryReceipt`) for offline laptop sets.
-* **Blind Catalog Sharding & `4 MB` Immutable Blocks (`8.4x` Multiplier)**: Shards are stored as opaque `shard-blobs/{hmac}.hbin` blocks (`4 MB` aligned with `Cache-Control: public, max-age=31536000, immutable`), gated by single-use `60s` HMAC-signed `X-Hera-Swarm-Ticket` headers and verified by a double cryptographic seal (`hera_seal` + `audio_sha256`).
+---
+
+### 3. ⇄ Transición y Puente Armónico con Enjambre P2P (`/bridge`)
+¿Necesitas cruzar de un groove a `122 BPM en 8A` (*Baiana*) a un himno de hora pico a `128 BPM en 10A` (*Pepas VIP*) sin forzar el pitch ni chocar las voces? El flujo horizontal **`Actual → Puente sugerido → Destino`** calcula los 2 eslabones armónicos exactos tanto en tu disco local como en el **Enjambre P2P global**, te permite **pre-escuchar 15 segundos del cruce (`Cue 4 Mix Out → Cue 1 Intro`)** y ajustar la transición en un clic (`Más suave`, `Más energía`, `Sin voces`).
+
+![HERA v0.6.0 — Pantalla 3: Transición y Puente Armónico P2P](docs/superpowers/assets/hera_v060_3_transition_1180x720.png)
+
+---
+
+### 4. ◈ Mi Estilo y ADN Musical (`/dna`)
+Escanea tu colección en Rust (`0%` de internet requerido) y sintetiza tu identidad musical: programa principal de cabina (`VirtualDJ`, `Rekordbox`, `Traktor`, `Serato`), **Ritmo habitual (`125 BPM`)**, **Tonos principales (`8A · 9A · 10A`)**, barra de **Balance musical (`Melódico · Hora pico · Vocal`)**, distribución detallada de las 24 llaves de la **Rueda Camelot** y tus 3 interruptores de **Preferencias al ordenar** (*Evitar choque de voces*, *Mantener graves continuos*, *Ocultar audio de baja calidad*).
+
+![HERA v0.6.0 — Pantalla 4: Mi Estilo y ADN Musical](docs/superpowers/assets/hera_v060_4_dna_1180x720.png)
+
+---
+
+### 5. ⧉ Modo Mini Always-on-Top para Cabina en Vivo (`Ctrl+Shift+M`)
+Cuando mezclas en vivo en una sola pantalla de laptop con **VirtualDJ**, una ventana grande tapa las ondas y los decks. Al pulsar `Ctrl+Shift+M`, la misma ventana de HERA se transforma sin consumir un solo megabyte extra de RAM en dos formatos flotantes anclados abajo a la derecha:
+- **Tarjeta de Cabina (`360×408 px`):** Detecta automáticamente qué pista está sonando en VirtualDJ (`History/tracklist.txt`), sugiere las 3 siguientes canciones armónicas o un puente en 2 pasos, permite pre-escuchar en audífonos (`▶`) y al pulsar **`+ VDJ`** inyecta la pista al instante en `Documents/VirtualDJ/Folders/HERA En Vivo.vdjfolder` con sus 4 Hot Cues `<Poi>`.
+- **Cápsula HUD Ultracompacta (`560×52 px`):** Una sola línea flotante (`Sonando → Siguiente · Tono · BPM · 4 Cues · [+ VDJ]`).
+
+![HERA v0.6.0 — Pantalla 5: Modo Mini Tarjeta 360x408 y Cápsula HUD 560x52](docs/superpowers/assets/hera_v060_5_mini_overlay_1180x720.png)
+
+---
+
+## 🐝 El Concepto de los Enjambres P2P (*«Por el bien del enjambre»*)
+
+> **Regla de Oro de HERA:** *«La mejor decisión es por el bien del enjambre siempre. Mientras más nodos de Hera, más fuerte es el sistema de enjambres.»*
+
+![Concepto y Arquitectura del Enjambre P2P Simbiótico de HERA v0.6.0](assets/hera_swarm_concept.jpg)
+
+### ¿Cuál es la idea detrás de los Enjambres de HERA?
+
+En las redes P2P tradicionales (Soulseek, BitTorrent), la mayoría de los usuarios descargan archivos de baja calidad o transcodes falsos y cierran el programa (*leeching*), mientras que los servidores centrales en la nube quiebran por costos de ancho de banda y almacenamiento. **HERA resuelve ambos problemas con un ecosistema simbiótico de costo marginal `$0.00`:**
+
+#### 1. 🤝 El Trueque Simbiótico (`100% Gratis` a cambio de Nutrir el Enjambre)
+- Todo el motor acústico en Rust (`Symphonia + rustfft`), los 4 Hot Cues automáticos, el optimizador `2-Opt TSP`, los exportadores para VirtualDJ/Rekordbox/Traktor y el Copiloto IA con **Cloudflare Workers AI (`10,000 Neurons/día` gratis)** cuestan **`$0.00`** para cualquier DJ.
+- A cambio, en todos los nodos gratuitos y locales (`free`, `beta_mvp`, `local_unlimited`), **compartir en el enjambre viene activado por defecto (`p2p_sharing_enabled = true`)**. Cada vez que un DJ analiza y valida un Master de estudio en su laptop, esa pista fortalece el catálogo global para los demás DJs. *(Solo las cuentas `pro_monthly` con bóveda privada de `50 GB` pueden apagar el P2P en dubplates o edits exclusivos).*
+
+#### 2. 🛡️ Cuarentena Forense Zero-Trust y Doble Sello Criptográfico
+- Ningún archivo entra al enjambre ni a tu carpeta `library/` sin pasar primero por `quarantine/` y superar la auditoría espectral de [`hera-rs/src/forensics.rs`](hera-rs/src/forensics.rs):
+  - **Detector de Falsos Lossless (`rustfft`):** Rechaza MP3 de `128 kbps` inflados a `.flac`/`.wav` detectando cortes de ladrillo por debajo de `20 kHz`.
+  - **Auditoría de Fase Sub-Bass (`< 120 Hz`):** Garantiza correlación estéreo `r >= 0.25` para que los subwoofers del club nunca se cancelen en mono.
+  - **Doble Sello Anti-Poisoning (`hera_seal` + `audio_sha256`):** Protege el enjambre contra ataques *Bait-and-Switch*. Si un nodo intenta servir un bloque alterado, es aislado de inmediato en `quarantined_nodes`.
+
+#### 3. 🌐 Cascada P2P Zero-Config de 5 Etapas (Sin abrir puertos en el router)
+Cuando pides una pista o un puente armónico, [`hera-rs/src/p2p/`](hera-rs/src/p2p/) conecta los nodos automáticamente a través de 5 niveles:
+1. **Etapa 1 — `LAN Direct Subnet`:** Transferencia directa por Wi-Fi/Ethernet local en cabina (`0 ms` WAN, `0` bytes de nube).
+2. **Etapa 2 — `Multi-STUN + UDP Hole Punching`:** Perforación simultánea RFC 5389 (`stun.cloudflare.com:3478` + `stun.l.google.com:19302`) para NAT cónico.
+3. **Etapa 3 — `16-Port Prediction Spray`:** Rocío determinista de 16 puertos con apretón de manos `HERA_PUNCH_SYN` / `HERA_PUNCH_ACK` para atravesar CGNAT móvil.
+4. **Etapa 3.5 — `Cloudflare Managed TURN Relay (RFC 5766)`:** Retransmisión binaria (`ChannelBind 0x4000`) que salva CGNAT simétrico estricto consumiendo **`0` bytes de R2**.
+5. **Etapa 4 — `Enjambre R2 Federado & P2P Boost`:** Descarga paralela multi-nodo (`Swarm Striping` sobre HTTP/3 QUIC) desde los nodos comunitarios `Edge Guardian`.
+
+#### 4. 🦀 Nodos Comunitarios `Edge Guardian` y Matemática `Constrained Water-Filling` (`$0.00/mes`)
+Cualquier DJ o desarrollador puede desplegar [`hera-rs`](hera-rs/README.md) en su cuenta gratuita de **Cloudflare Workers + R2 (`$0.00/mes`)** ([guía completa en `docs/FEDERATED_R2_SWARM.md`](docs/FEDERATED_R2_SWARM.md)):
+- **Protección Matemática de Facturación `$0.00` (`Constrained Water-Filling`):** El enjambre reparte los fragmentos más demandados imponiendo techos estrictos de seguridad en cada Worker comunitario: **`9.0 GB` de R2** (dejando `1 GB` libre bajo los `10 GB` gratuitos) y **`85,000 req/día`** (dejando `15k` libres bajo las `100,000 req/día` gratuitas). Ningún colaborador paga jamás un centavo.
+- **Fragmentos Ciegos de `4 MB` (`8.4x` Eficiencia) + Árboles Merkle (`16×256 KiB`):** Los archivos se dividen en bloques inmutables `shard-blobs/{hmac}.hbin` de `4 MB` sin nombres de artistas ni canciones en claro, protegidos por tickets firmados de `60s` (`X-Hera-Swarm-Ticket`) y pruebas Merkle estilo BitTorrent v2 (BEP 52) / Iroh.
+- **Meritocracia `1 : 1.5` y Auditoría `Proof-of-Custody` (64 Bytes):** Mientras el nodo pasa los desafíos aleatorios de 64 bytes en R2, disfruta de **carril rápido ilimitado (`EDGE_GUARDIAN_UNLIMITED_FAST_LANE`)** y gana **`1.5 MB` de Crédito Turbo por cada `1.0 MB` servido** a otros DJs (`ProofOfDeliveryReceipt`).
+- **Deduplicación Global CAS y Bounty al Pionero (`+38 MB`):** Si 20 DJs tienen el mismo Master, la bóveda guarda **1 sola copia física** (`0.0 MB` extra) y acredita **`+38.0 MB` de cuota libre** al curador pionero que descubrió la pista.
 
 ---
 
@@ -120,7 +148,7 @@ Any community member who deploys [`hera-rs`](hera-rs/README.md) on the **Cloudfl
 
 Hera works seamlessly at every level — from a deterministic offline DJ booth app to a 44-tool autonomous agent. **No LLM is required for Modes 1 and 2.**
 
-> 💡 **Guías en español:** Consulta la [Guía Completa de Modos de Uso](docs/MODOS_DE_USO.md) y la [Guía de HERA en VPS Remoto + Curadora AI](docs/VPS_REMOTE_GUIDE.md).
+> 💡 **Guías en español:** Consulta la [Guía Completa de Modos de Uso](docs/MODOS_DE_USO.md) y la [Guía de HERA en VPS Remoto + Enjambre Edge](docs/VPS_REMOTE_GUIDE.md).
 
 ### Mode 1: Deterministic DJ Studio & `Modo Mini` Overlay (No LLM — For Humans)
 Launch **HERA Desktop** alongside VirtualDJ, Rekordbox, or Traktor with 100% offline Pure-Rust curation:
@@ -329,5 +357,5 @@ We welcome contributions from developers, DJs, and audio engineers! Please revie
 Hera is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
 
 <div align="center">
-  <sub>Crafted for DJs, producers, and audio curators worldwide.</sub>
+  <sub>Crafted for DJs, producers, and audio curators worldwide · <b>«Por el bien del enjambre»</b></sub>
 </div>

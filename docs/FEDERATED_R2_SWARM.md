@@ -1,42 +1,46 @@
-# 🐝 HERA Federated R2 Edge Swarm — Guía de Nodos Comunitarios & `Edge Guardians`
+# 🐝 HERA Federated R2 Edge Swarm — Guía de Nodos Comunitarios & `Edge Guardians` (`v0.6.0`)
 
 > **Lema del Enjambre:** *«Mientras más nodos de Hera, más fuerte es el sistema de enjambres»*  
-> **Runtime:** `hera-node-rs` (`native` VPS/Local + `cloudflare` Workers WASM + R2 + D1)
+> **Regla de Oro:** *«La mejor decisión es por el bien del enjambre siempre.»*  
+> **Runtime:** `hera-node-rs v0.6.0` (`native` Desktop/VPS + `cloudflare` Workers WASM + R2 + D1 + Vectorize)
+
+![Concepto y Arquitectura del Enjambre P2P Simbiótico de HERA v0.6.0](../assets/hera_swarm_concept.jpg)
 
 ---
 
 ## 🎯 Visión General (Contexto del Repositorio Público `hera`)
 
-En el ecosistema Open-Core de **Hera**, cualquier DJ o desarrollador de la comunidad puede desplegar su propia instancia de [`hera-rs`](../hera-rs/README.md) sobre el **Plan Gratuito de Cloudflare Workers + R2 (`$0.00/mes`)** o en un micro-VPS/laptop local.
+En el ecosistema Open-Core de **HERA (`v0.6.0`)**, cualquier DJ o desarrollador de la comunidad puede ejecutar **HERA Desktop** o desplegar su propia instancia de [`hera-rs`](../hera-rs/README.md) sobre el **Plan Gratuito de Cloudflare Workers + R2 (`$0.00/mes`)** o en un micro-VPS/laptop local.
 
 Cuando un nodo comunitario (`hera-node`) se une a la federación:
-1. **Aporta capacidad ociosa segura (`Zero-Egress`):** Comparte automáticamente una fracción segura de su bucket gratuito de Cloudflare R2 (`10 GB/mes` gratis) y peticiones diarias (`100,000 req/día` gratis) para alojar fragmentos cifrados/ofuscados (`Blind Shards`) de los masters más demandados de la red.
-2. **El Enjambre Decide Matemáticamente (`Constrained Water-Filling`):** Ningún humano tiene que configurar límites manuales. El algoritmo de optimización **Water-Filling Restringido** calcula en cada heartbeat cuánto espacio y cuántas réplicas ($K$) asignar a cada nodo, respetando techos estrictos de seguridad (`9.0 GB` R2 y `85,000 req/día`) para que **ningún colaborador pague jamás un centavo a Cloudflare**.
-3. **Meritocracia Automática (`Edge Guardian` + Créditos Turbo `1 : 1.5`):** Mientras el nodo comunitario está en línea y supera las auditorías automáticas de custodia de 64 bytes (`Proof-of-Custody`), el DJ recibe **acceso ilimitado al carril rápido (`EDGE_GUARDIAN_UNLIMITED_FAST_LANE`)** y además acumula **`1.5 MB` de Crédito Turbo por cada `1.0 MB` servido** a otros peers para usar cuando esté fuera de casa con su laptop.
+1. **Trueque Simbiótico (`100% Gratis` por Nutrir el Enjambre):** Todo el motor DSP en Rust (`Symphonia + rustfft`), los 4 Hot Cues acústicos, el optimizador global `2-Opt TSP`, los exportadores para VirtualDJ / Rekordbox / Traktor y `Cloudflare Workers AI Free` (`10,000 Neurons/día` a `$0.00`) son gratuitos. A cambio, todas las cuentas gratuitas/locales mantienen `share_on_p2p = true` por defecto.
+2. **Capacidad Ociosa Segura (`Zero-Egress`):** Comparte automáticamente una fracción segura de su bucket gratuito de Cloudflare R2 (`10 GB/mes` gratis) y peticiones diarias (`100,000 req/día` gratis) para alojar fragmentos ofuscados (`Blind Shards`) de los masters más demandados de la red.
+3. **El Enjambre Decide Matemáticamente (`Constrained Water-Filling`):** Ningún humano tiene que configurar límites manuales. El algoritmo de optimización **Water-Filling Restringido** calcula en cada heartbeat cuánto espacio y cuántas réplicas ($K$) asignar a cada nodo, respetando techos estrictos de seguridad (`9.0 GB` R2 y `85,000 req/día`) para que **ningún colaborador pague jamás un centavo a Cloudflare**.
+4. **Meritocracia Automática (`Edge Guardian` + Créditos Turbo `1 : 1.5`):** Mientras el nodo comunitario está en línea y supera las auditorías automáticas de custodia de 64 bytes (`Proof-of-Custody`), el DJ recibe **acceso ilimitado al carril rápido (`EDGE_GUARDIAN_UNLIMITED_FAST_LANE`)** y además acumula **`1.5 MB` de Crédito Turbo por cada `1.0 MB` servido** a otros peers (`ProofOfDeliveryReceipt`).
 
 ---
 
-## 🏗️ Arquitectura del Enjambre Federado
+## 🏗️ Arquitectura del Enjambre Federado (`hera-rs/src/p2p/` & `hera-rs/src/p2p_exchange.rs`)
 
 ```mermaid
 flowchart TD
-    subgraph Community["🌍 Nodos Comunitarios (Repositorio Público: hera / hera-rs)"]
+    subgraph Community["🌍 Nodos Comunitarios (Repositorio Público: hera / hera-rs v0.6.0)"]
         N1["🦀 hera-node #1 (CF Worker Free Tier)\n9.0 GB Safe Cap | 85k req/day Cap"]
         N2["🦀 hera-node #2 (CF Worker Free Tier)\n9.0 GB Safe Cap | 85k req/day Cap"]
-        N3["💻 hera-node #3 (Laptop / VPS Local)\nCGNAT Outbound Pull Seeder"]
+        N3["💻 HERA Desktop / VPS Local\n5-Stage P2P Cascade + Outbound Pull Seeder"]
     end
 
     subgraph Coordinator["⚡ Orquestador del Enjambre & Super DB"]
         WF["🧮 Algoritmo Water-Filling Restringido\n+ Replicación Térmica Elástica (K=1..5)"]
-        P2C["🎯 Balanceador Power-of-Two-Choices (P2C)\n+ Tickets Firmados de 60s"]
+        P2C["🎯 Balanceador Latency-Aware P2C\n+ Tickets Firmados de 60s"]
         PoC["🛡️ Auditor Proof-of-Custody (64 Bytes)\n+ Doble Sello (hera_seal + SHA-256)"]
     end
 
     N1 -- "1. POST /api/v1/swarm/heartbeat" --> WF
     N2 -- "1. POST /api/v1/swarm/heartbeat" --> WF
     N3 -- "1. Heartbeat + Pull Tickets (CGNAT)" --> WF
-    WF -- "2. Asignación Óptima de Shards (4 MB)" --> N1
-    WF -- "2. Asignación Óptima de Shards (4 MB)" --> N2
+    WF -- "2. Asignación Óptima de Shards (4 MB BEP 52)" --> N1
+    WF -- "2. Asignación Óptima de Shards (4 MB BEP 52)" --> N2
     PoC -- "3. Range: bytes=offset..offset+63" --> N1
     PoC -- "3. Range: bytes=offset..offset+63" --> N2
     P2C -- "4. X-Hera-Swarm-Ticket (60s TTL)" --> N1
@@ -46,7 +50,7 @@ flowchart TD
 
 ## 🧮 1. Optimización Autónoma: `Constrained Water-Filling` + `Elastic K` + `P2C`
 
-Implementado en [`hera-rs/src/p2p_exchange.rs`](../hera-rs/src/p2p_exchange.rs):
+Implementado en [`hera-rs/src/p2p_exchange.rs`](../hera-rs/src/p2p_exchange.rs) y [`hera-rs/src/p2p/`](../hera-rs/src/p2p):
 
 ### A. Techos de Seguridad de Costo `$0.00` (Protección al Colaborador)
 Para proteger el Free Tier de Cloudflare de cada miembro de la comunidad:
@@ -66,7 +70,7 @@ Para proteger el Free Tier de Cloudflare de cada miembro de la comunidad:
 - $N \ge 5 \implies K = 3 \dots 5$ para pistas calientes (`heat_score >= 5.0`), multiplicando el caudal de descarga global sin desperdiciar megabytes en canciones frías.
 
 ### D. Enrutamiento `Power-of-Two-Choices (P2C)` (`select_node_p2c`)
-Cuando un DJ solicita descargar un bloque (`4 MB`), el enjambre selecciona determinísticamente dos nodos saludables que poseen ese shard y elige el nodo con **menor `daily_worker_requests_used`**, evitando cuellos de botella en tiempo $O(1)$.
+Cuando un DJ solicita descargar un bloque (`4 MB`), el enjambre selecciona determinísticamente dos nodos saludables que poseen ese shard y elige el nodo con **menor costo compuesto de peticiones y latencia (`ewma_rtt_ms`)**, evitando cuellos de botella en tiempo $O(1)$.
 
 ---
 
@@ -83,7 +87,7 @@ Cuando un DJ solicita descargar un bloque (`4 MB`), el enjambre selecciona deter
    - Reduce la descarga de un FLAC de `38 MB` de ~84 invocaciones de Worker a solo ~10 invocaciones, permitiendo servir **8.4 veces más pistas** dentro del mismo Free Tier.
 4. **Auditoría `Proof-of-Custody` de 64 Bytes (`issue_custody_challenge` / `verify_custody_response`):**
    - El enjambre envía desafíos aleatorios de rango (`Range: bytes=offset..offset+63`) contra los shards alojados en el R2 del nodo.
-   - Si el nodo devuelve `404` o un hash incorrecto (por ejemplo, si el usuario vació su bucket R2 manualmente), pierde inmediatamente el estatus `Edge Guardian` y sale del balanceador `P2C`.
+   - Si el nodo devuelve `404` o un hash incorrecto, pierde inmediatamente el estatus `Edge Guardian` y sale del balanceador `P2C`.
 5. **Doble Sello Criptográfico Anti-Poisoning (`hera_seal` + `audio_sha256`):**
    - Protege contra ataques *Bait-and-Switch* (pasar la auditoría acústica FFT con un FLAC real pero subir ruido corrupto al shard).
    - Si `audit_and_quarantine_poisoned_shard` detecta discrepancia en cualquiera de los dos sellos, el nodo es aislado en `quarantined_nodes`.
@@ -144,4 +148,3 @@ Una vez desplegado, verifica que tu nodo responde al estado del enjambre:
 ```bash
 curl -s https://tu-hera-node.workers.dev/api/v1/swarm/strength | jq .
 ```
-

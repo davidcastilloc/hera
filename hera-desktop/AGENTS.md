@@ -1,185 +1,86 @@
-# AGENTS.md - AI Assistant Guide for Museeks
+# AGENTS.md — Operational Guide for HERA Desktop (`hera-desktop v0.6.0`)
 
 ## Overview
 
-Museeks is a music player desktop app built on top of Tauri. It focuses on clean UX and simplicity — it does not compete with more full-featured players in terms of customization or niche features.
+**HERA Desktop (`v0.6.0`)** is the native **Dark Booth Studio** desktop application for the HERA ecosystem, adapted from `martpie/museeks` (`v0.23.4`, MIT) on **Tauri v2 + 100% Pure Rust (`hera-node-rs` + `hera-ipc`) + React 19 + StyleX + Bun 1.4.4 + Vite+**. It delivers a `~8 MB` native installer with zero Python runtime dependencies.
 
 ## Stack
 
-- **Frontend**
-  - Types: TypeScript (strict)
-  - UI Library: React.js 19
-  - Routing: TanStack Router (file-based)
-  - Accessibility: Base UI
-  - Global State Management: Zustand
-  - Styling: [StyleX](https://stylexjs.com/docs/learn)
-  - Localization/i18n: [Lingui.js](https://lingui.dev/introduction)
-  - Dev Infra (all the following is setup via [Vite Plus](https://viteplus.dev/guide/)) (see below for explanations)
-    - Node.js
-    - Linting: Oxlint
-    - Formatting: Oxfmt
-    - Unit tests: Vitest
-    - E2E tests: [Vitest Browser Mode](https://vitest.dev/guide/browser/) (w/ Playwright)
-    - Bundler: Vite
+- **Frontend (`hera-desktop/src/`)**
+  - Types: TypeScript (strict) + headless `ts-rs` bindings generated from `hera-ipc` (`src/generated/hera-typings.ts`)
+  - UI Library: React 19 (with React Compiler)
+  - Routing: TanStack Router (`src/routes/`: `library.tsx`, `agent.tsx`, `bridge.tsx`, `dna.tsx`, `settings.*`)
+  - Virtualization & Drag-and-Drop: `@tanstack/react-virtual` + `@dnd-kit`
+  - Global State Management: Zustand (`src/stores/`)
+  - Styling: [StyleX](https://stylexjs.com/docs/learn) — **Dark Booth Studio** palette (`#0c0e12` obsidian canvas + `#14b8a6` acoustic teal)
+  - Localization/i18n: [Lingui.js](https://lingui.dev/introduction) (Spanish default)
+  - Dev & Build Infra: Bun `1.4.4` + [Vite Plus (`vp`)](https://viteplus.dev/guide/) (Oxlint, Oxfmt, Vitest)
 
-- **Backend**
-  - Language: Rust · Desktop integration: Tauri v2
-  - Database: SQLite (via `sqlx`)
-  - Linting: Clippy
-  - Formatting: Rustfmt
+- **Backend (`hera-desktop/src-ipc/` & `hera-desktop/src-tauri/`)**
+  - `src-ipc/` (`hera-ipc v0.6.0`): Zero-GTK pure-Rust Hexagonal IPC contract crate, `ts-rs` DTO generator (`typegen.rs`), 44-tool MCP catalog (`agent_catalog.rs`), Tauri v2 ACL Triad verifier (`acl_guard.rs`), and CI workflow/documentation guardian (`workflow_guard.rs`).
+  - `src-tauri/` (`hera-desktop v0.6.0`): Tauri v2 desktop shell integrating `hera-node-rs` DSP, SQLite (`sqlx`), and 8 inlined plugins (`config`, `cover`, `db`, `default`, `hera_agent`, `hera_dj`, `shell_extension`, `stream_server`).
 
-## Development Commands
+## Canonical Commands
+
+> **Important Rule**: Never start or leave running local dev servers (`bun run dev`, `vp dev`, `vp run tauri dev`) in automated agent sessions unless explicitly requested. Verify changes deterministically via the commands below:
 
 ```bash
-vp install                    # Install dependencies
-vp run tauri dev              # Start dev (Vite + Tauri with hot reload)
-vp run tauri build            # Build distributable binaries for the current platform
-vp build                      # Front-end code build only
-vp check                      # Check formatting (Oxfmt) and Lint/Typecheck (Oxlint)
+# 1. Headless Rust -> TypeScript DTO Generation (< 5s via hera-ipc)
+bun run gen:types
 
-# Code Generation
-vp run gen:types              # Generate TS types from Rust (ts-rs)
-vp run gen:translations       # Extract i18n strings to .po files
+# 2. Format, Lint & Typecheck (Vite+ / Oxfmt / Oxlint)
+bun run check
 
-# Rust
-vp run clippy                 # Rust linting
+# 3. Frontend Unit Test Suite (Vitest)
+bun run test
+
+# 4. Production Frontend Bundle Build
+bun run build
+
+# 5. Hexagonal IPC Contracts, Tauri v2 ACL Triad & Documentation Guardian (from repo root)
+cargo test -p hera-ipc
 ```
 
 ## Project Structure
 
 ```
-src/                     # React/TypeScript frontend
-  components/            # Feature-level components (Header, Footer, PlayerControls, ...)
-  elements/              # Reusable UI primitives (Button, Flexbox, Scrollable, ...)
-  hooks/                 # Custom React hooks (usePlayer, useCover, useAllTracks, ...)
-  lib/                   # Core logic, IPC bridges, utilities
-    bridge-*.ts          # Tauri IPC helpers — add new IPC calls here, never in components
-    player.ts            # Singleton EventEmitter-based audio player — side-effect-heavy, modify with care
-  routes/                # File-based routes (TanStack Router)
-  stores/                # Zustand stores (useLibraryStore, PlaylistsAPI, SettingsAPI, ...)
-  translations/          # Lingui .po files (en, fr, ja, ru, zh-CN, zh-TW, es, ...)
-  generated/             # Auto-generated — never edit manually, regenerate via scripts
-  types/                 # TypeScript type definitions
-
-src-tauri/               # Rust/Tauri backend
+src-ipc/                 # Zero-GTK pure-Rust Hexagonal IPC & CI Guard crate (hera-ipc)
   src/
-    libs/                # Core Rust libraries (database, track, playlist, events, ...)
-    plugins/             # Custom Tauri plugins (db, config, cover, stream_server, ...)
-    migrations/          # SQLite migrations — files are frozen, never edit existing ones
-    main.rs
+    acl_guard.rs         # Enforces Tauri v2 ACL Triad parity across all 8 inlined plugins
+    workflow_guard.rs    # Enforces workspace target/ paths, version parity & v0.6.0 doc assets
+    agent_catalog*.rs    # 44-tool Desktop + Core MCP schema & human summary catalog
+    dj_types.rs          # Shared DJ DSP, Hot Cue, 2-Opt TSP & P2P Swarm DTOs
+    agent_types.rs       # Shared Autonomous Agent & MCP tool execution DTOs
+    typegen.rs           # Exports src/generated/hera-typings.ts
+
+src/                     # React 19 / TypeScript frontend
+  components/            # Feature components:
+    Header.tsx           # 4-tab studio navigation (Biblioteca, Agente, Transición, Mi Estilo) + Modo Mini
+    TrackProgress.tsx    # Waveform scrubber with 4 clickable Hot Cue pins (Intro, Breakdown, Drop, Outro)
+    HeraDjToolbar.tsx    # Symphonia+rustfft audit, 2-Opt TSP curation, VirtualDJ/Rekordbox/Traktor export
+    MiniOverlay.tsx      # Morphing VirtualDJ booth card (360x408) & HUD pill (560x52) (Ctrl+Shift+M)
+    mini-overlay/        # Modularized MiniOverlay subcomponents & StyleX styles
+    transition/          # Modularized 3-band EQ & crossfader harmonic bridge deck cards
+  routes/                # File-based routes (TanStack Router):
+    library.tsx          # Virtualized DJ track table (BPM, Camelot Key, Puntos, Hot Cues)
+    agent.tsx            # Autonomous /agent workspace (Ctrl+J) with @ Contexto & confirmation gates
+    bridge.tsx           # Dual-deck Transition Studio + 5-Stage P2P Swarm badge
+    dna.tsx              # Mi Estilo (DJ Style DNA Auto-Profiler & SimHash u64 affinity)
+  lib/                   # IPC bridges (bridge-hera-dj.ts, bridge-hera-agent.ts, bridge-database.ts)
+  generated/             # Auto-generated ts-rs types — regenerate via `bun run gen:types`
+
+src-tauri/               # Tauri v2 desktop backend
+  src/
+    plugins/             # 8 inlined plugins (db, config, cover, default, hera_agent, hera_dj, shell_extension, stream_server)
+    migrations/          # SQLite migrations — frozen, never edit existing .sql files
   capabilities/
-    main.json            # Permissions for Tauri commands (native or custom)
-  build.rs               # Rust build, including inlined custom Tauri commands
-  Cargo.toml
-  tauri.conf.json
+    main.json            # Tauri v2 ACL permissions for all 8 plugins
+  build.rs               # Registers all inlined plugin commands
 ```
-
-## Conventions & Guidelines
-
-- Optimize for readability and cognitive load, not LoC count or cleverness, unless it's performance-sensitive.
-- Keep logic co-located: prefer one file per business concern over spreading it across many.
-- Prefer atomic commits.
-- Node.js is purely infra (dev, build, scripts) — there is no server-side JavaScript.
-
-**Backend:**
-
-- Desktop integrations (file associations, sleep blocker, etc.) and Tauri commands go in plugins (`src-tauri/src/plugins`), unless there is a documented exception.
-- Default Rust code lives in `src-tauri/src/libs`.
-- Migrations: prefer `DEFAULT` values over backfills when adding columns — users will rescan their library.
-- Never edit existing migration `.sql` files — they are frozen.
-- When adding new Tauri commands, don't forget to add them to `build.rs`, and allow them in `capabilities/main.json`.
-
-**UI:**
-
-- Never call `invoke` directly from React components — extend the `bridge-*.ts` helpers in `src/lib` (or re-use the same pattern).
-- `src/elements` are business-agnostic UI primitives. `src/components` and `src/routes` hold business logic.
-- Prefer URL state over Zustand global state unless persistence is required.
-- TypeScript types generated from Rust live in `src/generated` and should be committed — regenerate via `gen:types`.
 
 ## Agent Operations Rules
 
-- After UI edits: ensure `vp check` (covers formatting, linting + type-check) passes
-- After Rust edits: ensure `cargo test` in `src-tauri` passes. Clippy is a bonus.
-- After modifying a Rust struct exposed via `ts-rs`: run `vp run gen:types` and commit the output.
-- After editing the configuration of a route, regenerating the route-tree must be done via the `vp build` script.
-- Never manually edit `src/generated` — always regenerate.
-- Don't fix pre-existing issues unrelated to the current task.
-- Don't try to run `tsc` for checking typescript typings, it should be done via `vp check` instead.
-- When uncertain, read nearby file patterns first, then ask.
-
-<!--VITE PLUS START-->
-
-# Using Vite+, the Unified Toolchain for the Web
-
-This project is using Vite+, a unified toolchain built on top of Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, and Vite Task. Vite+ wraps runtime management, package management, and frontend tooling in a single global CLI called `vp`. Vite+ is distinct from Vite, but it invokes Vite through `vp dev` and `vp build`.
-
-## Vite+ Workflow
-
-`vp` is a global binary that handles the full development lifecycle. Run `vp help` to print a list of commands and `vp <command> --help` for information about a specific command.
-
-Vite+ automatically detects and wraps the underlying package manager such as pnpm, npm, or Yarn through the `packageManager` field in `package.json` or package manager-specific lockfiles.
-
-### Start
-
-- create - Create a new project from a template
-- migrate - Migrate an existing project to Vite+
-- config - Configure hooks and agent integration
-- staged - Run linters on staged files
-- install (`i`) - Install dependencies
-- env - Manage Node.js versions
-
-### Develop
-
-- dev - Run the development server
-- check - Run format, lint, and TypeScript type checks
-- lint - Lint code
-- fmt - Format code
-- test - Run tests
-
-### Execute
-
-- run - Run monorepo tasks
-- exec - Execute a command from local `node_modules/.bin`
-- dlx - Execute a package binary without installing it as a dependency
-- cache - Manage the task cache
-
-### Build
-
-- build - Build for production
-- pack - Build libraries
-- preview - Preview production build
-
-### Manage Dependencies
-
-- add - Add packages to dependencies
-- remove (`rm`, `un`, `uninstall`) - Remove packages from dependencies
-- update (`up`) - Update packages to latest versions
-- dedupe - Deduplicate dependencies
-- outdated - Check for outdated packages
-- list (`ls`) - List installed packages
-- why (`explain`) - Show why a package is installed
-- info (`view`, `show`) - View package information from the registry
-- link (`ln`) / unlink - Manage local package links
-- pm - Forward a command to the package manager
-
-### Maintain
-
-- upgrade - Update `vp` itself to the latest version
-
-These commands map to their corresponding tools. For example, `vp dev --port 3000` runs Vite's dev server and works the same as Vite. `vp test` runs JavaScript tests through the bundled Vitest. The version of all tools can be checked using `vp --version`. This is useful when researching documentation, features, and bugs.
-
-## Common Pitfalls
-
-- **Using the package manager directly:** Do not use pnpm, npm, or Yarn directly. Vite+ can handle all package manager operations.
-- **Always use Vite commands to run tools:** Don't attempt to run `vp vitest` or `vp oxlint`. They do not exist. Use `vp test` and `vp lint` instead.
-- **Running scripts:** Vite+ commands take precedence over `package.json` scripts. If there is a `test` script defined in `scripts` that conflicts with the built-in `vp test` command, run it using `vp run test`.
-- **Do not install Vitest, Oxlint, Oxfmt, or tsdown directly:** Vite+ wraps these tools. They must not be installed directly. You cannot upgrade these tools by installing their latest versions. Always use Vite+ commands.
-- **Use Vite+ wrappers for one-off binaries:** Use `vp dlx` instead of package-manager-specific `dlx`/`npx` commands.
-- **Import JavaScript modules from `vite-plus`:** Instead of importing from `vite` or `vitest`, all modules should be imported from the project's `vite-plus` dependency. For example, `import { defineConfig } from 'vite-plus';` or `import { expect, test, vi } from 'vite-plus/test';`. You must not install `vitest` to import test utilities.
-- **Type-Aware Linting:** There is no need to install `oxlint-tsgolint`, `vp lint --type-aware` works out of the box.
-
-## Review Checklist for Agents
-
-- [ ] Run `vp install` after pulling remote changes and before getting started.
-- [ ] Run `vp check` and `vp test` to validate changes.
-<!--VITE PLUS END-->
+- **Tauri v2 ACL Triad Invariant:** Every `#[tauri::command]` in `src-tauri/src/plugins/<plugin>/` MUST be registered in (1) the plugin's `init()`, (2) `src-tauri/build.rs` `COMMANDS`, and (3) `src-tauri/capabilities/main.json`. Always run `cargo test -p hera-ipc` to verify.
+- **IPC Bridge Rule:** Never call `invoke` directly from React components — always go through `src/lib/bridge-*.ts`.
+- **DTO Generation:** After modifying any Rust struct in `src-ipc/src/`, run `bun run gen:types` and commit `src/generated/hera-typings.ts`.
+- **Verification Gate:** Always run `cargo test -p hera-ipc` and `cd hera-desktop && bun run check && bun run test && bun run build` before completing any task.

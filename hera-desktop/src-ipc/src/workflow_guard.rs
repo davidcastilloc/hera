@@ -141,6 +141,91 @@ pub fn verify_qa_mcp_bridge_default(repo_root: &Path) -> Result<(), String> {
     {
         errs.push("hera-desktop/src-tauri/src/main.rs: missing loopback 127.0.0.1 tauri_plugin_mcp_bridge binding".to_string());
     }
+
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        Err(errs.join("\n"))
+    }
+}
+
+/// Verifies that `v0.6.0` visual assets exist, are embedded in `README.md` and `hera-desktop/README.md`,
+/// and that `docs/` guides no longer contain legacy Python/Streamlit (`localhost:8501`, `.venv/bin/hera`) strings.
+pub fn verify_documentation_assets_and_v060_alignment(repo_root: &Path) -> Result<(), String> {
+    let mut errs = Vec::new();
+
+    for asset in [
+        "assets/hera_banner_y2k.jpg",
+        "assets/hera_banner.jpg",
+        "assets/hera_swarm_concept.jpg",
+        "docs/superpowers/assets/hera_v060_1_library_1180x720.png",
+        "docs/superpowers/assets/hera_v060_2_agent_1180x720.png",
+        "docs/superpowers/assets/hera_v060_3_transition_1180x720.png",
+        "docs/superpowers/assets/hera_v060_4_dna_1180x720.png",
+        "docs/superpowers/assets/hera_v060_5_mini_overlay_1180x720.png",
+    ] {
+        match fs::metadata(repo_root.join(asset)) {
+            Ok(meta) if meta.len() > 10_000 => {}
+            Ok(meta) => errs.push(format!("{asset}: file too small ({} bytes)", meta.len())),
+            Err(e) => errs.push(format!("{asset}: missing ({e})")),
+        }
+    }
+
+    for (doc, required_refs) in [
+        (
+            "README.md",
+            &[
+                "assets/hera_swarm_concept.jpg",
+                "docs/superpowers/assets/hera_v060_1_library_1180x720.png",
+                "docs/superpowers/assets/hera_v060_2_agent_1180x720.png",
+                "docs/superpowers/assets/hera_v060_3_transition_1180x720.png",
+                "docs/superpowers/assets/hera_v060_4_dna_1180x720.png",
+                "docs/superpowers/assets/hera_v060_5_mini_overlay_1180x720.png",
+            ][..],
+        ),
+        (
+            "hera-desktop/README.md",
+            &[
+                "../assets/hera_swarm_concept.jpg",
+                "../docs/superpowers/assets/hera_v060_1_library_1180x720.png",
+                "../docs/superpowers/assets/hera_v060_2_agent_1180x720.png",
+                "../docs/superpowers/assets/hera_v060_3_transition_1180x720.png",
+                "../docs/superpowers/assets/hera_v060_4_dna_1180x720.png",
+                "../docs/superpowers/assets/hera_v060_5_mini_overlay_1180x720.png",
+            ][..],
+        ),
+    ] {
+        match fs::read_to_string(repo_root.join(doc)) {
+            Err(e) => errs.push(format!("{doc}: {e}")),
+            Ok(text) => {
+                for req in required_refs {
+                    if !text.contains(req) {
+                        errs.push(format!("{doc}: missing visual reference '{req}'"));
+                    }
+                }
+            }
+        }
+    }
+
+    for doc in [
+        "MANIFESTO.md",
+        "docs/README.md",
+        "docs/MODOS_DE_USO.md",
+        "docs/VPS_REMOTE_GUIDE.md",
+        "docs/Hera_Guia_para_Agentes_AI.md",
+    ] {
+        match fs::read_to_string(repo_root.join(doc)) {
+            Err(e) => errs.push(format!("{doc}: {e}")),
+            Ok(text) => {
+                for forbidden in ["localhost:8501", ".venv/bin/hera", "Python 3.11+"] {
+                    if text.contains(forbidden) {
+                        errs.push(format!("{doc}: contains stale legacy string '{forbidden}'"));
+                    }
+                }
+            }
+        }
+    }
+
     if errs.is_empty() {
         Ok(())
     } else {
@@ -151,8 +236,8 @@ pub fn verify_qa_mcp_bridge_default(repo_root: &Path) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        verify_qa_mcp_bridge_default, verify_tauri_version_parity,
-        verify_workspace_release_workflows,
+        verify_documentation_assets_and_v060_alignment, verify_qa_mcp_bridge_default,
+        verify_tauri_version_parity, verify_workspace_release_workflows,
     };
     use std::{fs, path::Path};
 
@@ -160,6 +245,15 @@ mod tests {
     fn test_workspace_release_workflows_target_paths() {
         let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         assert_eq!(verify_workspace_release_workflows(&repo_root), Ok(()));
+    }
+
+    #[test]
+    fn test_documentation_assets_and_v060_alignment() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        assert_eq!(
+            verify_documentation_assets_and_v060_alignment(&repo_root),
+            Ok(())
+        );
     }
 
     #[test]
