@@ -195,14 +195,14 @@
 **Interfaces:**
 - Preserves `/bridge` (`Transición` route) and default export `MiniOverlay` (`React.lazy` in `__root.tsx`) with identical DOM aria-labels, dark booth tokens, and VirtualDJ live crate actions (`ADR-021..023`).
 
-- [ ] **Step 1: Write unit tests for `hera-harmonic-utils.ts` (`parseCamelot`, `camelotDistance`, `nextHarmonicCamelot`, `camelotRootHz`, `buildSyntheticTrackDescriptor`)**
+- [x] **Step 1: Write unit tests for `hera-harmonic-utils.ts` (`parseCamelot`, `camelotDistance`, `nextHarmonicCamelot`, `camelotRootHz`, `buildSyntheticTrackDescriptor`)**
   Run `cd hera-desktop && bun run test` to verify red → green cycle.
-- [ ] **Step 2: Extract `components/transition/*` from `routes/bridge.tsx` and `components/mini-overlay/*` from `components/MiniOverlay.tsx`**
+- [x] **Step 2: Extract `components/transition/*` from `routes/bridge.tsx` and `components/mini-overlay/*` from `components/MiniOverlay.tsx`**
   Keep each extracted module focused (`< 350` LOC for TS helpers/subcomponents; `< 500` LOC for StyleX root containers with colocated `stylex.create`). Do not alter any `ADR-021..023` minimalist UI behavior.
-- [ ] **Step 3: Verify `wc -l`, `bun run fmt`, `bun run check`, `bun run test`, and `bun run build` in `hera-desktop`**
+- [x] **Step 3: Verify `wc -l`, `bun run fmt`, `bun run check`, `bun run test`, and `bun run build` in `hera-desktop`**
   Run: `cd hera-desktop && bun run check && bun run test && bun run build`
   Expected: `0` Oxlint/StyleX/TypeScript errors, all unit tests green, lazy chunks built cleanly.
-- [ ] **Step 4: Mark `[x]` and create atomic commit**
+- [x] **Step 4: Mark `[x]` and create atomic commit**
   Commit `refactor(desktop): modularize Transition route, MiniOverlay, and shared harmonic utilities`.
 
 ---
