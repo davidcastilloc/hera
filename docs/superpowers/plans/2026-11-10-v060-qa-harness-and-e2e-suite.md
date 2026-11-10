@@ -25,7 +25,7 @@
 
 ---
 
-### Task 2: `v0.6.0` Browser E2E QA Suite (`bun run test:e2e`) & CI Gate
+### Task 2: `v0.6.0` Local Browser E2E QA Suite (`bun run test:e2e`)
 
 **Files:**
 - Modify: `hera-desktop/vitest.config.ts`
@@ -33,11 +33,10 @@
 - Modify: `hera-desktop/src/__tests__/library.test-e2e.tsx`
 - Modify: `hera-desktop/src/__tests__/translations.test-e2e.tsx`
 - Create: `hera-desktop/src/__tests__/hera-studio-qa.test-e2e.tsx`
-- Modify: `.github/workflows/ci.yml`
 - Modify: `docs/superpowers/DECISIONS.md`
 
 - [x] **Step 1: Update `vitest.config.ts` to support `1180x720` viewport and optional `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`**
 - [x] **Step 2: Align `e2e-helpers.tsx`, `library.test-e2e.tsx`, and `translations.test-e2e.tsx` with `v0.6.0` navigation & `BPM`/`Camelot` columns**
 - [x] **Step 3: Create `hera-desktop/src/__tests__/hera-studio-qa.test-e2e.tsx` covering `/library`, `/agent`, `/bridge`, `/dna`, and `Modo Mini`**
-- [x] **Step 4: Run `bun run check`, `bun run test`, and `bun run test:e2e` (`0` errors, all unit + E2E tests passing)**
-- [x] **Step 5: Add E2E browser step to `.github/workflows/ci.yml`, record `ADR-026` in `DECISIONS.md`, commit atomically, push `main`, and update `v0.6.0` release**
+- [x] **Step 4: Run `bun run check`, `bun run test`, and `bun run test:e2e` locally (`0` errors, all unit + E2E tests passing)**
+- [x] **Step 5: Record `ADR-026` in `DECISIONS.md`, keep `.github/workflows/ci.yml` free of E2E runner overhead, commit atomically, and push `main`**
