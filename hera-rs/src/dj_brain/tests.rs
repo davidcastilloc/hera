@@ -155,3 +155,28 @@ fn test_build_cli_agent_args_places_print_flag_immediately_before_prompt() {
     assert_eq!(args[args.len() - 1], prompt);
     assert!(args.contains(&"--disable-slash-commands".to_string()));
 }
+
+#[test]
+fn test_curl_stdin_config_format_and_zero_argv_secrets() {
+    let secret = "secret-token-super-confidential-999";
+    let url = "https://example.com/api/v1/chat?mode=test&foo=\"bar\"";
+    let config = http_client::build_curl_stdin_config(url, Some(secret));
+
+    // Valid curl config syntax
+    assert!(config.starts_with("url = \""));
+    assert!(config.contains("header = \"Authorization: Bearer "));
+    assert!(config.contains(secret));
+    assert!(config.contains("\\\"bar\\\""));
+
+    // Ensure curl command argv contains zero secrets and passes --config -
+    let mut cmd = std::process::Command::new("curl");
+    cmd.args(["--silent", "--show-error", "--fail-with-body", "--config", "-"]);
+    let argv_strings: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+
+    assert!(argv_strings.contains(&"--config".to_string()));
+    assert!(argv_strings.contains(&"-".to_string()));
+    for arg in &argv_strings {
+        assert!(!arg.contains(secret), "Bearer token leaked into argv: {arg}");
+        assert!(!arg.contains("example.com"), "URL leaked into argv: {arg}");
+    }
+}

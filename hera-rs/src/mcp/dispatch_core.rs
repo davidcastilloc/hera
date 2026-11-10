@@ -13,6 +13,24 @@ pub(super) fn dispatch_core_tool(
     match name {
         "ensure_hera_updated" => {
             let _ = args;
+            #[allow(unused_mut)]
+            let mut git_head = "unknown".to_string();
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let mut cmd = std::process::Command::new("git");
+                cmd.args(["rev-parse", "--short", "HEAD"]);
+                if let Ok(out) = crate::dj_brain::cli_runner::run_command_with_timeout(
+                    cmd,
+                    std::time::Duration::from_secs(2),
+                ) {
+                    if out.status.success() {
+                        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                        if !s.is_empty() {
+                            git_head = s;
+                        }
+                    }
+                }
+            }
             Some(Ok(json!({
                 "status": "ok",
                 "engine": "hera-node-rs (100% Pure Rust)",
@@ -20,6 +38,7 @@ pub(super) fn dispatch_core_tool(
                 "runtime_target": current_runtime_target(),
                 "node_id": state.node_id,
                 "git_pulled": false,
+                "git_head": git_head,
                 "python_dependency": "none (0 MB)"
             })))
         }

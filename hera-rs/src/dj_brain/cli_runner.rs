@@ -10,18 +10,29 @@ fn configure_background_command(cmd: &mut std::process::Command) {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn run_command_with_timeout(
+pub(crate) fn run_command_with_stdin_and_timeout(
     mut cmd: std::process::Command,
+    stdin_data: Option<&[u8]>,
     timeout: std::time::Duration,
 ) -> Result<std::process::Output, String> {
-    use std::io::Read;
+    use std::io::{Read, Write};
     use std::process::Stdio;
     use std::time::Instant;
 
     configure_background_command(&mut cmd);
+    if stdin_data.is_some() {
+        cmd.stdin(Stdio::piped());
+    } else {
+        cmd.stdin(Stdio::null());
+    }
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let mut child = cmd.spawn().map_err(|e| format!("spawn failed: {e}"))?;
+    if let Some(data) = stdin_data {
+        if let Some(mut sin) = child.stdin.take() {
+            let _ = sin.write_all(data);
+        }
+    }
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
 
@@ -69,6 +80,14 @@ pub(crate) fn run_command_with_timeout(
         stdout,
         stderr,
     })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn run_command_with_timeout(
+    cmd: std::process::Command,
+    timeout: std::time::Duration,
+) -> Result<std::process::Output, String> {
+    run_command_with_stdin_and_timeout(cmd, None, timeout)
 }
 
 pub fn check_binary_in_path(bin_name: &str) -> (bool, Option<String>) {

@@ -48,15 +48,29 @@ pub fn compute_canonical_audio_sha256(
 }
 
 /// Blinds the global catalog on community Worker R2 buckets by mapping `(cas_fingerprint, audio_sha256)`
-/// to an opaque HMAC-SHA256 blob key (`shard-blobs/{hmac}.hbin`).
-pub fn compute_opaque_shard_blob_key(cas_fingerprint: &str, audio_sha256: &str) -> String {
+/// to an opaque HMAC-SHA256 blob key (`shard-blobs/{hmac}.hbin`) with custom blinding secret.
+pub fn compute_opaque_shard_blob_key_with_secret(
+    cas_fingerprint: &str,
+    audio_sha256: &str,
+    blinding_secret: &str,
+) -> String {
     let msg = format!(
         "HERA-OPAQUE-SHARD|{}|{}",
         cas_fingerprint.trim(),
         audio_sha256.trim()
     );
-    let mac = compute_hmac_sha256_hex(SWARM_SHARD_BLINDING_SECRET.as_bytes(), msg.as_bytes());
+    let mac = compute_hmac_sha256_hex(blinding_secret.as_bytes(), msg.as_bytes());
     format!("shard-blobs/{}.hbin", &mac[..32])
+}
+
+/// Blinds the global catalog on community Worker R2 buckets by mapping `(cas_fingerprint, audio_sha256)`
+/// to an opaque HMAC-SHA256 blob key (`shard-blobs/{hmac}.hbin`) using default fallback secret.
+pub fn compute_opaque_shard_blob_key(cas_fingerprint: &str, audio_sha256: &str) -> String {
+    compute_opaque_shard_blob_key_with_secret(
+        cas_fingerprint,
+        audio_sha256,
+        SWARM_SHARD_BLINDING_SECRET,
+    )
 }
 
 /// Synthesizes a deterministic 64-byte (`CUSTODY_PROOF_SLICE_BYTES`) binary slice at `byte_offset`
@@ -108,7 +122,27 @@ pub fn transform_p2p_boost_shard_bytes(
     out
 }
 
-/// Computes the HMAC-SHA256 signature for a 60-second `SwarmRedirectTicket` (`X-Hera-Swarm-Ticket`).
+/// Computes the HMAC-SHA256 signature for a 60-second `SwarmRedirectTicket` (`X-Hera-Swarm-Ticket`) with custom secret.
+#[allow(clippy::too_many_arguments)]
+pub fn compute_swarm_ticket_hmac_with_secret(
+    ticket_id: &str,
+    requester_dj: &str,
+    target_node_id: &str,
+    opaque_blob_key: &str,
+    audio_sha256: &str,
+    aligned_offset_bytes: u64,
+    aligned_length_bytes: u64,
+    issued_at_unix: u64,
+    expires_at_unix: u64,
+    ticket_secret: &str,
+) -> String {
+    let canonical = format!(
+        "HERA-TICKET-V1|{ticket_id}|{requester_dj}|{target_node_id}|{opaque_blob_key}|{audio_sha256}|{aligned_offset_bytes}|{aligned_length_bytes}|{issued_at_unix}|{expires_at_unix}"
+    );
+    compute_hmac_sha256_hex(ticket_secret.as_bytes(), canonical.as_bytes())
+}
+
+/// Computes the HMAC-SHA256 signature for a 60-second `SwarmRedirectTicket` (`X-Hera-Swarm-Ticket`) with default secret.
 #[allow(clippy::too_many_arguments)]
 pub fn compute_swarm_ticket_hmac(
     ticket_id: &str,
@@ -121,45 +155,38 @@ pub fn compute_swarm_ticket_hmac(
     issued_at_unix: u64,
     expires_at_unix: u64,
 ) -> String {
-    let canonical = format!(
-        "HERA-TICKET-V1|{}|{}|{}|{}|{}|{}|{}|{}|{}",
-        ticket_id,
-        requester_dj,
-        target_node_id,
-        opaque_blob_key,
-        audio_sha256,
-        aligned_offset_bytes,
-        aligned_length_bytes,
-        issued_at_unix,
-        expires_at_unix
+    compute_swarm_ticket_hmac_with_secret(
+        ticket_id, requester_dj, target_node_id, opaque_blob_key, audio_sha256,
+        aligned_offset_bytes, aligned_length_bytes, issued_at_unix, expires_at_unix,
+        SWARM_TICKET_MASTER_SECRET,
+    )
+}
+
+/// Verifies HMAC signature and TTL window of a `SwarmRedirectTicket` with custom secret.
+pub fn verify_swarm_redirect_ticket_with_secret(
+    ticket: &SwarmRedirectTicket,
+    current_unix: u64,
+    ticket_secret: &str,
+) -> bool {
+    if ticket.expires_at_unix < ticket.issued_at_unix
+        || ticket.expires_at_unix - ticket.issued_at_unix > SWARM_TICKET_TTL_SECS
+        || current_unix < ticket.issued_at_unix
+        || current_unix > ticket.expires_at_unix
+    {
+        return false;
+    }
+    let expected = compute_swarm_ticket_hmac_with_secret(
+        &ticket.ticket_id, &ticket.requester_dj, &ticket.target_node_id,
+        &ticket.opaque_blob_key, &ticket.audio_sha256, ticket.aligned_offset_bytes,
+        ticket.aligned_length_bytes, ticket.issued_at_unix, ticket.expires_at_unix,
+        ticket_secret,
     );
-    compute_hmac_sha256_hex(SWARM_TICKET_MASTER_SECRET.as_bytes(), canonical.as_bytes())
+    constant_time_eq(expected.as_bytes(), ticket.hmac_signature.trim().to_ascii_lowercase().as_bytes())
 }
 
 /// Verifies both the HMAC-SHA256 signature (in constant time) and the strict 60-second TTL window of a `SwarmRedirectTicket`.
 pub fn verify_swarm_redirect_ticket(ticket: &SwarmRedirectTicket, current_unix: u64) -> bool {
-    if ticket.expires_at_unix < ticket.issued_at_unix {
-        return false;
-    }
-    if ticket.expires_at_unix - ticket.issued_at_unix > SWARM_TICKET_TTL_SECS {
-        return false;
-    }
-    if current_unix < ticket.issued_at_unix || current_unix > ticket.expires_at_unix {
-        return false;
-    }
-    let expected = compute_swarm_ticket_hmac(
-        &ticket.ticket_id,
-        &ticket.requester_dj,
-        &ticket.target_node_id,
-        &ticket.opaque_blob_key,
-        &ticket.audio_sha256,
-        ticket.aligned_offset_bytes,
-        ticket.aligned_length_bytes,
-        ticket.issued_at_unix,
-        ticket.expires_at_unix,
-    );
-    let provided = ticket.hmac_signature.trim().to_ascii_lowercase();
-    constant_time_eq(expected.as_bytes(), provided.as_bytes())
+    verify_swarm_redirect_ticket_with_secret(ticket, current_unix, SWARM_TICKET_MASTER_SECRET)
 }
 
 /// Computes the deterministic SHA-256 leaf digest for a 256 KiB sub-slice (`leaf_index` in `0..16`)
@@ -356,32 +383,15 @@ pub fn merge_swarm_crdt_deltas(a: &SwarmCrdtDelta, b: &SwarmCrdtDelta) -> SwarmC
     }
 
     let mut lww_entries = a.lww_track_entries.clone();
-    for (cas, entry_b) in &b.lww_track_entries {
-        match lww_entries.get(cas) {
-            Some(entry_a) => {
-                let key_a = (
-                    entry_a.hlc_timestamp_ms,
-                    entry_a.tombstone,
-                    &entry_a.track.hera_seal,
-                    &entry_a.origin_endpoint_pubkey_id,
-                );
-                let key_b = (
-                    entry_b.hlc_timestamp_ms,
-                    entry_b.tombstone,
-                    &entry_b.track.hera_seal,
-                    &entry_b.origin_endpoint_pubkey_id,
-                );
-                if key_b > key_a {
-                    lww_entries.insert(cas.clone(), entry_b.clone());
-                }
-            }
-            None => {
-                lww_entries.insert(cas.clone(), entry_b.clone());
-            }
-        }
+    for (cas, eb) in &b.lww_track_entries {
+        let replace = match lww_entries.get(cas) {
+            Some(ea) => (eb.hlc_timestamp_ms, eb.tombstone, &eb.track.hera_seal, &eb.origin_endpoint_pubkey_id)
+                > (ea.hlc_timestamp_ms, ea.tombstone, &ea.track.hera_seal, &ea.origin_endpoint_pubkey_id),
+            None => true,
+        };
+        if replace { lww_entries.insert(cas.clone(), eb.clone()); }
     }
 
-    let hlc_max = a.hlc_timestamp_ms.max(b.hlc_timestamp_ms);
     let (origin_id, origin_pub) = if a.origin_node_id >= b.origin_node_id {
         (a.origin_node_id.clone(), a.origin_endpoint_pubkey_id.clone())
     } else {
@@ -391,7 +401,7 @@ pub fn merge_swarm_crdt_deltas(a: &SwarmCrdtDelta, b: &SwarmCrdtDelta) -> SwarmC
     SwarmCrdtDelta {
         origin_node_id: origin_id,
         origin_endpoint_pubkey_id: origin_pub,
-        hlc_timestamp_ms: hlc_max,
+        hlc_timestamp_ms: a.hlc_timestamp_ms.max(b.hlc_timestamp_ms),
         gcounter_node_bytes_served_mb: gcounter_served,
         gcounter_cas_play_counts: gcounter_plays,
         lww_track_entries: lww_entries,
@@ -499,16 +509,14 @@ pub fn are_camelot_keys_harmonically_compatible(sub_camelot: &str, target_camelo
 /// Pure-Rust FIPS 180-4 SHA-256 implementation (zero external crate dependencies, compiles to native & WASM).
 pub fn compute_sha256_bytes(data: &[u8]) -> [u8; 32] {
     const K: [u32; 64] = [
-        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4,
-        0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe,
-        0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f,
-        0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
-        0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc,
-        0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b,
-        0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116,
-        0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7,
-        0xc67178f2,
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
     ];
 
     let mut h: [u32; 8] = [
@@ -570,20 +578,14 @@ pub fn compute_sha256_bytes(data: &[u8]) -> [u8; 32] {
             a = temp1.wrapping_add(temp2);
         }
 
-        h[0] = h[0].wrapping_add(a);
-        h[1] = h[1].wrapping_add(b);
-        h[2] = h[2].wrapping_add(c);
-        h[3] = h[3].wrapping_add(d);
-        h[4] = h[4].wrapping_add(e);
-        h[5] = h[5].wrapping_add(f);
-        h[6] = h[6].wrapping_add(g);
-        h[7] = h[7].wrapping_add(hh);
+        for idx in 0..8 {
+            h[idx] = h[idx].wrapping_add([a, b, c, d, e, f, g, hh][idx]);
+        }
     }
 
     let mut out = [0u8; 32];
     for (i, word) in h.iter().enumerate() {
-        let bytes = word.to_be_bytes();
-        out[i * 4..i * 4 + 4].copy_from_slice(&bytes);
+        out[i * 4..i * 4 + 4].copy_from_slice(&word.to_be_bytes());
     }
     out
 }
@@ -603,8 +605,7 @@ pub fn compute_sha256_hex(data: &[u8]) -> String {
 pub fn compute_hmac_sha256_hex(key: &[u8], message: &[u8]) -> String {
     let mut key_block = [0u8; 64];
     if key.len() > 64 {
-        let hashed = compute_sha256_bytes(key);
-        key_block[..32].copy_from_slice(&hashed);
+        key_block[..32].copy_from_slice(&compute_sha256_bytes(key));
     } else {
         key_block[..key.len()].copy_from_slice(key);
     }
@@ -616,13 +617,11 @@ pub fn compute_hmac_sha256_hex(key: &[u8], message: &[u8]) -> String {
         i_key_pad[i] ^= key_block[i];
     }
 
-    let mut inner_data = Vec::with_capacity(64 + message.len());
-    inner_data.extend_from_slice(&i_key_pad);
-    inner_data.extend_from_slice(message);
-    let inner_hash = compute_sha256_bytes(&inner_data);
-
-    let mut outer_data = Vec::with_capacity(64 + 32);
-    outer_data.extend_from_slice(&o_key_pad);
-    outer_data.extend_from_slice(&inner_hash);
-    compute_sha256_hex(&outer_data)
+    let mut inner = Vec::with_capacity(64 + message.len());
+    inner.extend_from_slice(&i_key_pad);
+    inner.extend_from_slice(message);
+    let mut outer = Vec::with_capacity(64 + 32);
+    outer.extend_from_slice(&o_key_pad);
+    outer.extend_from_slice(&compute_sha256_bytes(&inner));
+    compute_sha256_hex(&outer)
 }

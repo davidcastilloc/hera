@@ -43,7 +43,8 @@ impl P2PMeshState {
         }
 
         let now_unix = current_unix_override.unwrap_or_else(|| self.current_unix_secs());
-        if !verify_swarm_redirect_ticket(&ticket, now_unix) {
+        let secrets = self.get_swarm_secrets();
+        if !verify_swarm_redirect_ticket_with_secret(&ticket, now_unix, &secrets.ticket_hmac_secret) {
             return Err(
                 "Invalid or expired X-Hera-Swarm-Ticket signature/TTL (60s window exceeded)"
                     .to_string(),

@@ -1,5 +1,5 @@
 #[cfg(not(target_arch = "wasm32"))]
-use super::cli_runner::run_command_with_timeout;
+use super::cli_runner::run_command_with_stdin_and_timeout;
 
 #[cfg(not(target_arch = "wasm32"))]
 #[derive(Debug)]
@@ -250,23 +250,29 @@ pub(super) fn http_post_chat_completions(
             .map_err(|e| format!("Invalid JSON from `{chat_url}`: {e}"));
     }
 
+    let config_str = build_curl_stdin_config(&chat_url, api_key);
     let mut cmd = std::process::Command::new("curl");
     cmd.args([
-        "-sS",
+        "--silent",
+        "--show-error",
+        "--fail-with-body",
         "--max-time",
         "12",
         "-X",
         "POST",
-        &chat_url,
         "-H",
         "Content-Type: application/json",
+        "-d",
+        &body_str,
+        "--config",
+        "-",
     ]);
-    if let Some(k) = api_key.filter(|k| !k.trim().is_empty()) {
-        cmd.args(["-H", &format!("Authorization: Bearer {}", k.trim())]);
-    }
-    cmd.args(["-d", &body_str]);
-    let out = run_command_with_timeout(cmd, std::time::Duration::from_secs(14))
-        .map_err(|e| format!("curl execution failed: {e}"))?;
+    let out = run_command_with_stdin_and_timeout(
+        cmd,
+        Some(config_str.as_bytes()),
+        std::time::Duration::from_secs(14),
+    )
+    .map_err(|e| format!("curl execution failed: {e}"))?;
     if !out.status.success() {
         return Err(format!(
             "HTTP POST failed: {}",
@@ -274,4 +280,32 @@ pub(super) fn http_post_chat_completions(
         ));
     }
     serde_json::from_slice(&out.stdout).map_err(|e| format!("Invalid JSON response: {e}"))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub(crate) fn build_curl_stdin_config(url: &str, bearer_token: Option<&str>) -> String {
+    let mut out = String::with_capacity(128);
+    out.push_str("url = \"");
+    for ch in url.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '"' => out.push_str("\\\""),
+            '\n' | '\r' => out.push(' '),
+            other => out.push(other),
+        }
+    }
+    out.push_str("\"\n");
+    if let Some(token) = bearer_token.filter(|t| !t.trim().is_empty()) {
+        out.push_str("header = \"Authorization: Bearer ");
+        for ch in token.trim().chars() {
+            match ch {
+                '\\' => out.push_str("\\\\"),
+                '"' => out.push_str("\\\""),
+                '\n' | '\r' => out.push(' '),
+                other => out.push(other),
+            }
+        }
+        out.push_str("\"\n");
+    }
+    out
 }

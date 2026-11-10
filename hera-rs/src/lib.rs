@@ -2302,6 +2302,50 @@ mod tests {
 
         // Clean up token
         state.set_node_api_token(None);
+
+        // 7. Verify set_swarm_secrets updates ticket HMAC signature and rejects tickets signed with mismatched secret
+        state.set_swarm_secrets(
+            "custom-ticket-key-xyz-789".to_string(),
+            "custom-shard-key-xyz-789".to_string(),
+        );
+        let custom_ticket_req = SwarmRouteRequest {
+            requester_dj: "DJFoo".to_string(),
+            track_id_or_cas: "hera-seed-001".to_string(),
+            block_index: Some(0),
+        };
+        let custom_ticket_res = state.issue_route_ticket(custom_ticket_req).unwrap();
+        let custom_ticket_sig = custom_ticket_res.ticket.hmac_signature.clone();
+
+        // Prove signature changed from the default secret HMAC
+        assert_ne!(custom_ticket_sig, j_ticket["ticket"]["hmac_signature"].as_str().unwrap());
+
+        // Delivery succeeds with matching secret
+        let ticket_json = serde_json::to_string(&custom_ticket_res.ticket).unwrap();
+        let deliver_ok = state.redeem_swarm_shard_delivery(
+            &custom_ticket_res.ticket.opaque_blob_key,
+            &ticket_json,
+            None,
+        );
+        assert!(deliver_ok.is_ok());
+
+        // Delivery fails with error if state secret is changed / mismatched
+        state.set_swarm_secrets(
+            "different-ticket-key-abc-000".to_string(),
+            "different-shard-key-abc-000".to_string(),
+        );
+        let deliver_mismatch = state.redeem_swarm_shard_delivery(
+            &custom_ticket_res.ticket.opaque_blob_key,
+            &ticket_json,
+            None,
+        );
+        assert!(deliver_mismatch.is_err());
+        assert!(deliver_mismatch.unwrap_err().contains("Invalid or expired X-Hera-Swarm-Ticket"));
+
+        // Reset to default secrets
+        state.set_swarm_secrets(
+            crate::p2p::SWARM_TICKET_MASTER_SECRET.to_string(),
+            crate::p2p::SWARM_SHARD_BLINDING_SECRET.to_string(),
+        );
     }
 }
 

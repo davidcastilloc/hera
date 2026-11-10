@@ -706,23 +706,28 @@ pub fn issue_cloudflare_turn_credentials(
                 key_id.trim()
             );
             let body = format!("{{\"ttl\":{ttl}}}");
-            if let Ok(output) = std::process::Command::new("curl")
-                .args([
-                    "-sS",
-                    "-m",
-                    "4",
-                    "-X",
-                    "POST",
-                    &url,
-                    "-H",
-                    &format!("Authorization: Bearer {}", api_token.trim()),
-                    "-H",
-                    "Content-Type: application/json",
-                    "-d",
-                    &body,
-                ])
-                .output()
-            {
+            let config_str = crate::dj_brain::http_client::build_curl_stdin_config(&url, Some(&api_token));
+            let mut cmd = std::process::Command::new("curl");
+            cmd.args([
+                "--silent",
+                "--show-error",
+                "--fail-with-body",
+                "-m",
+                "4",
+                "-X",
+                "POST",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                &body,
+                "--config",
+                "-",
+            ]);
+            if let Ok(output) = crate::dj_brain::cli_runner::run_command_with_stdin_and_timeout(
+                cmd,
+                Some(config_str.as_bytes()),
+                std::time::Duration::from_secs(6),
+            ) {
                 if output.status.success() {
                     if let Ok(val) = serde_json::from_slice::<serde_json::Value>(&output.stdout) {
                         let ice_node = val.get("iceServers").unwrap_or(&val);

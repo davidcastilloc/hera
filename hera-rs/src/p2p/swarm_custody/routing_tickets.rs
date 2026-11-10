@@ -45,7 +45,12 @@ impl P2PMeshState {
             .ok()
             .and_then(|g| g.get(&cas_fp).cloned())
             .unwrap_or_else(|| compute_canonical_audio_sha256(&cas_fp, &track.hera_seal, 38.0));
-        let opaque_blob_key = compute_opaque_shard_blob_key(&cas_fp, &audio_sha256);
+        let secrets = self.get_swarm_secrets();
+        let opaque_blob_key = compute_opaque_shard_blob_key_with_secret(
+            &cas_fp,
+            &audio_sha256,
+            &secrets.shard_blinding_secret,
+        );
 
         let q_map = self
             .quarantined_nodes
@@ -121,7 +126,7 @@ impl P2PMeshState {
             short_sha,
             issued_at_unix ^ nonce
         );
-        let hmac_signature = compute_swarm_ticket_hmac(
+        let hmac_signature = compute_swarm_ticket_hmac_with_secret(
             &ticket_id,
             &requester,
             &target_node_id,
@@ -131,6 +136,7 @@ impl P2PMeshState {
             SWARM_ALIGNED_BLOCK_BYTES,
             issued_at_unix,
             expires_at_unix,
+            &secrets.ticket_hmac_secret,
         );
 
         let merkle_root_sha256 = compute_shard_merkle_tree(

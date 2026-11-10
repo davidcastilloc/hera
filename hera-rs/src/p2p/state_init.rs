@@ -255,6 +255,10 @@ impl P2PMeshState {
         }
     }
 
+    pub fn get_swarm_secrets(&self) -> SwarmCryptoSecrets {
+        self.swarm_secrets.read().map(|g| g.clone()).unwrap_or_default()
+    }
+
     pub fn set_node_api_token(&self, token: Option<String>) {
         if let Ok(mut guard) = self.node_api_token.write() {
             *guard = token;
