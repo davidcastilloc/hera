@@ -193,11 +193,11 @@ pub fn evaluate_agent_harness_turn(
             .as_ref()
             .map(|d| d.overall_average_bpm)
             .unwrap_or(124.0);
-        let _fallback_cam = req
+        let fallback_cam_score = req
             .style_dna
             .as_ref()
-            .and_then(|d| d.dominant_camelot_keys.first().cloned())
-            .unwrap_or_else(|| "8A".to_string());
+            .and_then(|d| d.dominant_camelot_keys.first().map(|k| crate::synergy::compute_camelot_synergy(k, k).0))
+            .unwrap_or(0.94);
 
         if let Ok(catalog) = state.catalog.read() {
             if catalog.len() >= 2 {
@@ -228,10 +228,10 @@ pub fn evaluate_agent_harness_turn(
                 let (cam_score, _) = crate::synergy::compute_camelot_synergy(&s1.camelot_key, &s2.camelot_key);
                 (s1.bpm, s2.bpm, (s1.quality_score / 100.0).clamp(0.4, 0.99), (s2.quality_score / 100.0).clamp(0.4, 0.99), cam_score, 0.04)
             } else {
-                (fallback_bpm, fallback_bpm + 1.5, 0.76, 0.84, 0.94, 0.04)
+                (fallback_bpm, fallback_bpm + 1.5, 0.76, 0.84, fallback_cam_score, 0.04)
             }
         } else {
-            (fallback_bpm, fallback_bpm + 1.5, 0.76, 0.84, 0.94, 0.04)
+            (fallback_bpm, fallback_bpm + 1.5, 0.76, 0.84, fallback_cam_score, 0.04)
         }
     };
 
@@ -300,30 +300,5 @@ pub fn evaluate_cloudflare_free_ai_turn(
     evaluate_agent_harness_turn(req, &crate::p2p::P2PMeshState::new("hera-default-node"))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
 
-    #[test]
-    fn test_turn_eval_derives_distinct_candidate_metrics_from_state_catalog() {
-        let state = crate::p2p::P2PMeshState::new("hera-test-node");
-        let req = CloudflareFreeAiTurnRequest {
-            dj_handle: "DaviDJ".to_string(),
-            message: "Recomienda transición cabina".to_string(),
-            session_id: None,
-            style_dna: None,
-            daily_neurons_used_so_far: 0.0,
-            cache_hit: false,
-            backend: Some("cloudflare_free".to_string()),
-            base_url: None,
-            model: None,
-            api_key: None,
-            max_tool_iterations: Some(1),
-            commander_mode: None,
-        };
-        let resp = evaluate_agent_harness_turn(&req, &state);
-        assert!(resp.assistant_reply.contains("Sinergia Neural"));
-        assert!(resp.assistant_reply.contains("122.0 BPM") || resp.assistant_reply.contains("perfil estándar"));
-    }
-}
 

@@ -245,3 +245,87 @@ fn test_react_self_healing_on_tool_error_with_mock_lmstudio() {
     assert!(!resp.tool_calls_trace[1].is_error);
     assert!(resp.assistant_reply.contains("Fixed_Set"));
 }
+
+#[test]
+fn test_turn_eval_derives_distinct_candidate_metrics_from_state_catalog() {
+    use crate::p2p::P2PVerifiedTrack;
+    use crate::structure::HotCuePoint;
+
+    fn make_test_track(id: &str, bpm: f32, cam: &str, cues: Vec<HotCuePoint>) -> P2PVerifiedTrack {
+        P2PVerifiedTrack {
+            track_id: id.to_string(),
+            title: format!("Title {id}"),
+            artist: "DaviDJ".to_string(),
+            owner_dj: "DaviDJ".to_string(),
+            bpm,
+            camelot_key: cam.to_string(),
+            top_subgenre: "Tech House".to_string(),
+            duration_seconds: 300.0,
+            format: "flac".to_string(),
+            effective_bandwidth_hz: 21500.0,
+            sub_bass_phase_correlation: 0.95,
+            mono_compatible_sub: true,
+            quality_score: 98.0,
+            forensic_verdict: "VERIFIED_STUDIO_MASTER".to_string(),
+            hot_cues: cues,
+            storage_provider: "local_disk".to_string(),
+            gdrive_file_id: None,
+            r2_object_key: None,
+            stream_url: None,
+            share_on_p2p: true,
+            node_id: "hera-test".to_string(),
+            hera_seal: format!("seal-{id}"),
+        }
+    }
+
+    let state_clean = crate::p2p::P2PMeshState::new("clean-node");
+    {
+        let mut cat = state_clean.catalog.write().unwrap();
+        cat.clear();
+        cat.push(make_test_track("c1", 124.0, "8A", vec![]));
+        cat.push(make_test_track("c2", 124.0, "8A", vec![]));
+    }
+
+    let state_clash = crate::p2p::P2PMeshState::new("clash-node");
+    {
+        let mut cat = state_clash.catalog.write().unwrap();
+        cat.clear();
+        let outro = HotCuePoint { num: 4, name: "o".into(), seconds: 200.0, bar_index: 96, role: "outro_vocals".into(), confidence: 0.9 };
+        let intro = HotCuePoint { num: 1, name: "i".into(), seconds: 1.0, bar_index: 0, role: "intro_vocals".into(), confidence: 0.9 };
+        cat.push(make_test_track("x1", 120.0, "1A", vec![outro]));
+        cat.push(make_test_track("x2", 136.0, "7B", vec![intro]));
+    }
+
+    let req = CloudflareFreeAiTurnRequest {
+        dj_handle: "DaviDJ".to_string(),
+        message: "Mix".to_string(),
+        session_id: None,
+        style_dna: None,
+        daily_neurons_used_so_far: 0.0,
+        cache_hit: false,
+        backend: Some("cloudflare_free".to_string()),
+        base_url: None,
+        model: None,
+        api_key: None,
+        max_tool_iterations: Some(1),
+        commander_mode: None,
+    };
+
+    let resp_clean = evaluate_agent_harness_turn(&req, &state_clean);
+    let resp_clash = evaluate_agent_harness_turn(&req, &state_clash);
+
+    let get_synergy = |rep: &str| -> f32 {
+        let m = "Sinergia Neural ";
+        rep.find(m).and_then(|p| rep[p + m.len()..].split('%').next())
+            .and_then(|s| s.trim().parse::<f32>().ok()).unwrap_or(0.0)
+    };
+
+    let syn_clean = get_synergy(&resp_clean.assistant_reply);
+    let syn_clash = get_synergy(&resp_clash.assistant_reply);
+
+    assert!(
+        syn_clean > syn_clash + 15.0,
+        "Clean harmonic catalog pair (syn={syn_clean}%) must score > 15% higher than clash pair (syn={syn_clash}%)"
+    );
+}
+
