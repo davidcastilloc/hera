@@ -11,6 +11,7 @@ pub mod agent_types;
 pub mod agy_stream;
 pub mod dj_types;
 pub mod typegen;
+pub mod workflow_guard;
 
 /// Canonical workspace crate version exposed by `hera-ipc`.
 pub const HERA_IPC_VERSION: &str = env!("CARGO_PKG_VERSION");

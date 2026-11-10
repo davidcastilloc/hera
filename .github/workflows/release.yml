@@ -33,7 +33,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libsoup-3.0-dev
+          sudo apt-get install -y pkg-config libdbus-1-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libasound2-dev libsoup-3.0-dev
 
       - name: Setup Rust Stable Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -43,9 +43,7 @@ jobs:
       - name: Rust Cargo Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: |
-            hera-rs -> target
-            hera-desktop/src-tauri -> target
+          workspaces: . -> target
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

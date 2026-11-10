@@ -28,24 +28,25 @@
 ### Task 1: Root Workspace Release Workflow Fix & Automated Guard in `hera-ipc`
 
 **Files:**
-- Modify: `hera-desktop/src-ipc/src/acl_guard.rs`
+- Create: `hera-desktop/src-ipc/src/workflow_guard.rs` (extracted from `acl_guard.rs` to keep every file `< 350` LOC)
+- Modify: `hera-desktop/src-ipc/src/lib.rs`
 - Modify: `.github/workflows/release-binaries.yml`
 - Modify: `.github/workflows/release.yml`
 
 **Interfaces:**
 - Produces: `verify_workspace_release_workflows(repo_root: &Path) -> Result<(), String>` tested in `hera-ipc` (`cargo test -p hera-ipc`).
 
-- [ ] **Step 1: Add failing test `test_workspace_release_workflows_target_paths` in `hera-desktop/src-ipc/src/acl_guard.rs`**
+- [x] **Step 1: Add failing test `test_workspace_release_workflows_target_paths` in `hera-desktop/src-ipc/src/workflow_guard.rs`**
   Assert `.github/workflows/release-binaries.yml` copies from `target/${{ matrix.target }}/release/` (never `hera-rs/target/`) and `.github/workflows/release.yml` caches root `. -> target` without stale `hera-rs -> target` / `hera-desktop/src-tauri -> target`.
-- [ ] **Step 2: Run `cargo test -p hera-ipc` to capture red receipt**
+- [x] **Step 2: Run `cargo test -p hera-ipc` to capture red receipt**
   Run: `cargo test -p hera-ipc`
   Expected: FAIL citing `hera-rs/target/` in `release-binaries.yml` and stale `workspaces:` in `release.yml`.
-- [ ] **Step 3: Update `.github/workflows/release-binaries.yml` and `.github/workflows/release.yml` to use root workspace `target/`**
+- [x] **Step 3: Update `.github/workflows/release-binaries.yml` and `.github/workflows/release.yml` to use root workspace `target/`**
   Update artifact staging path in `release-binaries.yml` (`target/${{ matrix.target }}/release/${{ matrix.bin_name }}`) and `Swatinem/rust-cache@v2` `workspaces: . -> target` in `release.yml` (plus `ubuntu-22.04` `libsoup-3.0-dev` / `libdbus-1-dev` parity).
-- [ ] **Step 4: Run `cargo test -p hera-ipc` and capture green receipt**
+- [x] **Step 4: Run `cargo test -p hera-ipc` and capture green receipt**
   Run: `cargo test -p hera-ipc`
   Expected: PASS (`0` failed).
-- [ ] **Step 5: Mark `[x]` and commit atomically**
+- [x] **Step 5: Mark `[x]` and commit atomically**
   Commit `fix(ci): align release workflows with v0.6.0 root Cargo workspace target`.
 
 ---
