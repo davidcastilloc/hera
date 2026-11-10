@@ -44,8 +44,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: |
-            hera-rs -> target
-            hera-desktop/src-tauri -> target
+            . -> target
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

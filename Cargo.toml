@@ -17,11 +17,14 @@ authors = ["David Castillo <vikruzdavid@gmail.com>"]
 repository = "https://github.com/davidcastilloc/hera"
 
 [workspace.dependencies]
+axum = { version = "0.8.9", default-features = false }
+http = "1.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-thiserror = "2.0.18"
-ts-rs = "12.0.1"
 strum = { version = "0.28.0", features = ["derive"] }
+thiserror = "2.0.18"
+tokio = "1.52.3"
+ts-rs = "12.0.1"
 
 [profile.dev]
 incremental = true

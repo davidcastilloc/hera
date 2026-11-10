@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cp "hera-rs/target/${{ matrix.target }}/release/${{ matrix.bin_name }}" "dist/${{ matrix.asset_name }}"
+          cp "target/${{ matrix.target }}/release/${{ matrix.bin_name }}" "dist/${{ matrix.asset_name }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

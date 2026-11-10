@@ -1,9 +1,11 @@
-# Stage 1: Build pure-Rust static binary (Symphonia + rustfft + Axum)
+# Stage 1: Build pure-Rust static binary (Symphonia + rustfft + Axum) from workspace root
 FROM rust:1.85-slim AS builder
 WORKDIR /app
-COPY Cargo.toml ./
-COPY src ./src
-RUN cargo build --release --bin hera-node
+COPY Cargo.toml Cargo.lock ./
+COPY hera-rs ./hera-rs
+COPY hera-desktop/src-ipc ./hera-desktop/src-ipc
+RUN sed -i '/"hera-desktop\/src-tauri",/d' Cargo.toml \
+    && cargo build --release -p hera-node-rs --bin hera-node
 
 # Stage 2: Ultra-minimal runtime (~15 MB disk, ~10 MB RAM)
 FROM debian:bookworm-slim
