@@ -4,11 +4,16 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CandleTransitionScore {
     pub neural_synergy: f32,
+    pub synergy_probability: f32,
     pub eq_swap_confidence: f32,
     pub echo_out_confidence: f32,
     pub stem_blend_confidence: f32,
     pub recommended_technique: String,
 }
+
+#[cfg(feature = "native")]
+static GLOBAL_CANDLE_DJ_MODEL: std::sync::OnceLock<Result<CandleLocalDjModel, String>> =
+    std::sync::OnceLock::new();
 
 /// Deterministic 2-layer CPU neural network (`Linear(8 -> 16)` + `Activation::Gelu` + `Linear(16 -> 4)`)
 /// backed by `candle_core::Tensor` and `candle_nn::Linear` on `Device::Cpu` for `< 2 ms` offline DJ inference.
@@ -22,6 +27,14 @@ pub struct CandleLocalDjModel {
 
 #[cfg(feature = "native")]
 impl CandleLocalDjModel {
+    /// Returns the cached singleton CPU model in `OnceLock` (`0` per-call tensor allocations).
+    pub fn global_cpu() -> Result<&'static CandleLocalDjModel, String> {
+        GLOBAL_CANDLE_DJ_MODEL
+            .get_or_init(Self::new_cpu)
+            .as_ref()
+            .map_err(|e| e.clone())
+    }
+
     /// Constructs a deterministic `8 -> 16 -> 4` MLP on `Device::Cpu` using sinusoidal weight priors
     /// calibrated to reward harmonic compatibility, gradual tempo deltas, and balanced punch.
     pub fn new_cpu() -> Result<Self, String> {
@@ -47,7 +60,7 @@ impl CandleLocalDjModel {
                 w1.push(base + prior);
             }
         }
-        let b1: Vec<f32> = (0..hidden_dim)
+        let mut b1: Vec<f32> = (0..hidden_dim)
             .map(|h| (((h + 1) as f32) * 0.29).cos() * 0.12)
             .collect();
 
@@ -58,7 +71,37 @@ impl CandleLocalDjModel {
                 w2.push(phase.cos() * 0.22 + 0.11);
             }
         }
-        let b2 = vec![0.35_f32, 0.25_f32, 0.15_f32, 0.28_f32];
+        let mut b2 = vec![0.35_f32, 0.25_f32, 0.15_f32, 0.28_f32];
+
+        #[derive(Deserialize)]
+        struct CandleWeightsOverride {
+            w1: Option<Vec<f32>>,
+            b1: Option<Vec<f32>>,
+            w2: Option<Vec<f32>>,
+            b2: Option<Vec<f32>>,
+        }
+
+        if let Ok(raw) = std::env::var("HERA_CANDLE_WEIGHTS_JSON") {
+            let json_str = if raw.trim_start().starts_with('{') {
+                raw
+            } else {
+                std::fs::read_to_string(&raw).unwrap_or_default()
+            };
+            if let Ok(ov) = serde_json::from_str::<CandleWeightsOverride>(&json_str) {
+                if let Some(v) = ov.w1.filter(|v| v.len() == hidden_dim * in_dim) {
+                    w1 = v;
+                }
+                if let Some(v) = ov.b1.filter(|v| v.len() == hidden_dim) {
+                    b1 = v;
+                }
+                if let Some(v) = ov.w2.filter(|v| v.len() == out_dim * hidden_dim) {
+                    w2 = v;
+                }
+                if let Some(v) = ov.b2.filter(|v| v.len() == out_dim) {
+                    b2 = v;
+                }
+            }
+        }
 
         let t_w1 = Tensor::from_vec(w1, (hidden_dim, in_dim), &device)
             .and_then(|t| t.to_dtype(DType::F32))
@@ -148,7 +191,7 @@ pub fn score_transition_neural(
 
     #[cfg(feature = "native")]
     let raw_scores = {
-        let model = CandleLocalDjModel::new_cpu()?;
+        let model = CandleLocalDjModel::global_cpu()?;
         model.forward_features(&features)?
     };
 
@@ -181,6 +224,7 @@ pub fn score_transition_neural(
 
     Ok(CandleTransitionScore {
         neural_synergy,
+        synergy_probability: neural_synergy,
         eq_swap_confidence,
         echo_out_confidence,
         stem_blend_confidence,
@@ -217,4 +261,15 @@ mod tests {
             "Expected fast local CPU tensor inference, took {elapsed:?}"
         );
     }
+
+    #[test]
+    fn candle_global_cpu_reuses_singleton_tensors_and_reacts_to_real_clash_inputs() {
+        let m1 = CandleLocalDjModel::global_cpu().expect("cpu model") as *const _;
+        let m2 = CandleLocalDjModel::global_cpu().expect("cpu model") as *const _;
+        assert_eq!(m1, m2, "OnceLock must reuse identical model allocation");
+        let clean = score_transition_neural(124.0, 124.0, 0.75, 0.78, 1.0, 0.0).unwrap();
+        let clash = score_transition_neural(124.0, 136.0, 0.90, 0.40, 0.2, 0.95).unwrap();
+        assert!(clean.synergy_probability > clash.synergy_probability + 0.15);
+    }
 }
+

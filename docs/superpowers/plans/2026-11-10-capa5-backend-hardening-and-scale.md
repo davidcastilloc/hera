@@ -332,7 +332,7 @@ git commit -m "feat(p2p): add persistent timeout-guarded IrohQuicAdapter peer tr
 - `CandleLocalDjModel::global_cpu() -> Result<&'static CandleLocalDjModel, String>` backed by `static GLOBAL_CANDLE_DJ_MODEL: std::sync::OnceLock<Result<CandleLocalDjModel, String>> = std::sync::OnceLock::new();` (`0` per-call tensor allocations after first init; optional `HERA_CANDLE_WEIGHTS_JSON` override for calibrated offline weights).
 - `turn_eval.rs` extracts real `deck_a` / top candidate `(bpm_a, bpm_b, energy_a, energy_b, camelot_compatibility, vocal_clash_risk)` from the turn context / catalog instead of `(base_bpm, base_bpm + 1.5, 0.76, 0.84, 0.94, 0.04)`.
 
-- [ ] **Step 1: Write failing pointer-identity caching test & distinct-input sensitivity test**
+- [x] **Step 1: Write failing pointer-identity caching test & distinct-input sensitivity test**
 
 ```rust
 #[test]
@@ -346,22 +346,22 @@ fn candle_global_cpu_reuses_singleton_tensors_and_reacts_to_real_clash_inputs() 
 }
 ```
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
 
 Run: `cargo test -p hera-node-rs candle_global_cpu_reuses_singleton`
 Expected: FAIL (`global_cpu` missing).
 
-- [ ] **Step 3: Implement `OnceLock` model caching and wire real track pair metrics in `turn_eval.rs`**
+- [x] **Step 3: Implement `OnceLock` model caching and wire real track pair metrics in `turn_eval.rs`**
 
 1. Add `GLOBAL_CANDLE_DJ_MODEL: OnceLock<...>` and `CandleLocalDjModel::global_cpu()` in `candle_local.rs` (`<= 349` LOC), updating `score_transition_neural` to borrow `CandleLocalDjModel::global_cpu()?`.
 2. In `turn_eval.rs` (`<= 349` LOC), derive `(target_bpm, cand_energy, camelot_compat, vocal_risk)` from actual catalog/context tracks when available instead of hardcoded constants.
 
-- [ ] **Step 4: Run verification suite**
+- [x] **Step 4: Run verification suite**
 
 Run: `wc -l hera-rs/src/dj_brain/*.rs && cargo test -p hera-node-rs`
 Expected: Every `dj_brain/*.rs <= 349` LOC; all tests + Golden Masters pass (`0` diffs).
 
-- [ ] **Step 5: Mark `[x]` and commit**
+- [x] **Step 5: Mark `[x]` and commit**
 
 ```bash
 git add hera-rs/src/dj_brain/ docs/superpowers/plans/

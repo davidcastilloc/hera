@@ -185,12 +185,57 @@ pub fn evaluate_agent_harness_turn(
         )
     };
 
-    let base_bpm = req
-        .style_dna
-        .as_ref()
-        .map(|d| d.overall_average_bpm)
-        .unwrap_or(124.0);
-    let neural_note = score_transition_neural(base_bpm, base_bpm + 1.5, 0.76, 0.84, 0.94, 0.04)
+    let swarm_index = state.build_broker_swarm_index();
+
+    let (bpm_a, bpm_b, energy_a, energy_b, camelot_compat, vocal_risk) = {
+        let fallback_bpm = req
+            .style_dna
+            .as_ref()
+            .map(|d| d.overall_average_bpm)
+            .unwrap_or(124.0);
+        let _fallback_cam = req
+            .style_dna
+            .as_ref()
+            .and_then(|d| d.dominant_camelot_keys.first().cloned())
+            .unwrap_or_else(|| "8A".to_string());
+
+        if let Ok(catalog) = state.catalog.read() {
+            if catalog.len() >= 2 {
+                let t1 = &catalog[0];
+                let t2 = &catalog[1];
+                let (cam_score, _) = crate::synergy::compute_camelot_synergy(&t1.camelot_key, &t2.camelot_key);
+                let e1 = (t1.quality_score / 100.0).clamp(0.4, 0.99);
+                let e2 = (t2.quality_score / 100.0).clamp(0.4, 0.99);
+                let clash = if t1.hot_cues.iter().any(|c| c.role == "outro_vocals")
+                    && t2.hot_cues.iter().any(|c| c.role == "intro_vocals")
+                {
+                    0.85
+                } else {
+                    0.04
+                };
+                (t1.bpm, t2.bpm, e1, e2, cam_score, clash)
+            } else if let Some(first_cat) = catalog.first() {
+                let cand_b = swarm_index.first();
+                let bpm2 = cand_b.map(|c| c.bpm).unwrap_or(first_cat.bpm + 1.0);
+                let cam2 = cand_b.map(|c| c.camelot_key.as_str()).unwrap_or(&first_cat.camelot_key);
+                let (cam_score, _) = crate::synergy::compute_camelot_synergy(&first_cat.camelot_key, cam2);
+                let e1 = (first_cat.quality_score / 100.0).clamp(0.4, 0.99);
+                let e2 = cand_b.map(|c| (c.quality_score / 100.0).clamp(0.4, 0.99)).unwrap_or(0.84);
+                (first_cat.bpm, bpm2, e1, e2, cam_score, 0.04)
+            } else if swarm_index.len() >= 2 {
+                let s1 = &swarm_index[0];
+                let s2 = &swarm_index[1];
+                let (cam_score, _) = crate::synergy::compute_camelot_synergy(&s1.camelot_key, &s2.camelot_key);
+                (s1.bpm, s2.bpm, (s1.quality_score / 100.0).clamp(0.4, 0.99), (s2.quality_score / 100.0).clamp(0.4, 0.99), cam_score, 0.04)
+            } else {
+                (fallback_bpm, fallback_bpm + 1.5, 0.76, 0.84, 0.94, 0.04)
+            }
+        } else {
+            (fallback_bpm, fallback_bpm + 1.5, 0.76, 0.84, 0.94, 0.04)
+        }
+    };
+
+    let neural_note = score_transition_neural(bpm_a, bpm_b, energy_a, energy_b, camelot_compat, vocal_risk)
         .map(|s| {
             format!(
                 " · Sinergia Neural {:.0}% ({})",
@@ -215,7 +260,6 @@ pub fn evaluate_agent_harness_turn(
         })
         .unwrap_or_else(|| format!("perfil estándar 124 BPM (8A, VirtualDJ){}", neural_note));
 
-    let swarm_index = state.build_broker_swarm_index();
     let swarm_preview: Vec<String> = swarm_index
         .iter()
         .take(3)
@@ -255,3 +299,31 @@ pub fn evaluate_cloudflare_free_ai_turn(
 ) -> CloudflareFreeAiTurnResponse {
     evaluate_agent_harness_turn(req, &crate::p2p::P2PMeshState::new("hera-default-node"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_turn_eval_derives_distinct_candidate_metrics_from_state_catalog() {
+        let state = crate::p2p::P2PMeshState::new("hera-test-node");
+        let req = CloudflareFreeAiTurnRequest {
+            dj_handle: "DaviDJ".to_string(),
+            message: "Recomienda transición cabina".to_string(),
+            session_id: None,
+            style_dna: None,
+            daily_neurons_used_so_far: 0.0,
+            cache_hit: false,
+            backend: Some("cloudflare_free".to_string()),
+            base_url: None,
+            model: None,
+            api_key: None,
+            max_tool_iterations: Some(1),
+            commander_mode: None,
+        };
+        let resp = evaluate_agent_harness_turn(&req, &state);
+        assert!(resp.assistant_reply.contains("Sinergia Neural"));
+        assert!(resp.assistant_reply.contains("122.0 BPM") || resp.assistant_reply.contains("perfil estándar"));
+    }
+}
+
