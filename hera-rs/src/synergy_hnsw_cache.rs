@@ -102,7 +102,7 @@ pub fn query_or_build_cached_hnsw(
     }
 
     let cached = lock.as_ref().ok_or_else(|| "Index uninitialized".to_string())?;
-    let mut selected = Vec::new();
+    let mut probe_results: Vec<Vec<usize>> = Vec::with_capacity(probes.len());
 
     for probe in probes {
         let matches = cached
@@ -110,26 +110,32 @@ pub fn query_or_build_cached_hnsw(
             .search(probe, per_probe_k)
             .map_err(|e| format!("Index::search: {e}"))?;
 
+        let mut list = Vec::new();
         for k in matches.keys {
             let idx = k as usize;
             if idx < embeddings.len() {
-                selected.push(idx);
+                list.push(idx);
+            }
+        }
+        probe_results.push(list);
+    }
+
+    // Interleave probe results in round-robin probe-rank order and deduplicate
+    let mut selected = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let max_len = probe_results.iter().map(|r| r.len()).max().unwrap_or(0);
+    for rank in 0..max_len {
+        for probe_list in &probe_results {
+            if rank < probe_list.len() {
+                let idx = probe_list[rank];
+                if seen.insert(idx) {
+                    selected.push(idx);
+                }
             }
         }
     }
 
-    selected.sort_unstable();
-    selected.dedup();
     Ok(selected)
-}
-
-#[cfg(feature = "native")]
-pub fn query_cached_hnsw_multi_probe(
-    embeddings: &[[f32; 64]],
-    probes: &[[f32; 64]],
-    per_probe_k: usize,
-) -> Result<Vec<usize>, String> {
-    query_or_build_cached_hnsw(embeddings, probes, per_probe_k)
 }
 
 #[cfg(not(feature = "native"))]
@@ -154,7 +160,7 @@ pub fn query_or_build_cached_hnsw(
         }
     }
 
-    let mut selected = Vec::new();
+    let mut probe_results: Vec<Vec<usize>> = Vec::with_capacity(probes.len());
     for probe in probes {
         let mut scored: Vec<(usize, f32)> = embeddings
             .iter()
@@ -169,20 +175,24 @@ pub fn query_or_build_cached_hnsw(
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.0.cmp(&b.0))
         });
-        for (idx, _) in scored.into_iter().take(per_probe_k) {
-            selected.push(idx);
+        let list: Vec<usize> = scored.into_iter().take(per_probe_k).map(|(idx, _)| idx).collect();
+        probe_results.push(list);
+    }
+
+    // Interleave probe results in round-robin probe-rank order and deduplicate
+    let mut selected = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let max_len = probe_results.iter().map(|r| r.len()).max().unwrap_or(0);
+    for rank in 0..max_len {
+        for probe_list in &probe_results {
+            if rank < probe_list.len() {
+                let idx = probe_list[rank];
+                if seen.insert(idx) {
+                    selected.push(idx);
+                }
+            }
         }
     }
-    selected.sort_unstable();
-    selected.dedup();
-    Ok(selected)
-}
 
-#[cfg(not(feature = "native"))]
-pub fn query_cached_hnsw_multi_probe(
-    embeddings: &[[f32; 64]],
-    probes: &[[f32; 64]],
-    per_probe_k: usize,
-) -> Result<Vec<usize>, String> {
-    query_or_build_cached_hnsw(embeddings, probes, per_probe_k)
+    Ok(selected)
 }

@@ -511,17 +511,20 @@ fn golden_2opt_tsp_and_set_spine_routes() {
 
 #[test]
 fn optimize_crate_with_spine_uses_cached_hnsw_above_64_tracks_and_retains_all_anchors() {
+    use hera_node_rs::synergy_hnsw::synthesize_or_normalize_64d_embedding;
     use hera_node_rs::synergy_hnsw_cache::{cache_hits_count, reset_cache_hits};
 
     reset_cache_hits();
 
     // Build 200 synthetic CrateTrackCandidates spanning 118..134 BPM and opposite keys 2A / 8A
+    // with distinct non-uniform 64-D embeddings
     let mut candidates = Vec::with_capacity(200);
     for i in 0..200 {
         let bpm = 118.0 + (i as f32) * (16.0 / 199.0);
         let key = if i % 2 == 0 { "2A" } else { "8A" };
         let energy = 0.4 + (i as f32) * (0.55 / 199.0);
-        candidates.push(CrateTrackCandidate {
+        let embedding = deterministic_embedding_64d(i);
+        let track = CrateTrackCandidate {
             track_id: format!("track_{i}"),
             title: format!("Synthetic Track {i}"),
             artist: format!("Producer {}", i % 10),
@@ -535,9 +538,17 @@ fn optimize_crate_with_spine_uses_cached_hnsw_above_64_tracks_and_retains_all_an
             top_subgenre: "Tech House".to_string(),
             has_intro_vocals: false,
             has_outro_vocals: false,
-            embedding_64d: vec![0.125; 64],
+            embedding_64d: embedding,
             hot_cues: vec![],
-        });
+        };
+        // Verify synthesize_or_normalize_64d_embedding enriches distinct embeddings with norm ~1.0
+        let enriched = synthesize_or_normalize_64d_embedding(&track);
+        let norm: f32 = enriched.iter().map(|&x| x * x).sum::<f32>().sqrt();
+        assert!(
+            (norm - 1.0).abs() < 1e-4,
+            "Enriched 64-D embedding must be L2 normalized to ~1.0, got {norm}"
+        );
+        candidates.push(track);
     }
 
     // Pin track_0 (118 BPM, 2A) as opener and track_199 (134 BPM, 8A) as peak in SetSpineConfig
@@ -596,6 +607,19 @@ fn optimize_crate_with_spine_uses_cached_hnsw_above_64_tracks_and_retains_all_an
     assert!(
         res2_ids.contains(&"track_199"),
         "result 2 must retain peak anchor track_199"
+    );
+
+    // Verify late-index peak candidates (indices >= 150) are retrieved by peak probe
+    let has_late_res1 = res1.sequence.iter().any(|t| {
+        t.track_id
+            .strip_prefix("track_")
+            .and_then(|num| num.parse::<usize>().ok())
+            .map(|idx| idx >= 150)
+            .unwrap_or(false)
+    });
+    assert!(
+        has_late_res1,
+        "Multi-probe HNSW peak quartile must retrieve late-index candidates >= 150"
     );
 
     assert!(

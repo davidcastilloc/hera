@@ -29,16 +29,25 @@ pub fn synthesize_or_normalize_64d_embedding(track: &CrateTrackCandidate) -> [f3
         false
     };
 
+    let (cam_num, _cam_letter) = parse_camelot(&track.camelot_key).unwrap_or((8, 'A'));
+    let angle = ((cam_num - 1) as f32) * (std::f32::consts::TAU / 12.0);
+    let bpm_norm = ((track.bpm - 90.0) / 80.0).clamp(0.0, 1.5);
+    let energy = track.energy_score.clamp(0.0, 1.0);
+
     if has_distinct_embedding {
         for (dst, &src) in vec64.iter_mut().zip(track.embedding_64d.iter()) {
             *dst = if src.is_finite() { src } else { 0.0 };
         }
+        l2_normalize_64d(&mut vec64);
+
+        // Blend circular Camelot, BPM, and energy coordinates into dims 0..4
+        let basis = [angle.cos(), angle.sin(), bpm_norm, energy];
+        for i in 0..4 {
+            vec64[i] = vec64[i] * 0.5 + basis[i] * 0.5;
+        }
     } else {
-        let (cam_num, cam_letter) = parse_camelot(&track.camelot_key).unwrap_or((8, 'A'));
-        let angle = ((cam_num - 1) as f32) * (std::f32::consts::TAU / 12.0);
+        let (_, cam_letter) = parse_camelot(&track.camelot_key).unwrap_or((8, 'A'));
         let mode_sign = if cam_letter == 'B' { 1.0_f32 } else { -1.0_f32 };
-        let bpm_norm = ((track.bpm - 90.0) / 80.0).clamp(0.0, 1.5);
-        let energy = track.energy_score.clamp(0.0, 1.0);
         let punch = track.punch_index.clamp(0.0, 1.0);
 
         // Harmonic circle & tempo/energy basis in dimensions 0..8
@@ -120,9 +129,12 @@ pub fn prefilter_candidates_hnsw_for_spine(
 
     // Collect all locked spine anchor indices to unconditionally retain them
     let mut anchor_indices = HashSet::new();
+    let mut final_indices: Vec<usize> = Vec::with_capacity(cap);
     for anchor in &spine.anchors {
         if let Some(pos) = candidates.iter().position(|c| c.track_id == anchor.track_id) {
-            anchor_indices.insert(pos);
+            if anchor_indices.insert(pos) {
+                final_indices.push(pos);
+            }
         }
     }
 
@@ -145,45 +157,35 @@ pub fn prefilter_candidates_hnsw_for_spine(
     let probes = [probe_opener, probe_bridge, probe_peak];
 
     let per_probe_k = (cap / probes.len()).max(4) + 4;
-    let mut selected_indices = query_or_build_cached_hnsw(&embeddings, &probes, per_probe_k)
+    let ranked_indices = query_or_build_cached_hnsw(&embeddings, &probes, per_probe_k)
         .unwrap_or_default();
 
-    // Union unconditionally every spine anchor track
-    for &anchor_idx in &anchor_indices {
-        if !selected_indices.contains(&anchor_idx) {
-            selected_indices.push(anchor_idx);
+    // Fill remaining slots up to cap from interleaved nearest-neighbor probe order
+    for idx in ranked_indices {
+        if final_indices.len() >= cap {
+            break;
+        }
+        if !anchor_indices.contains(&idx) {
+            anchor_indices.insert(idx);
+            final_indices.push(idx);
         }
     }
 
-    // If still below cap and library has more tracks, fill remaining slots
-    if selected_indices.len() < cap {
+    // If still below cap and library has more tracks, fill remaining
+    if final_indices.len() < cap {
         for i in 0..candidates.len() {
-            if !selected_indices.contains(&i) {
-                selected_indices.push(i);
-                if selected_indices.len() >= cap {
-                    break;
-                }
-            }
-        }
-    } else if selected_indices.len() > cap {
-        // Truncate non-anchor tracks if over cap, while strictly retaining all anchors
-        let mut final_indices: Vec<usize> = Vec::with_capacity(cap);
-        for &a in &anchor_indices {
-            final_indices.push(a);
-        }
-        for &idx in &selected_indices {
             if final_indices.len() >= cap {
                 break;
             }
-            if !final_indices.contains(&idx) {
-                final_indices.push(idx);
+            if !anchor_indices.contains(&i) {
+                anchor_indices.insert(i);
+                final_indices.push(i);
             }
         }
-        selected_indices = final_indices;
     }
 
-    selected_indices.sort_unstable();
-    selected_indices
+    final_indices.sort_unstable();
+    final_indices
         .into_iter()
         .map(|idx| candidates[idx].clone())
         .collect()
