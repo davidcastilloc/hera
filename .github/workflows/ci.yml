@@ -1,36 +1,21 @@
-name: HERA Community CI (Pure Rust + HERA Desktop ODD Verification)
+name: HERA Community CI (Lean PR & Manual Gate)
 
 on:
-  push:
-    branches: ["main"]
   pull_request:
     branches: ["main"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "assets/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  odd-and-open-core-hygiene:
-    name: ODD Multi-OS Path Audit & Open-Core Boundary Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Verify Zero OS Symlinks in .agent/skills and .claude/skills
-        run: |
-          SYMLINKS=$(find .agent/skills .claude/skills -type l)
-          if [ -n "$SYMLINKS" ]; then
-            echo "Error: OS symlinks detected in skills directories: $SYMLINKS"
-            exit 1
-          fi
-
-      - name: Open-Core Security Boundary Check (No Private SaaS Leaks)
-        run: |
-          if grep -rnE '/api/v1/cloud/economics|/api/v1/dj/upgrade-tier|X-Hera-Admin-Secret|calculate_cloudflare_beta_economics' hera-rs/src/ hera-desktop/src/; then
-            echo "Error: Private hera-cloud SaaS routes/economics leaked into public hera repository!"
-            exit 1
-          fi
-
-  rust-dsp-node:
-    name: Rust DSP, Cloudflare WASM & IPC Contracts (hera-rs + hera-ipc)
+  hera-fast-gate:
+    name: Pure Rust DSP, IPC Guardian & Desktop Bundle Gate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -41,57 +26,19 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Cargo Check & Test (hera-rs native)
-        run: |
-          cargo check --manifest-path hera-rs/Cargo.toml
-          cargo test --manifest-path hera-rs/Cargo.toml
+      - name: Rust Cargo Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
 
-      - name: Cloudflare Workers WASM Compilation Gate (hera-rs)
+      - name: Cargo Check, WASM Gate & Headless IPC/ACL/Hygiene Guardian (hera-rs + hera-ipc)
         run: |
-          rustup target add wasm32-unknown-unknown
+          cargo check
           cargo check --manifest-path hera-rs/Cargo.toml --target wasm32-unknown-unknown --features cloudflare --no-default-features
-
-      - name: Tauri v2 ACL Triad Parity & ts-rs IPC Contracts (hera-ipc)
-        run: |
           cargo test -p hera-ipc
+          cargo test -p hera-node-rs
 
-  hera-desktop-tauri:
-    name: HERA Desktop Tauri v2 Native Check & Tests (src-tauri)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Linux WebKit2GTK & System Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libdbus-1-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev librsvg2-dev patchelf
-          sudo apt-get install -y libappindicator3-dev || sudo apt-get install -y libayatana-appindicator3-dev
-
-      - name: Install Rust stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Prepare frontendDist placeholder for tauri::generate_context!()
-        run: |
-          mkdir -p hera-desktop/dist
-          printf '<!doctype html><html><body></body></html>\n' > hera-desktop/dist/index.html
-
-      - name: Full Workspace Cargo Check & src-tauri Test Suite
-        run: |
-          cargo check --workspace
-          cargo test --manifest-path hera-desktop/src-tauri/Cargo.toml
-
-  hera-desktop-ui:
-    name: HERA Desktop UI (Bun + moon + React 19 + StyleX + Vite+)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: hera-desktop
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 24 & Bun 1.4.4
+      - name: Setup Bun 1.4.4 & Node.js 24
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.4"
@@ -101,14 +48,10 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Install Dependencies with Bun (bun.lock)
-        run: bun install --ignore-scripts
-
-      - name: Run Vite+ Format, Lint & Typecheck (bun run check)
-        run: bun run check
-
-      - name: Run Production Bundle Build (bun run build)
-        run: bun run build
-
-      - name: Run Unit Tests (bun run test)
-        run: bun run test
+      - name: Verify HERA Desktop Format, Typecheck, Unit Tests & Bundle Build
+        working-directory: hera-desktop
+        run: |
+          bun install --ignore-scripts
+          bun run check
+          bun run test
+          bun run build

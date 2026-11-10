@@ -233,13 +233,103 @@ pub fn verify_documentation_assets_and_v060_alignment(repo_root: &Path) -> Resul
     }
 }
 
+/// Verifies locally (`< 50ms`) that:
+/// 1. `.agent/skills` and `.claude/skills` contain zero OS symlinks.
+/// 2. Public `hera-rs/src` and `hera-desktop/src` contain zero private `hera-cloud` SaaS leaks.
+/// 3. `.github/workflows/ci.yml` stays lean (no Playwright `test:e2e` and no heavy `libwebkit2gtk-4.1-dev` apt installs).
+pub fn verify_open_core_and_lean_ci(repo_root: &Path) -> Result<(), String> {
+    let mut errs = Vec::new();
+
+    for skills_dir in [".agent/skills", ".claude/skills"] {
+        let root = repo_root.join(skills_dir);
+        if root.exists() {
+            check_no_symlinks_recursive(&root, &mut errs);
+        }
+    }
+
+    for src_dir in ["hera-rs/src", "hera-desktop/src"] {
+        let root = repo_root.join(src_dir);
+        if root.exists() {
+            check_no_private_saas_leaks_recursive(&root, &mut errs);
+        }
+    }
+
+    let ci_path = repo_root.join(".github/workflows/ci.yml");
+    match fs::read_to_string(&ci_path) {
+        Err(e) => errs.push(format!(".github/workflows/ci.yml: {e}")),
+        Ok(ci) => {
+            for forbidden in ["test:e2e", "playwright install", "libwebkit2gtk-4.1-dev"] {
+                if ci.contains(forbidden) {
+                    errs.push(format!(
+                        ".github/workflows/ci.yml: contains expensive non-release step '{forbidden}' (must run locally or in release.yml only)"
+                    ));
+                }
+            }
+        }
+    }
+
+    if errs.is_empty() {
+        Ok(())
+    } else {
+        Err(errs.join("\n"))
+    }
+}
+
+fn check_no_symlinks_recursive(dir: &Path, errs: &mut Vec<String>) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Ok(ft) = entry.file_type() {
+                if ft.is_symlink() {
+                    errs.push(format!("OS symlink detected: {}", path.display()));
+                } else if ft.is_dir() {
+                    check_no_symlinks_recursive(&path, errs);
+                }
+            }
+        }
+    }
+}
+
+fn check_no_private_saas_leaks_recursive(dir: &Path, errs: &mut Vec<String>) {
+    const FORBIDDEN_MARKERS: [&str; 4] = [
+        "/api/v1/cloud/economics",
+        "/api/v1/dj/upgrade-tier",
+        "X-Hera-Admin-Secret",
+        "calculate_cloudflare_beta_economics",
+    ];
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                check_no_private_saas_leaks_recursive(&path, errs);
+            } else if let Ok(text) = fs::read_to_string(&path) {
+                for marker in FORBIDDEN_MARKERS {
+                    if text.contains(marker) {
+                        errs.push(format!(
+                            "Private SaaS leak '{marker}' found in {}",
+                            path.display()
+                        ));
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        verify_documentation_assets_and_v060_alignment, verify_qa_mcp_bridge_default,
-        verify_tauri_version_parity, verify_workspace_release_workflows,
+        verify_documentation_assets_and_v060_alignment, verify_open_core_and_lean_ci,
+        verify_qa_mcp_bridge_default, verify_tauri_version_parity,
+        verify_workspace_release_workflows,
     };
     use std::{fs, path::Path};
+
+    #[test]
+    fn test_open_core_and_lean_ci_hygiene() {
+        let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        assert_eq!(verify_open_core_and_lean_ci(&repo_root), Ok(()));
+    }
 
     #[test]
     fn test_workspace_release_workflows_target_paths() {

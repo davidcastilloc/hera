@@ -84,6 +84,9 @@ Every AI agent working across **Windows**, **macOS**, or **Linux / Antigravity**
 5. **Performance Gate & Stack Respect:**
    - **Surgical Search First:** Always use `ripgrep` (`rg -n`) before reading full files. Never bulk-read ignored directories (`target`, `node_modules`, `.wrangler`, `quarantine`, `library`, `exports`, `logs`).
    - **Stack Respect:** Zero Python dependencies; strictly respect root `Cargo.toml`, `hera-rs/Cargo.toml`, `hera-desktop/src-ipc/Cargo.toml`, `hera-desktop/src-tauri/Cargo.toml`, and `hera-desktop/package.json`.
+6. **Local-First Verification & GitHub Actions Cost Discipline:**
+   - Execute all routine verification locally (`cargo check`, `cargo test -p hera-ipc`, `cargo test -p hera-node-rs`, `bun run check`, `bun run test`, `bun run test:e2e`, `bun run build`) before pushing.
+   - Reserve GitHub Actions strictly for critical operations: Multi-OS binary release compilation (`release.yml` and `release-binaries.yml` on `v*` tags / `workflow_dispatch`) and external Pull Request gatekeeping (`ci.yml` on `pull_request` / `workflow_dispatch`). Never run Playwright E2E, `libwebkit2gtk-4.1-dev` apt installs, or routine `push: [main]` runs in `ci.yml`.
 
 ---
 
