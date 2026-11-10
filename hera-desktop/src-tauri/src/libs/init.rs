@@ -43,6 +43,7 @@ pub fn init() -> AnyResult<ConfigManager> {
 
     // 3. Ensure Wayland compatibility fixes if the user requests them
     if config.get()?.wayland_compat {
+        // SAFETY: Called once at process startup on the main thread before any worker threads are spawned.
         unsafe {
             env::set_var("GDK_BACKEND", "x11");
             env::set_var("WEBKIT_DISABLE_COMPOSITING_MODE", "1");

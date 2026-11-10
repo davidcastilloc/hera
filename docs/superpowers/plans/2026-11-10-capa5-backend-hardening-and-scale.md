@@ -123,7 +123,7 @@ git commit -m "fix(audio): serialize CommandQueue producers, retire deck buffers
 - Pure helper `pub fn format_m3u_entry_path(track_path: &Path, playlist_parent: &Path) -> String` in `plugins/db.rs`: uses `pathdiff::diff_paths(track_folder, playlist_parent)` when `Some`, otherwise falls back to `track_path.to_string_lossy().into_owned()` without `.unwrap()`.
 - Do NOT add or remove any `#[tauri::command]` function (only remove the duplicate `get_playlist` line inside `tauri::generate_handler![...]` at `db.rs:461` so `EXPECTED_TAURI_COMMANDS_COUNT = 58` stays exact).
 
-- [ ] **Step 1: Write failing unit tests for cross-drive M3U path formatting in `plugins/db.rs` and headless `sleepblocker` graceful fallback**
+- [x] **Step 1: Write failing unit tests for cross-drive M3U path formatting in `plugins/db.rs` and headless `sleepblocker` graceful fallback**
 
 ```rust
 #[test]
@@ -136,23 +136,23 @@ fn format_m3u_entry_falls_back_cleanly_when_diff_paths_is_none() {
 }
 ```
 
-- [ ] **Step 2: Run check/test to confirm failure**
+- [x] **Step 2: Run check/test to confirm failure**
 
 Run: `cargo check --manifest-path hera-desktop/src-tauri/Cargo.toml` (or `cargo test -p hera-ipc` if GTK dev headers are absent on headless CI; verify `libs/database.rs` & `plugins/db.rs` unit tests if `libwebkit2gtk` is installed, otherwise verify via `cargo check` / `acl_guard`).
 
-- [ ] **Step 3: Implement synchronous `block_on(setup())` before `.setup()` returns, `SqlitePool`, cross-drive M3U fallback, and `.unwrap()` removal**
+- [x] **Step 3: Implement synchronous `block_on(setup())` before `.setup()` returns, `SqlitePool`, cross-drive M3U fallback, and `.unwrap()` removal**
 
 1. Upgrade `DB` (`libs/database.rs`) to `SqlitePool` (`&self.pool` in queries instead of `&mut self.connection`), remove duplicate `get_playlist` at `plugins/db.rs:461`, and replace `tauri::async_runtime::spawn(async move { ... app_handle.manage(...) })` (`db.rs:473-483`) with synchronous `tauri::async_runtime::block_on(setup())` inside `.setup()` so `app_handle.manage(DBState(db))` completes BEFORE `.setup()` returns `Ok(())`.
 2. Replace `.unwrap()` calls in `db.rs:export_playlist` (`L410-424`) with `Result<_, MuseeksError>` `?` propagation + `format_m3u_entry_path`.
 3. In `sleepblocker.rs`, store `Mutex<Option<NoSleep>>`; log a warning if `NoSleep::new()` fails on headless Linux instead of panicking.
 4. Replace `.unwrap()` on HTTP response building / header parsing in `stream_server.rs` with graceful `400`/`500` responses, and add a `// SAFETY: Called at process start in main before spawning worker threads.` comment above `unsafe { env::set_var(...) }` in `libs/init.rs:46`.
 
-- [ ] **Step 4: Run ACL triad & workspace verification**
+- [x] **Step 4: Run ACL triad & workspace verification**
 
 Run: `cargo test -p hera-ipc && cargo test -p hera-node-rs --test architectural_ratchets`
 Expected: `58` Tauri commands verified 1:1:1 across `plugins`, `build.rs`, and `capabilities/main.json`; `0` errors.
 
-- [ ] **Step 5: Mark `[x]` and commit**
+- [x] **Step 5: Mark `[x]` and commit**
 
 ```bash
 git add hera-desktop/src-tauri/ docs/superpowers/plans/

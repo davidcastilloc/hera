@@ -22,6 +22,7 @@ use crate::libs::track::{Track, TrackGroup, get_track_from_file, get_track_id_fo
 use crate::libs::utils::{TimeLogger, scan_dirs};
 
 use super::config::get_storage_dir;
+use hera_ipc::format_m3u_entry_path;
 
 // Connection is mutable, so we must wrap the state in a mutex to make sure there
 // are no concurrency issues
@@ -46,7 +47,8 @@ async fn setup() -> AnyResult<DB> {
         .create_if_missing(true)
         .optimize_on_close(true, None)
         .auto_vacuum(SqliteAutoVacuum::Incremental)
-        .journal_mode(SqliteJournalMode::Wal);
+        .journal_mode(SqliteJournalMode::Wal)
+        .busy_timeout(std::time::Duration::from_secs(5));
 
     let mut connection = SqliteConnection::connect_with(&options).await?;
 
@@ -407,21 +409,32 @@ async fn export_playlist<R: Runtime>(
                 _ => return,
             };
 
-            let playlist_dir_path = playlist_path.parent().unwrap();
+            let playlist_dir_path = match playlist_path.parent() {
+                Some(parent) => parent,
+                None => return,
+            };
 
             let playlist = tracks
                 .iter()
                 .map(|track| {
-                    let relative_path =
-                        pathdiff::diff_paths(&track.path, playlist_dir_path).unwrap();
-                    m3u::path_entry(relative_path)
+                    let entry_path =
+                        format_m3u_entry_path(std::path::Path::new(&track.path), playlist_dir_path);
+                    m3u::path_entry(entry_path)
                 })
                 .collect::<Vec<m3u::Entry>>();
 
-            let mut file = std::fs::File::create(playlist_path).unwrap();
+            let mut file = match std::fs::File::create(&playlist_path) {
+                Ok(f) => f,
+                Err(err) => {
+                    warn!("Failed to create playlist file {playlist_path:?}: {err}");
+                    return;
+                }
+            };
             let mut writer = m3u::Writer::new(&mut file);
             for entry in &playlist {
-                writer.write_entry(entry).unwrap();
+                if let Err(err) = writer.write_entry(entry) {
+                    warn!("Failed to write M3U entry: {err}");
+                }
             }
         });
 
@@ -458,7 +471,6 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             has_compilations,
             get_all_playlists,
             get_playlist,
-            get_playlist,
             create_playlist,
             rename_playlist,
             set_playlist_tracks,
@@ -470,19 +482,16 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .setup(|app_handle, _api| {
             let app_handle = app_handle.clone();
 
-            tauri::async_runtime::spawn(async move {
-                let db = match setup().await {
-                    Ok(db) => db,
-                    Err(err) => {
-                        handle_fatal_error(&app_handle, err);
-                        return;
-                    }
-                };
-
-                app_handle.manage(DBState(Mutex::new(db)));
-            });
-
-            Ok(())
+            match tauri::async_runtime::block_on(setup()) {
+                Ok(db) => {
+                    app_handle.manage(DBState(Mutex::new(db)));
+                    Ok(())
+                }
+                Err(err) => {
+                    handle_fatal_error(&app_handle, err);
+                    Ok(())
+                }
+            }
         })
         .build()
 }

@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use log::info;
+use log::{info, warn};
 use nosleep::{NoSleep, NoSleepType};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, Runtime, State};
@@ -8,7 +8,7 @@ use tauri::{Manager, Runtime, State};
 use crate::libs::error::AnyResult;
 use crate::plugins::config::ConfigManager;
 
-pub struct NoSleepInstance(Mutex<NoSleep>);
+pub struct NoSleepInstance(Mutex<Option<NoSleep>>);
 
 #[tauri::command]
 pub fn enable(
@@ -17,13 +17,15 @@ pub fn enable(
 ) -> AnyResult<()> {
     config_manager.set_sleepblocker(true)?;
 
-    nosleep
-        .0
-        .lock()
-        .unwrap() // TODO, use ?
-        .start(NoSleepType::PreventUserIdleSystemSleep)?;
+    if let Ok(mut guard) = nosleep.0.lock() {
+        if let Some(ref mut instance) = *guard {
+            instance.start(NoSleepType::PreventUserIdleSystemSleep)?;
+            info!("Sleepblocker enabled");
+        } else {
+            info!("Sleepblocker enabled (no-op: NoSleep unavailable on this platform)");
+        }
+    }
 
-    info!("Sleepblocker enabled");
     Ok(())
 }
 
@@ -34,13 +36,15 @@ pub fn disable(
 ) -> AnyResult<()> {
     config_manager.set_sleepblocker(false)?;
 
-    nosleep
-        .0
-        .lock()
-        .unwrap() // TODO, use ?
-        .stop()?;
+    if let Ok(mut guard) = nosleep.0.lock() {
+        if let Some(ref mut instance) = *guard {
+            instance.stop()?;
+            info!("Sleepblocker disabled");
+        } else {
+            info!("Sleepblocker disabled (no-op: NoSleep unavailable on this platform)");
+        }
+    }
 
-    info!("Sleepblocker disabled");
     Ok(())
 }
 
@@ -51,8 +55,15 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::<R>::new("sleepblocker")
         .invoke_handler(tauri::generate_handler![enable, disable])
         .setup(|app_handle, _api| {
-            // Add NoSleep to the app state
-            app_handle.manage(NoSleepInstance(Mutex::new(NoSleep::new().unwrap())));
+            // Add NoSleep to the app state, handling headless platforms where NoSleep::new() fails
+            let nosleep_instance = match NoSleep::new() {
+                Ok(instance) => Some(instance),
+                Err(err) => {
+                    warn!("NoSleep initialization failed (running headless or without sleep inhibitor): {}", err);
+                    None
+                }
+            };
+            app_handle.manage(NoSleepInstance(Mutex::new(nosleep_instance)));
 
             // Enable it right away
             let config_manager = app_handle.state::<ConfigManager>();

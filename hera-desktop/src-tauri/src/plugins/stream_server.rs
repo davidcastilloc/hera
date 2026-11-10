@@ -68,21 +68,26 @@ fn build_response(
         None => file_size,
     };
 
+    let Ok(ct_val) = content_type.parse() else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let Ok(cl_val) = content_length.to_string().parse() else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+    let Ok(ar_val) = "bytes".parse() else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
     let mut headers = AxumHeaderMap::new();
-    headers.insert(header::CONTENT_TYPE, content_type.parse().unwrap());
-    headers.insert(
-        header::CONTENT_LENGTH,
-        content_length.to_string().parse().unwrap(),
-    );
-    headers.insert(header::ACCEPT_RANGES, "bytes".parse().unwrap());
+    headers.insert(header::CONTENT_TYPE, ct_val);
+    headers.insert(header::CONTENT_LENGTH, cl_val);
+    headers.insert(header::ACCEPT_RANGES, ar_val);
 
     if let Some((start, end)) = range {
-        headers.insert(
-            header::CONTENT_RANGE,
-            format!("bytes {}-{}/{}", start, end, file_size)
-                .parse()
-                .unwrap(),
-        );
+        let Ok(cr_val) = format!("bytes {}-{}/{}", start, end, file_size).parse() else {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        };
+        headers.insert(header::CONTENT_RANGE, cr_val);
     }
 
     (status, headers, body).into_response()
@@ -201,7 +206,9 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                     .route("/stream", get(stream_handler))
                     .with_state(app_handle);
 
-                axum::serve(listener, router).await.unwrap();
+                if let Err(err) = axum::serve(listener, router).await {
+                    log::error!("[stream_server] Server exited with error: {}", err);
+                }
             });
 
             Ok(())
