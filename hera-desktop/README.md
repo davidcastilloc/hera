@@ -40,7 +40,7 @@
 ![Mi Estilo y ADN Musical v0.6.0](../docs/superpowers/assets/hera_v060_4_dna_1180x720.png)
 
 - **Auto-Perfilado Determinista en Rust:** Calcula tu `Ritmo habitual` (`125 BPM`), `Tonos principales` (`8A · 9A · 10A`) y tipo de `Mezcla` (`Progresiva`) directamente sobre tu colección local, con selector de software principal (`VirtualDJ`, `Rekordbox`, `Traktor`, `Serato`).
-- **Balance Musical y Reglas de Ordenamiento:** Visualiza la proporción `Melódico · Hora pico · Vocal`, despliega la matriz Camelot (`1A–12A`) y activa tus 3 reglas de oro (*Evitar choque de voces*, *Mantener graves continuos*, *Ocultar audio de baja calidad*).
+- **Balance Musical y Reglas de Ordenamiento:** Visualiza la proporción `Melódico · Hora pico · Vocal`, despliega la matriz Camelot (`1A–12A`) y activa tus 3 reglas de oro (_Evitar choque de voces_, _Mantener graves continuos_, _Ocultar audio de baja calidad_).
 
 ---
 
@@ -53,11 +53,12 @@
 
 ---
 
-## 🐝 Integración con el Enjambre P2P Simbiótico (*«Por el bien del enjambre»*)
+## 🐝 Integración con el Enjambre P2P Simbiótico (_«Por el bien del enjambre»_)
 
 ![Arquitectura del Enjambre P2P Simbiótico de HERA](../assets/hera_swarm_concept.jpg)
 
 Cada instancia de **HERA Desktop** participa como un ciudadano P2P de primera clase:
+
 1. **Trueque Simbiótico (`$0.00` Gratis):** Disfrutas gratis del motor DSP, los 4 Hot Cues, el agente de 44 herramientas y `Cloudflare Workers AI Free` (`10,000 Neurons/día`); a cambio, los Masters verificados (`VERIFIED_STUDIO_MASTER`) nutren al enjambre global (`p2p_sharing_enabled = true` por defecto).
 2. **Cascada P2P de 5 Etapas + Nodos `Edge Guardian`:** Conecta primero por `LAN Directa` → `Multi-STUN` → `16-Port UDP Spray` → `Cloudflare TURN Relay` (`0` bytes R2) → `Enjambre R2 Federado` (`Constrained Water-Filling` con tope seguro de `9.0 GB` R2 y `85,000 req/día`, bloques ciegos de `4 MB` y créditos `1 : 1.5`).
 
