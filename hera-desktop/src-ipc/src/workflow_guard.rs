@@ -37,10 +37,15 @@ pub fn verify_workspace_release_workflows(repo_root: &Path) -> Result<(), String
     match fs::read_to_string(&rel_path) {
         Err(e) => errs.push(format!("{RELEASE_YML}: {e}")),
         Ok(rel) => {
-            for forbidden in ["hera-rs -> target", "hera-desktop/src-tauri -> target"] {
+            for forbidden in [
+                "hera-rs -> target",
+                "hera-desktop/src-tauri -> target",
+                "libgstreamer1.0-dev",
+                "libgstreamer-plugins-base1.0-dev",
+            ] {
                 if rel.contains(forbidden) {
                     errs.push(format!(
-                        "{RELEASE_YML}: contains stale sub-crate workspaces cache entry '{forbidden}'"
+                        "{RELEASE_YML}: contains forbidden/conflicting entry '{forbidden}'"
                     ));
                 }
             }

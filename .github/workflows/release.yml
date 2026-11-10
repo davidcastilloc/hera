@@ -29,11 +29,11 @@ jobs:
       - name: Checkout HERA Repository
         uses: actions/checkout@v4
 
-      - name: Install Linux WebKit2GTK, GStreamer & AppImage/RPM Dependencies
+      - name: Install Linux WebKit2GTK, Runtime GStreamer & AppImage Dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libdbus-1-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev librsvg2-dev patchelf libasound2-dev file wget libfuse2 rpm desktop-file-utils libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-plugins-good gstreamer1.0-plugins-bad
+          sudo apt-get install -y pkg-config libdbus-1-dev libwebkit2gtk-4.1-dev libsoup-3.0-dev librsvg2-dev patchelf xdg-utils libasound2-dev libfuse2 desktop-file-utils gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav
           sudo apt-get install -y libappindicator3-dev || sudo apt-get install -y libayatana-appindicator3-dev
 
       - name: Setup Rust Stable Toolchain
@@ -64,7 +64,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NO_STRIP: "true"
+          NO_STRIP: "1"
         with:
           projectPath: hera-desktop
           tagName: v__VERSION__
