@@ -391,10 +391,10 @@ flowchart BT
 - Create/Modify: `hera-desktop/src-tauri/src/plugins/hera_dj/{audio_transport.rs,mod.rs}`, `hera-desktop/src-tauri/build.rs`, `hera-desktop/src-tauri/capabilities/main.json`
 - Create/Modify: `hera-desktop/src/lib/native-audio-transport.ts`, `hera-desktop/src/lib/player.ts` (retirar `new Audio()` / `HTMLAudioElement`), `hera-rs/tests/architectural_ratchets.rs`, `hera-desktop/src-ipc/src/acl_guard.rs`
 
-- [ ] **Step 1 (Expand):** Extraer `pub trait AudioBackend` sobre `DualDeckEngine`, añadir remuestreo de alta precisión (`rubato`), etapa master soft-clip/EQ (`fundsp` `default-features = false, features = ["std"]`), analizador espectral de 32 bandas (`realfft`) y cola SPSC wait-free (`rtrb`).
-- [ ] **Step 2 (Migrate):** Implementar `CpalAudioBackend` en modo compartido no exclusivo (cero conflicto con VirtualDJ) con fallback automático `HeadlessClockAudioBackend` en entornos sin tarjeta de sonido, exponer comandos Tauri `native_audio_*` con paridad ACL 1:1:1 y validar shadow testing contra los 4 Hot Cues del Golden Master.
-- [ ] **Step 3 (Contract):** Retirar `HTMLAudioElement` (`new Audio()`) de `hera-desktop/src/lib/player.ts` delegando en `NativeRustAudioTransport`, añadir ratchet que prohíba `HTMLAudioElement`/`new Audio(` en `player.ts`, y verificar `bun run test` (incluyendo `player.test-e2e.tsx`), `cargo test --workspace` y `cargo insta test -p hera-node-rs --check`.
-- [ ] **Step 4:** Marcar `[x]` y crear commit atómico `feat(audio): migrate player transport to native Rust cpal/rubato/fundsp/realfft/rtrb AudioBackend`.
+- [x] **Step 1 (Expand):** Extraer `pub trait AudioBackend` sobre `DualDeckEngine`, añadir remuestreo de alta precisión (`rubato`), etapa master soft-clip/EQ (`fundsp` `default-features = false, features = ["std"]`), analizador espectral de 32 bandas (`realfft`) y cola SPSC wait-free (`rtrb`).
+- [x] **Step 2 (Migrate):** Implementar `CpalAudioBackend` en modo compartido no exclusivo (cero conflicto con VirtualDJ) con fallback automático `HeadlessClockAudioBackend` en entornos sin tarjeta de sonido, exponer comandos Tauri `native_audio_*` con paridad ACL 1:1:1 y validar shadow testing contra los 4 Hot Cues del Golden Master.
+- [x] **Step 3 (Contract):** Retirar `HTMLAudioElement` (`new Audio()`) de `hera-desktop/src/lib/player.ts` delegando en `NativeRustAudioTransport`, añadir ratchet que prohíba `HTMLAudioElement`/`new Audio(` en `player.ts`, y verificar `bun run test` (incluyendo `player.test-e2e.tsx`), `cargo test --workspace` y `cargo insta test -p hera-node-rs --check`.
+- [x] **Step 4:** Marcar `[x]` y crear commit atómico `feat(audio): migrate player transport to native Rust cpal/rubato/fundsp/realfft/rtrb AudioBackend`.
 
 #### Milestone M4.3: UI 120 FPS & Streaming de Telemetría `tauri::ipc::Channel<T>` hacia `OffscreenCanvas` WebGPU/WebGL2
 **Files:**

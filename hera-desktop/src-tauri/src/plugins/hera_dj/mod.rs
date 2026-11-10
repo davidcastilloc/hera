@@ -1,3 +1,4 @@
+mod audio_transport;
 mod bridge_p2p;
 mod mini_overlay;
 mod p2p_download;
@@ -5,6 +6,7 @@ mod p2p_download;
 mod tests;
 mod virtualdj_live;
 
+use hera_node_rs::audio_engine::create_default_audio_backend;
 use hera_node_rs::cloudflare_edge::{CloudflareEdgeCapabilities, get_cloudflare_edge_capabilities};
 use hera_node_rs::dj_brain::{
     AiBackendOption, AiConnectivityOnboardingReport, CloudflareFreeAiTurnRequest,
@@ -26,6 +28,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, Runtime};
 
+#[allow(unused_imports)]
+pub use audio_transport::*;
 #[allow(unused_imports)]
 pub use bridge_p2p::*;
 pub use hera_ipc::dj_types::*;
@@ -198,6 +202,10 @@ pub async fn scan_ai_connectivity(
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     warm_desktop_udp_daemon_background();
     Builder::<R>::new("hera-dj")
+        .setup(|app, _api| {
+            app.manage(NativeAudioState(create_default_audio_backend()));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             compute_style_dna,
             export_crate,
@@ -211,7 +219,14 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             p2p_download::download_p2p_track,
             mini_overlay::set_mini_overlay_mode,
             virtualdj_live::push_virtualdj_live_crate,
-            virtualdj_live::read_virtualdj_now_playing
+            virtualdj_live::read_virtualdj_now_playing,
+            audio_transport::native_audio_load_track,
+            audio_transport::native_audio_play,
+            audio_transport::native_audio_pause,
+            audio_transport::native_audio_seek,
+            audio_transport::native_audio_set_volume,
+            audio_transport::native_audio_set_playback_rate,
+            audio_transport::native_audio_get_state
         ])
         .build()
 }

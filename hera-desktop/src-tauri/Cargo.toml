@@ -62,4 +62,4 @@ ts-rs.workspace = true
 uuid = { version = "1.23.1", features = ["v3", "v4", "fast-rng"] }
 walkdir = "2.5.0"
 hera-ipc = { path = "../src-ipc" }
-hera-node-rs = { path = "../../hera-rs" }
+hera-node-rs = { path = "../../hera-rs", features = ["audio-device"] }

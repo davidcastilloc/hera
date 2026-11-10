@@ -28,7 +28,7 @@ const ZERO_COMMAND_PLUGIN_FILES: &[&str] = &[
 ];
 
 /// Exact count of `#[tauri::command]` functions across the 8 internal plugins in `v0.6.0`.
-const EXPECTED_TAURI_COMMANDS_COUNT: usize = 50;
+const EXPECTED_TAURI_COMMANDS_COUNT: usize = 57;
 
 /// Strict line-count ceilings (`content.lines().count()`) for module facades,
 /// pre-existing ADR-013 P2P submodules, route coordinators, and IPC bridges.
@@ -43,6 +43,8 @@ const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
     ("hera-desktop/src/components/MiniOverlay.tsx", 450),
     ("hera-desktop/src/lib/bridge-hera.ts", 300),
     ("hera-desktop/src/lib/bridge-agent.ts", 300),
+    ("hera-desktop/src/lib/native-audio-transport.ts", 280),
+    ("hera-desktop/src/lib/player.ts", 680),
 ];
 
 /// Recursive line-count ceilings (`<= 349` lines) enforced on every `.rs` file inside
@@ -1015,6 +1017,21 @@ fn ratchet_bridge_hera_manual_ipc_types_ceiling() {
          Per Law 4 (Ratcheting) and Milestone M3.1 (`hera-ipc`), generate IPC contracts from Rust via `ts-rs` \
          into `hera-desktop/src/generated/hera-typings.ts` instead of adding manual duplicate types."
     );
+}
+
+#[test]
+fn ratchet_player_ts_zero_html_audio_element() {
+    let root = workspace_root();
+    let rel_path = "hera-desktop/src/lib/player.ts";
+    let content = fs::read_to_string(root.join(rel_path))
+        .unwrap_or_else(|err| panic!("Failed to read `{rel_path}`: {err}"));
+
+    for forbidden in ["HTMLAudioElement", "new Audio("] {
+        assert!(
+            !content.contains(forbidden),
+            "`{rel_path}` must not reference `{forbidden}` after Milestone M4.2 migration to `NativeRustAudioTransport` (`AudioBackend`)"
+        );
+    }
 }
 
 #[test]

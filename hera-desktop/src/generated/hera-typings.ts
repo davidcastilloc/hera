@@ -60,6 +60,10 @@ export type McpHostIntegrationGuide = { stdio_command: string, http_endpoint: st
 
 export type MediaMixProfile = { audio_pct: number, video_pct: number, own_productions_pct: number, };
 
+export type NativeAudioTelemetryFrame = { sequence: number, sample_rate: number, current_time_sec: number, duration_sec: number, is_playing: boolean, rms_left: number, rms_right: number, peak_db: number, sub_bass: number, low_mid: number, high_mid: number, air_presence: number, spectrum_bins: Array<number>, };
+
+export type NativePlayerSnapshot = { backend_kind: string, sample_rate: number, track_loaded: boolean, loaded_path?: string | null, is_playing: boolean, ended: boolean, current_time_sec: number, duration_sec: number, playhead_frame: number, total_frames: number, volume: number, playback_rate: number, hot_cue_frames: Array<number>, hot_cue_seconds: Array<number>, latest_telemetry?: NativeAudioTelemetryFrame | null, };
+
 export type ProbeAiBackendResponse = { reachable: boolean, backend: string, base_url: string, models: Array<string>, };
 
 export type PushVirtualDjLiveCrateRequest = { tracks: Array<ExportTrackItem>, append?: boolean, crate_name?: string | null, };

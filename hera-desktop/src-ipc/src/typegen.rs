@@ -7,6 +7,7 @@ use crate::agent_types::{
     CreateAgentSessionRequest, StartAgentTurnRequest, StartAgentTurnResponse,
     UpdateAgentSessionRequest,
 };
+use crate::audio_types::{NativeAudioTelemetryFrame, NativePlayerSnapshot};
 use crate::dj_types::{
     DownloadP2PTrackRequest, DownloadP2PTrackResponse, HarmonicBridgeStep, ProbeAiBackendResponse,
     PushVirtualDjLiveCrateRequest, PushVirtualDjLiveCrateResponse, ResolveHarmonicBridgeRequest,
@@ -72,6 +73,8 @@ pub fn export_hera_typescript_bindings(generated_dir: &Path) -> Result<String, S
         export_decl::<HotCuePoint>(&cfg),
         export_decl::<McpHostIntegrationGuide>(&cfg),
         export_decl::<MediaMixProfile>(&cfg),
+        export_decl::<NativeAudioTelemetryFrame>(&cfg),
+        export_decl::<NativePlayerSnapshot>(&cfg),
         export_decl::<ProbeAiBackendResponse>(&cfg),
         export_decl::<PushVirtualDjLiveCrateRequest>(&cfg),
         export_decl::<PushVirtualDjLiveCrateResponse>(&cfg),
@@ -131,6 +134,8 @@ mod tests {
             "export type SetMiniOverlayModeResponse =",
             "export type AgentSessionSummary =",
             "export type AgentRuntimeStatus =",
+            "export type NativePlayerSnapshot =",
+            "export type NativeAudioTelemetryFrame =",
             "message_count: number",
             "supported_backends: Array<AiBackendOption>",
         ] {

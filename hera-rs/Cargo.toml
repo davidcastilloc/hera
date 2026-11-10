@@ -19,7 +19,17 @@ required-features = ["native"]
 
 [features]
 default = ["native"]
-native = ["dep:tokio", "dep:rmcp", "axum/tokio", "axum/http1"]
+native = [
+  "dep:tokio",
+  "dep:rmcp",
+  "dep:rtrb",
+  "dep:realfft",
+  "dep:rubato",
+  "dep:fundsp",
+  "axum/tokio",
+  "axum/http1",
+]
+audio-device = ["native", "dep:cpal"]
 cloudflare = ["dep:worker"]
 ts = ["dep:ts-rs"]
 
@@ -33,9 +43,14 @@ symphonia = { version = "0.5", default-features = false, features = ["pcm", "wav
 http.workspace = true
 tower-service = "0.3"
 
-# Native VPS / Local Server runtime (Railway, Vultr, DigitalOcean, Hetzner, Oracle Free Tier, PC)
+# Native VPS / Local Server & Pro-DJ Real-Time DSP runtime
 tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync", "io-util", "time"], optional = true }
 rmcp = { workspace = true, features = ["server", "transport-io"], optional = true }
+rtrb = { workspace = true, optional = true }
+realfft = { workspace = true, optional = true }
+rubato = { workspace = true, optional = true }
+fundsp = { workspace = true, optional = true }
+cpal = { workspace = true, optional = true }
 
 # Cloudflare Workers Serverless Edge WASM runtime (`npx wrangler deploy`)
 worker = { version = "0.8", features = ["http", "axum"], optional = true }
