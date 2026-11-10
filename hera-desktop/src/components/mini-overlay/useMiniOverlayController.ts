@@ -28,6 +28,29 @@ import {
 } from './mini-overlay-derivations';
 import type { MiniSuggestionItem } from './MiniIcons';
 
+async function pushSingleMiniSuggestionToVdjSafe(
+  item: MiniSuggestionItem,
+  invalidate: () => Promise<unknown>,
+): Promise<boolean> {
+  try {
+    await pushSingleMiniSuggestionToVdj(item, invalidate);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function pushMiniBridgeStepsToVdjSafe(
+  steps: Array<HarmonicBridgeStep>,
+): Promise<boolean> {
+  try {
+    await pushMiniBridgeStepsToVdj(steps);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function useMiniOverlayController() {
   const layoutMode = useMiniModeStore((s) => s.layoutMode);
   const pinned = useMiniModeStore((s) => s.pinned);
@@ -206,16 +229,15 @@ export function useMiniOverlayController() {
     async (item: MiniSuggestionItem) => {
       if (busyId) return;
       setBusyId(item.id);
-      try {
-        await pushSingleMiniSuggestionToVdj(item, invalidate);
+      const pushed = await pushSingleMiniSuggestionToVdjSafe(item, invalidate);
+      if (pushed) {
         setSentIds((prev) => {
           const next = new Set(prev);
           next.add(item.id);
           return next;
         });
-      } finally {
-        setBusyId(null);
       }
+      setBusyId(null);
     },
     [busyId, invalidate],
   );
@@ -223,17 +245,16 @@ export function useMiniOverlayController() {
   const handlePushBridgeToVdj = useCallback(async () => {
     if (busyId) return;
     setBusyId('bridge-push');
-    try {
-      await pushMiniBridgeStepsToVdj(bridgeSteps);
+    const pushed = await pushMiniBridgeStepsToVdjSafe(bridgeSteps);
+    if (pushed) {
       setBridgeSent(true);
       if (bridgeBadgeTimerRef.current)
         clearTimeout(bridgeBadgeTimerRef.current);
       bridgeBadgeTimerRef.current = setTimeout(() => {
         setBridgeSent(false);
       }, 2500);
-    } finally {
-      setBusyId(null);
     }
+    setBusyId(null);
   }, [bridgeSteps, busyId]);
 
   const handleApplyPreset = (preset: 'suave' | 'energia' | 'sin_voz') => {

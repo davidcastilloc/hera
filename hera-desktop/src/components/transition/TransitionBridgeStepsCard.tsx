@@ -53,7 +53,7 @@ export default function TransitionBridgeStepsCard({
 
       <div {...stylex.props(styles.stepsList)}>
         {steps.map((step, index) => {
-          const auditionKey = `step-${step.track_id}-${index}`;
+          const auditionKey = `step-${step.step_number}-${step.track_id}`;
           const isPlaying = activeAuditionId === auditionKey;
           const localTrack = findMatchingLocalTrack(
             step.artist,

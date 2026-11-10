@@ -17,6 +17,52 @@ export type TransitionCommandDockProps = {
   onApplyCustomSteps: (steps: Array<HarmonicBridgeStep>) => void;
 };
 
+async function runCommandAdjustmentSafe(params: {
+  promptToSend: string;
+  activeSteps: Array<HarmonicBridgeStep>;
+  originBpm: number;
+  targetBpm: number;
+  onApplyCustomSteps: (steps: Array<HarmonicBridgeStep>) => void;
+  activeBackend: string;
+  baseUrl: string | undefined;
+  commanderMode: CommanderAuthorityMode;
+}): Promise<string> {
+  try {
+    const lower = params.promptToSend.toLowerCase();
+    if (lower.includes('energ') || lower.includes('arriba')) {
+      params.onApplyCustomSteps(
+        params.activeSteps.map((step, i) => ({
+          ...step,
+          bpm: Math.round((step.bpm + (i === 0 ? 1.5 : 2.0)) * 10) / 10,
+        })),
+      );
+    } else if (lower.includes('suave') || lower.includes('lenta')) {
+      params.onApplyCustomSteps(
+        params.activeSteps.map((step, i) => ({
+          ...step,
+          bpm:
+            Math.round(
+              (params.originBpm +
+                ((params.targetBpm - params.originBpm) * (i + 1)) /
+                  (params.activeSteps.length + 1)) *
+                10,
+            ) / 10,
+        })),
+      );
+    }
+
+    await chatWithCloudflareFreeAi(params.promptToSend, 'DaviDJ', {
+      backend: params.activeBackend,
+      baseUrl: params.baseUrl,
+      commanderMode: params.commanderMode,
+    });
+
+    return `Ajuste aplicado: ${params.promptToSend}`;
+  } catch {
+    return `Ajuste local aplicado: ${params.promptToSend}`;
+  }
+}
+
 export default function TransitionCommandDock({
   activeSteps,
   originBpm,
@@ -36,8 +82,8 @@ export default function TransitionCommandDock({
   const [customBaseUrl, setCustomBaseUrl] = useState<string>(
     'http://127.0.0.1:11434/v1',
   );
-  const [offlineBackendId, setOfflineBackendId] = useState<string>('ollama');
 
+  const offlineBackendIdRef = useRef<string>('ollama');
   const noteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const popoverRef = useRef<HTMLDivElement | null>(null);
 
@@ -83,7 +129,7 @@ export default function TransitionCommandDock({
       .then((rep) => {
         const localServer = rep.local_servers.find((s) => s.reachable);
         if (localServer) {
-          setOfflineBackendId(localServer.id);
+          offlineBackendIdRef.current = localServer.id;
         }
       })
       .catch(() => {});
@@ -96,52 +142,28 @@ export default function TransitionCommandDock({
       setChatPrompt('');
     }
     setIsAiLoading(true);
-    try {
-      const lower = promptToSend.toLowerCase();
-      if (lower.includes('energ') || lower.includes('arriba')) {
-        onApplyCustomSteps(
-          activeSteps.map((step, i) => ({
-            ...step,
-            bpm: Math.round((step.bpm + (i === 0 ? 1.5 : 2.0)) * 10) / 10,
-          })),
-        );
-      } else if (lower.includes('suave') || lower.includes('lenta')) {
-        onApplyCustomSteps(
-          activeSteps.map((step, i) => ({
-            ...step,
-            bpm:
-              Math.round(
-                (originBpm +
-                  ((targetBpm - originBpm) * (i + 1)) /
-                    (activeSteps.length + 1)) *
-                  10,
-              ) / 10,
-          })),
-        );
-      }
+    const activeBackend =
+      connectionScope === 'cloud'
+        ? 'cloudflare_free'
+        : showAdvancedUrl
+          ? 'custom'
+          : offlineBackendIdRef.current;
 
-      const activeBackend =
-        connectionScope === 'cloud'
-          ? 'cloudflare_free'
-          : showAdvancedUrl
-            ? 'custom'
-            : offlineBackendId;
-
-      await chatWithCloudflareFreeAi(promptToSend, 'DaviDJ', {
-        backend: activeBackend,
-        baseUrl:
-          connectionScope === 'offline' && showAdvancedUrl
-            ? customBaseUrl
-            : undefined,
-        commanderMode,
-      });
-
-      flashQuietNote(`Ajuste aplicado: ${promptToSend}`);
-    } catch {
-      flashQuietNote(`Ajuste local aplicado: ${promptToSend}`);
-    } finally {
-      setIsAiLoading(false);
-    }
+    const note = await runCommandAdjustmentSafe({
+      promptToSend,
+      activeSteps,
+      originBpm,
+      targetBpm,
+      onApplyCustomSteps,
+      activeBackend,
+      baseUrl:
+        connectionScope === 'offline' && showAdvancedUrl
+          ? customBaseUrl
+          : undefined,
+      commanderMode,
+    });
+    flashQuietNote(note);
+    setIsAiLoading(false);
   };
 
   return (
@@ -157,6 +179,7 @@ export default function TransitionCommandDock({
             value={chatPrompt}
             onChange={(e) => setChatPrompt(e.target.value)}
             onKeyDown={(e) => {
+              if (e.nativeEvent.isComposing) return;
               if (e.key === 'Enter') {
                 void handleSendAdjustment();
               }

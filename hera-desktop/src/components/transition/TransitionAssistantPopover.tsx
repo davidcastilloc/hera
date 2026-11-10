@@ -24,8 +24,8 @@ export default function TransitionAssistantPopover({
   onCustomBaseUrlChange,
 }: TransitionAssistantPopoverProps) {
   return (
-    <div
-      role="dialog"
+    <dialog
+      open
       aria-label="Asistente"
       {...stylex.props(styles.assistantPopover)}
     >
@@ -112,16 +112,20 @@ export default function TransitionAssistantPopover({
           {showAdvancedUrl ? 'Ocultar servidor' : 'Conexión avanzada…'}
         </button>
       </div>
-    </div>
+    </dialog>
   );
 }
 
 const styles = stylex.create({
   assistantPopover: {
     position: 'absolute',
+    left: 'auto',
     right: 0,
     bottom: '46px',
     width: '296px',
+    margin: 0,
+    padding: 0,
+    color: '#edeff3',
     borderRadius: '12px',
     backgroundColor: '#151a23',
     borderWidth: '1px',
