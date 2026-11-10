@@ -1,0 +1,18 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT path FROM tracks",
+  "describe": {
+    "columns": [
+      {
+        "name": "path",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [false]
+  },
+  "hash": "8cf5e2a053ee7875d0a48a4213aed3503172a044939ebc5c76a6a6fcdc8ec26e"
+}

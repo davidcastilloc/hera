@@ -146,25 +146,22 @@ export async function createPlaylistFromBridgeSteps(params: {
   targetCamelot: string;
   invalidate: () => Promise<unknown>;
 }): Promise<Playlist | null> {
-  const downloadedPaths: Array<string> = [];
-  for (const step of params.activeSteps) {
-    const existing = matchLocalLibraryTrack(
-      step.artist,
-      step.title,
-      step.track_id,
-    );
-    if (!existing) {
-      const dl = await downloadP2PTrackToLibrary({
+  const missingSteps = params.activeSteps.filter(
+    (step) => !matchLocalLibraryTrack(step.artist, step.title, step.track_id),
+  );
+  const downloads = await Promise.all(
+    missingSteps.map((step) =>
+      downloadP2PTrackToLibrary({
         trackId: step.track_id,
         artist: step.artist,
         title: step.title,
         bpm: step.bpm,
         camelot: step.camelot,
         heraSeal: step.hera_seal,
-      });
-      downloadedPaths.push(dl.saved_path);
-    }
-  }
+      }),
+    ),
+  );
+  const downloadedPaths = downloads.map((dl) => dl.saved_path);
 
   if (downloadedPaths.length > 0) {
     await LibraryAPI.importAudioFiles(downloadedPaths);
@@ -173,21 +170,22 @@ export async function createPlaylistFromBridgeSteps(params: {
   const refreshedTracks = await DatabaseBridge.getAllTracks();
   useLibraryStore.setState({ tracks: refreshedTracks });
 
-  const orderedIds: Array<string> = [];
-  if (params.originTrackId) orderedIds.push(params.originTrackId);
+  const orderedIdsSet = new Set<string>();
+  if (params.originTrackId) orderedIdsSet.add(params.originTrackId);
   for (const step of params.activeSteps) {
     const matched = matchLocalLibraryTrack(
       step.artist,
       step.title,
       step.track_id,
     );
-    if (matched && !orderedIds.includes(matched.id)) {
-      orderedIds.push(matched.id);
+    if (matched) {
+      orderedIdsSet.add(matched.id);
     }
   }
-  if (params.targetTrackId && !orderedIds.includes(params.targetTrackId)) {
-    orderedIds.push(params.targetTrackId);
+  if (params.targetTrackId) {
+    orderedIdsSet.add(params.targetTrackId);
   }
+  const orderedIds = Array.from(orderedIdsSet);
 
   const playlistName = `Transición ${params.originCamelot}→${params.targetCamelot}`;
   const playlist = await PlaylistsAPI.create(playlistName, orderedIds, true);

@@ -19,26 +19,44 @@ required-features = ["native"]
 
 [features]
 default = ["native"]
-native = ["dep:tokio", "axum/tokio", "axum/http1"]
+native = [
+  "dep:tokio",
+  "dep:rmcp",
+  "dep:rtrb",
+  "dep:realfft",
+  "dep:rubato",
+  "dep:fundsp",
+  "axum/tokio",
+  "axum/http1",
+]
+audio-device = ["native", "dep:cpal"]
 cloudflare = ["dep:worker"]
 ts = ["dep:ts-rs"]
 
 [dependencies]
-axum = { version = "0.7", default-features = false, features = ["json", "query", "matched-path"] }
+axum = { workspace = true, features = ["json", "query", "matched-path"] }
 serde.workspace = true
 serde_json.workspace = true
 ts-rs = { workspace = true, optional = true }
 rustfft = "6.2"
 symphonia = { version = "0.5", default-features = false, features = ["pcm", "wav", "flac", "mp3", "ogg", "vorbis", "isomp4", "aac", "alac"] }
-http = "1.1"
+http.workspace = true
 tower-service = "0.3"
-bytes = "1.7"
 
-# Native VPS / Local Server runtime (Railway, Vultr, DigitalOcean, Hetzner, Oracle Free Tier, PC)
-tokio = { version = "1.40", features = ["rt-multi-thread", "macros", "net", "signal", "sync"], optional = true }
+# Native VPS / Local Server & Pro-DJ Real-Time DSP runtime
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync", "io-util", "time"], optional = true }
+rmcp = { workspace = true, features = ["server", "transport-io"], optional = true }
+rtrb = { workspace = true, optional = true }
+realfft = { workspace = true, optional = true }
+rubato = { workspace = true, optional = true }
+fundsp = { workspace = true, optional = true }
+cpal = { workspace = true, optional = true }
 
 # Cloudflare Workers Serverless Edge WASM runtime (`npx wrangler deploy`)
-worker = { version = "0.4", features = ["http", "axum"], optional = true }
+worker = { version = "0.8", features = ["http", "axum"], optional = true }
+
+[dev-dependencies]
+insta = { workspace = true }
 
 [package.metadata.wasm-pack.profile.release]
 wasm-opt = false

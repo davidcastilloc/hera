@@ -1,4 +1,3 @@
-import { convertFileSrc } from '@tauri-apps/api/core';
 import EventEmitter from 'eventemitter3';
 import debounce from 'lodash-es/debounce';
 
@@ -6,6 +5,7 @@ import type { Repeat, Track } from '../generated/typings';
 import type { QueueOrigin } from '../types/museeks';
 import ConfigBridge from './bridge-config';
 import { getCover } from './cover';
+import { NativeRustAudioTransport } from './native-audio-transport';
 import { logAndNotifyError } from './utils';
 import { shuffleTracks } from './utils-player';
 
@@ -52,11 +52,11 @@ export interface PlayerEvents {
 }
 
 /**
- * Enhanced Player class that manages both audio playback and queue state.
+ * Enhanced Player class that manages both native Rust audio playback and queue state.
  * Extends EventEmitter to notify React components of state changes.
  */
 class Player extends EventEmitter<PlayerEvents> {
-  private readonly audio: HTMLAudioElement;
+  private readonly transport: NativeRustAudioTransport;
 
   // Queue state
   private queue: Track[];
@@ -83,7 +83,11 @@ class Player extends EventEmitter<PlayerEvents> {
       ...options,
     };
 
-    this.audio = new Audio();
+    this.transport = new NativeRustAudioTransport({
+      playbackRate: mergedOptions.playbackRate,
+      volume: mergedOptions.volume,
+      muted: mergedOptions.muted,
+    });
     this.queue = [];
     this.oldQueue = [];
     this.queueCursor = null;
@@ -91,12 +95,7 @@ class Player extends EventEmitter<PlayerEvents> {
     this.repeat = mergedOptions.repeat;
     this.shuffle = mergedOptions.shuffle;
 
-    this.audio.defaultPlaybackRate = mergedOptions.playbackRate;
-    this.audio.playbackRate = mergedOptions.playbackRate;
-    this.audio.volume = mergedOptions.volume;
-    this.audio.muted = mergedOptions.muted;
-
-    this.setupAudioListeners();
+    this.setupTransportListeners();
     this.setupMediaSession();
 
     // Bind methods that are used as callbacks
@@ -124,41 +123,38 @@ class Player extends EventEmitter<PlayerEvents> {
   }
 
   /**
-   * Setup internal audio element event listeners
+   * Setup native Rust audio transport event listeners
    */
-  private setupAudioListeners() {
-    this.audio.addEventListener('play', () => {
+  private setupTransportListeners() {
+    this.transport.on('play', () => {
       this.emit('play');
       this.emitStateChange();
     });
 
-    this.audio.addEventListener('pause', () => {
+    this.transport.on('pause', () => {
       this.emit('pause');
       this.emitStateChange();
     });
 
-    this.audio.addEventListener('ended', async () => {
+    this.transport.on('ended', () => {
       this.emit('ended');
       // Auto-advance to next track
-      await this.next();
+      void this.next();
     });
 
-    this.audio.addEventListener('error', () => {
-      if (this.audio.error) {
-        this.emit('error', this.audio.error);
-      }
+    this.transport.on('error', (error) => {
+      this.emit('error', error);
     });
 
-    this.audio.addEventListener('timeupdate', () => {
-      this.emit('timeupdate', this.audio.currentTime);
+    this.transport.on('timeupdate', (currentTime) => {
+      this.emit('timeupdate', currentTime);
     });
 
-    this.audio.addEventListener('loadstart', () => {
+    this.transport.on('loadstart', () => {
       this.emit('loadstart');
     });
 
-    // Emit volume changes
-    this.audio.addEventListener('volumechange', () => {
+    this.transport.on('volumechange', () => {
       this.emitStateChange();
     });
   }
@@ -171,19 +167,16 @@ class Player extends EventEmitter<PlayerEvents> {
       return;
     }
 
-    // Update playback state when audio plays
-    this.audio.addEventListener('play', () => {
+    this.transport.on('play', () => {
       navigator.mediaSession.playbackState = 'playing';
     });
 
-    // Update playback state when audio pauses
-    this.audio.addEventListener('pause', () => {
+    this.transport.on('pause', () => {
       navigator.mediaSession.playbackState = 'paused';
     });
 
-    // Sync metadata when track loads
-    this.audio.addEventListener('loadstart', async () => {
-      await this.syncMediaSession();
+    this.transport.on('loadstart', () => {
+      void this.syncMediaSession();
     });
 
     // Setup action handlers
@@ -250,9 +243,9 @@ class Player extends EventEmitter<PlayerEvents> {
       queueOrigin: this.queueOrigin,
       repeat: this.repeat,
       shuffle: this.shuffle,
-      volume: this.audio.volume,
-      muted: this.audio.muted,
-      isPaused: this.audio.paused,
+      volume: this.transport.volume,
+      muted: this.transport.muted,
+      isPaused: this.transport.paused,
     };
 
     return this.state;
@@ -263,19 +256,19 @@ class Player extends EventEmitter<PlayerEvents> {
   // ============================================================================
 
   async play() {
-    if (!this.audio.src) {
-      throw new Error('Trying to play a track but no audio.src is defined');
+    if (!this.transport.hasTrack()) {
+      throw new Error('Trying to play a track but no track is loaded');
     }
 
-    await this.audio.play();
+    await this.transport.play();
   }
 
   pause() {
-    this.audio.pause();
+    this.transport.pause();
   }
 
   stop() {
-    this.audio.pause();
+    this.transport.pause();
 
     this.queue = [];
     this.queueCursor = null;
@@ -286,7 +279,7 @@ class Player extends EventEmitter<PlayerEvents> {
 
   async playPause() {
     try {
-      if (this.audio.paused && this.queue.length > 0) {
+      if (this.transport.paused && this.queue.length > 0) {
         await this.play();
       } else {
         this.pause();
@@ -340,7 +333,7 @@ class Player extends EventEmitter<PlayerEvents> {
     let newQueueCursor = this.queueCursor;
 
     // If track started less than 5 seconds ago, play the previous track
-    if (this.audio.currentTime < 5) {
+    if (this.transport.currentTime < 5) {
       newQueueCursor = this.queueCursor - 1;
     }
 
@@ -577,15 +570,7 @@ class Player extends EventEmitter<PlayerEvents> {
   // ============================================================================
 
   async setTrack(track: Track) {
-    // On Linux, use a local HTTP server for audio streaming because
-    // WebKitGTK's asset protocol doesn't support media streaming properly.
-    // See: https://github.com/tauri-apps/tauri/issues/3725
-    if (window.__MUSEEKS_STREAM_SERVER_URL != null) {
-      this.audio.src = `${window.__MUSEEKS_STREAM_SERVER_URL}/stream?track_id=${encodeURIComponent(track.id)}`;
-    } else {
-      this.audio.src = convertFileSrc(track.path);
-    }
-
+    await this.transport.loadTrack(track.path, track.duration);
     this.emit('trackChange', track);
     this.emitStateChange();
   }
@@ -605,15 +590,15 @@ class Player extends EventEmitter<PlayerEvents> {
   // ============================================================================
 
   setCurrentTime(time: number) {
-    this.audio.currentTime = time;
+    this.transport.seek(time);
   }
 
   getCurrentTime(): number {
-    return this.audio.currentTime;
+    return this.transport.currentTime;
   }
 
   setVolume(volume: number) {
-    this.audio.volume = volume;
+    this.transport.setVolume(volume);
     this.emitStateChange();
     this.saveVolumeDebounced(volume);
   }
@@ -626,46 +611,44 @@ class Player extends EventEmitter<PlayerEvents> {
   }, 500);
 
   getVolume(): number {
-    return this.audio.volume;
+    return this.transport.volume;
   }
 
   async toggleMute() {
-    this.audio.muted = !this.audio.muted;
+    const nextMuted = !this.transport.muted;
+    this.transport.setMuted(nextMuted);
     this.emitStateChange();
-    await ConfigBridge.set('audio_muted', this.audio.muted);
+    await ConfigBridge.set('audio_muted', nextMuted);
   }
 
   async unmute() {
-    this.audio.muted = false;
+    this.transport.setMuted(false);
     this.emitStateChange();
-    await ConfigBridge.set('audio_muted', this.audio.muted);
+    await ConfigBridge.set('audio_muted', false);
   }
 
   isMuted(): boolean {
-    return this.audio.muted;
+    return this.transport.muted;
   }
 
   isPaused(): boolean {
-    return this.audio.paused;
+    return this.transport.paused;
   }
 
   async setPlaybackRate(rate: number) {
-    // Validate range
     if (!Number.isNaN(rate) && rate >= 0.5 && rate <= 5) {
-      this.audio.playbackRate = rate;
-      this.audio.defaultPlaybackRate = rate;
+      this.transport.setPlaybackRate(rate);
       this.emitStateChange();
       await ConfigBridge.set('audio_playback_rate', rate);
     } else {
-      this.audio.playbackRate = 1.0;
-      this.audio.defaultPlaybackRate = 1.0;
+      this.transport.setPlaybackRate(1.0);
       this.emitStateChange();
       await ConfigBridge.set('audio_playback_rate', null);
     }
   }
 
   getPlaybackRate(): number {
-    return this.audio.playbackRate;
+    return this.transport.playbackRate;
   }
 }
 

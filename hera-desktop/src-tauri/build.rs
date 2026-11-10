@@ -62,6 +62,13 @@ fn main() {
                     "set_mini_overlay_mode",
                     "push_virtualdj_live_crate",
                     "read_virtualdj_now_playing",
+                    "native_audio_load_track",
+                    "native_audio_play",
+                    "native_audio_pause",
+                    "native_audio_seek",
+                    "native_audio_set_volume",
+                    "native_audio_set_playback_rate",
+                    "native_audio_get_state",
                 ]),
             )
             .plugin(

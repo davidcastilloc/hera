@@ -20,6 +20,8 @@ export default function TransitionSuggestionsSection({
   onToggleSuggestions,
   onAcquireCandidate,
 }: TransitionSuggestionsSectionProps) {
+  const addedFingerprintSet = new Set(addedFingerprints);
+
   return (
     <section {...stylex.props(styles.suggestionsSection)}>
       <button
@@ -39,7 +41,7 @@ export default function TransitionSuggestionsSection({
         <div {...stylex.props(styles.suggestionsList)}>
           {swarmCatalog.slice(0, 4).map((item, idx) => {
             const isBusy = busyAction === item.cas_fingerprint;
-            const isAdded = addedFingerprints.includes(item.cas_fingerprint);
+            const isAdded = addedFingerprintSet.has(item.cas_fingerprint);
             return (
               <div
                 key={item.cas_fingerprint}
@@ -98,6 +100,7 @@ const styles = stylex.create({
     color: '#edeff3',
     fontSize: '13px',
     fontWeight: 500,
+    fontVariantNumeric: 'tabular-nums',
     cursor: 'pointer',
   },
   suggestionsList: {

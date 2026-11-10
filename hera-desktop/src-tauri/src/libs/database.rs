@@ -60,10 +60,7 @@ impl DB {
      * Get only the file paths of all tracks in the database (cheaper than get_all_tracks)
      */
     pub async fn get_all_track_paths(&mut self) -> AnyResult<Vec<String>> {
-        let paths = sqlx::query_scalar("SELECT path FROM tracks")
-            .fetch_all(&mut self.connection)
-            .await?;
-        Ok(paths)
+        super::db_offline_queries::fetch_all_track_paths(&mut self.connection).await
     }
 
     /**
@@ -322,12 +319,7 @@ impl DB {
      * Returns true if any tracks are flagged as compilations.
      */
     pub async fn has_compilations(&mut self) -> AnyResult<bool> {
-        let result: bool =
-            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM tracks WHERE is_compilation = 1)")
-                .fetch_one(&mut self.connection)
-                .await?;
-
-        Ok(result)
+        super::db_offline_queries::has_compilation_tracks(&mut self.connection).await
     }
 
     /**
@@ -470,11 +462,13 @@ impl DB {
         id: &String,
         tracks: Vec<String>,
     ) -> AnyResult<Playlist> {
-        sqlx::query("UPDATE playlists SET tracks = ? WHERE id = ?")
-            .bind(json!(&tracks))
-            .bind(id)
-            .execute(&mut self.connection)
-            .await?;
+        let tracks_json = json!(&tracks).to_string();
+        super::db_offline_queries::update_playlist_tracks_raw(
+            &mut self.connection,
+            id,
+            &tracks_json,
+        )
+        .await?;
 
         let playlist = sqlx::query_as::<_, Playlist>("SELECT * FROM playlists WHERE id = ?")
             .bind(id)
@@ -486,11 +480,7 @@ impl DB {
 
     /** Update a playlist name by ID */
     pub async fn rename_playlist(&mut self, id: &String, name: String) -> AnyResult<Playlist> {
-        sqlx::query("UPDATE playlists SET name = ? WHERE id = ?")
-            .bind(&name)
-            .bind(id)
-            .execute(&mut self.connection)
-            .await?;
+        super::db_offline_queries::rename_playlist_raw(&mut self.connection, id, &name).await?;
 
         let playlist = sqlx::query_as::<_, Playlist>("SELECT * FROM playlists WHERE id = ?")
             .bind(id)
@@ -502,12 +492,7 @@ impl DB {
 
     /** Delete a playlist by ID */
     pub async fn delete_playlist(&mut self, id: &String) -> AnyResult<()> {
-        sqlx::query("DELETE FROM playlists WHERE id = ?")
-            .bind(id)
-            .execute(&mut self.connection)
-            .await?;
-
-        Ok(())
+        super::db_offline_queries::delete_playlist_by_id(&mut self.connection, id).await
     }
 
     /** List all persisted agent chat sessions ordered by most recently updated */
@@ -637,15 +622,7 @@ impl DB {
 
     /** Delete an agent session (cascades to agent_messages when foreign keys are enabled, plus explicit cleanup) */
     pub async fn delete_agent_session(&mut self, id: &str) -> AnyResult<()> {
-        sqlx::query("DELETE FROM agent_messages WHERE session_id = ?")
-            .bind(id)
-            .execute(&mut self.connection)
-            .await?;
-        sqlx::query("DELETE FROM agent_sessions WHERE id = ?")
-            .bind(id)
-            .execute(&mut self.connection)
-            .await?;
-        Ok(())
+        super::db_offline_queries::delete_agent_session_and_messages(&mut self.connection, id).await
     }
 
     /** Fetch all messages for a given agent session in chronological order */
@@ -695,11 +672,12 @@ impl DB {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as i64)
             .unwrap_or(msg.created_at);
-        sqlx::query("UPDATE agent_sessions SET updated_at = MAX(updated_at + 1, ?) WHERE id = ?")
-            .bind(now_ms)
-            .bind(&msg.session_id)
-            .execute(&mut self.connection)
-            .await?;
+        super::db_offline_queries::touch_agent_session_updated_at(
+            &mut self.connection,
+            &msg.session_id,
+            now_ms,
+        )
+        .await?;
 
         Ok(())
     }

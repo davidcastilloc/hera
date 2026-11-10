@@ -438,16 +438,7 @@ async fn reset(db_state: State<'_, DBState>) -> AnyResult<()> {
     info!("Resetting DB...");
 
     let mut db = db_state.get_lock().await;
-
-    sqlx::query("DELETE FROM tracks;")
-        .execute(&mut db.connection)
-        .await?;
-    sqlx::query("DELETE FROM playlists;")
-        .execute(&mut db.connection)
-        .await?;
-    sqlx::query("VACUUM;").execute(&mut db.connection).await?;
-
-    Ok(())
+    crate::libs::db_offline_queries::reset_tracks_and_playlists(&mut db.connection).await
 }
 
 /**

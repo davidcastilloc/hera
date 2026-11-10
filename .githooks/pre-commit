@@ -1,22 +1,29 @@
 #!/usr/bin/env sh
-# Hook pre-commit de Hera: Formato, Linter y Tests antes de hacer commit
+# Hook pre-commit de HERA: Verificación rápida Pure-Rust + Frontend antes de hacer commit
+set -eu
+
 echo "[*] Ejecutando verificaciones pre-commit de HERA..."
 
-# 1. Ruff linter y format check
-if command -v uv >/dev/null 2>&1; then
-    echo "[+] Verificando formato y linter con Ruff..."
-    uv run ruff check . || {
-        echo "[!] Error en Ruff linter. Corrige los problemas antes de commitear."
-        exit 1
-    }
-
-    echo "[+] Ejecutando suite de tests pytest..."
-    uv run --no-sync pytest || {
-        echo "[!] Fallaron los tests unitarios. El commit fue cancelado para proteger la rama."
+# 1. Verificación de compilación y tipos en el workspace Rust
+if command -v cargo >/dev/null 2>&1; then
+    echo "[+] Verificando compilación Rust (cargo check --workspace)..."
+    cargo check --workspace || {
+        echo "[!] Error en cargo check --workspace. Corrige los problemas antes de commitear."
         exit 1
     }
 else
-    echo "[!] 'uv' no encontrado en PATH. Omitiendo tests automáticos."
+    echo "[!] 'cargo' no encontrado en PATH. Omitiendo verificación Rust."
+fi
+
+# 2. Verificación estática del frontend (hera-desktop con Bun + Vite+)
+if command -v bun >/dev/null 2>&1; then
+    echo "[+] Verificando frontend en hera-desktop (bun run check)..."
+    (cd hera-desktop && bun run check) || {
+        echo "[!] Error en bun run check (hera-desktop). Corrige los problemas antes de commitear."
+        exit 1
+    }
+else
+    echo "[!] 'bun' no encontrado en PATH. Omitiendo verificación frontend."
 fi
 
 echo "[OK] Todas las verificaciones pre-commit pasaron exitosamente."

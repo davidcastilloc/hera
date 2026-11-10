@@ -22,6 +22,42 @@ import {
   matchLocalLibraryTrack,
 } from './transition-actions';
 
+async function acquireSwarmCandidateStepSafe(
+  item: SwarmCatalogItem,
+  invalidate: () => Promise<unknown>,
+): Promise<HarmonicBridgeStep | null> {
+  try {
+    return await acquireSwarmCandidateStep(item, invalidate);
+  } catch {
+    return null;
+  }
+}
+
+async function createPlaylistFromBridgeStepsSafe(
+  params: Parameters<typeof createPlaylistFromBridgeSteps>[0],
+): Promise<{
+  ok: boolean;
+  playlist: Awaited<ReturnType<typeof createPlaylistFromBridgeSteps>>;
+}> {
+  try {
+    const playlist = await createPlaylistFromBridgeSteps(params);
+    return { ok: true, playlist };
+  } catch {
+    return { ok: false, playlist: null };
+  }
+}
+
+async function exportBridgeToVirtualDjCrateSafe(
+  params: Parameters<typeof exportBridgeToVirtualDjCrate>[0],
+): Promise<boolean> {
+  try {
+    await exportBridgeToVirtualDjCrate(params);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function useTransitionStudio() {
   const tracks = useLibraryStore((state) => state.tracks);
   const invalidate = useInvalidate();
@@ -177,7 +213,7 @@ export function useTransitionStudio() {
     [activeSteps, bridgeResult],
   );
 
-  const findMatchingLocalTrack = useCallback(matchLocalLibraryTrack, []);
+  const findMatchingLocalTrack = matchLocalLibraryTrack;
 
   const handleAuditionStep = async (
     auditionId: string,
@@ -215,60 +251,57 @@ export function useTransitionStudio() {
   const handleAcquireAndInsertCandidate = async (item: SwarmCatalogItem) => {
     if (busyAction) return;
     setBusyAction(item.cas_fingerprint);
-    try {
-      const updatedStep = await acquireSwarmCandidateStep(item, invalidate);
+    const updatedStep = await acquireSwarmCandidateStepSafe(item, invalidate);
+    if (updatedStep) {
       setCustomSteps([updatedStep, ...activeSteps.slice(1)]);
       setAddedFingerprints((prev) => [...prev, item.cas_fingerprint]);
-    } finally {
-      setBusyAction(null);
     }
+    setBusyAction(null);
   };
 
   const handleApproveAndCreatePlaylist = async () => {
     if (busyAction) return;
     setBusyAction('approve_set');
-    try {
-      const playlist = await createPlaylistFromBridgeSteps({
-        activeSteps,
-        originTrackId,
-        targetTrackId,
-        originCamelot,
-        targetCamelot,
-        invalidate,
-      });
+    const result = await createPlaylistFromBridgeStepsSafe({
+      activeSteps,
+      originTrackId,
+      targetTrackId,
+      originCamelot,
+      targetCamelot,
+      invalidate,
+    });
+    if (result.ok) {
       flashInlineBadge('saved');
-      if (playlist) {
+      if (result.playlist) {
         void navigate({
           to: '/playlists/$playlistID',
-          params: { playlistID: playlist.id },
+          params: { playlistID: result.playlist.id },
         });
       }
-    } finally {
-      setBusyAction(null);
     }
+    setBusyAction(null);
   };
 
   const handleExportBridgeVirtualDj = async () => {
     if (busyAction) return;
     setBusyAction('export_vdj');
-    try {
-      await exportBridgeToVirtualDjCrate({
-        originTrackId,
-        originArtist,
-        originTitle,
-        originBpm,
-        originCamelot,
-        targetTrackId,
-        targetArtist,
-        targetTitle,
-        targetBpm,
-        targetCamelot,
-        activeSteps,
-      });
+    const exported = await exportBridgeToVirtualDjCrateSafe({
+      originTrackId,
+      originArtist,
+      originTitle,
+      originBpm,
+      originCamelot,
+      targetTrackId,
+      targetArtist,
+      targetTitle,
+      targetBpm,
+      targetCamelot,
+      activeSteps,
+    });
+    if (exported) {
       flashInlineBadge('exported');
-    } finally {
-      setBusyAction(null);
     }
+    setBusyAction(null);
   };
 
   return {

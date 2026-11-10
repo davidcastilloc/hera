@@ -1,8 +1,27 @@
 import type * as T from '../generated/typings';
-import type {
-  DownloadP2PTrackParams,
-  ResolveHarmonicBridgeParams,
-} from './bridge-hera';
+
+export type ResolveHarmonicBridgeParams = {
+  originTitle: string;
+  originArtist: string;
+  originBpm: number;
+  originCamelot: string;
+  targetTitle: string;
+  targetArtist: string;
+  targetBpm: number;
+  targetCamelot: string;
+};
+
+export type DownloadP2PTrackParams = {
+  trackId: string;
+  artist: string;
+  title: string;
+  bpm: number;
+  camelot: string;
+  heraSeal: string;
+  peerEndpoint?: string;
+  turnRelayEndpoint?: string;
+  chunkCount?: number;
+};
 
 export const EMPTY_SET_SPINE = {
   orderedTrackIds: [] as Array<string>,
@@ -276,62 +295,5 @@ export function prepareSetSpinePayload(
     },
     anchorCount: anchors.length,
     fallbackIds,
-  };
-}
-
-export function buildOfflineEdgeRadarFallback(): T.CloudflareEdgeCapabilities {
-  const primSpec = [
-    'cf_kv_forensic_cache|Cloudflare KV Global Forensic Dedup Cache|Evita recalcular FFT/Symphonia en tu laptop si otro DJ ya verificó el mismo CAS (< 2 ms)|100,000 lecturas/día gratis + +5 MB Pioneer Bounty',
-    'cf_d1_dna_sync|Cloudflare D1 Edge SQLite (DJ Style DNA + Set Spines)|Sincroniza tu ADN musical (~250 tokens) y anclas de Set Spine entre cabinas a $0.00|5 GB (~14M perfiles DJ) + 5M lecturas/día gratis',
-    'cf_vectorize_simhash|Cloudflare Vectorize + u64 SimHash POPCNT Index|Empareja textura acústica + Rueda Camelot + curva BPM en todo el enjambre global|30M dimensiones consultadas/mes gratis',
-    'cf_r2_zero_egress_swarm|Cloudflare R2 Zero-Egress CAS + P2C 60s Signed Tickets|Almacenamiento de shards ciegos de 4 MB con $0.00 de egress y créditos 1:1.5 Turbo|10 GB R2/nodo (9 GB safe cap) · $0.00 egress',
-    'cf_workers_ai_gateway|Cloudflare Workers AI + AI Gateway Cache|Copiloto ReAct gratuito (Llama-3.1-8B / 3.2-3B) con caché de prompts repetidos|10,000 Neurons/día (~1,400 turnos/día a $0.00)',
-    'cf_workers_wasm_moq_pubsub|Cloudflare Workers WASM + MoQ Harmonic Pub/Sub Relay|Enrutador P2C de baja latencia y suscripción semántica hera://swarm/camelot/<key>|100,000 req/día por Edge Guardian (85,000 safe cap)',
-  ];
-  const moqSpec = [
-    'moq-hera-seed-01|hera://swarm/camelot/8A/bpm/119-125|cas_8a_122_ritual_del_sol|hera-seed-001|DaviDJ|Ritual Del Sol (DaviDJ Original Club Master)|122|8A|1094827165|e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-    'moq-hera-seed-02|hera://swarm/camelot/9A/bpm/123-129|cas_9a_126_fuego_de_medianoche|hera-seed-002|DJFoo|Fuego De Medianoche (Guaracha & Tribal Club Edit)|126|9A|2849104721|9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08',
-  ];
-  return {
-    control_plane:
-      'HERA Cloud Edge Optimizer (Cloudflare Workers WASM + KV + D1 + R2 + Vectorize + Workers AI)',
-    motto: 'La mejor decisión es por el bien del enjambre siempre',
-    active_swarm_nodes: 3,
-    kv_forensic_cache_entries: 42,
-    estimated_laptop_cpu_seconds_saved: 211.6,
-    d1_free_storage_gb: 5.0,
-    workers_ai_free_neurons_per_day: 10000,
-    r2_egress_fee_usd_per_gb: 0.0,
-    pioneer_forensic_bounty_mb: 5.0,
-    turbo_credit_multiplier: 1.5,
-    primitives: primSpec.map((row) => {
-      const p = row.split('|');
-      return {
-        id: p[0],
-        name: p[1],
-        role_in_hera: p[2],
-        free_tier_allowance: p[3],
-        unit_cost_usd: 0.0,
-        active: true,
-      };
-    }),
-    recent_moq_harmonic_events: moqSpec.map((row) => {
-      const m = row.split('|');
-      return {
-        event_id: m[0],
-        topic_uri: m[1],
-        cas_fingerprint: m[2],
-        track_id: m[3],
-        artist: m[4],
-        title: m[5],
-        bpm: Number(m[6]),
-        camelot_key: m[7],
-        style_simhash_u64: Number(m[8]),
-        merkle_root_sha256: m[9],
-        opaque_blob_key: `shard-blobs/${m[3]}.hbin`,
-        hot_cues_count: 4,
-        prefetch_recommended: true,
-      };
-    }),
   };
 }

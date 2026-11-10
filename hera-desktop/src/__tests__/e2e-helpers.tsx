@@ -80,7 +80,7 @@ export function getMainNavigation() {
 }
 
 // Get the track list element
-export function getTrackList() {
+function getTrackList() {
   return page.getByRole('listbox', { name: 'Track list' });
 }
 

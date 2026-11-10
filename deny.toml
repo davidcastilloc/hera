@@ -1,0 +1,11 @@
+# HERA Cargo Workspace Dependency Governance (`cargo-deny`)
+# Enforces single-version invariants for core HTTP/router crates across `hera-rs` and `hera-desktop`.
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+highlight = "all"
+deny = [
+    { crate = "axum", deny-multiple-versions = true, reason = "Workspace must resolve to a single canonical axum 0.8 version" },
+    { crate = "axum-core", deny-multiple-versions = true, reason = "Workspace must resolve to a single canonical axum-core 0.5 version" },
+]

@@ -68,5 +68,21 @@ fn test_tauri_v2_acl_triad_parity() {
         "CARGO_MANIFEST_DIR"
     )))
     .unwrap();
-    assert!(report.commands_checked >= 45);
+    assert_eq!(report.commands_checked, 57);
+}
+
+#[test]
+fn test_native_audio_state_snapshot_and_telemetry_mapping() {
+    use hera_node_rs::audio_engine::{AudioBackend, DeckId, HeadlessClockAudioBackend};
+
+    let backend = HeadlessClockAudioBackend::new_deterministic(48_000);
+    let snap = backend.snapshot();
+    let mapped = audio_transport::map_player_snapshot(snap, backend.poll_latest_telemetry());
+    assert_eq!(mapped.sample_rate, 48_000);
+    assert!(!mapped.track_loaded);
+    assert_eq!(mapped.hot_cue_frames.len(), 4);
+
+    let after_vol = backend.set_master_volume(0.75);
+    assert!((after_vol.volume - 0.75).abs() < 1e-6);
+    let _ = DeckId::DeckA;
 }

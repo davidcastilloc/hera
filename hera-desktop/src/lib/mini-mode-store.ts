@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { type MiniOverlayLayoutMode, setMiniOverlayMode } from './bridge-hera';
 
-export type MiniOverlayTab = 'siguientes' | 'puente';
+type MiniOverlayTab = 'siguientes' | 'puente';
 
 type MiniModeState = {
   layoutMode: MiniOverlayLayoutMode;

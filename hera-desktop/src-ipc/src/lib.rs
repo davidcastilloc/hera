@@ -9,6 +9,7 @@ pub mod agent_catalog_schemas;
 pub mod agent_catalog_summary;
 pub mod agent_types;
 pub mod agy_stream;
+pub mod audio_types;
 pub mod dj_types;
 pub mod typegen;
 pub mod workflow_guard;

@@ -5,11 +5,6 @@ import * as F from './hera-offline-fallbacks';
 
 export type * from '../generated/typings';
 
-export type HeraStyleDnaResponse = T.DjStyleDnaProfile;
-export type HeraExportCrateResponse = T.ExportCrateResponse;
-export type HeraToolExecutionStep = T.AgentToolExecutionStep;
-export type HeraProbeAiBackendResponse = T.ProbeAiBackendResponse;
-export type HeraCloudflareFreeAiResponse = T.CloudflareFreeAiTurnResponse;
 export type MiniOverlayLayoutMode = T.SetMiniOverlayModeResponse['mode'];
 export type DjExportFormat =
   | 'virtualdj'
@@ -31,7 +26,7 @@ export const HERA_ROBIN_HOOD_SUPPORT = {
   repoUrl: 'https://github.com/davidcastilloc/hera',
 } as const;
 
-export type HeraAiBackendParams = {
+type HeraAiBackendParams = {
   backend?: string;
   baseUrl?: string;
   model?: string;
@@ -39,30 +34,7 @@ export type HeraAiBackendParams = {
   commanderMode?: CommanderAuthorityMode;
 };
 
-export type ResolveHarmonicBridgeParams = {
-  originTitle: string;
-  originArtist: string;
-  originBpm: number;
-  originCamelot: string;
-  targetTitle: string;
-  targetArtist: string;
-  targetBpm: number;
-  targetCamelot: string;
-};
-
-export type DownloadP2PTrackParams = {
-  trackId: string;
-  artist: string;
-  title: string;
-  bpm: number;
-  camelot: string;
-  heraSeal: string;
-  peerEndpoint?: string;
-  turnRelayEndpoint?: string;
-  chunkCount?: number;
-};
-
-export type HeraSetSpineSummary = {
+type HeraSetSpineSummary = {
   orderedTrackIds: Array<string>;
   averageTransitionSynergy: number;
   pinnedCount: number;
@@ -104,7 +76,7 @@ function toExportItem(
 export const getFourHotCuesForTrack = F.buildFourFallbackHotCues;
 
 export function downloadP2PTrackToLibrary(
-  p: DownloadP2PTrackParams,
+  p: F.DownloadP2PTrackParams,
 ): Promise<T.DownloadP2PTrackResponse> {
   const request = {
     track_id: p.trackId,
@@ -127,7 +99,7 @@ export function computeDjStyleDna(
   dj = 'DaviDJ',
   sw = 'VirtualDJ',
   rules = 'Priorizar FLAC/320k, flujo armónico Camelot y al menos 1 producción propia',
-): Promise<HeraStyleDnaResponse> {
+): Promise<T.DjStyleDnaProfile> {
   const request = {
     tracks: tracks.map((t) => toExportItem(t)),
     dj_handle: dj,
@@ -143,7 +115,7 @@ export function exportCrateToDjSoftware(
   crate_name: string,
   tracks: Array<T.Track>,
   formats: Array<DjExportFormat>,
-): Promise<HeraExportCrateResponse> {
+): Promise<T.ExportCrateResponse> {
   const request = {
     crate_name,
     brief: 'Hera Active Set Export',
@@ -157,27 +129,11 @@ export function exportCrateToDjSoftware(
   }));
 }
 
-export function probeLocalAiBackend(
-  baseUrl?: string,
-): Promise<HeraProbeAiBackendResponse> {
-  const fb = () => ({
-    reachable: false,
-    backend: 'lmstudio',
-    base_url: baseUrl || 'http://localhost:1234/v1',
-    models: [],
-  });
-  return invokeDj(
-    'probe_ai_backend',
-    { baseUrl: baseUrl || null, apiKey: null },
-    fb,
-  );
-}
-
 export function chatWithCloudflareFreeAi(
   msg: string,
   dj = 'DaviDJ',
   o?: HeraAiBackendParams,
-): Promise<HeraCloudflareFreeAiResponse> {
+): Promise<T.CloudflareFreeAiTurnResponse> {
   const request = {
     dj_handle: dj,
     message: msg,
@@ -206,7 +162,7 @@ export function scanAiConnectivityOnboarding(
 }
 
 export function resolveHarmonicBridge(
-  p: ResolveHarmonicBridgeParams,
+  p: F.ResolveHarmonicBridgeParams,
 ): Promise<T.ResolveHarmonicBridgeResponse> {
   const request = {
     origin_title: p.originTitle,
@@ -257,14 +213,6 @@ export async function buildSetSpineForLibrary(
     pinnedCount: anchorCount,
     ...titles,
   };
-}
-
-export function getCloudflareEdgeRadar(): Promise<T.CloudflareEdgeCapabilities> {
-  return invokeDj(
-    'get_cloudflare_edge_radar',
-    undefined,
-    F.buildOfflineEdgeRadarFallback,
-  );
 }
 
 export function setMiniOverlayMode(

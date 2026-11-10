@@ -70,5 +70,3 @@ const styles = stylex.create({
     borderColor: 'rgba(239, 68, 68, 0.5)',
   },
 });
-
-export type ToastType = 'success' | 'info' | 'warning' | 'danger';

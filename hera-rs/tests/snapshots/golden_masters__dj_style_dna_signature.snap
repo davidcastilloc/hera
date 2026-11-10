@@ -1,0 +1,44 @@
+---
+source: hera-rs/tests/golden_masters.rs
+expression: normalized
+---
+{
+  "dj_handle": "DaviDJ",
+  "dominant_bpm_zone": "club_afro_guaracha_122_132",
+  "dominant_camelot_keys": [
+    "8A",
+    "10A",
+    "7A",
+    "8B",
+    "9A"
+  ],
+  "golden_rules": "Priorizar vocales limpias y puentes armónicos Camelot",
+  "media_mix_profile": {
+    "audio_pct": 66.7,
+    "own_productions_pct": 16.7,
+    "video_pct": 16.7
+  },
+  "minor_key_ratio_pct": 83.3,
+  "overall_average_bpm": 125.8,
+  "preferred_dj_software": "VirtualDJ",
+  "prompt_block": "[MEMORIA ACTIVA DEL DJ BRAIN — PERFIL 'DaviDJ']\n- Tracks locales: 6\n- Zona BPM dominante: club_afro_guaracha_122_132 (Promedio: 125.8 BPM)\n- Llaves Camelot dominantes: [\"8A\", \"10A\", \"7A\", \"8B\", \"9A\"]\n- Software principal de cabina: VirtualDJ\n- Reglas de oro: Priorizar vocales limpias y puentes armónicos Camelot",
+  "top_anchor_artists": [
+    {
+      "artist": "Hugel",
+      "track_count": 2
+    },
+    {
+      "artist": "Keinemusik",
+      "track_count": 2
+    },
+    {
+      "artist": "DaviDJ",
+      "track_count": 1
+    },
+    {
+      "artist": "Gordo",
+      "track_count": 1
+    }
+  ],
+  "total_tracks": 6
+}

@@ -11,14 +11,6 @@ export interface Theme {
 }
 
 /**
- * APIs Helpers
- */
-export type API<
-  // oxlint-disable-next-line typescript/no-redundant-type-constituents - this is alright
-  T extends { api: Record<string, (...args: any[]) => Promise<any> | any> },
-> = T;
-
-/**
  * Misc Helpers
  */
 type StringableKey<T> = T extends readonly unknown[]
