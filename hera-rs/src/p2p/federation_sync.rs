@@ -249,19 +249,30 @@ impl P2PMeshState {
         let body_bytes =
             serde_json::to_vec(&payload).map_err(|e| format!("JSON serialize error: {e}"))?;
 
-        let clean = remote_url
-            .trim()
-            .trim_start_matches("http://")
-            .trim_start_matches("https://");
+        let trimmed_remote = remote_url.trim();
+        if trimmed_remote.starts_with("https://") {
+            return Err("HTTPS not supported over plaintext TcpStream. Use HTTP federation endpoint.".to_string());
+        }
+        let clean = trimmed_remote.trim_start_matches("http://");
         let host_port = clean.split('/').next().unwrap_or("127.0.0.1:8080");
-        let addr = if host_port.contains(':') {
+        let addr_str = if host_port.contains(':') {
             host_port.to_string()
         } else {
             format!("{host_port}:80")
         };
 
-        let mut stream = TcpStream::connect(&addr)
-            .map_err(|e| format!("Failed to connect to federation hub `{addr}`: {e}"))?;
+        use std::net::ToSocketAddrs;
+        let socket_addr = addr_str
+            .to_socket_addrs()
+            .map_err(|e| format!("DNS resolution failed for `{addr_str}`: {e}"))?
+            .next()
+            .ok_or_else(|| format!("No socket addresses found for `{addr_str}`"))?;
+
+        let timeout_5s = std::time::Duration::from_secs(5);
+        let mut stream = TcpStream::connect_timeout(&socket_addr, timeout_5s)
+            .map_err(|e| format!("Failed to connect to federation hub `{addr_str}`: {e}"))?;
+        let _ = stream.set_read_timeout(Some(timeout_5s));
+        let _ = stream.set_write_timeout(Some(timeout_5s));
         let req_str = format!(
             "POST /api/v1/p2p/federate-sync HTTP/1.1\r\nHost: {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
             host_port,

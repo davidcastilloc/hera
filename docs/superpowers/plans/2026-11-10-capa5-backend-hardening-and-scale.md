@@ -183,19 +183,19 @@ git commit -m "fix(desktop): register SqlitePool DBState synchronously in setup 
   - `pub fn set_clock_override_unix(&self, unix_secs: Option<u64>)`
   - `pub fn current_unix_secs(&self) -> u64` (`SystemTime::now()` on `not(target_arch = "wasm32")`, `worker::Date::now().as_millis() / 1000` on `wasm32`)
 
-- [ ] **Step 1: Write failing tests for real ticket TTL expiration without `?now_unix=`, short `audio_sha256` slice safety, and `> 2 MiB` JSON rejection**
+- [x] **Step 1: Write failing tests for real ticket TTL expiration without `?now_unix=`, short `audio_sha256` slice safety, and `> 2 MiB` JSON rejection**
 
 Add tests in `hera-rs/src/lib.rs` verifying:
 1. A ticket issued at `t = 2_000_000` (`state.set_clock_override_unix(Some(2_000_000))`) fails with `403 FORBIDDEN` when `state.set_clock_override_unix(Some(2_000_061))` on `GET /api/v1/swarm/shard/{blob_id}` (with NO `?now_unix=` query parameter).
 2. `issue_route_ticket` with `audio_sha256 = "abc"` does not panic.
 3. `ensure_hera_updated` MCP tool returns local version status without spawning `git pull --rebase`.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `cargo test -p hera-node-rs ticket_expires_via_server_clock`
 Expected: FAIL (`set_clock_override_unix` missing; `?now_unix=` currently required to expire tickets).
 
-- [ ] **Step 3: Implement injectable clock, runtime secrets, loopback-default bind, `curl --config -`, read-only `ensure_hera_updated`, and `spawn_blocking` DSP wrappers**
+- [x] **Step 3: Implement injectable clock, runtime secrets, loopback-default bind, `curl --config -`, read-only `ensure_hera_updated`, and `spawn_blocking` DSP wrappers**
 
 1. Add `swarm_secrets`, `node_api_token`, and `clock_override_unix` to `P2PMeshState` (`state_init.rs`, keeping `<= 349` LOC); replace `issued_at_unix = 1_762_600_000` (`routing_tickets.rs:115`) and `ticket.issued_at_unix + 5` (`merkle_delivery.rs:45`) with `self.current_unix_secs()`, replace `&audio_sha256[..10]` (`routing_tickets.rs:120`) with `audio_sha256.chars().take(10).collect::<String>()`, remove `now_unix` from `ShardDeliveryQuery`, and update `hera-rs/src/lib.rs:1159` to call `state.set_clock_override_unix(...)`.
 2. In `dj_brain/http_client.rs` and `cloudflare_edge.rs`, pass URL and `Authorization: Bearer ...` via `curl --config -` over `Stdio::piped()` stdin (`0` secrets in `argv`), align `sync_d1_dj_dna` (`cloudflare_edge.rs:436`) column name to `updated_at_unix` (matching D1 migration `0003_d1_dj_style_dna.sql`), cache `(P2PMeshState, axum::Router)` inside `OnceLock` in `hera-rs/src/lib.rs:25-49` so warm Worker requests do not rebuild the 45-route router, and add `5s` connect/read timeouts + HTTPS scheme rejection on plaintext `TcpStream` in `p2p/federation_sync.rs`.
@@ -203,12 +203,12 @@ Expected: FAIL (`set_clock_override_unix` missing; `?now_unix=` currently requir
 4. In `router.rs`, set `DefaultBodyLimit::max(2 * 1024 * 1024)` globally, scope `64 MiB` (`native`) / `16 MiB` (`wasm32`) strictly to `/api/v1/audio/analyze-file`, gate `scan-local-dir` / `p2p/download` / `federate-sync` with `verify_node_api_token` when configured, and wrap CPU-heavy `analyze_pcm_handler`, `analyze_file_handler`, and `build_crate_handler` in `tokio::task::spawn_blocking` (`#[cfg(feature = "native")]`).
 5. In `main.rs`, change default bind from `0.0.0.0:8080` to `127.0.0.1:8080` (overridable via `HERA_BIND_ADDR` / `--bind`) and add `.with_graceful_shutdown(tokio::signal::ctrl_c())`.
 
-- [ ] **Step 4: Run native, WASM, Golden Master & Ratchet suites**
+- [x] **Step 4: Run native, WASM, Golden Master & Ratchet suites**
 
 Run: `cargo check -p hera-node-rs && cargo check -p hera-node-rs --no-default-features --features cloudflare && cargo test -p hera-node-rs`
 Expected: `42+` tests pass (`0` Golden Master diffs, `0` Ratchet violations).
 
-- [ ] **Step 5: Mark `[x]` and commit**
+- [x] **Step 5: Mark `[x]` and commit**
 
 ```bash
 git add hera-rs/ docs/superpowers/plans/

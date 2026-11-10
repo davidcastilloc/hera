@@ -78,6 +78,22 @@ pub const SWARM_CREDIT_MULTIPLIER: f32 = 1.5;
 pub(crate) const SWARM_TICKET_MASTER_SECRET: &str = "hera-swarm-master-ticket-hmac-key-2026-v1";
 pub(crate) const SWARM_SHARD_BLINDING_SECRET: &str = "hera-swarm-opaque-shard-blinding-key-2026-v1";
 
+/// Cryptographic secrets for Swarm tickets and catalog blinding.
+#[derive(Debug, Clone)]
+pub struct SwarmCryptoSecrets {
+    pub ticket_hmac_secret: String,
+    pub shard_blinding_secret: String,
+}
+
+impl Default for SwarmCryptoSecrets {
+    fn default() -> Self {
+        Self {
+            ticket_hmac_secret: SWARM_TICKET_MASTER_SECRET.to_string(),
+            shard_blinding_secret: SWARM_SHARD_BLINDING_SECRET.to_string(),
+        }
+    }
+}
+
 /// Zero-Tech DJ profile registered on the Hera Node (connects via Google Drive, Dropbox, R2 with Quota, or Local Disk P2P).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DjProfile {

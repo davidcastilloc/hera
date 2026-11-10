@@ -12,29 +12,14 @@ pub(super) fn dispatch_core_tool(
 ) -> Option<Result<Value, String>> {
     match name {
         "ensure_hera_updated" => {
-            let pull_remote = args
-                .get("pull_remote")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true);
-            #[allow(unused_mut)]
-            let mut git_pulled = false;
-            #[cfg(not(target_arch = "wasm32"))]
-            if pull_remote {
-                if let Ok(output) = std::process::Command::new("git")
-                    .args(["pull", "--rebase", "origin", "main", "--quiet"])
-                    .output()
-                {
-                    git_pulled = output.status.success();
-                }
-            }
-            let _ = pull_remote;
+            let _ = args;
             Some(Ok(json!({
                 "status": "ok",
                 "engine": "hera-node-rs (100% Pure Rust)",
                 "version": env!("CARGO_PKG_VERSION"),
                 "runtime_target": current_runtime_target(),
                 "node_id": state.node_id,
-                "git_pulled": git_pulled,
+                "git_pulled": false,
                 "python_dependency": "none (0 MB)"
             })))
         }

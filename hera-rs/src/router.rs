@@ -148,7 +148,14 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/ai/onboarding", get(ai_onboarding_scan_handler))
         .route("/api/v1/ai/chat", post(ai_cloudflare_free_chat_handler))
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
-        .route("/api/v1/audio/analyze-file", post(analyze_file_handler))
+        .route(
+            "/api/v1/audio/analyze-file",
+            post(analyze_file_handler).layer(DefaultBodyLimit::max(if cfg!(target_arch = "wasm32") {
+                16 * 1024 * 1024
+            } else {
+                64 * 1024 * 1024
+            })),
+        )
         .route("/api/v1/crates/build", post(build_crate_handler))
         .route("/api/v1/crates/set-spine", post(build_crate_handler))
         .route("/api/v1/crates/export", post(export_crate_handler))
@@ -167,7 +174,7 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/p2p/download/{track_id}", get(p2p_download_local_file_handler))
         .route("/api/v1/p2p/turn-credentials", post(p2p_turn_credentials_handler))
         .route("/api/v1/p2p/turn-relay-proof", post(p2p_turn_relay_proof_handler))
-        .layer(DefaultBodyLimit::max(64 * 1024 * 1024))
+        .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
         .with_state(state)
 }
 
@@ -209,8 +216,11 @@ async fn broker_similar_handler(
 
 async fn scan_local_dir_handler(
     State(state): State<P2PMeshState>,
+    headers: HeaderMap,
     Json(req): Json<ScanLocalDirRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), HeraError> {
+    let auth = headers.get("authorization").or_else(|| headers.get("x-hera-node-token")).and_then(|v| v.to_str().ok());
+    state.verify_node_api_token(auth).map_err(HeraError::Unauthorized)?;
     match state.scan_local_directory(req) {
         Ok(res) => Ok((
             StatusCode::CREATED,
@@ -246,10 +256,13 @@ async fn p2p_register_peer_handler(
 
 async fn p2p_federate_sync_handler(
     State(state): State<P2PMeshState>,
+    headers: HeaderMap,
     Json(req): Json<FederatedSyncRequest>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, HeraError> {
+    let auth = headers.get("authorization").or_else(|| headers.get("x-hera-node-token")).and_then(|v| v.to_str().ok());
+    state.verify_node_api_token(auth).map_err(HeraError::Unauthorized)?;
     let resp = state.federate_sync(req);
-    (StatusCode::OK, Json(resp))
+    Ok((StatusCode::OK, Json(resp)))
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,7 +285,10 @@ async fn p2p_export_federation_handler(
 async fn p2p_download_local_file_handler(
     State(state): State<P2PMeshState>,
     Path(track_id): Path<String>,
+    headers: HeaderMap,
 ) -> Result<impl IntoResponse, HeraError> {
+    let auth = headers.get("authorization").or_else(|| headers.get("x-hera-node-token")).and_then(|v| v.to_str().ok());
+    state.verify_node_api_token(auth).map_err(HeraError::Unauthorized)?;
     match state.get_local_file_bytes(&track_id) {
         Ok((path_str, bytes)) => {
             let content_type = if path_str.ends_with(".flac") {
@@ -407,7 +423,6 @@ async fn swarm_subscribe_handler(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ShardDeliveryQuery {
-    pub now_unix: Option<u64>,
     pub leaf_index: Option<usize>,
 }
 
@@ -421,7 +436,7 @@ async fn swarm_shard_delivery_handler(
         .get("x-hera-swarm-ticket")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
-    match state.redeem_swarm_shard_delivery(&blob_id, ticket_header, q.now_unix) {
+    match state.redeem_swarm_shard_delivery(&blob_id, ticket_header, None) {
         Ok((bytes, receipt)) => {
             let receipt_json = serde_json::to_string(&receipt).unwrap_or_default();
             let parsed_ticket: Option<SwarmRedirectTicket> =
@@ -639,6 +654,20 @@ async fn analyze_pcm_handler(
         ));
     }
 
+    #[cfg(feature = "native")]
+    {
+        tokio::task::spawn_blocking(move || compute_analyze_pcm(req))
+            .await
+            .map_err(|e| HeraError::Internal(format!("analyze_pcm task join error: {e}")))?
+    }
+
+    #[cfg(not(feature = "native"))]
+    {
+        compute_analyze_pcm(req)
+    }
+}
+
+fn compute_analyze_pcm(req: AnalyzePcmRequest) -> Result<Json<FullDspAnalysisResponse>, HeraError> {
     let forensics = audit_pcm_channels(
         &req.left,
         req.right.as_deref(),
@@ -695,6 +724,20 @@ async fn analyze_file_handler(
         return Err(HeraError::BadRequest("Empty audio file body".to_string()));
     }
 
+    #[cfg(feature = "native")]
+    {
+        tokio::task::spawn_blocking(move || compute_analyze_file(q, body))
+            .await
+            .map_err(|e| HeraError::Internal(format!("analyze_file task join error: {e}")))?
+    }
+
+    #[cfg(not(feature = "native"))]
+    {
+        compute_analyze_file(q, body)
+    }
+}
+
+fn compute_analyze_file(q: AnalyzeFileQuery, body: Bytes) -> Result<Json<FullDspAnalysisResponse>, HeraError> {
     let ext = q.ext.as_deref().unwrap_or("wav");
     let claimed_ext = q.claimed_ext.as_deref().unwrap_or(ext);
     let max_sec = q.max_seconds.unwrap_or(45.0).clamp(5.0, 90.0);
@@ -747,6 +790,21 @@ async fn build_crate_handler(
             "Crate `candidates` list cannot be empty".to_string(),
         ));
     }
+
+    #[cfg(feature = "native")]
+    {
+        tokio::task::spawn_blocking(move || compute_build_crate(req))
+            .await
+            .map_err(|e| HeraError::Internal(format!("build_crate task join error: {e}")))?
+    }
+
+    #[cfg(not(feature = "native"))]
+    {
+        compute_build_crate(req)
+    }
+}
+
+fn compute_build_crate(req: BuildCrateRequest) -> Result<Json<OptimizedCrateResult>, HeraError> {
     let spine = SetSpineConfig {
         anchors: req.anchors,
         custom_energy_curve: req.custom_energy_curve,

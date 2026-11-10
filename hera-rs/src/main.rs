@@ -81,6 +81,10 @@ async fn main() {
         return;
     }
 
+    let bind_host = extract_cli_flag(&args, "--bind")
+        .or_else(|| env::var("HERA_BIND_ADDR").ok())
+        .unwrap_or_else(|| "127.0.0.1".to_string());
+
     let port: u16 = extract_cli_flag(&args, "--port")
         .or_else(|| env::var("PORT").ok())
         .and_then(|p| p.parse().ok())
@@ -88,7 +92,9 @@ async fn main() {
 
     let app = build_hera_router(state);
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    let addr: SocketAddr = format!("{bind_host}:{port}")
+        .parse()
+        .unwrap_or_else(|_| SocketAddr::from(([127, 0, 0, 1], port)));
     println!(
         "⚡ Hera Rust Universal Node (`{}`) listening on http://{}",
         node_id, addr
@@ -110,6 +116,9 @@ async fn main() {
         .expect("Failed to bind TCP listener");
 
     axum::serve(listener, app)
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
         .await
         .expect("Hera Rust HTTP server failed");
 }

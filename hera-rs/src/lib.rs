@@ -22,11 +22,11 @@ use tower_service::Service;
 use worker::{event, Context, Env, HttpRequest, Result as WorkerResult};
 
 #[cfg(feature = "cloudflare")]
-static ISOLATE_MESH_STATE: OnceLock<p2p::P2PMeshState> = OnceLock::new();
+static ISOLATE_ROUTER: OnceLock<axum::Router> = OnceLock::new();
 
 /// Cloudflare Workers WASM Entrypoint (`npx wrangler deploy --features cloudflare --no-default-features`).
 /// Uses the exact same `axum::Router` as the Native VPS binary, while persisting `P2PMeshState`
-/// across warm isolate invocations.
+/// and the pre-built `axum::Router` across warm isolate invocations.
 #[cfg(feature = "cloudflare")]
 #[event(fetch)]
 pub async fn fetch(
@@ -34,17 +34,17 @@ pub async fn fetch(
     env: Env,
     _ctx: Context,
 ) -> WorkerResult<http::Response<axum::body::Body>> {
-    let state = ISOLATE_MESH_STATE
+    let mut router = ISOLATE_ROUTER
         .get_or_init(|| {
             let node_id = env
                 .var("HERA_NODE_ID")
                 .map(|v| v.to_string())
                 .unwrap_or_else(|_| "hera-cf-edge-node".to_string());
-            p2p::P2PMeshState::new(node_id)
+            let state = p2p::P2PMeshState::new(node_id);
+            router::build_hera_router(state)
         })
         .clone();
 
-    let mut router = router::build_hera_router(state);
     Ok(router.call(req).await?)
 }
 
@@ -968,7 +968,7 @@ mod tests {
         use axum::body::to_bytes;
 
         let state = P2PMeshState::new("hera-edge-primary");
-        let mut app = build_hera_router(state);
+        let mut app = build_hera_router(state.clone());
 
         // 1. Baseline Swarm Strength (N = 1 active healthy node: `hera-edge-primary`)
         let req_s1 = Request::builder()
@@ -1154,17 +1154,17 @@ mod tests {
         assert_eq!(resp_bad_ticket.status(), StatusCode::FORBIDDEN);
 
         // 4b-bis. Attempting to fetch with an EXPIRED 60s ticket (`now_unix > expires_at_unix`) must be blocked (403 FORBIDDEN)
+        state.set_clock_override_unix(Some(expires + 1));
         let req_expired_ticket = Request::builder()
-            .uri(&format!(
-                "/api/v1/swarm/shard/{}?now_unix={}",
-                blob_id,
-                expires + 1
-            ))
+            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
             .header("x-hera-swarm-ticket", &signed_ticket_header)
             .body(Body::empty())
             .unwrap();
         let resp_expired_ticket = app.call(req_expired_ticket).await.unwrap();
         assert_eq!(resp_expired_ticket.status(), StatusCode::FORBIDDEN);
+
+        // Reset clock back to valid issued window so 4c succeeds
+        state.set_clock_override_unix(Some(issued + 5));
 
         // 4c. Valid 60s ticket succeeds, sets `Cache-Control: public, max-age=31536000, immutable`, and mints 1 : 1.5 Turbo credits!
         let req_good_shard = Request::builder()
@@ -2175,4 +2175,133 @@ mod tests {
         assert_eq!(fallback_chunk.len(), 8192);
         assert_eq!(stage_label, "STAGE_3_5_CLOUDFLARE_TURN_CHANNEL_RELAY");
     }
+
+    #[tokio::test]
+    async fn test_ticket_expires_via_server_clock_and_short_sha_safety() {
+        use axum::body::to_bytes;
+        use crate::p2p::SwarmRouteRequest;
+
+        let state = P2PMeshState::new("hera-security-test-node");
+        state.set_clock_override_unix(Some(2_000_000));
+
+        let app = build_hera_router(state.clone());
+
+        // 1. Issue route ticket at t = 2_000_000
+        let req_ticket = Request::builder()
+            .method("POST")
+            .uri("/api/v1/swarm/route-ticket")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "track_id_or_cas": "hera-seed-001",
+                    "requester_dj": "DJFoo",
+                    "block_index": 0
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_ticket = app.clone().call(req_ticket).await.unwrap();
+        assert_eq!(resp_ticket.status(), StatusCode::OK);
+        let j_ticket: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_ticket.into_body(), 1024 * 1024).await.unwrap(),
+        )
+        .unwrap();
+        let signed_ticket_header = serde_json::to_string(&j_ticket["ticket"]).unwrap();
+        let blob_id = j_ticket["ticket"]["opaque_blob_key"]
+            .as_str()
+            .unwrap()
+            .trim_start_matches("shard-blobs/")
+            .trim_end_matches(".hbin");
+
+        // 2. Fetch ticket at t = 2_000_061 (expired: 61s > 60s TTL) with NO ?now_unix= query parameter
+        state.set_clock_override_unix(Some(2_000_061));
+        let req_expired = Request::builder()
+            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .header("x-hera-swarm-ticket", &signed_ticket_header)
+            .body(Body::empty())
+            .unwrap();
+        let resp_expired = app.clone().call(req_expired).await.unwrap();
+        assert_eq!(resp_expired.status(), StatusCode::FORBIDDEN);
+
+        // 3. issue_route_ticket with short audio_sha256 = "abc" (< 10 chars) does not panic
+        let cas_fp = crate::p2p::compute_cas_fingerprint("DaviDJ", "Ritual Del Sol (DaviDJ Original Club Master)", 122.0);
+        state.cas_audio_sha256.write().unwrap().insert(cas_fp, "abc".to_string());
+        let short_sha_req = SwarmRouteRequest {
+            requester_dj: "DJFoo".to_string(),
+            track_id_or_cas: "hera-seed-001".to_string(),
+            block_index: Some(0),
+        };
+        let short_res = state.issue_route_ticket(short_sha_req);
+        assert!(short_res.is_ok());
+
+        // 4. ensure_hera_updated MCP tool returns local version status without spawning git pull
+        let mcp_call = crate::mcp::dispatch_tool_call(
+            "ensure_hera_updated",
+            serde_json::json!({ "pull_remote": true }),
+            &state,
+        );
+        assert!(mcp_call.is_ok());
+        let mcp_val = mcp_call.unwrap();
+        assert_eq!(mcp_val["status"], "ok");
+        assert_eq!(mcp_val["version"], env!("CARGO_PKG_VERSION"));
+
+        // 5. Verify 2 MiB global body limit rejects large JSON payloads (> 2 MiB)
+        let large_blob = vec![b'a'; 3 * 1024 * 1024]; // 3 MiB
+        let req_large = Request::builder()
+            .method("POST")
+            .uri("/api/v1/crates/build")
+            .header("content-type", "application/json")
+            .body(Body::from(large_blob))
+            .unwrap();
+        let resp_large = app.clone().call(req_large).await.unwrap();
+        assert_eq!(resp_large.status(), StatusCode::PAYLOAD_TOO_LARGE);
+
+        // 6. Verify node_api_token authentication guards administrative routes
+        state.set_node_api_token(Some("test-secret-token-123".to_string()));
+
+        // Request with missing token is rejected (401 Unauthorized)
+        let req_scan_no_auth = Request::builder()
+            .method("POST")
+            .uri("/api/v1/node/scan-local-dir")
+            .header("content-type", "application/json")
+            .body(Body::from(serde_json::to_vec(&serde_json::json!({
+                "dj_handle": "DaviDJ",
+                "directory_path": "/tmp/test"
+            })).unwrap()))
+            .unwrap();
+        let resp_scan_no_auth = app.clone().call(req_scan_no_auth).await.unwrap();
+        assert_eq!(resp_scan_no_auth.status(), StatusCode::UNAUTHORIZED);
+
+        // Request with invalid token is rejected (401 Unauthorized)
+        let req_scan_bad_auth = Request::builder()
+            .method("POST")
+            .uri("/api/v1/node/scan-local-dir")
+            .header("content-type", "application/json")
+            .header("authorization", "Bearer wrong-token")
+            .body(Body::from(serde_json::to_vec(&serde_json::json!({
+                "dj_handle": "DaviDJ",
+                "directory_path": "/tmp/test"
+            })).unwrap()))
+            .unwrap();
+        let resp_scan_bad_auth = app.clone().call(req_scan_bad_auth).await.unwrap();
+        assert_eq!(resp_scan_bad_auth.status(), StatusCode::UNAUTHORIZED);
+
+        // Request with valid token passes auth check (fails at directory scan since /nonexistent/test/dir does not exist)
+        let req_scan_ok_auth = Request::builder()
+            .method("POST")
+            .uri("/api/v1/node/scan-local-dir")
+            .header("content-type", "application/json")
+            .header("authorization", "Bearer test-secret-token-123")
+            .body(Body::from(serde_json::to_vec(&serde_json::json!({
+                "dj_handle": "DaviDJ",
+                "directory_path": "/nonexistent/test/dir/123"
+            })).unwrap()))
+            .unwrap();
+        let resp_scan_ok_auth = app.clone().call(req_scan_ok_auth).await.unwrap();
+        assert_eq!(resp_scan_ok_auth.status(), StatusCode::BAD_REQUEST);
+
+        // Clean up token
+        state.set_node_api_token(None);
+    }
 }
+

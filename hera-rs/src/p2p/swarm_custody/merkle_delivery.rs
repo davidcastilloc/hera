@@ -42,7 +42,7 @@ impl P2PMeshState {
             ));
         }
 
-        let now_unix = current_unix_override.unwrap_or(ticket.issued_at_unix + 5);
+        let now_unix = current_unix_override.unwrap_or_else(|| self.current_unix_secs());
         if !verify_swarm_redirect_ticket(&ticket, now_unix) {
             return Err(
                 "Invalid or expired X-Hera-Swarm-Ticket signature/TTL (60s window exceeded)"

@@ -433,7 +433,7 @@ pub fn sync_d1_dj_dna(req: D1DnaSyncRequest) -> D1DnaSyncResponse {
     let anchors_json = serde_json::to_string(&req.pinned_anchors).unwrap_or_default();
     let escaped_prompt = req.prompt_block.replace('\'', "''");
     let d1_upsert_sql = format!(
-        "INSERT OR REPLACE INTO d1_dj_style_dna (dj_handle, preferred_software, dominant_bpm_zone, overall_average_bpm, dominant_camelot_keys_json, prompt_block, pinned_anchors_json, synced_at_hlc_ms) VALUES ('{}', '{}', '{}', {:.2}, '{}', '{}', '{}', 1762640000000);",
+        "INSERT OR REPLACE INTO d1_dj_style_dna (dj_handle, preferred_software, dominant_bpm_zone, overall_average_bpm, dominant_camelot_keys_json, prompt_block, pinned_anchors_json, updated_at_unix) VALUES ('{}', '{}', '{}', {:.2}, '{}', '{}', '{}', 1762640000);",
         req.dj_handle.replace('\'', "''"),
         req.preferred_software.replace('\'', "''"),
         req.dominant_bpm_zone.replace('\'', "''"),

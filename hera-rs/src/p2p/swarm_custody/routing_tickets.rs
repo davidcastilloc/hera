@@ -112,12 +112,13 @@ impl P2PMeshState {
             }
         }
 
-        let issued_at_unix = 1_762_600_000u64;
+        let issued_at_unix = self.current_unix_secs();
         let expires_at_unix = issued_at_unix + SWARM_TICKET_TTL_SECS;
         let aligned_offset_bytes = (block_index as u64) * SWARM_ALIGNED_BLOCK_BYTES;
+        let short_sha: String = audio_sha256.chars().take(10).collect();
         let ticket_id = format!(
             "tkt-{}-{:x}",
-            &audio_sha256[..10],
+            short_sha,
             issued_at_unix ^ nonce
         );
         let hmac_signature = compute_swarm_ticket_hmac(

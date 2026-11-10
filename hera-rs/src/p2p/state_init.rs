@@ -23,6 +23,12 @@ pub struct P2PMeshState {
     pub crdt_state: Arc<RwLock<SwarmCrdtDelta>>,
     /// Layer 5 MoQ-style Harmonic Topic Subscriptions (`hera://swarm/<camelot>/<bpm_band>`)
     pub topic_subscriptions: Arc<RwLock<Vec<SwarmTopicSubscription>>>,
+    /// Runtime Swarm secrets for tickets & catalog blinding
+    pub swarm_secrets: Arc<RwLock<SwarmCryptoSecrets>>,
+    /// Optional Bearer / x-hera-node-token API token guarding administrative routes
+    pub node_api_token: Arc<RwLock<Option<String>>>,
+    /// Testable clock override for real ticket TTL expiration without HTTP query params
+    pub clock_override_unix: Arc<RwLock<Option<u64>>>,
 }
 
 impl P2PMeshState {
@@ -45,38 +51,10 @@ impl P2PMeshState {
                 quality_score: 98.5,
                 forensic_verdict: "VERIFIED_STUDIO_MASTER".to_string(),
                 hot_cues: vec![
-                    HotCuePoint {
-                        num: 1,
-                        name: "1.1.1 Downbeat".to_string(),
-                        seconds: 0.25,
-                        bar_index: 0,
-                        role: "downbeat".to_string(),
-                        confidence: 0.98,
-                    },
-                    HotCuePoint {
-                        num: 2,
-                        name: "Phrase In (8b)".to_string(),
-                        seconds: 15.98,
-                        bar_index: 8,
-                        role: "phrase_in".to_string(),
-                        confidence: 0.93,
-                    },
-                    HotCuePoint {
-                        num: 3,
-                        name: "Main Drop (16b)".to_string(),
-                        seconds: 31.72,
-                        bar_index: 16,
-                        role: "drop".to_string(),
-                        confidence: 0.96,
-                    },
-                    HotCuePoint {
-                        num: 4,
-                        name: "Mix Out (144b)".to_string(),
-                        seconds: 283.52,
-                        bar_index: 144,
-                        role: "mix_out".to_string(),
-                        confidence: 0.94,
-                    },
+                    HotCuePoint { num: 1, name: "1.1.1 Downbeat".to_string(), seconds: 0.25, bar_index: 0, role: "downbeat".to_string(), confidence: 0.98 },
+                    HotCuePoint { num: 2, name: "Phrase In (8b)".to_string(), seconds: 15.98, bar_index: 8, role: "phrase_in".to_string(), confidence: 0.93 },
+                    HotCuePoint { num: 3, name: "Main Drop (16b)".to_string(), seconds: 31.72, bar_index: 16, role: "drop".to_string(), confidence: 0.96 },
+                    HotCuePoint { num: 4, name: "Mix Out (144b)".to_string(), seconds: 283.52, bar_index: 144, role: "mix_out".to_string(), confidence: 0.94 },
                 ],
                 storage_provider: "gdrive".to_string(),
                 gdrive_file_id: Some("1DaviDJ_RitualDelSol_MasterFLAC".to_string()),
@@ -110,22 +88,8 @@ impl P2PMeshState {
                 quality_score: 97.0,
                 forensic_verdict: "VERIFIED_STUDIO_MASTER".to_string(),
                 hot_cues: vec![
-                    HotCuePoint {
-                        num: 1,
-                        name: "1.1.1 Downbeat".to_string(),
-                        seconds: 0.12,
-                        bar_index: 0,
-                        role: "downbeat".to_string(),
-                        confidence: 0.97,
-                    },
-                    HotCuePoint {
-                        num: 3,
-                        name: "Main Drop (16b)".to_string(),
-                        seconds: 30.12,
-                        bar_index: 16,
-                        role: "drop".to_string(),
-                        confidence: 0.95,
-                    },
+                    HotCuePoint { num: 1, name: "1.1.1 Downbeat".to_string(), seconds: 0.12, bar_index: 0, role: "downbeat".to_string(), confidence: 0.97 },
+                    HotCuePoint { num: 3, name: "Main Drop (16b)".to_string(), seconds: 30.12, bar_index: 16, role: "drop".to_string(), confidence: 0.95 },
                 ],
                 storage_provider: "gdrive".to_string(),
                 gdrive_file_id: Some("1DaviDJ_GuarachaTurbo_MasterFLAC".to_string()),
@@ -159,22 +123,8 @@ impl P2PMeshState {
                 quality_score: 96.5,
                 forensic_verdict: "VERIFIED_STUDIO_MASTER".to_string(),
                 hot_cues: vec![
-                    HotCuePoint {
-                        num: 1,
-                        name: "1.1.1 Downbeat".to_string(),
-                        seconds: 0.10,
-                        bar_index: 0,
-                        role: "downbeat".to_string(),
-                        confidence: 0.98,
-                    },
-                    HotCuePoint {
-                        num: 3,
-                        name: "Main Drop (16b)".to_string(),
-                        seconds: 40.10,
-                        bar_index: 16,
-                        role: "drop".to_string(),
-                        confidence: 0.95,
-                    },
+                    HotCuePoint { num: 1, name: "1.1.1 Downbeat".to_string(), seconds: 0.10, bar_index: 0, role: "downbeat".to_string(), confidence: 0.98 },
+                    HotCuePoint { num: 3, name: "Main Drop (16b)".to_string(), seconds: 40.10, bar_index: 16, role: "drop".to_string(), confidence: 0.95 },
                 ],
                 storage_provider: "gdrive".to_string(),
                 gdrive_file_id: Some("1DaviDJ_Teteo96_MasterFLAC".to_string()),
@@ -292,6 +242,63 @@ impl P2PMeshState {
             delivery_receipts: Arc::new(RwLock::new(Vec::new())),
             crdt_state: Arc::new(RwLock::new(initial_crdt)),
             topic_subscriptions: Arc::new(RwLock::new(Vec::new())),
+            swarm_secrets: Arc::new(RwLock::new(SwarmCryptoSecrets::default())),
+            node_api_token: Arc::new(RwLock::new(None)),
+            clock_override_unix: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    pub fn set_swarm_secrets(&self, ticket_secret: String, blinding_secret: String) {
+        if let Ok(mut guard) = self.swarm_secrets.write() {
+            guard.ticket_hmac_secret = ticket_secret;
+            guard.shard_blinding_secret = blinding_secret;
+        }
+    }
+
+    pub fn set_node_api_token(&self, token: Option<String>) {
+        if let Ok(mut guard) = self.node_api_token.write() {
+            *guard = token;
+        }
+    }
+
+    pub fn verify_node_api_token(&self, provided: Option<&str>) -> Result<(), String> {
+        let expected = self
+            .node_api_token
+            .read()
+            .map(|g| g.clone())
+            .unwrap_or(None);
+        if let Some(exp) = expected {
+            let p = provided.unwrap_or("").trim();
+            let token_clean = p.strip_prefix("Bearer ").or_else(|| p.strip_prefix("bearer ")).unwrap_or(p).trim();
+            if token_clean.is_empty() || !crate::error::constant_time_eq(token_clean.as_bytes(), exp.as_bytes()) {
+                return Err("Missing or invalid node API token (401 Unauthorized)".to_string());
+            }
+        }
+        Ok(())
+    }
+
+    pub fn set_clock_override_unix(&self, unix_secs: Option<u64>) {
+        if let Ok(mut guard) = self.clock_override_unix.write() {
+            *guard = unix_secs;
+        }
+    }
+
+    pub fn current_unix_secs(&self) -> u64 {
+        if let Ok(guard) = self.clock_override_unix.read() {
+            if let Some(override_secs) = *guard {
+                return override_secs;
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            (worker::Date::now().as_millis() / 1000) as u64
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(1_762_600_000)
         }
     }
 }
