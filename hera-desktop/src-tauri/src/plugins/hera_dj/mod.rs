@@ -1,3 +1,4 @@
+mod audio_telemetry;
 mod audio_transport;
 mod bridge_p2p;
 mod mini_overlay;
@@ -28,6 +29,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, Runtime};
 
+#[allow(unused_imports)]
+pub use audio_telemetry::*;
 #[allow(unused_imports)]
 pub use audio_transport::*;
 #[allow(unused_imports)]
@@ -226,7 +229,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             audio_transport::native_audio_seek,
             audio_transport::native_audio_set_volume,
             audio_transport::native_audio_set_playback_rate,
-            audio_transport::native_audio_get_state
+            audio_transport::native_audio_get_state,
+            audio_telemetry::subscribe_audio_telemetry
         ])
         .build()
 }

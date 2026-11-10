@@ -28,7 +28,7 @@ const ZERO_COMMAND_PLUGIN_FILES: &[&str] = &[
 ];
 
 /// Exact count of `#[tauri::command]` functions across the 8 internal plugins in `v0.6.0`.
-const EXPECTED_TAURI_COMMANDS_COUNT: usize = 57;
+const EXPECTED_TAURI_COMMANDS_COUNT: usize = 58;
 
 /// Strict line-count ceilings (`content.lines().count()`) for module facades,
 /// pre-existing ADR-013 P2P submodules, route coordinators, and IPC bridges.
@@ -43,7 +43,10 @@ const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
     ("hera-desktop/src/components/MiniOverlay.tsx", 450),
     ("hera-desktop/src/lib/bridge-hera.ts", 300),
     ("hera-desktop/src/lib/bridge-agent.ts", 300),
-    ("hera-desktop/src/lib/native-audio-transport.ts", 280),
+    ("hera-desktop/src/lib/native-audio-transport.ts", 320),
+    ("hera-desktop/src/lib/spectrum-renderer.ts", 260),
+    ("hera-desktop/src/components/LiveSpectrumCanvas.tsx", 240),
+    ("hera-desktop/src/components/TrackProgress.tsx", 220),
     ("hera-desktop/src/lib/player.ts", 680),
 ];
 

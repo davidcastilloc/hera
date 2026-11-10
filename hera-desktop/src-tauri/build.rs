@@ -69,6 +69,7 @@ fn main() {
                     "native_audio_set_volume",
                     "native_audio_set_playback_rate",
                     "native_audio_get_state",
+                    "subscribe_audio_telemetry",
                 ]),
             )
             .plugin(

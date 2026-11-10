@@ -404,9 +404,9 @@ flowchart BT
 - Modify: `hera-desktop/src/components/TrackProgress.tsx`, `hera-desktop/src/lib/native-audio-transport.ts`, `hera-desktop/src/__tests__/player.test-e2e.tsx` (test de verificación tipo `tauri-pilot` de streaming `Channel<T>` + renderizado `OffscreenCanvas`)
 - Modify: `hera-rs/tests/architectural_ratchets.rs`, `hera-desktop/src-ipc/src/acl_guard.rs`
 
-- [ ] **Step 1 (Expand & Migrate IPC Channel):** Implementar `subscribe_audio_telemetry` con `tauri::ipc::Channel<NativeAudioTelemetryFrame>` drenando el ring buffer `rtrb` a `120 Hz` con cancelación atómica limpia al reconectar.
-- [ ] **Step 2 (OffscreenCanvas WebGPU/WebGL2 + Pilot Test):** Construir `spectrum-renderer.ts` + `LiveSpectrumCanvas.tsx` integrados en `TrackProgress.tsx` sin re-renders del árbol React, añadir suite E2E de pilotaje de canal/canvas, y validar `react-doctor` `100 / 100` + `bun run test` + `bun run knip`.
-- [ ] **Step 3:** Marcar `[x]` y crear commit atómico `feat(ui): stream 120Hz Rust FFT telemetry via Tauri Channel to WebGPU/WebGL2 OffscreenCanvas`.
+- [x] **Step 1 (Expand & Migrate IPC Channel):** Implementar `subscribe_audio_telemetry` con `tauri::ipc::Channel<NativeAudioTelemetryFrame>` drenando el ring buffer `rtrb` a `120 Hz` con cancelación atómica limpia al reconectar.
+- [x] **Step 2 (OffscreenCanvas WebGPU/WebGL2 + Pilot Test):** Construir `spectrum-renderer.ts` + `LiveSpectrumCanvas.tsx` integrados en `TrackProgress.tsx` sin re-renders del árbol React, añadir suite E2E de pilotaje de canal/canvas, y validar `react-doctor` `100 / 100` + `bun run test` + `bun run knip`.
+- [x] **Step 3:** Marcar `[x]` y crear commit atómico `feat(ui): stream 120Hz Rust FFT telemetry via Tauri Channel to WebGPU/WebGL2 OffscreenCanvas`.
 
 #### Milestone M4.4: Escalado Vectorial HNSW (`usearch`), Transporte QUIC P2P (`iroh`) y Fallback Local IA (`candle`)
 **Files:**

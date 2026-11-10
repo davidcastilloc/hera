@@ -30,10 +30,13 @@ test('Double click on a track should play it and display its metadata', async ()
     .element(page.getByRole('button', { name: 'Pause' }))
     .toBeInTheDocument();
 
-  // Check the track info is there
+  // Check the track info and 120 FPS spectrum canvas are there
   await expect
     .element(page.getByRole('banner').getByText('Whiskey Blues'))
     .toBeVisible();
+  await expect
+    .element(page.getByTestId('hera-live-spectrum-canvas'))
+    .toBeInTheDocument();
   await expect
     .element(page.getByRole('banner'))
     .toHaveTextContent('Captain_Sleepy — Another Album');

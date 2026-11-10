@@ -238,10 +238,10 @@ mod tests {
         assert_eq!(by_id["database"], 18);
         assert_eq!(by_id["default-view"], 1);
         assert_eq!(by_id["hera-agent"], 9);
-        assert_eq!(by_id["hera-dj"], 20);
+        assert_eq!(by_id["hera-dj"], 21);
         assert_eq!(by_id["sleepblocker"], 2);
         let r = verify_tauri_v2_acl_triad(&dir).expect("ACL triad parity");
-        assert_eq!((r.plugins_checked, r.commands_checked), (8, 57));
+        assert_eq!((r.plugins_checked, r.commands_checked), (8, 58));
         assert!(r.commands_checked >= 45);
     }
 

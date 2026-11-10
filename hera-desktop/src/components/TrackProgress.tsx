@@ -7,6 +7,7 @@ import useFormattedDuration from '../hooks/useFormattedDuration';
 import usePlayingTrackCurrentTime from '../hooks/usePlayingTrackCurrentTime';
 import { getFourHotCuesForTrack } from '../lib/bridge-hera';
 import player from '../lib/player';
+import LiveSpectrumCanvas from './LiveSpectrumCanvas';
 
 type Props = {
   trackPlaying: Track;
@@ -65,6 +66,7 @@ export default function TrackProgress(props: Props) {
         onMouseLeave={hideTooltip}
       >
         <Slider.Track {...stylex.props(styles.trackProgress)}>
+          <LiveSpectrumCanvas />
           <Slider.Indicator {...stylex.props(styles.trackRange)} />
           {hotCues.map((cue) => {
             const pct = Math.min(

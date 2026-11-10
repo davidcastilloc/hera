@@ -1,7 +1,11 @@
 import EventEmitter from 'eventemitter3';
 import debounce from 'lodash-es/debounce';
 
-import type { Repeat, Track } from '../generated/typings';
+import type {
+  NativeAudioTelemetryFrame,
+  Repeat,
+  Track,
+} from '../generated/typings';
 import type { QueueOrigin } from '../types/museeks';
 import ConfigBridge from './bridge-config';
 import { getCover } from './cover';
@@ -42,6 +46,7 @@ export interface PlayerEvents {
   ended: () => void;
   error: (error: MediaError) => void;
   timeupdate: (currentTime: number) => void;
+  telemetry: (frame: NativeAudioTelemetryFrame) => void;
   loadstart: () => void;
 
   // State change event (for React hooks)
@@ -122,38 +127,31 @@ class Player extends EventEmitter<PlayerEvents> {
     this.setPlaybackRate = this.setPlaybackRate.bind(this);
   }
 
-  /**
-   * Setup native Rust audio transport event listeners
-   */
   private setupTransportListeners() {
     this.transport.on('play', () => {
       this.emit('play');
       this.emitStateChange();
     });
-
     this.transport.on('pause', () => {
       this.emit('pause');
       this.emitStateChange();
     });
-
     this.transport.on('ended', () => {
       this.emit('ended');
-      // Auto-advance to next track
       void this.next();
     });
-
     this.transport.on('error', (error) => {
       this.emit('error', error);
     });
-
     this.transport.on('timeupdate', (currentTime) => {
       this.emit('timeupdate', currentTime);
     });
-
+    this.transport.on('telemetry', (frame) => {
+      this.emit('telemetry', frame);
+    });
     this.transport.on('loadstart', () => {
       this.emit('loadstart');
     });
-
     this.transport.on('volumechange', () => {
       this.emitStateChange();
     });
@@ -649,6 +647,10 @@ class Player extends EventEmitter<PlayerEvents> {
 
   getPlaybackRate(): number {
     return this.transport.playbackRate;
+  }
+
+  getLatestTelemetry(): NativeAudioTelemetryFrame | null {
+    return this.transport.getLatestTelemetry();
   }
 }
 

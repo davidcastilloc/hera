@@ -73,6 +73,7 @@
     "hera-dj:allow-native-audio-set-volume",
     "hera-dj:allow-native-audio-set-playback-rate",
     "hera-dj:allow-native-audio-get-state",
+    "hera-dj:allow-subscribe-audio-telemetry",
     "hera-agent:allow-get-agent-runtime-status",
     "hera-agent:allow-list-agent-sessions",
     "hera-agent:allow-create-agent-session",
