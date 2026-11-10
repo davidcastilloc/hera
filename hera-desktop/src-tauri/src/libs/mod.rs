@@ -1,4 +1,5 @@
 pub mod database;
+pub mod db_offline_queries;
 pub mod error;
 pub mod events;
 pub mod init;

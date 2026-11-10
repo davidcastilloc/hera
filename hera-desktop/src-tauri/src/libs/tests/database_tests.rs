@@ -327,3 +327,40 @@ async fn test_agent_sessions_and_messages_db() {
     assert_eq!(remaining[0].id, s2.id);
     assert_eq!(remaining[0].message_count, 0);
 }
+
+#[tokio::test]
+async fn test_offline_queries_track_paths_compilations_and_reset() {
+    let mut db = get_test_db().await;
+
+    assert!(db.get_all_track_paths().await.unwrap().is_empty());
+    assert!(!db.has_compilations().await.unwrap());
+
+    let mut comp_track = sample_track_1();
+    comp_track.is_compilation = true;
+    db.insert_tracks(vec![comp_track, sample_track_2()])
+        .await
+        .unwrap();
+
+    let mut paths = db.get_all_track_paths().await.unwrap();
+    paths.sort();
+    assert_eq!(
+        paths,
+        vec![
+            "/music/artist1/album1/track1.mp3".to_string(),
+            "/music/artist2/album2/track2.mp3".to_string()
+        ]
+    );
+    assert!(db.has_compilations().await.unwrap());
+
+    db.create_playlist("Club Set".to_string(), vec!["1".to_string()], None)
+        .await
+        .unwrap();
+    assert_eq!(db.get_all_playlists().await.unwrap().len(), 1);
+
+    super::db_offline_queries::reset_tracks_and_playlists(&mut db.connection)
+        .await
+        .unwrap();
+    assert!(db.get_all_tracks().await.unwrap().is_empty());
+    assert!(db.get_all_playlists().await.unwrap().is_empty());
+    assert!(!db.has_compilations().await.unwrap());
+}

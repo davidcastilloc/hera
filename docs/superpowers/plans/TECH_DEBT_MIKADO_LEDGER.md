@@ -365,11 +365,58 @@ flowchart BT
 
 ---
 
-### Capa 4: Expand → Migrate → Contract (Evolución de Motores y Escalado — Pendiente de Aprobación)
+### Capa 4: Expand → Migrate → Contract (Evolución de Motores y Escalado — Autorizada por el Usuario)
 
-> **BLOQUEADO HASTA AUTORIZACIÓN DEL USUARIO TRAS SUPERAR EL GATE PRE-CAPA 4.**
+> **AUTORIZADA POR EL USUARIO TRAS SUPERAR EL GATE PRE-CAPA 4 (`4865830`).**
+> Reglas activas: todos los snapshots de `insta` permanecen 100% intactos (`cargo insta test -p hera-node-rs --check`), todos los módulos Rust nuevos o editados en directorios monitoreados permanecen `<= 349` LOC (`architectural_ratchets.rs`), todos los componentes UI permanecen `<= 450` LOC con `react-doctor` en `100 / 100` (`0` issues), `cargo-machete` = `0`, `cargo-deny check bans` = `ok`, y `bun run knip` = `0`.
 
-- [ ] **Milestone M4.1 (MCP y DB):** Migrar `hera-rs/src/mcp/` al SDK oficial `rmcp` mediante *Parallel Change* validando que el snapshot `mcp_21_tools_catalog` de `insta` permanezca 100% idéntico, y generar `.sqlx/` offline en `hera-desktop/src-tauri`.
-- [ ] **Milestone M4.2 (Audio Engine Pro-DJ):** Conectar el núcleo lock-free `DualDeckEngine` ya listo en `hera-rs/src/audio_engine/` detrás de `trait AudioBackend` (*Expand*), integrar salida y DSP en tiempo real con `cpal` + `rubato` + `realfft` + `fundsp` (*Migrate* validado con shadow testing), y retirar `HTMLAudioElement` de `hera-desktop/src/lib/player.ts` (*Contract*).
-- [ ] **Milestone M4.3 (UI 120 FPS & IPC Streaming):** Conectar telemetría en vivo por `tauri::ipc::Channel<T>` hacia `OffscreenCanvas` WebGPU/WebGL2 y verificar con `tauri-pilot`.
-- [ ] **Milestone M4.4 (Escalado Vectorial y QUIC):** Añadir segunda etapa HNSW con `sqlite-vec` / `usearch` al curador `2-Opt TSP` y adaptador P2P sobre `iroh` + fallback de IA local con `candle`.
+#### Milestone M4.1: Migración a SDK Oficial `rmcp` y Caché Offline `.sqlx/` (`Expand → Migrate → Contract`)
+**Files:**
+- Modify: `Cargo.toml`, `hera-rs/Cargo.toml` (añadir `rmcp = { version = "3.9.0", default-features = false, features = ["server", "transport-io"], optional = true }` bajo feature `native`)
+- Create: `hera-rs/src/mcp/rmcp_server.rs`, `hera-rs/src/mcp/rmcp_tests.rs` (`<= 349` LOC cada uno, implementación oficial `rmcp::ServerHandler` + `serve_mcp_stdio_rmcp` + `build_rmcp_tools` + shadow/duplex tests contra `list_mcp_tools()`)
+- Modify: `hera-rs/src/mcp/mod.rs` (delegar `run_mcp_stdio_loop` al transporte oficial `rmcp::transport::io::stdio()` manteniendo `handle_mcp_request` para HTTP/WASM)
+- Create: `hera-desktop/src-tauri/src/libs/db_offline_queries.rs` (`<= 349` LOC, consultas estáticas verificadas en compilación con `sqlx::query!` / `sqlx::query_scalar!`)
+- Modify: `hera-desktop/src-tauri/src/libs/mod.rs`, `hera-desktop/src-tauri/src/libs/database.rs`, `hera-desktop/src-tauri/src/plugins/db.rs`
+- Create: `hera-desktop/src-tauri/.sqlx/*.json` (metadatos offline generados contra el esquema migrado `src/migrations/01..05.sql`)
+
+- [x] **Step 1 (Expand & Migrate `rmcp`):** Implementar `HeraRmcpServer` (`rmcp::ServerHandler`) en `hera-rs/src/mcp/rmcp_server.rs`, validar paridad 1:1 del catálogo de 22 herramientas contra `golden_masters__mcp_21_tools_catalog.snap` y probar framing `initialize` / `tools/list` / `tools/call` sobre `tokio::io::duplex`.
+- [x] **Step 2 (Contract `stdio` + Offline `.sqlx/`):** Conectar `run_mcp_stdio_loop` a `rmcp`, migrar consultas SQL estáticas de `hera-desktop/src-tauri` a `db_offline_queries.rs` (`sqlx::query!`), generar `.sqlx/` offline y verificar `SQLX_OFFLINE=true cargo test -p hera-desktop` + `cargo check -p hera-node-rs --target wasm32-unknown-unknown --no-default-features --features cloudflare`.
+- [x] **Step 3:** Marcar `[x]` y crear commit atómico `feat(mcp,db): migrate stdio MCP server to official rmcp SDK and enable offline .sqlx cache`.
+
+#### Milestone M4.2: Motor de Audio Nativo Pro-DJ (`trait AudioBackend` + `cpal` + `rubato` + `realfft` + `fundsp` + `rtrb` + Retiro de `HTMLAudioElement`)
+**Files:**
+- Modify: `Cargo.toml`, `hera-rs/Cargo.toml`, `hera-desktop/src-tauri/Cargo.toml`, `.github/workflows/ci.yml` (`libasound2-dev` para `cpal` en job `hera-desktop-tauri`, feature opcional `audio-device = ["native", "dep:cpal"]` en `hera-node-rs`)
+- Create/Modify: `hera-rs/src/audio_engine/{mod.rs,dsp_chain.rs,backend.rs,cpal_backend.rs,tests.rs}` (cada archivo `<= 349` LOC, `#![forbid(unsafe_code)]`)
+- Create/Modify: `hera-desktop/src-ipc/src/{audio_types.rs,lib.rs,typegen.rs}` (`NativePlayerSnapshot`, `NativeAudioTelemetryFrame`, `NativeAudioLoadResult` exportados vía `ts-rs`)
+- Create/Modify: `hera-desktop/src-tauri/src/plugins/hera_dj/{audio_transport.rs,mod.rs}`, `hera-desktop/src-tauri/build.rs`, `hera-desktop/src-tauri/capabilities/main.json`
+- Create/Modify: `hera-desktop/src/lib/native-audio-transport.ts`, `hera-desktop/src/lib/player.ts` (retirar `new Audio()` / `HTMLAudioElement`), `hera-rs/tests/architectural_ratchets.rs`, `hera-desktop/src-ipc/src/acl_guard.rs`
+
+- [ ] **Step 1 (Expand):** Extraer `pub trait AudioBackend` sobre `DualDeckEngine`, añadir remuestreo de alta precisión (`rubato`), etapa master soft-clip/EQ (`fundsp` `default-features = false, features = ["std"]`), analizador espectral de 32 bandas (`realfft`) y cola SPSC wait-free (`rtrb`).
+- [ ] **Step 2 (Migrate):** Implementar `CpalAudioBackend` en modo compartido no exclusivo (cero conflicto con VirtualDJ) con fallback automático `HeadlessClockAudioBackend` en entornos sin tarjeta de sonido, exponer comandos Tauri `native_audio_*` con paridad ACL 1:1:1 y validar shadow testing contra los 4 Hot Cues del Golden Master.
+- [ ] **Step 3 (Contract):** Retirar `HTMLAudioElement` (`new Audio()`) de `hera-desktop/src/lib/player.ts` delegando en `NativeRustAudioTransport`, añadir ratchet que prohíba `HTMLAudioElement`/`new Audio(` en `player.ts`, y verificar `bun run test` (incluyendo `player.test-e2e.tsx`), `cargo test --workspace` y `cargo insta test -p hera-node-rs --check`.
+- [ ] **Step 4:** Marcar `[x]` y crear commit atómico `feat(audio): migrate player transport to native Rust cpal/rubato/fundsp/realfft/rtrb AudioBackend`.
+
+#### Milestone M4.3: UI 120 FPS & Streaming de Telemetría `tauri::ipc::Channel<T>` hacia `OffscreenCanvas` WebGPU/WebGL2
+**Files:**
+- Create/Modify: `hera-desktop/src-tauri/src/plugins/hera_dj/{audio_telemetry.rs,mod.rs}`, `hera-desktop/src-tauri/build.rs`, `hera-desktop/src-tauri/capabilities/main.json` (`subscribe_audio_telemetry` sobre `tauri::ipc::Channel<NativeAudioTelemetryFrame>`)
+- Create: `hera-desktop/src/lib/spectrum-renderer.ts` (`OffscreenCanvas` WebGPU → WebGL2 → 2D fallback determinista a 120 FPS sin re-renders de React)
+- Create: `hera-desktop/src/components/LiveSpectrumCanvas.tsx` (`<= 450` LOC, `tabular-nums`, cero violaciones de React 19 Compiler)
+- Modify: `hera-desktop/src/components/TrackProgress.tsx`, `hera-desktop/src/lib/native-audio-transport.ts`, `hera-desktop/src/__tests__/player.test-e2e.tsx` (test de verificación tipo `tauri-pilot` de streaming `Channel<T>` + renderizado `OffscreenCanvas`)
+- Modify: `hera-rs/tests/architectural_ratchets.rs`, `hera-desktop/src-ipc/src/acl_guard.rs`
+
+- [ ] **Step 1 (Expand & Migrate IPC Channel):** Implementar `subscribe_audio_telemetry` con `tauri::ipc::Channel<NativeAudioTelemetryFrame>` drenando el ring buffer `rtrb` a `120 Hz` con cancelación atómica limpia al reconectar.
+- [ ] **Step 2 (OffscreenCanvas WebGPU/WebGL2 + Pilot Test):** Construir `spectrum-renderer.ts` + `LiveSpectrumCanvas.tsx` integrados en `TrackProgress.tsx` sin re-renders del árbol React, añadir suite E2E de pilotaje de canal/canvas, y validar `react-doctor` `100 / 100` + `bun run test` + `bun run knip`.
+- [ ] **Step 3:** Marcar `[x]` y crear commit atómico `feat(ui): stream 120Hz Rust FFT telemetry via Tauri Channel to WebGPU/WebGL2 OffscreenCanvas`.
+
+#### Milestone M4.4: Escalado Vectorial HNSW (`usearch`), Transporte QUIC P2P (`iroh`) y Fallback Local IA (`candle`)
+**Files:**
+- Modify: `Cargo.toml`, `hera-rs/Cargo.toml` (`usearch = { version = "2.26.6", default-features = false, optional = true }`, `iroh = { version = "1.4.1", default-features = false, features = ["tls-ring"], optional = true }`, `candle-core = { version = "0.11.1", optional = true }`, `candle-nn = { version = "0.11.1", optional = true }` bajo feature `native`)
+- Create/Modify: `hera-rs/src/synergy.rs` -> `hera-rs/src/synergy/{mod.rs,hnsw_stage.rs}` (pre-filtrado HNSW `usearch` 64-D $O(\log N)$ para bibliotecas grandes preservando el snapshot exacto de `2-Opt TSP` en sets cortos + test de escalado de 1,000 pistas)
+- Create/Modify: `hera-rs/src/p2p.rs`, `hera-rs/src/p2p/quic_iroh.rs` (`<= 349` LOC, `pub trait SwarmTransportAdapter` + `IrohQuicTransport` con transferencia real verificada SHA-256/BLAKE3 entre dos `iroh::Endpoint` locales sobre QUIC)
+- Create/Modify: `hera-rs/src/dj_brain/{mod.rs,candle_local.rs,backends.rs,harness.rs}` (`<= 349` LOC cada uno, motor tensorial `CandleLocalDjModel` en CPU con `candle_core` + `candle_nn` como fallback neural local `< 2 ms` sin romper snapshots existentes)
+- Modify: `hera-rs/tests/architectural_ratchets.rs`, `docs/superpowers/DECISIONS.md` (`ADR-026`)
+
+- [ ] **Step 1 (HNSW `usearch` + `2-Opt TSP`):** Integrar etapa de recuperación vectorial HNSW 64-D con `usearch` antes del solver `2-Opt TSP` cuando `candidates.len() > hnsw_threshold`, manteniendo 0 diffs en `curator_2opt_tsp_and_spine_routes.snap` y validando benchmark de 1,000 tracks.
+- [ ] **Step 2 (`iroh` QUIC Transport + `candle` Local Fallback):** Implementar `IrohQuicTransport` (`ALPN hera-swarm-shard/1`) con test real de transferencia de shards entre dos endpoints QUIC, e integrar `CandleLocalDjModel` (`candle-core` + `candle-nn`) como inferencia neural offline en `dj_brain`.
+- [ ] **Step 3 (Verificación Global, Ratchets y `ADR-026`):** Ejecutar `cargo insta test -p hera-node-rs --check`, `cargo test --workspace`, `cargo check -p hera-node-rs --target wasm32-unknown-unknown --no-default-features --features cloudflare`, `cargo-machete`, `cargo-deny check bans`, `bun run check`, `bun run test`, `bun run build`, `bun run knip` y `react-doctor` (`100/100`), documentar `ADR-026`, marcar `[x]` y sincronizar `main` (`origin/main`) para QA.
+

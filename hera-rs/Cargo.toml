@@ -19,7 +19,7 @@ required-features = ["native"]
 
 [features]
 default = ["native"]
-native = ["dep:tokio", "axum/tokio", "axum/http1"]
+native = ["dep:tokio", "dep:rmcp", "axum/tokio", "axum/http1"]
 cloudflare = ["dep:worker"]
 ts = ["dep:ts-rs"]
 
@@ -34,7 +34,8 @@ http.workspace = true
 tower-service = "0.3"
 
 # Native VPS / Local Server runtime (Railway, Vultr, DigitalOcean, Hetzner, Oracle Free Tier, PC)
-tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync"], optional = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "net", "signal", "sync", "io-util", "time"], optional = true }
+rmcp = { workspace = true, features = ["server", "transport-io"], optional = true }
 
 # Cloudflare Workers Serverless Edge WASM runtime (`npx wrangler deploy`)
 worker = { version = "0.8", features = ["http", "axum"], optional = true }

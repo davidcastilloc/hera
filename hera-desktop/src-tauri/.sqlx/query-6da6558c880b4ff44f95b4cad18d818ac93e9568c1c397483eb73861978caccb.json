@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM agent_messages WHERE session_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "6da6558c880b4ff44f95b4cad18d818ac93e9568c1c397483eb73861978caccb"
+}

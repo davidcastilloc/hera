@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE playlists SET name = ? WHERE id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "5dfce3cce6b58c4c9d28234cd84481de8e50707f10a70ffcd70daf51f28841ae"
+}

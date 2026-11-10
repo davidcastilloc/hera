@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT EXISTS(SELECT 1 FROM tracks WHERE is_compilation = 1) AS \"exists!: bool\"",
+  "describe": {
+    "columns": [
+      {
+        "name": "exists!: bool",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6ceb60b6dc895008f26f19763eb62bba9aefff471965f699cfee231772a3d204"
+}

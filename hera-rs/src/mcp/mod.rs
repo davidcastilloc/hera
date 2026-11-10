@@ -1,8 +1,17 @@
 mod analyze;
 mod dispatch_core;
 mod dispatch_swarm;
+#[cfg(feature = "native")]
+pub mod rmcp_server;
+#[cfg(all(test, feature = "native"))]
+mod rmcp_tests;
 mod schemas_core;
 mod schemas_swarm;
+
+#[cfg(feature = "native")]
+pub use rmcp_server::{
+    build_rmcp_tools, serve_mcp_io_rmcp, serve_mcp_stdio_rmcp, HeraRmcpServer,
+};
 
 use crate::p2p::P2PMeshState;
 use crate::router::current_runtime_target;
@@ -68,11 +77,11 @@ pub fn list_mcp_tools() -> Value {
     json!({ "tools": tools })
 }
 
-/// Handle a single MCP JSON-RPC 2.0 request (works identically over `stdio` and HTTP `/mcp`).
+/// Handle a single stateless MCP JSON-RPC 2.0 request (used by HTTP `POST /mcp` on `native` & `cloudflare` WASM).
 pub fn handle_mcp_request(req: JsonRpcRequest, state: &P2PMeshState) -> Option<JsonRpcResponse> {
     let method = req.method.as_str();
 
-    // Notifications (no `id`) do not expect a response frame in MCP stdio
+    // Notifications (no `id`) do not expect a response frame in MCP
     if method.starts_with("notifications/") && req.id.is_none() {
         return None;
     }
@@ -145,32 +154,30 @@ pub fn dispatch_tool_call(name: &str, args: Value, state: &P2PMeshState) -> Resu
     dispatch_swarm::dispatch_swarm_tool(name, args, state)
 }
 
-/// Run the MCP JSON-RPC 2.0 Server over `stdin`/`stdout` (`hera-node --mcp`).
-#[cfg(not(target_arch = "wasm32"))]
+/// Run the official `rmcp` MCP Server over `stdin`/`stdout` (`hera-node --mcp`).
+#[cfg(feature = "native")]
 pub fn run_mcp_stdio_loop(state: P2PMeshState) {
-    use std::io::{self, BufRead, Write};
-    let stdin = io::stdin();
-    let mut stdout = io::stdout();
+    let outcome = match tokio::runtime::Handle::try_current() {
+        Ok(handle) if handle.runtime_flavor() == tokio::runtime::RuntimeFlavor::MultiThread => {
+            tokio::task::block_in_place(|| handle.block_on(serve_mcp_stdio_rmcp(state)))
+        }
+        Ok(_) => std::thread::spawn(move || {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| format!("failed to build stdio tokio runtime: {e}"))?
+                .block_on(serve_mcp_stdio_rmcp(state))
+        })
+        .join()
+        .unwrap_or_else(|_| Err("MCP stdio runtime thread panicked".to_string())),
+        Err(_) => tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|e| format!("failed to build stdio tokio runtime: {e}"))
+            .and_then(|rt| rt.block_on(serve_mcp_stdio_rmcp(state))),
+    };
 
-    for line in stdin.lock().lines() {
-        let Ok(raw) = line else { break };
-        let trimmed = raw.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let resp = match serde_json::from_str::<JsonRpcRequest>(trimmed) {
-            Ok(req) => handle_mcp_request(req, &state),
-            Err(e) => Some(JsonRpcResponse::err(
-                None,
-                -32700,
-                format!("Parse error: {e}"),
-            )),
-        };
-        if let Some(r) = resp {
-            if let Ok(out) = serde_json::to_string(&r) {
-                let _ = writeln!(stdout, "{out}");
-                let _ = stdout.flush();
-            }
-        }
+    if let Err(err) = outcome {
+        eprintln!("⚠️ MCP stdio server error: {err}");
     }
 }
