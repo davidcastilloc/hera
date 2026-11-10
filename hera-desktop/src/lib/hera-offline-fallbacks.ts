@@ -1,8 +1,27 @@
 import type * as T from '../generated/typings';
-import type {
-  DownloadP2PTrackParams,
-  ResolveHarmonicBridgeParams,
-} from './bridge-hera';
+
+export type ResolveHarmonicBridgeParams = {
+  originTitle: string;
+  originArtist: string;
+  originBpm: number;
+  originCamelot: string;
+  targetTitle: string;
+  targetArtist: string;
+  targetBpm: number;
+  targetCamelot: string;
+};
+
+export type DownloadP2PTrackParams = {
+  trackId: string;
+  artist: string;
+  title: string;
+  bpm: number;
+  camelot: string;
+  heraSeal: string;
+  peerEndpoint?: string;
+  turnRelayEndpoint?: string;
+  chunkCount?: number;
+};
 
 export const EMPTY_SET_SPINE = {
   orderedTrackIds: [] as Array<string>,

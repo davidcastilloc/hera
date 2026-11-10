@@ -4,10 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import View from '../elements/View';
 import DatabaseBridge from '../lib/bridge-database';
-import {
-  computeDjStyleDna,
-  type HeraStyleDnaResponse,
-} from '../lib/bridge-hera';
+import { computeDjStyleDna, type DjStyleDnaProfile } from '../lib/bridge-hera';
 import useLibraryStore from '../lib/store';
 
 export const Route = createFileRoute('/dna')({
@@ -72,9 +69,7 @@ function ViewDjStyleDna() {
   const [ruleSubBass, setRuleSubBass] = useState(true);
   const [ruleAudioQuality, setRuleAudioQuality] = useState(true);
   const [showKeyGrid, setShowKeyGrid] = useState(false);
-  const [dnaProfile, setDnaProfile] = useState<HeraStyleDnaResponse | null>(
-    null,
-  );
+  const [dnaProfile, setDnaProfile] = useState<DjStyleDnaProfile | null>(null);
 
   useEffect(() => {
     if (tracks.length === 0) {
