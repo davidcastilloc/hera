@@ -10,7 +10,7 @@ repository.workspace = true
 edition = "2024"
 
 [features]
-default = []
+default = ["mcp-bridge"]
 mcp-bridge = []
 
 [build-dependencies]

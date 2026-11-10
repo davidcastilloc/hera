@@ -1,7 +1,7 @@
 import { i18n } from '@lingui/core';
 import { beforeEach, vi } from 'vite-plus/test';
+import { page } from 'vite-plus/test/browser';
 import { render } from 'vitest-browser-react';
-import { page } from 'vitest/context';
 
 import { MOCK_CONFIG } from '../lib/__mocks__/bridge-config.ts';
 import { messages } from '../translations/en.po';
@@ -76,7 +76,7 @@ export function beforeEachSetup() {
 
 // Get the main navigation element for main navigation between library, settings, etc
 export function getMainNavigation() {
-  return page.getByRole('navigation', { name: 'Main navigation' });
+  return page.getByRole('navigation', { name: 'Secciones' });
 }
 
 // Get the track list element
@@ -97,13 +97,13 @@ export function getTrackAt(index: number) {
 // Get a sort button from the track list header by column name
 export function getSortButton(name: string) {
   return page
-    .getByRole('group', { name: 'Track list sorting options' })
+    .getByRole('group', { name: 'Columnas y orden de pistas' })
     .getByRole('button', { name });
 }
 
 // Trigger a fake scan of the library based on mocks
 export async function setupScannedLibrary() {
-  await getMainNavigation().getByRole('link', { name: 'Settings' }).click();
+  await getMainNavigation().getByRole('link', { name: 'Ajustes' }).click();
   await page.getByRole('button', { name: 'Scan' }).click();
-  await getMainNavigation().getByRole('link', { name: 'Library' }).click();
+  await getMainNavigation().getByRole('link', { name: 'Biblioteca' }).click();
 }

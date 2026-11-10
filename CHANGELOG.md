@@ -4,6 +4,34 @@ All notable changes to **HERA (`davidcastilloc/hera`)** are documented in this f
 
 ---
 
+## [0.6.0] - 2026-11-09
+
+### Added
+- **Agent-First Root Cargo Workspace, `hera-ipc` (`ts-rs` + ACL Triad Guardian), `< 350` LOC Modularization & Lock-Free `DualDeckEngine` (`ADR-024`):**
+  - Consolidated `hera-rs` (`hera-node-rs` `v0.6.0`), `hera-desktop/src-ipc` (`hera-ipc` `v0.6.0`), and `hera-desktop/src-tauri` (`hera-desktop` `v0.6.0`) into a unified root `Cargo.toml` workspace (`resolver = "2"`, default headless members `["hera-rs", "hera-desktop/src-ipc"]`).
+  - Introduced the zero-GTK pure-Rust `hera-ipc` crate (`acl_guard.rs`, `workflow_guard.rs`, `typegen.rs`, `dj_types.rs`, `agent_types.rs` -> `hera-desktop/src/generated/hera-typings.ts`) for `< 5s` cross-OS `ts-rs` DTO generation and automated Tauri v2 ACL Triad parity verification across all 8 inlined plugins.
+  - Decomposed monolithic modules into `< 350` LOC cohesive files across `hera-rs/src/dj_brain/`, `hera-rs/src/mcp/`, `hera-rs/src/code_mode/`, `hera-desktop/src-tauri/src/plugins/hera_agent/`, `hera-desktop/src-tauri/src/plugins/hera_dj/`, `hera-desktop/src/routes/bridge.tsx` (`src/components/transition/`), and `hera-desktop/src/components/MiniOverlay.tsx` (`src/components/mini-overlay/`).
+  - Added `#![forbid(unsafe_code)]` in-memory `DualDeckEngine` (`hera-rs/src/audio_engine/`) over Symphonia PCM frames driven by a lock-free `[AtomicU64; 64]` SPSC `CommandQueue` for sample-accurate 4-Hot-Cue jumping and linear tempo resampling (`0.5..=2.0`) with zero heap allocations in `render_interleaved_stereo`.
+- **Autonomous `/agent` Workspace & 44-Tool Loopback HTTP MCP (`ADR-023`):**
+  - Added `plugin:hera-agent` (`hera-desktop/src-tauri/src/plugins/hera_agent/`) hosting a per-launch random `Bearer`-authenticated `axum` HTTP MCP router bound strictly to `127.0.0.1:0`, combining `21` DSP/P2P/curator tools with `23` desktop SQLite, VirtualDJ, player, and host OS tools (`44` total).
+  - Built the minimalist `/agent` workspace (`agent.tsx`, `AgentComposer.tsx`, `AgentToolStepRow.tsx`, `Ctrl+J` / `Cmd+J`) with live streaming tool execution (`hera:agent-stream`), `@ Contexto` track/playlist/folder attachments, SQLite session persistence, and an inline `Confirmar` approval gate.
+- **Single-Window Morphing VirtualDJ `Modo Mini` Overlay (`ADR-022`):**
+  - Added atomic single-window morphing (`set_mini_overlay_mode`, `Ctrl+Shift+M` / `Cmd+Shift+M`) switching between full studio (`1180x720`), `360x408` booth card (`Tarjeta de Cabina`), and `560x52` HUD pill (`Píldora HUD`) without spawning extra WebView processes.
+  - Added non-blocking `push_virtualdj_live_crate` writing deduplicated `HERA En Vivo.vdjfolder` + `HERA En Vivo_vdj_database.xml` with 4 `<Poi>` Hot Cues, alongside live VirtualDJ `History/tracklist.txt` reader (`read_virtualdj_now_playing`).
+- **Unified Dark Booth Studio UI, Minimalist Distillation & Non-Blocking Async Tauri IPC (`ADR-016`..`ADR-021`):**
+  - Unified native and webview Dark Booth Studio tokens (`#0c0e12` booth slate + `#14b8a6` studio emerald), `216px` left studio rail, `1.5px`-stroke SVG iconography, silent inline action confirmations, and low-text `Transición` (`bridge.tsx`) and `Mi Estilo` (`dna.tsx`) views.
+  - Converted Tauri IPC commands to 100% off-main-thread `async` + `spawn_blocking`, added bounded parallel `127.0.0.1` AI/CLI discovery (`< 400 ms`), enabled tag-tolerant case-insensitive Symphonia audio import, and integrated localhost `tauri-plugin-mcp-bridge` (`127.0.0.1:9223`).
+- **5-Stage Zero-Config P2P Cascade, RFC 5766 TURN Relay, Universal Symphonia Streaming Decoder & Rust/WASM Hardening (`ADR-012`..`ADR-015`):**
+  - Expanded zero-config P2P cascade (`hera-rs/src/p2p/`): `LAN Direct` -> `Multi-STUN` (`stun.cloudflare.com:3478` + `stun.l.google.com:19302`) -> `16-Port Prediction Spray` + persistent Desktop UDP seeder -> `Cloudflare Calls RFC 5766 TURN Relay` (`Allocate` + `ChannelBind`, `0` R2 bytes) -> `R2 P2P Boost`.
+  - Added streaming multi-codec decoder `decode_audio_file_partial` (`WAV`, `FLAC`, `MP3`, `M4A`, `AAC`, `ALAC`, `OGG`, `AIFF`) in `hera-rs/src/forensics.rs`.
+  - Introduced typed `HeraError` (`hera-rs/src/error.rs`), warm Cloudflare Worker `OnceLock<P2PMeshState>`, constant-time secret/ticket verification (`constant_time_eq`), `8 KiB` `Seek` UDP chunk reads, and zero-allocation 1D `2-Opt TSP` optimization.
+
+### Fixed
+- **Root Cargo Workspace Release Pipelines (`.github/workflows/release-binaries.yml`, `.github/workflows/release.yml`, `hera-ipc`):**
+  - Updated cross-OS binary packaging and `Swatinem/rust-cache@v2` workspace paths to consume the root workspace `target/` directory and root `Cargo.lock`, enforced by `verify_workspace_release_workflows` in `hera-desktop/src-ipc/src/workflow_guard.rs`.
+
+---
+
 ## [0.5.0] - 2026-11-08
 
 ### Added

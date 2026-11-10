@@ -1,18 +1,19 @@
-# 🦀 Hera Universal Rust Node (`hera-node-rs`)
+# 🦀 Hera Universal Rust Node (`hera-node-rs v0.6.0`)
 
-**Pure-Rust Audio DSP, 4-Layer 2-Opt TSP Crate Optimizer & Federated R2 Edge Swarm Node**  
-*One single `Axum` codebase that compiles to both **Cloudflare Workers (WASM)** and **Standalone Micro-VPS (`~10 MB RAM`)**.*  
+**Pure-Rust Audio DSP, `#![forbid(unsafe_code)]` Dual-Deck Audio Engine, 4-Layer 2-Opt TSP Crate Optimizer, 21-Tool MCP Server & Federated R2 Edge Swarm Node**  
+*One single `Axum` codebase that compiles to **HERA Desktop (`Tauri v2`)**, **Cloudflare Workers (`wasm32-unknown-unknown`)**, and **Standalone Micro-VPS (`~10 MB RAM`)**.*  
 **Swarm Motto:** *«Mientras más nodos de Hera, más fuerte es el sistema de enjambres»*
 
 ---
 
-## ⚡ Why Rust for Hera?
+## ⚡ Why 100% Pure Rust for Hera?
 
-| Metric | Python (`Librosa` + `FFmpeg`) | TypeScript (`Bun` + `Hono`) | 🦀 **Rust (`Axum` + `Symphonia` + `rustfft`)** |
+| Metric | Legacy v0.1 (`Librosa` + `FFmpeg`) | TypeScript (`Bun` + `Hono`) | 🦀 **Rust v0.6.0 (`Axum` + `Symphonia` + `rustfft`)** |
 | :--- | :---: | :---: | :---: |
 | **Idle Memory (RAM)** | ~120 MB | ~35 MB | **~10 MB** |
 | **Audio Analysis Speed (1 Track)** | ~1.80s | Calls external binary | **~0.08s (100% Pure Rust)** |
-| **External Dependencies** | Python + `.venv` + `ffmpeg` | Bun runtime | **Zero (1 static binary / WASM)** |
+| **Supported Streaming Codecs** | Requires external `ffmpeg` | None native | **8 Codecs (`WAV`, `FLAC`, `MP3`, `M4A`, `AAC`, `ALAC`, `OGG`, `AIFF`)** |
+| **Runtime Dependencies** | Python + `.venv` + `ffmpeg` | Bun runtime | **Zero (1 static binary / WASM)** |
 | **Cloudflare Workers Native?** | ❌ No | ✅ API only (No DSP) | ✅ **Full API + DSP + 2-Opt TSP + R2 Swarm in WASM** |
 
 ---
@@ -20,65 +21,52 @@
 ## 🧩 Core Modules ([`src/`](src))
 
 1. **[`src/forensics.rs`](src/forensics.rs) — Zero-Trust Spectral & Club Phase Lab**:
-   - Pure-Rust `Symphonia` multi-format decoder (`FLAC`, `WAV`, `MP3`, `OGG`) capped to lightweight streaming windows (`< 25 MB RAM`) so it fits inside Cloudflare Workers' 128 MB limit.
+   - Pure-Rust `Symphonia` streaming partial decoder (`decode_audio_file_partial` supporting `WAV`, `FLAC`, `MP3`, `M4A`, `AAC`, `ALAC`, `OGG`, `AIFF`) capped to lightweight windows (`< 25 MB RAM`) so it fits comfortably inside Cloudflare Workers' 128 MB limit.
    - `rustfft` Welch Averaged Power Spectrum (`2048`-sample Hann window) detecting **Fake Lossless** (`128 kbps` MP3 brickwall cutoffs around `15.5 kHz` upscaled to `.flac`/`.wav`).
    - **Synthetic Sine/Test Tone Detector** (`Peak-to-Mean Spectral Ratio > 0.35` & `Wiener Spectral Flatness < 1e-4`).
    - **Sub-Bass (`< 120 Hz`) Stereo Phase Correlation Audit** ensuring mono club subwoofer compatibility (`r >= 0.25`).
 
 2. **[`src/structure.rs`](src/structure.rs) — Acoustic 4-Hot-Cue & Vocal Activity Analyzer**:
-   - Real first downbeat kick lock (`Cue 1: 1.1.1 Downbeat`), melodic/vocal entry (`Cue 2: Phrase In`), post-breakdown sub-bass surge (`Cue 3: Main Drop`), and late-track vocal clear-out (`Cue 4: Mix Out`).
-   - Krumhansl-Schmuckler 12-pitch chroma key correlation mapped to the **24-key Camelot Wheel** (`1A`..`12B`) + **64D L2-normalized Style Embedding**.
+   - Real first downbeat kick lock (`Cue 1: Intro`), melodic/vocal breakdown (`Cue 2: Breakdown`), post-breakdown sub-bass surge (`Cue 3: Drop`), and late-track vocal clear-out (`Cue 4: Outro`).
+   - Krumhansl-Schmuckler 12-pitch chroma key correlation mapped to the **24-key Camelot Wheel** (`1A`..`12B`) + **64D L2-normalized Style Embedding** & **`u64` Style SimHash (`POPCNT`)**.
 
 3. **[`src/synergy.rs`](src/synergy.rs) — 4-Layer Synergy & Global 2-Opt TSP Crate Optimizer**:
-   - Optimizes the entire DJ set sequence globally using **2-Opt Traveling Salesperson (TSP)** across Camelot harmony, BPM curve (`3:4` and `4:3` polyrhythmic bridges), transient punch & vocal clash prevention, and 64D style embeddings.
-   - Exports ready-to-play `M3U8`, `Rekordbox XML` (with embedded Hot Cues), and Markdown Set Guides.
+   - Optimizes the entire DJ set sequence globally using **2-Opt Traveling Salesperson (TSP)** across Camelot harmony, BPM curve (`3:4` and `4:3` polyrhythmic bridges), transient punch & vocal clash prevention, and `u64` SimHash style embeddings.
 
-4. **[`src/p2p_exchange.rs`](src/p2p_exchange.rs) — Federated R2 Edge Swarm, Constrained Water-Filling & `Edge Guardian` Protocol**:
-   - **Zero-Cost Billing Safety Caps (`Constrained Water-Filling`):** Dynamically allocates hot shards across community Cloudflare Workers while enforcing `CF_WORKER_SAFE_R2_CAP_MB = 9,000.0 MB` (`9.0 GB` out of `10 GB` free R2) and `CF_WORKER_SAFE_REQ_CAP = 85,000 req/day` (out of `100,000 req/day` free Workers) so collaborators never pay a cent.
-   - **Elastic Thermal Replication ($K$) & `Power-of-Two-Choices (P2C)`:** Scales shard replication factor $K \in [1, 5]$ automatically as more community nodes join ($N$) and routes downloads to the healthy node with the lowest `daily_worker_requests_used`.
-   - **Meritocratic `Edge Guardian` Autopilot (`1 : 1.5` Turbo Credits):** Active nodes passing `64-byte Proof-of-Custody` range challenges receive unlimited R2 Fast Lane access (`EDGE_GUARDIAN_UNLIMITED_FAST_LANE`) + `1.5 MB` of Turbo Credit per `1.0 MB` served (`SWARM_TURBO_CREDIT_MULTIPLIER = 1.5`) via single-use `ProofOfDeliveryReceipt`.
-   - **Blind Catalog Sharding & `4 MB` Immutable Blocks (`8.4x` Multiplier):** Stores opaque `shard-blobs/{hmac}.hbin` chunks (`4,194,304` bytes) with `Cache-Control: public, max-age=31536000, immutable`, gated by `60s` HMAC-signed `X-Hera-Swarm-Ticket` headers and protected by double cryptographic seals (`hera_seal` + `audio_sha256`).
+4. **[`src/audio_engine/`](src/audio_engine) — `#![forbid(unsafe_code)]` Lock-Free Dual-Deck Engine**:
+   - In-memory `DualDeckEngine` driven by a lock-free `[AtomicU64; 64]` SPSC `CommandQueue`, 3-band Linkwitz-Riley EQ crossover (`Low` / `Mid` / `High`), and equal-power crossfader for deterministic transition previews.
 
-5. **[`src/mcp.rs`](src/mcp.rs), [`src/p2p.rs`](src/p2p.rs) & [`src/router.rs`](src/router.rs) — Universal `Axum` API, MCP JSON-RPC 2.0 Server & Quarantine-First P2P Mesh**:
-   - **MCP `stdio` Server (`hera-node --mcp`)**: Native JSON-RPC 2.0 over `stdin`/`stdout` for AI coding/curation clients (Antigravity, Claude Desktop, Cursor, Codex) with zero Python dependency.
-   - **MCP HTTP/Edge Server (`POST /mcp` & `GET /mcp/tools`)**: Exposes all MCP tools + Code Mode (`POST /mcp/code-mode`) over HTTP and Cloudflare Workers.
-   - **Core DSP & P2P Endpoints**:
-     - `GET  /health` — Node status & runtime target (`cloudflare-workers-wasm32` or `native-vps-tokio`).
-     - `GET  /api/v1/node/manifest` — Capabilities, invariants & Cloud Referral catalog.
-     - `POST /api/v1/audio/analyze-file` — Upload raw `.wav`/`.flac`/`.mp3` bytes (up to 64 MB) for instant pure-Rust DSP audit & 4 Hot Cues.
-     - `POST /api/v1/audio/analyze-pcm` — Analyze raw float32 PCM channels.
-     - `POST /api/v1/crates/build` — Run global **2-Opt TSP** set curation.
-     - `GET  /api/v1/p2p/search` — Search verified studio masters on the node.
-     - `POST /api/v1/p2p/announce` — Quarantine-First P2P Gatekeeper (rejects fake FLACs, sine tones, and out-of-phase sub-bass).
-   - **Federated R2 Swarm Endpoints ([`docs/FEDERATED_R2_SWARM.md`](../docs/FEDERATED_R2_SWARM.md))**:
-     - `GET  /api/v1/swarm/strength` — Live swarm metrics (`SwarmStrengthMetrics`), active `Edge Guardians`, elastic $K$, and swarm motto.
-     - `POST /api/v1/swarm/heartbeat` — Node telemetry check-in, `Constrained Water-Filling` allocation, `Edge Guardian` privilege verification, and CGNAT `outbound_pull_tickets`.
-     - `POST /api/v1/swarm/route-ticket` — `Power-of-Two-Choices (P2C)` node selection + `60s` signed `SwarmRedirectTicket` + `1:1.5` `ProofOfDeliveryReceipt` credit.
-     - `GET  /api/v1/swarm/shard/:blob_id` — Serves `4 MB` immutable R2 shard blocks (`HERA_R2_VAULT`) gated by `X-Hera-Swarm-Ticket`.
-     - `POST /api/v1/swarm/custody-challenge` — Issues a 64-byte random range `Proof-of-Custody` challenge.
-     - `GET  /api/v1/swarm/custody-probe/:blob_id` — Reads the challenged 64-byte slice directly from R2 and returns its cryptographic digest.
-     - `POST /api/v1/swarm/custody-audit` — Verifies the 64-byte custody response (maintains or revokes `Edge Guardian` status immediately).
-     - `GET  /api/v1/swarm/quarantine` — Returns the `quarantined_nodes` ban list isolated for Bait-and-Switch / poisoned shard attempts.
+5. **[`src/export.rs`](src/export.rs) — Universal DJ Ecosystem Exporters**:
+   - Pure-Rust generators for **VirtualDJ** (`.vdjfolder` + `_vdj_database.xml`), **Rekordbox XML** (with embedded 4 Hot Cues), **Traktor Pro NML** (`_traktor.nml`), and **M3U8** (`POST /api/v1/crates/export`).
+
+6. **[`src/dj_brain/`](src/dj_brain) — Autonomous `DJ Style DNA` Profiler & Multi-Backend AI**:
+   - Pure-Rust `DJ Style DNA` Auto-Profiler (`POST /api/v1/dj/style-dna`), ReAct `HeraAgentHarness`, bounded parallel local AI discovery (`Ollama`, `LM Studio`, `Llama.cpp`, `Jan`, `vLLM`), and `Cloudflare Workers AI Free` (`10,000 Neurons/day` free at `$0.00`, `POST /api/v1/ai/chat`, `GET /api/v1/ai/backends`).
+
+7. **[`src/mcp/`](src/mcp) & [`src/code_mode/`](src/code_mode) — 21-Tool Pure-Rust MCP Server & Code Mode**:
+   - **MCP `stdio` Server (`hera-node --mcp`)**: Native JSON-RPC 2.0 over `stdin`/`stdout` for AI coding/curation clients (Antigravity, Claude Desktop, Cursor, Codex).
+   - **MCP HTTP/Edge Server (`POST /mcp` & `GET /mcp/tools`) + Code Mode (`POST /mcp/code-mode`)**: Exposes all 21 core MCP tools and single-turn multi-step pipeline execution over HTTP and Cloudflare Workers.
+
+8. **[`src/p2p/`](src/p2p), [`src/p2p_exchange.rs`](src/p2p_exchange.rs) & [`src/cloudflare_edge.rs`](src/cloudflare_edge.rs) — 5-Stage Zero-Config P2P & Federated R2 Edge Swarm**:
+   - **5-Stage Zero-Config P2P Cascade**: `1. LAN mDNS` -> `2. Multi-STUN (RFC 5389)` -> `3. 16-Port Birthday Spray` -> `4. Ephemeral TURN (RFC 5766)` -> `5. R2 Edge Boost`.
+   - **Zero-Cost Billing Safety Caps (`Constrained Water-Filling`)**: Dynamically allocates hot shards across community Cloudflare Workers while enforcing `CF_WORKER_SAFE_R2_CAP_MB = 9,000.0 MB` (`9.0 GB` out of `10 GB` free R2) and `CF_WORKER_SAFE_REQ_CAP = 85,000 req/day` (out of `100,000 req/day` free Workers).
+   - **Meritocratic `Edge Guardian` Autopilot (`1 : 1.5` Turbo Credits)**: Active nodes passing `64-byte Proof-of-Custody` range challenges receive unlimited R2 Fast Lane access + `1.5 MB` of Turbo Credit per `1.0 MB` served via `ProofOfDeliveryReceipt`.
+   - **Blind Catalog Sharding & `4 MB` Immutable Blocks (`8.4x` Multiplier)**: Stores opaque `shard-blobs/{hmac}.hbin` chunks (`4,194,304` bytes) with `16 x 256 KiB` BEP 52 Merkle trees, gated by `60s` HMAC-signed `X-Hera-Swarm-Ticket` headers and double cryptographic seals (`hera_seal` + `audio_sha256`).
 
 ---
 
-## 🚀 Deployment Options (Free & Referral-Monetized)
+## 🛠️ Canonical Commands (`v0.6.0`)
 
-### Option A: Cloudflare Workers + R2 `Edge Guardian` (`$0.00 / Forever Free Edge WASM`)
 ```bash
-cd hera-rs
-npx wrangler deploy
-```
+# 1. Fast Typecheck & Native Compilation Check
+cargo check -p hera-node-rs
 
-### Option B: 1-Click Micro-VPS & Container Providers (Referral Monetization)
-Replace the placeholder codes (`HERA_REFERRAL`, `HERA_VULTR_REF`, `HERA_DO_REF`, `HERA_HETZNER_REF`) in [`src/p2p.rs`](src/p2p.rs) and your GitHub README with your personal referral codes to earn cash/credits on every community node deployment:
+# 2. Full Rust Unit & Integration Test Suite (DSP, DualDeckEngine, Exporters, DJ Brain, MCP, P2P Swarm)
+cargo test -p hera-node-rs
 
-- **Railway.app (Up to 25%–50% recurring monthly template kickbacks)**: Uses [`../railway.json`](../railway.json) + [`Dockerfile`](Dockerfile).
-- **Vultr (\$100–\$300 Free User Credit / \$35–\$100 USD payout per referral)**
-- **DigitalOcean (\$200 Free User Credit / \$25–\$200 USD per referral)**
-- **Hetzner Cloud (€20 Free User Credit / €10 per referral)**
+# 3. Run the 21-Tool MCP Server over stdio
+cargo run --release -p hera-node-rs -- --mcp
 
-One-line installer on any Linux VPS:
-```bash
-curl -fsSL https://raw.githubusercontent.com/davidcastilloc/hera/main/deploy/install-node.sh | bash
+# 4. Cloudflare Workers WASM Target Check & Release Build
+cargo check --manifest-path Cargo.toml --target wasm32-unknown-unknown --features cloudflare --no-default-features
+worker-build --release -- --features cloudflare --no-default-features
 ```

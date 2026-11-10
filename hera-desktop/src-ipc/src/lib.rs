@@ -12,6 +12,9 @@ pub mod agy_stream;
 pub mod audio_types;
 pub mod dj_types;
 pub mod typegen;
+pub mod workflow_guard;
+#[cfg(test)]
+mod workflow_guard_tests;
 
 /// Canonical workspace crate version exposed by `hera-ipc`.
 pub const HERA_IPC_VERSION: &str = env!("CARGO_PKG_VERSION");

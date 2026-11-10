@@ -9,21 +9,26 @@
 Before claiming any task is complete, execute and attach the real terminal output (`exit code 0`) for:
 
 ```bash
-# Rust Engine Verification (hera-rs — Rust 2021, hera-node-rs v0.2.0, Zero Python)
-cargo check --manifest-path hera-rs/Cargo.toml
-cargo test --manifest-path hera-rs/Cargo.toml
+# Root Cargo Workspace Verification (hera-node-rs v0.6.0 + hera-ipc v0.6.0, Zero Python)
+cargo check
+cargo test -p hera-node-rs
+cargo test -p hera-ipc
+
+# Desktop Frontend Typegen, Lint/Typecheck, Unit Tests & Bundle (Bun 1.4.4 + Vite+)
+cd hera-desktop && bun run gen:types && bun run check && bun run test && bun run build
 ```
 
 ---
 
 ## 2. Codebase Conventions & Architecture (Zero-Python `~8 MB` Native Stack)
 
-- **Language & Runtime:** 100% Rust 2021 (`hera-rs/` + `hera-desktop/src-tauri/`) + TypeScript / React 19 Compiler / StyleX (`hera-desktop/src/`). Zero Python runtime or dependencies.
-- **Module Layout:**
-  - `hera-rs/src/`: Pure-Rust DSP (`forensics.rs`, `structure.rs`, `synergy.rs`), Native DJ Exporters (`export.rs` for VirtualDJ `.vdjfolder`, Rekordbox XML, Traktor NML, M3U8), `DJ Style DNA` & `Cloudflare Workers AI Free` (`dj_brain.rs`), 5-Layer Post-P2P Swarm (`p2p.rs`, `p2p_exchange.rs`), and 21-tool MCP Server (`mcp.rs`, `code_mode.rs`).
-  - `hera-desktop/`: Direct clone of `martpie/museeks` (`v0.23.4`, MIT) adapted for HERA (`Tauri v2` + `React 19` + `StyleX` + `@tanstack/react-virtual` + `sqlx` + `lofty` + `ts-rs`).
+- **Language & Runtime:** 100% Rust (`Cargo.toml` root workspace: `hera-rs/`, `hera-desktop/src-ipc/`, `hera-desktop/src-tauri/`) + TypeScript / React 19 Compiler / StyleX (`hera-desktop/src/`, Bun `1.4.4` + Vite+ `vp` + `moon 2.6.5`). Zero Python runtime or dependencies.
+- **Module Layout (`v0.6.0`, `< 350` LOC Modular Decomposition):**
+  - `hera-rs/src/` (`hera-node-rs` `v0.6.0`): Pure-Rust DSP (`forensics.rs`, `structure.rs`, `synergy.rs`), `#![forbid(unsafe_code)]` Lock-Free `DualDeckEngine` (`audio_engine/`), Native DJ Exporters (`export.rs` for VirtualDJ `.vdjfolder`, Rekordbox XML, Traktor NML, M3U8), `DJ Style DNA` & `HeraAgentHarness` (`dj_brain/`), 5-Stage Zero-Config P2P + 5-Layer Federated R2 Swarm (`p2p/`, `p2p.rs`, `p2p_exchange.rs`, `cloudflare_edge.rs`, `error.rs`), and 21-tool MCP Server (`mcp/`, `code_mode/`).
+  - `hera-desktop/src-ipc/` (`hera-ipc` `v0.6.0`): Zero-GTK pure-Rust `ts-rs` IPC DTO contract (`typegen.rs` -> `hera-desktop/src/generated/hera-typings.ts`), Tauri v2 ACL Triad guardian (`acl_guard.rs`), and release workflow path guard (`workflow_guard.rs`).
+  - `hera-desktop/` (`hera-desktop` `v0.6.0`): Adapted from `martpie/museeks` (`v0.23.4`, MIT) on `Tauri v2` (`src-tauri/src/plugins/{hera_agent,hera_dj}/`, `sqlx`, `lofty`, `rayon`) + `React 19` + `StyleX` (`agent.tsx`, `bridge.tsx`, `dna.tsx`, `MiniOverlay.tsx`, `HeraDjToolbar.tsx`).
 - **Coding Standards:**
-  - Never commit OS-specific absolute paths (`C:\`, `/Users/`, `/home/`).
+  - Never commit OS-specific absolute host, user-home, or drive-letter paths (always use repository-relative paths).
   - Conventional Commits / Semantic Release (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`) with `git config user.name "David Castillo"` and `git config user.email "vikruzdavid@gmail.com"` (`davidcastilloc`).
 
 ---

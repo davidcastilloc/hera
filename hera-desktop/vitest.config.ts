@@ -22,10 +22,21 @@ export default defineConfig({
           includeTaskLocation: true,
           browser: {
             enabled: true,
-            provider: playwright(),
+            headless: true,
+            provider: playwright(
+              process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+                ? {
+                    launchOptions: {
+                      executablePath:
+                        process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+                      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+                    },
+                  }
+                : undefined,
+            ),
             viewport: {
-              width: 900,
-              height: 500,
+              width: 1180,
+              height: 720,
             },
 
             // https://vitest.dev/guide/browser/playwright

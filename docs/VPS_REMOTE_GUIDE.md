@@ -1,135 +1,118 @@
-﻿# ☁️ Guía: HERA en VPS Remoto + Curadora AI en tu Terminal Local
+# ☁️ Guía: HERA (`hera-node-rs v0.6.0`) en VPS Remoto y Cloudflare Edge + Copiloto Local
 
-Esta guía explica en lenguaje claro y sin complicaciones cómo funciona la arquitectura **Cerebro (Local) + Músculo (VPS 24/7)** y cómo configurarla paso a paso para que cualquier DJ, productor o amante de la música pueda tener su propio super-nodo y asistente virtual.
-
----
-
-## 💡 1. La Idea Central (En pocas palabras)
-
-Míralo como un restaurante:
-* **Tú (El DJ):** Pides lo que quieres desde tu laptop o terminal (*Ármame un set de 90 min de French Touch a 124 BPM*).
-* **Tu Asistente Virtual / Antigravity (El Mesero):** Entiende de música, reglas armónicas (Camelot Wheel) y toma tu comanda.
-* **El Servidor VPS en la Nube (La Cocina Industrial):** Una máquina encendida 24/7 con internet ultrarrápido (1 Gbps) que busca en P2P, descarga a cuarentena, analiza con FFmpeg (BPM/Key/LUFS), organiza los archivos y crea tus playlists sin saturar tu PC local.
-
-`	ext
-┌────────────────────────────────────────────────────────┐
-│  TU LAPTOP / PC LOCAL (Windows, Mac o Linux)           │
-│                                                        │
-│  Tú escribes en la terminal:                           │
-│  Curadora, ármame un set de Deep House a 122 BPM     │
-│                                                        │
-│  🧠 Agente / CLI (Antigravity 'agy', Claude, Cursor)   │
-│     └── Skill 'curadora-hera' (Cerebro Musical)        │
-└───────────────────────────┬────────────────────────────┘
-                            │
-              (Conexión remota segura vía MCP)
-              (Túnel SSH o endpoint privado)
-                            │
-                            ▼
-┌────────────────────────────────────────────────────────┐
-│  SERVIDOR VPS EN LA NUBE (Ubuntu / Debian / Linux)     │
-│                                                        │
-│  💪 HERA Super-Node (El Músculo)                       │
-│     ├── Descarga en segundo plano por P2P (slskd)      │
-│     ├── Cuarentena e integridad acústica (FFmpeg)      │
-│     ├── Análisis acústico DSP (BPM, Camelot, LUFS)     │
-│     ├── Organización limpia con tags ID3 / FLAC        │
-│     └── Sincronización a Google Drive / USB de DJ      │
-└────────────────────────────────────────────────────────┘
-`
+Esta guía explica cómo desplegar el motor nativo en Rust **`hera-node-rs v0.6.0` (`~10 MB RAM`, cero Python)** en un **Micro-VPS 24/7** o en **Cloudflare Workers (`$0.00/mes`)** y conectarlo a **HERA Desktop** o a tu terminal local (`Antigravity`, `Claude Desktop`, `Cursor`, `Codex`) mediante el protocolo **MCP**.
 
 ---
 
-## 🚀 2. Paso a Paso: Cómo ponerlo en marcha
+## 💡 1. La Arquitectura `v0.6.0`: Estudio Local + Nodo de Enjambre 24/7
 
-### Paso 1: Levantar el Servidor en tu VPS (El Músculo)
-En tu servidor remoto (DigitalOcean, Hetzner, AWS, Linode o cualquier Linux), ejecuta el instalador de 1-clic:
+![Concepto y Arquitectura del Enjambre P2P Simbiótico de HERA v0.6.0](../assets/hera_swarm_concept.jpg)
 
-`ash
-curl -fsSL https://raw.githubusercontent.com/davidcastilloc/hera/main/install.sh | bash
-`
-
-Esto dejará listo:
-* El servicio P2P (slskd) corriendo en segundo plano con auto-arranque.
-* Las carpetas /library, /sets, /quarantine y /exports.
-* Los motores de audio (fmpeg, pcalc, librosa).
-
-Para comprobar que todo está en orden en el VPS:
-`ash
-hera status
-`
+```text
+┌──────────────────────────────────────────────────────────────────────┐
+│  TU LAPTOP DE CABINA / PC LOCAL (Windows, macOS o Linux)             │
+│                                                                      │
+│  🎛️ HERA Desktop v0.6.0 (Tauri v2 Dark Booth Studio · ~8 MB)         │
+│     ├── Biblioteca + 4 Hot Cues + DualDeckEngine (#![forbid(unsafe)])│
+│     ├── Modo Mini Always-on-Top (360x408 / 560x52) para VirtualDJ    │
+│     └── Espacio /agent (Ctrl+J · 44 Tools MCP Loopback Bearer)       │
+└──────────────────────────────────┬───────────────────────────────────┘
+                                   │
+               Conexión MCP (stdio SSH / HTTP POST /mcp)
+               + Cascada P2P Zero-Config de 5 Etapas
+                                   │
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  NODO REMOTO 24/7 (Micro-VPS ~10 MB RAM o Cloudflare Worker Free)    │
+│                                                                      │
+│  🦀 hera-node-rs v0.6.0 (100% Pure Rust · Axum + Symphonia + rustfft)│
+│     ├── Auditoría Forense Zero-Trust (< 80 ms, 8 codecs en streaming)│
+│     ├── Optimizador Global 2-Opt TSP + Exportadores VDJ/RB/Traktor   │
+│     ├── 21 Herramientas MCP (stdio, HTTP POST /mcp y Code Mode)      │
+│     └── Edge Guardian P2P Swarm (Water-Filling 9 GB / 85k req cap,   │
+│         bloques Merkle BEP 52 de 4 MB y Créditos Turbo 1 : 1.5)      │
+└──────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
-### Paso 2: Conectar tu CLI Local al VPS (El Cable)
-En tu computadora personal (donde tienes instalado gy / Antigravity, Claude Desktop o Cursor), agrega la configuración del servidor MCP de HERA para que se conecte a tu VPS mediante SSH.
+## 🚀 2. Paso a Paso: Cómo Ponerlo en Marcha
 
-Edita tu archivo de configuración de MCP (ejemplo: ~/.gemini/antigravity/mcp_config.json o la configuración de Claude Desktop):
+### Opción A: Nodo `Edge Guardian` en Cloudflare Workers + R2 (`$0.00/mes`)
 
-`json
+Compila `hera-node-rs` a `wasm32-unknown-unknown` y despliégalo en tu cuenta gratuita de Cloudflare:
+
+```bash
+cd hera-rs
+cargo check --target wasm32-unknown-unknown --features cloudflare --no-default-features
+npx wrangler deploy
+```
+
+- **Protección Matemática de Costo `$0.00`:** El algoritmo **Constrained Water-Filling** limita automáticamente tu Worker a `9,000 MB` de R2 (sobre `10 GB` gratis) y `85,000 req/día` (sobre `100,000 req/día` gratis).
+- **Créditos Turbo `1 : 1.5`:** Mientras tu nodo supera los desafíos `Proof-of-Custody` de 64 bytes, ganas `1.5 MB` de prioridad de descarga por cada `1.0 MB` servido al enjambre.
+
+---
+
+### Opción B: Super-Nodo 24/7 en un Micro-VPS Linux (`~10 MB RAM`)
+
+En cualquier VPS Linux (Ubuntu / Debian en Hetzner, DigitalOcean, Vultr o Railway), instala el binario estático en Rust con el instalador de 1 línea:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/davidcastilloc/hera/main/deploy/install-node.sh | bash
+```
+
+O compílalo directamente desde el workspace Cargo:
+
+```bash
+git clone https://github.com/davidcastilloc/hera.git
+cd hera
+cargo build --release -p hera-node-rs
+
+# Iniciar servidor HTTP Axum + Enjambre P2P en el puerto 8080
+./target/release/hera-node --port 8080
+```
+
+Verifica el estado del nodo y las métricas del enjambre:
+
+```bash
+curl -s http://127.0.0.1:8080/health | jq .
+curl -s http://127.0.0.1:8080/api/v1/swarm/strength | jq .
+```
+
+---
+
+## 🔌 3. Conectar tu Agente Local (`agy`, Claude, Cursor) al VPS por MCP
+
+Como `hera-node` incluye un servidor **MCP JSON-RPC 2.0 nativo sobre `stdio`** (`--mcp`), puedes conectarte desde tu laptop al VPS mediante SSH sin exponer puertos adicionales:
+
+```json
 {
-  mcpServers: {
-    hera: {
-      command: ssh,
-      args: [
-        usuario@IP_DE_TU_VPS,
-        /home/usuario/hera/.venv/bin/hera,
-        serve
+  "mcpServers": {
+    "hera-remote": {
+      "command": "ssh",
+      "args": [
+        "dj@IP_DE_TU_VPS",
+        "/usr/local/bin/hera-node",
+        "--mcp"
       ]
     }
   }
 }
-`
+```
 
-> *(Opcional para pruebas locales en Windows con WSL: puedes cambiar ssh por wsl y args: [-d, Ubuntu, -e, /home/usuario/hera/.venv/bin/hera, serve]).*
-
----
-
-### Paso 3: Instalar la Curadora Virtual (El Cerebro)
-Asegúrate de tener el skill de la curadora en tu carpeta global de skills:
-
-Ubicación: ~/.gemini/config/skills/curadora-hera/SKILL.md
-
-Este skill le enseña a tu agente:
-1. Reglas estrictas de calidad (FLAC Lossless > MP3 320k > Cero audio falso).
-2. Teoría armónica de la Rueda Camelot (progresiones de tonalidad y tempo).
-3. Cómo ejecutar búsquedas, descargas a cuarentena y exportación de crates de DJ de forma autónoma.
+También puedes consumir el endpoint MCP HTTP o **Code Mode** directamente:
+- `GET  /mcp/tools` — Catálogo completo de las 21 herramientas MCP.
+- `POST /mcp` — Ejecución JSON-RPC 2.0 estándar.
+- `POST /mcp/code-mode` — Ejecución multi-paso determinista en un solo turno (`analyze -> 2-Opt TSP -> export`).
 
 ---
 
-### Paso 4: ¡Dar órdenes en lenguaje natural!
-Abre tu terminal en cualquier carpeta y empieza a hablarle a tu Curadora:
+## 🎧 4. Flujo Completo desde Cabina o Terminal
 
-`	ext
-> Curadora, ármame un set de 90 minutos de French Touch a 124 BPM, prioridad FLAC. Autorización: purchased_copy
-`
-
-**Lo que pasará automáticamente:**
-1. Tu agente local envía las instrucciones al VPS.
-2. El VPS busca las mejores versiones de estudio en Soulseek.
-3. Las descarga en la VPS, las pasa por cuarentena y FFmpeg para verificar que sean auténticas.
-4. Calcula su BPM, Key Camelot y energía.
-5. Inyecta tags ID3v2.4 / Vorbis limpios.
-6. Construye la playlist .m3u8, el archivo XML para Rekordbox y la guía visual del set.
-7. Te entrega un reporte final en tu terminal.
-
----
-
-## 🎧 3. ¿Cómo llevo la música a mi USB para tocar en el club?
-
-Tienes dos opciones muy sencillas:
-
-1. **Auto-Sync a la Nube (Google Drive, S3, R2):**
-   Configura clone en tu VPS ejecutando clone config. Una vez configurado, HERA puede subir automáticamente tus sets terminados a tu carpeta de Google Drive.
-2. **Descarga directa por SCP / SFTP:**
-   Desde tu PC local descargas el crate con un solo comando:
-   `ash
-   scp -r usuario@IP_DE_TU_VPS:~/hera/sets/MiNuevoSet ./MisSets/
-   `
-
----
-
-## 🛡️ Ventajas de esta arquitectura
-* **Cero calentamiento de tu laptop:** Los gigabytes de descarga y procesos DSP ocurren en la nube.
-* **Nodo 24/7:** Sigues compartiendo y colaborando con la comunidad DJ sin necesidad de dejar tu PC encendida.
-* **Control total desde cualquier lugar:** Puedes pedir música desde tu laptop de viaje, tu PC de escritorio o tu terminal móvil.
+1. **Pides el set o puente armónico:** Desde la pestaña **`Agente` (`Ctrl+J`)** de HERA Desktop o desde tu terminal con `agy`:
+   > *«Ármame un set de 90 minutos de Afro & Tech House entre 124 y 126 BPM empezando en 8A, verifica los masters con Symphonia y expórtalo para VirtualDJ y Rekordbox XML.»*
+2. **Auditoría y Curaduría en Rust (`< 80 ms` por pista):**
+   - `hera-node-rs` verifica cada pista en cuarentena (`Symphonia + rustfft`), clava los **4 Hot Cues** (`Intro`, `Breakdown`, `Drop`, `Outro`) y sella el activo (`hera_seal` + `audio_sha256`).
+   - El motor `synergy.rs` ejecuta **`2-Opt TSP`** sobre las 4 capas acústicas + `SimHash u64`.
+3. **Sincronización a tu Cabina:**
+   - Descarga los bloques verificados de `4 MB` mediante `Swarm Striping` (`POST /api/v1/swarm/parallel-manifest`) o cárgala al instante en **VirtualDJ** usando el botón **`+ VDJ`** del **`Modo Mini` (`Ctrl+Shift+M`)**.

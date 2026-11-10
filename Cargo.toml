@@ -34,7 +34,8 @@ tokio = "1.52.3"
 ts-rs = "12.0.1"
 
 [profile.dev]
-incremental = true
+incremental = false
+debug = 0
 
 [profile.release]
 opt-level = 3

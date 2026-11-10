@@ -75,3 +75,5 @@ work/
 .wrangler/
 node_modules/
 .moon/cache/
+.vitest-attachments/
+__screenshots__/
