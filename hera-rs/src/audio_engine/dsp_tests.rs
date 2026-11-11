@@ -156,7 +156,10 @@ fn test_headless_backend_4_hot_cue_seek_shadow_parity_and_eof_completion() {
     let expected_ratio = f64::from(out_sr) / f64::from(in_sr);
 
     let backend = HeadlessClockAudioBackend::new_deterministic(out_sr);
-    assert_eq!(backend.backend_kind(), AudioBackendKind::HeadlessClockFallback);
+    assert_eq!(
+        backend.backend_kind(),
+        AudioBackendKind::HeadlessClockFallback
+    );
     let snap = backend
         .load_bytes(DeckId::DeckA, &wav, Some("wav"))
         .expect("load & resample WAV into HeadlessClockAudioBackend");
@@ -165,12 +168,13 @@ fn test_headless_backend_4_hot_cue_seek_shadow_parity_and_eof_completion() {
 
     for (idx, label) in HOT_CUE_LABELS.iter().enumerate() {
         assert_eq!(raw_44k.hot_cues[idx].label, *label);
-        let expected_48k = ((raw_44k.hot_cues[idx].frame_index as f64) * expected_ratio)
-            .round() as u64;
+        let expected_48k =
+            ((raw_44k.hot_cues[idx].frame_index as f64) * expected_ratio).round() as u64;
         assert_eq!(snap.hot_cue_frames[idx], expected_48k);
 
         let cue_num = (idx as u8) + 1;
-        let after_jump = backend.send_command(TransportCommand::JumpToHotCue(DeckId::DeckA, cue_num));
+        let after_jump =
+            backend.send_command(TransportCommand::JumpToHotCue(DeckId::DeckA, cue_num));
         assert_eq!(after_jump.playhead_frame, expected_48k);
     }
 

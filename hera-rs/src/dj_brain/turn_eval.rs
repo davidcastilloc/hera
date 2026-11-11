@@ -196,14 +196,19 @@ pub fn evaluate_agent_harness_turn(
         let fallback_cam_score = req
             .style_dna
             .as_ref()
-            .and_then(|d| d.dominant_camelot_keys.first().map(|k| crate::synergy::compute_camelot_synergy(k, k).0))
+            .and_then(|d| {
+                d.dominant_camelot_keys
+                    .first()
+                    .map(|k| crate::synergy::compute_camelot_synergy(k, k).0)
+            })
             .unwrap_or(0.94);
 
         if let Ok(catalog) = state.catalog.read() {
             if catalog.len() >= 2 {
                 let t1 = &catalog[0];
                 let t2 = &catalog[1];
-                let (cam_score, _) = crate::synergy::compute_camelot_synergy(&t1.camelot_key, &t2.camelot_key);
+                let (cam_score, _) =
+                    crate::synergy::compute_camelot_synergy(&t1.camelot_key, &t2.camelot_key);
                 let e1 = (t1.quality_score / 100.0).clamp(0.4, 0.99);
                 let e2 = (t2.quality_score / 100.0).clamp(0.4, 0.99);
                 let clash = if t1.hot_cues.iter().any(|c| c.role == "outro_vocals")
@@ -217,33 +222,61 @@ pub fn evaluate_agent_harness_turn(
             } else if let Some(first_cat) = catalog.first() {
                 let cand_b = swarm_index.first();
                 let bpm2 = cand_b.map(|c| c.bpm).unwrap_or(first_cat.bpm + 1.0);
-                let cam2 = cand_b.map(|c| c.camelot_key.as_str()).unwrap_or(&first_cat.camelot_key);
-                let (cam_score, _) = crate::synergy::compute_camelot_synergy(&first_cat.camelot_key, cam2);
+                let cam2 = cand_b
+                    .map(|c| c.camelot_key.as_str())
+                    .unwrap_or(&first_cat.camelot_key);
+                let (cam_score, _) =
+                    crate::synergy::compute_camelot_synergy(&first_cat.camelot_key, cam2);
                 let e1 = (first_cat.quality_score / 100.0).clamp(0.4, 0.99);
-                let e2 = cand_b.map(|c| (c.quality_score / 100.0).clamp(0.4, 0.99)).unwrap_or(0.84);
+                let e2 = cand_b
+                    .map(|c| (c.quality_score / 100.0).clamp(0.4, 0.99))
+                    .unwrap_or(0.84);
                 (first_cat.bpm, bpm2, e1, e2, cam_score, 0.04)
             } else if swarm_index.len() >= 2 {
                 let s1 = &swarm_index[0];
                 let s2 = &swarm_index[1];
-                let (cam_score, _) = crate::synergy::compute_camelot_synergy(&s1.camelot_key, &s2.camelot_key);
-                (s1.bpm, s2.bpm, (s1.quality_score / 100.0).clamp(0.4, 0.99), (s2.quality_score / 100.0).clamp(0.4, 0.99), cam_score, 0.04)
+                let (cam_score, _) =
+                    crate::synergy::compute_camelot_synergy(&s1.camelot_key, &s2.camelot_key);
+                (
+                    s1.bpm,
+                    s2.bpm,
+                    (s1.quality_score / 100.0).clamp(0.4, 0.99),
+                    (s2.quality_score / 100.0).clamp(0.4, 0.99),
+                    cam_score,
+                    0.04,
+                )
             } else {
-                (fallback_bpm, fallback_bpm + 1.5, 0.76, 0.84, fallback_cam_score, 0.04)
+                (
+                    fallback_bpm,
+                    fallback_bpm + 1.5,
+                    0.76,
+                    0.84,
+                    fallback_cam_score,
+                    0.04,
+                )
             }
         } else {
-            (fallback_bpm, fallback_bpm + 1.5, 0.76, 0.84, fallback_cam_score, 0.04)
+            (
+                fallback_bpm,
+                fallback_bpm + 1.5,
+                0.76,
+                0.84,
+                fallback_cam_score,
+                0.04,
+            )
         }
     };
 
-    let neural_note = score_transition_neural(bpm_a, bpm_b, energy_a, energy_b, camelot_compat, vocal_risk)
-        .map(|s| {
-            format!(
-                " · Sinergia Neural {:.0}% ({})",
-                s.neural_synergy * 100.0,
-                s.recommended_technique
-            )
-        })
-        .unwrap_or_default();
+    let neural_note =
+        score_transition_neural(bpm_a, bpm_b, energy_a, energy_b, camelot_compat, vocal_risk)
+            .map(|s| {
+                format!(
+                    " · Sinergia Neural {:.0}% ({})",
+                    s.neural_synergy * 100.0,
+                    s.recommended_technique
+                )
+            })
+            .unwrap_or_default();
 
     let dna_ctx = req
         .style_dna
@@ -299,6 +332,3 @@ pub fn evaluate_cloudflare_free_ai_turn(
 ) -> CloudflareFreeAiTurnResponse {
     evaluate_agent_harness_turn(req, &crate::p2p::P2PMeshState::new("hera-default-node"))
 }
-
-
-

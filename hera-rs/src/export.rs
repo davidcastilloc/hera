@@ -167,18 +167,15 @@ pub fn generate_m3u8(tracks: &[ExportTrackItem]) -> String {
 
 pub fn generate_rekordbox_xml(crate_name: &str, tracks: &[ExportTrackItem]) -> String {
     let rb_colors = [
-        ("40", "226", "20"),  // Cue 1: Green
-        ("0", "210", "255"),  // Cue 2: Cyan
-        ("255", "45", "45"),  // Cue 3: Red
-        ("255", "190", "0"),  // Cue 4: Amber
+        ("40", "226", "20"), // Cue 1: Green
+        ("0", "210", "255"), // Cue 2: Cyan
+        ("255", "45", "45"), // Cue 3: Red
+        ("255", "190", "0"), // Cue 4: Amber
     ];
     let mut xml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     xml.push_str("<DJ_PLAYLISTS Version=\"1.0.0\">\n");
     xml.push_str("  <PRODUCT Name=\"Hera\" Version=\"0.2.0\" Company=\"Hera DJ\"/>\n");
-    xml.push_str(&format!(
-        "  <COLLECTION Entries=\"{}\">\n",
-        tracks.len()
-    ));
+    xml.push_str(&format!("  <COLLECTION Entries=\"{}\">\n", tracks.len()));
 
     for (idx, t) in tracks.iter().enumerate() {
         let track_num = idx + 1;
@@ -317,10 +314,7 @@ pub fn generate_traktor_nml(crate_name: &str, tracks: &[ExportTrackItem]) -> Str
     let mut nml = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
     nml.push_str("<NML VERSION=\"19\">\n");
     nml.push_str("  <HEAD COMPANY=\"Hera DJ\" PROGRAM=\"Hera\"/>\n");
-    nml.push_str(&format!(
-        "  <COLLECTION ENTRIES=\"{}\">\n",
-        tracks.len()
-    ));
+    nml.push_str(&format!("  <COLLECTION ENTRIES=\"{}\">\n", tracks.len()));
 
     let mut playlist_keys = Vec::with_capacity(tracks.len());
 
@@ -407,9 +401,8 @@ pub fn generate_traktor_nml(crate_name: &str, tracks: &[ExportTrackItem]) -> Str
 
 pub fn export_crate_bundle(req: &ExportCrateRequest) -> ExportCrateResponse {
     let want_all = req.formats.iter().any(|f| f.eq_ignore_ascii_case("all"));
-    let has_fmt = |target: &str| {
-        want_all || req.formats.iter().any(|f| f.eq_ignore_ascii_case(target))
-    };
+    let has_fmt =
+        |target: &str| want_all || req.formats.iter().any(|f| f.eq_ignore_ascii_case(target));
 
     let m3u8_content = if has_fmt("m3u8") {
         Some(generate_m3u8(&req.tracks))
@@ -423,13 +416,12 @@ pub fn export_crate_bundle(req: &ExportCrateRequest) -> ExportCrateResponse {
         None
     };
 
-    let (virtualdj_folder_xml, virtualdj_database_xml) =
-        if has_fmt("virtualdj") || has_fmt("vdj") {
-            let (f_xml, db_xml) = generate_virtualdj_exports(&req.crate_name, &req.tracks);
-            (Some(f_xml), Some(db_xml))
-        } else {
-            (None, None)
-        };
+    let (virtualdj_folder_xml, virtualdj_database_xml) = if has_fmt("virtualdj") || has_fmt("vdj") {
+        let (f_xml, db_xml) = generate_virtualdj_exports(&req.crate_name, &req.tracks);
+        (Some(f_xml), Some(db_xml))
+    } else {
+        (None, None)
+    };
 
     let traktor_nml_content = if has_fmt("traktor_nml") || has_fmt("traktor") {
         Some(generate_traktor_nml(&req.crate_name, &req.tracks))

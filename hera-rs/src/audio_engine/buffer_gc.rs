@@ -1,8 +1,8 @@
 //! Lock-free retired audio buffer GC channel keeping deallocation off the real-time audio thread.
 
-use std::sync::{Arc, Mutex};
-use rtrb::{Consumer, Producer, RingBuffer};
 use super::PreallocatedDeckBuffer;
+use rtrb::{Consumer, Producer, RingBuffer};
+use std::sync::{Arc, Mutex};
 
 /// Capacity of the ring buffer holding retired deck buffers pending GC.
 pub const RETIRED_BUFFER_CHANNEL_CAPACITY: usize = 16;

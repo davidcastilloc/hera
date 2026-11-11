@@ -9,9 +9,7 @@ mod schemas_core;
 mod schemas_swarm;
 
 #[cfg(feature = "native")]
-pub use rmcp_server::{
-    build_rmcp_tools, serve_mcp_io_rmcp, serve_mcp_stdio_rmcp, HeraRmcpServer,
-};
+pub use rmcp_server::{build_rmcp_tools, serve_mcp_io_rmcp, serve_mcp_stdio_rmcp, HeraRmcpServer};
 
 use crate::p2p::P2PMeshState;
 use crate::router::current_runtime_target;
@@ -81,8 +79,8 @@ pub fn list_mcp_tools() -> Value {
 pub fn handle_mcp_request(req: JsonRpcRequest, state: &P2PMeshState) -> Option<JsonRpcResponse> {
     let method = req.method.as_str();
 
-    // Notifications (no `id`) do not expect a response frame in MCP
-    if method.starts_with("notifications/") && req.id.is_none() {
+    // Notifications (no `id` or `notifications/*` method) do not expect a response frame (JSON-RPC 2.0 §4.1)
+    if req.id.is_none() || method.starts_with("notifications/") {
         return None;
     }
 

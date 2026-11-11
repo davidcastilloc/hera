@@ -128,7 +128,10 @@ impl P2PMeshState {
                 let (prov, direct) = normalize_cloud_share_link(c_url);
                 (prov, Some(direct))
             } else if let Some(ref fid) = file_id {
-                ("gdrive".to_string(), Some(build_gdrive_direct_download_url(fid)))
+                (
+                    "gdrive".to_string(),
+                    Some(build_gdrive_direct_download_url(fid)),
+                )
             } else if let (Some(ref r2_base), Some(ref key)) =
                 (&req.r2_bucket_url, &item.r2_object_key)
             {

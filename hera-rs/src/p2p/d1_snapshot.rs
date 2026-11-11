@@ -143,7 +143,8 @@ impl P2PMeshState {
         if let Ok(catalog) = self.catalog.read() {
             for t in catalog.iter() {
                 let cas = compute_cas_fingerprint(&t.artist, &t.title, t.bpm);
-                let cues_json = serde_json::to_string(&t.hot_cues).unwrap_or_else(|_| "[]".to_string());
+                let cues_json =
+                    serde_json::to_string(&t.hot_cues).unwrap_or_else(|_| "[]".to_string());
                 sql.push_str(&format!(
                     "INSERT OR REPLACE INTO verified_p2p_catalog (track_id, owner_dj, cas_fingerprint, title, artist, bpm, camelot_key, top_subgenre, duration_seconds, format, effective_bandwidth_hz, sub_bass_phase_correlation, mono_compatible_sub, quality_score, forensic_verdict, storage_provider, r2_object_key, stream_url, share_on_p2p, hot_cues_json, hera_seal) VALUES ('{}', '{}', '{}', '{}', '{}', {:.2}, '{}', '{}', {:.2}, '{}', {:.1}, {:.3}, {}, {:.2}, '{}', '{}', '{}', '{}', {}, '{}', '{}');\n",
                     esc(&t.track_id),

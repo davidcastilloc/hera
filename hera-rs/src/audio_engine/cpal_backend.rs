@@ -63,9 +63,15 @@ impl CpalSharedAudioBackend {
                 let hub = Arc::new(hub);
 
                 let stream_res = match sample_format {
-                    SampleFormat::F32 => build_typed_stream::<f32>(&device, &config, channels, worker),
-                    SampleFormat::I16 => build_typed_stream::<i16>(&device, &config, channels, worker),
-                    SampleFormat::U16 => build_typed_stream::<u16>(&device, &config, channels, worker),
+                    SampleFormat::F32 => {
+                        build_typed_stream::<f32>(&device, &config, channels, worker)
+                    }
+                    SampleFormat::I16 => {
+                        build_typed_stream::<i16>(&device, &config, channels, worker)
+                    }
+                    SampleFormat::U16 => {
+                        build_typed_stream::<u16>(&device, &config, channels, worker)
+                    }
                     other => Err(format!("Unsupported cpal sample format: {other:?}")),
                 };
 

@@ -29,8 +29,19 @@ pub struct DetectedLocalServer {
     pub latency_ms: Option<u64>,
 }
 
+type BackendSpec = (
+    &'static str,
+    &'static str,
+    &'static str,
+    &'static str,
+    bool,
+    bool,
+    bool,
+    &'static str,
+);
+
 pub fn list_supported_ai_backends() -> Vec<AiBackendOption> {
-    const SPECS: &[(&str, &str, &str, &str, bool, bool, bool, &str)] = &[
+    const SPECS: &[BackendSpec] = &[
         (
             "cloudflare_free",
             "⚡ Hera Cloud Free (Cloudflare Workers AI + AI Gateway)",

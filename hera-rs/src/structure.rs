@@ -59,7 +59,9 @@ pub fn analyze_structure_and_style(
     bpm_hint: Option<f32>,
 ) -> StructuralCueProfile {
     let decoded_dur = (mono.len() as f32) / (sample_rate.max(1) as f32);
-    let total_dur = full_duration_seconds.unwrap_or(decoded_dur).max(decoded_dur);
+    let total_dur = full_duration_seconds
+        .unwrap_or(decoded_dur)
+        .max(decoded_dur);
 
     let n_fft = 2048usize;
     let hop = 512usize;
@@ -75,9 +77,7 @@ pub fn analyze_structure_and_style(
     let mut planner = FftPlanner::<f32>::new();
     let fft = planner.plan_fft_forward(n_fft);
     let hann: Vec<f32> = (0..n_fft)
-        .map(|i| {
-            0.5 * (1.0 - (2.0 * std::f32::consts::PI * (i as f32) / (n_fft as f32)).cos())
-        })
+        .map(|i| 0.5 * (1.0 - (2.0 * std::f32::consts::PI * (i as f32) / (n_fft as f32)).cos()))
         .collect();
 
     let n_frames = (mono.len() - n_fft) / hop + 1;
@@ -92,7 +92,13 @@ pub fn analyze_structure_and_style(
 
     let mut prev_sub = 0.0_f32;
     let mut prev_mid = 0.0_f32;
-    let mut buf = vec![Complex { re: 0.0_f32, im: 0.0_f32 }; n_fft];
+    let mut buf = vec![
+        Complex {
+            re: 0.0_f32,
+            im: 0.0_f32
+        };
+        n_fft
+    ];
 
     for frame_idx in 0..n_frames {
         let start = frame_idx * hop;
@@ -108,9 +114,9 @@ pub fn analyze_structure_and_style(
         let mut m_e = 0.0_f32;
         let mut h_e = 0.0_f32;
 
-        for b in 1..n_bins {
+        for (b, c) in buf.iter().enumerate().take(n_bins).skip(1) {
             let f = (b as f32) * bin_hz;
-            let mag = (buf[b].re * buf[b].re + buf[b].im * buf[b].im).sqrt();
+            let mag = (c.re * c.re + c.im * c.im).sqrt();
 
             if (20.0..=135.0).contains(&f) {
                 s_e += mag;
@@ -208,7 +214,8 @@ pub fn analyze_structure_and_style(
             break;
         }
     }
-    let first_beat_sec = ((first_kick_frame as f32) * frame_dt + (n_fft as f32 * 0.25) / (sample_rate as f32))
+    let first_beat_sec = ((first_kick_frame as f32) * frame_dt
+        + (n_fft as f32 * 0.25) / (sample_rate as f32))
         .min(decoded_dur * 0.35);
 
     // 5. Bar-level Sub, Mid & Total Energy Profiles locked to `first_beat_sec`
@@ -264,7 +271,9 @@ pub fn analyze_structure_and_style(
 
     let mut phrase_bar = 8usize.min(best_drop_bar.saturating_sub(4)).max(4);
     let mut best_phrase_score = -1e9_f32;
-    let max_phrase_cand = best_drop_bar.saturating_sub(4).min(n_bars_decoded.saturating_sub(2));
+    let max_phrase_cand = best_drop_bar
+        .saturating_sub(4)
+        .min(n_bars_decoded.saturating_sub(2));
     let mut p_b = 4usize;
     while p_b <= max_phrase_cand {
         let pre_mid = mean_slice(&bar_mid[..p_b]);

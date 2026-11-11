@@ -132,7 +132,7 @@ mod tests {
 
         // Silence for first 1.0s, then kicks starting at t = 1.0s
         // Breakdown from bar 12 to 16 (t=25s..33s), massive Main Drop at bar 16 (t=33s)
-        for i in 0..n {
+        for (i, m) in mono.iter_mut().enumerate().take(n) {
             let t = (i as f32) / (sr as f32);
             if t < 1.0 {
                 continue;
@@ -155,12 +155,12 @@ mod tests {
             };
 
             let sub_wave = (2.0 * std::f32::consts::PI * 58.0 * t).sin() * kick_env * sub_gain;
-            let mid_wave = if bar >= 4 && bar < 20 {
+            let mid_wave = if (4..20).contains(&bar) {
                 (2.0 * std::f32::consts::PI * 440.0 * t).sin() * 0.25
             } else {
                 0.0
             };
-            mono[i] = sub_wave + mid_wave;
+            *m = sub_wave + mid_wave;
         }
 
         let profile = analyze_structure_and_style(&mono, sr, Some(dur_sec), Some(bpm));
@@ -465,7 +465,9 @@ mod tests {
             .unwrap();
         let resp_profiles = app.call(req_profiles).await.unwrap();
         assert_eq!(resp_profiles.status(), StatusCode::OK);
-        let profiles_bytes = to_bytes(resp_profiles.into_body(), 1024 * 1024).await.unwrap();
+        let profiles_bytes = to_bytes(resp_profiles.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
         let profiles_json: serde_json::Value = serde_json::from_slice(&profiles_bytes).unwrap();
         assert_eq!(profiles_json["connected_djs_count"], 1);
         assert_eq!(profiles_json["profiles"][0]["dj_handle"], "DaviDJ");
@@ -508,11 +510,15 @@ mod tests {
             .method("POST")
             .uri("/api/v1/dj/connect-drive")
             .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_vec(&djfoo_connect_payload).unwrap()))
+            .body(Body::from(
+                serde_json::to_vec(&djfoo_connect_payload).unwrap(),
+            ))
             .unwrap();
         let resp_connect = app.call(req_connect).await.unwrap();
         assert_eq!(resp_connect.status(), StatusCode::CREATED);
-        let connect_bytes = to_bytes(resp_connect.into_body(), 1024 * 1024).await.unwrap();
+        let connect_bytes = to_bytes(resp_connect.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
         let connect_json: serde_json::Value = serde_json::from_slice(&connect_bytes).unwrap();
 
         // Zero-Trust Quarantine must admit ONLY the authentic 20.6 kHz master and reject the 14.9 kHz fake!
@@ -528,12 +534,10 @@ mod tests {
             .as_str()
             .unwrap()
             .to_string();
-        assert!(
-            connect_json["admitted_tracks"][0]["stream_url"]
-                .as_str()
-                .unwrap()
-                .contains("1DJFoo_Groove_125BPM_8A_Master")
-        );
+        assert!(connect_json["admitted_tracks"][0]["stream_url"]
+            .as_str()
+            .unwrap()
+            .contains("1DJFoo_Groove_125BPM_8A_Master"));
 
         // 3. DJFoo's free Gemini CLI / Claude agent runs a SINGLE Cloudflare Code Mode script
         // to collaborate with DaviDJ's catalog and build a 4-track B2B set (DaviDJ + DJFoo)!
@@ -566,12 +570,14 @@ mod tests {
 
         // 4. Verify DaviDJ can resolve DJFoo's direct Google Drive download link via /api/v1/p2p/stream/:track_id
         let req_stream = Request::builder()
-            .uri(&format!("/api/v1/p2p/stream/{}", djfoo_track_id))
+            .uri(format!("/api/v1/p2p/stream/{}", djfoo_track_id))
             .body(Body::empty())
             .unwrap();
         let resp_stream = app.call(req_stream).await.unwrap();
         assert_eq!(resp_stream.status(), StatusCode::OK);
-        let stream_bytes = to_bytes(resp_stream.into_body(), 1024 * 1024).await.unwrap();
+        let stream_bytes = to_bytes(resp_stream.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
         let stream_json: serde_json::Value = serde_json::from_slice(&stream_bytes).unwrap();
         assert_eq!(stream_json["owner_dj"], "DJFoo");
         assert_eq!(stream_json["storage_provider"], "gdrive");
@@ -651,19 +657,18 @@ mod tests {
         assert_eq!(j2["cas_deduplicated_hits"], 1);
         assert_eq!(j2["physical_r2_mb_saved"], 45.0);
         assert_eq!(j2["admitted_tracks"].as_array().unwrap().len(), 3);
-        assert_eq!(j2["rejected_quarantine_tracks"].as_array().unwrap().len(), 1);
-        assert!(
-            j2["rejected_quarantine_tracks"][0]
-                .as_str()
-                .unwrap()
-                .contains("R2_QUOTA_EXCEEDED")
+        assert_eq!(
+            j2["rejected_quarantine_tracks"].as_array().unwrap().len(),
+            1
         );
+        assert!(j2["rejected_quarantine_tracks"][0]
+            .as_str()
+            .unwrap()
+            .contains("R2_QUOTA_EXCEEDED"));
 
         // 3. Test Local Laptop / Server Direct Storage & P2P Seeder (`POST /api/v1/node/scan-local-dir` + `GET /api/v1/p2p/download/:track_id`)
-        let temp_dir = std::env::temp_dir().join(format!(
-            "hera_local_p2p_test_dir_{}",
-            std::process::id()
-        ));
+        let temp_dir =
+            std::env::temp_dir().join(format!("hera_local_p2p_test_dir_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&temp_dir);
         std::fs::create_dir_all(&temp_dir).unwrap();
 
@@ -684,7 +689,11 @@ mod tests {
             right_good.push(kick + airy);
         }
         let good_wav = encode_stereo_wav(&left_good, &right_good, sr);
-        std::fs::write(temp_dir.join("DJLaptop - Local Seeder Master.wav"), &good_wav).unwrap();
+        std::fs::write(
+            temp_dir.join("DJLaptop - Local Seeder Master.wav"),
+            &good_wav,
+        )
+        .unwrap();
 
         let bad_sine: Vec<f32> = (0..sr as usize * 3)
             .map(|i| (2.0 * std::f32::consts::PI * 440.0 * (i as f32 / sr as f32)).sin() * 0.8)
@@ -713,7 +722,13 @@ mod tests {
                 .unwrap();
 
         assert_eq!(j_scan["admitted_tracks"].as_array().unwrap().len(), 1);
-        assert_eq!(j_scan["rejected_quarantine_tracks"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            j_scan["rejected_quarantine_tracks"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
         assert!(!crate::p2p::tier_allows_private_vault("local_unlimited"));
         let local_track_id = j_scan["admitted_tracks"][0]["track_id"]
             .as_str()
@@ -722,12 +737,14 @@ mod tests {
 
         // Verify direct P2P binary audio streaming from the laptop's local disk!
         let req_dl = Request::builder()
-            .uri(&format!("/api/v1/p2p/download/{}", local_track_id))
+            .uri(format!("/api/v1/p2p/download/{}", local_track_id))
             .body(Body::empty())
             .unwrap();
         let resp_dl = app.call(req_dl).await.unwrap();
         assert_eq!(resp_dl.status(), StatusCode::OK);
-        let dl_bytes = to_bytes(resp_dl.into_body(), 64 * 1024 * 1024).await.unwrap();
+        let dl_bytes = to_bytes(resp_dl.into_body(), 64 * 1024 * 1024)
+            .await
+            .unwrap();
         assert_eq!(dl_bytes.len(), good_wav.len());
 
         let _ = std::fs::remove_dir_all(&temp_dir);
@@ -739,11 +756,17 @@ mod tests {
             .unwrap();
         let resp_bstats = app.call(req_bstats).await.unwrap();
         assert_eq!(resp_bstats.status(), StatusCode::OK);
-        let j_bstats: serde_json::Value =
-            serde_json::from_slice(&to_bytes(resp_bstats.into_body(), 1024 * 1024).await.unwrap())
-                .unwrap();
+        let j_bstats: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_bstats.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         // Verify deduplication in the Broker: `Ritual Del Sol` has 2 replicas (DaviDJ + DJR2TrialUser) grouped under 1 CAS master!
-        assert!(j_bstats["total_swarm_replicas"].as_u64().unwrap() > j_bstats["unique_cas_masters"].as_u64().unwrap());
+        assert!(
+            j_bstats["total_swarm_replicas"].as_u64().unwrap()
+                > j_bstats["unique_cas_masters"].as_u64().unwrap()
+        );
 
         // Test Collective Crowd-DSP O(1) Lookup + Auto-Heal of a 14,800 Hz fake YouTube rip!
         let req_lookup = Request::builder()
@@ -766,9 +789,12 @@ mod tests {
             .unwrap();
         let resp_lookup = app.call(req_lookup).await.unwrap();
         assert_eq!(resp_lookup.status(), StatusCode::OK);
-        let j_lookup: serde_json::Value =
-            serde_json::from_slice(&to_bytes(resp_lookup.into_body(), 1024 * 1024).await.unwrap())
-                .unwrap();
+        let j_lookup: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_lookup.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         assert_eq!(j_lookup["auto_healed_count"], 1);
         assert_eq!(j_lookup["instant_intel_hits"][0]["needs_auto_heal"], true);
         // Has 2 swarm download routes (DaviDJ's Google Drive + DJR2TrialUser's R2 CAS)!
@@ -794,9 +820,12 @@ mod tests {
             .unwrap();
         let resp_bridge = app.call(req_bridge).await.unwrap();
         assert_eq!(resp_bridge.status(), StatusCode::OK);
-        let j_bridge: serde_json::Value =
-            serde_json::from_slice(&to_bytes(resp_bridge.into_body(), 1024 * 1024).await.unwrap())
-                .unwrap();
+        let j_bridge: serde_json::Value = serde_json::from_slice(
+            &to_bytes(resp_bridge.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
         assert!(j_bridge["bridge_candidates_count"].as_u64().unwrap() >= 1);
 
         // 5. Test 64-Bit SimHash POPCNT Sonic Similarity (`POST /api/v1/broker/similar`)
@@ -1057,12 +1086,7 @@ mod tests {
                 serde_json::from_slice(&to_bytes(resp_hb.into_body(), 1024 * 1024).await.unwrap())
                     .unwrap();
             if cgnat {
-                assert!(
-                    !j_hb["outbound_pull_tickets"]
-                        .as_array()
-                        .unwrap()
-                        .is_empty()
-                );
+                assert!(!j_hb["outbound_pull_tickets"].as_array().unwrap().is_empty());
             }
             let alloc_mb = j_hb["water_filling_allocation"]["allocated_r2_mb"]
                 .as_f64()
@@ -1114,10 +1138,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(j_ticket["status"], "SWARM_TICKET_ISSUED");
-        assert_eq!(
-            j_ticket["access_mode"],
-            "EDGE_GUARDIAN_UNLIMITED_FAST_LANE"
-        );
+        assert_eq!(j_ticket["access_mode"], "EDGE_GUARDIAN_UNLIMITED_FAST_LANE");
         assert_eq!(j_ticket["ticket"]["aligned_length_bytes"], 4_194_304);
         let issued = j_ticket["ticket"]["issued_at_unix"].as_u64().unwrap();
         let expires = j_ticket["ticket"]["expires_at_unix"].as_u64().unwrap();
@@ -1134,7 +1155,7 @@ mod tests {
 
         // 4a. Attempting to fetch the opaque shard WITHOUT `X-Hera-Swarm-Ticket` must be blocked (403 FORBIDDEN)
         let req_no_ticket = Request::builder()
-            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .uri(format!("/api/v1/swarm/shard/{}", blob_id))
             .body(Body::empty())
             .unwrap();
         let resp_no_ticket = app.call(req_no_ticket).await.unwrap();
@@ -1144,7 +1165,7 @@ mod tests {
         let mut tampered_ticket = j_ticket["ticket"].clone();
         tampered_ticket["hmac_signature"] = serde_json::Value::String("0000deadbeef".to_string());
         let req_bad_ticket = Request::builder()
-            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .uri(format!("/api/v1/swarm/shard/{}", blob_id))
             .header(
                 "x-hera-swarm-ticket",
                 serde_json::to_string(&tampered_ticket).unwrap(),
@@ -1157,7 +1178,7 @@ mod tests {
         // 4b-bis. Attempting to fetch with an EXPIRED 60s ticket (`now_unix > expires_at_unix`) must be blocked (403 FORBIDDEN)
         state.set_clock_override_unix(Some(expires + 1));
         let req_expired_ticket = Request::builder()
-            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .uri(format!("/api/v1/swarm/shard/{}", blob_id))
             .header("x-hera-swarm-ticket", &signed_ticket_header)
             .body(Body::empty())
             .unwrap();
@@ -1169,7 +1190,7 @@ mod tests {
 
         // 4c. Valid 60s ticket succeeds, sets `Cache-Control: public, max-age=31536000, immutable`, and mints 1 : 1.5 Turbo credits!
         let req_good_shard = Request::builder()
-            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .uri(format!("/api/v1/swarm/shard/{}", blob_id))
             .header("x-hera-swarm-ticket", &signed_ticket_header)
             .body(Body::empty())
             .unwrap();
@@ -1217,7 +1238,7 @@ mod tests {
 
         // 4d. Replaying the exact same `X-Hera-Swarm-Ticket` a second time must be rejected (403 FORBIDDEN) to prevent infinite credit farming!
         let req_replay_shard = Request::builder()
-            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .uri(format!("/api/v1/swarm/shard/{}", blob_id))
             .header("x-hera-swarm-ticket", &signed_ticket_header)
             .body(Body::empty())
             .unwrap();
@@ -1252,7 +1273,7 @@ mod tests {
 
         // 5a. Probe the Worker's 64-byte slice endpoint with the `Range` header
         let req_probe = Request::builder()
-            .uri(&format!("/api/v1/swarm/custody-probe/{}", blob_id))
+            .uri(format!("/api/v1/swarm/custody-probe/{}", blob_id))
             .header("range", &range_header)
             .body(Body::empty())
             .unwrap();
@@ -1394,19 +1415,11 @@ mod tests {
                 .unwrap(),
         )
         .unwrap();
-        assert_eq!(
-            j_ticket_standard["access_mode"],
-            "COMMUNITY_STANDARD_LANE"
-        );
+        assert_eq!(j_ticket_standard["access_mode"], "COMMUNITY_STANDARD_LANE");
 
         // 6. Anti-Bait-and-Switch Double Cryptographic Seal (`audio_sha256` + `hera_seal`) & Quarantine Blacklist
-        let valid_seal = compute_hera_seal(
-            "hera-bait-001",
-            122.0,
-            "8A",
-            98.5,
-            "VERIFIED_STUDIO_MASTER",
-        );
+        let valid_seal =
+            compute_hera_seal("hera-bait-001", 122.0, "8A", 98.5, "VERIFIED_STUDIO_MASTER");
         let req_bait = Request::builder()
             .method("POST")
             .uri("/api/v1/p2p/federate-sync")
@@ -1497,19 +1510,15 @@ mod tests {
                 .unwrap(),
         )
         .unwrap();
-        assert!(
-            j_stream["gdrive_large_file_bypass_url"]
-                .as_str()
-                .unwrap()
-                .contains("&confirm=t")
-        );
+        assert!(j_stream["gdrive_large_file_bypass_url"]
+            .as_str()
+            .unwrap()
+            .contains("&confirm=t"));
         assert_eq!(j_stream["aligned_block_size_bytes"], 4_194_304);
-        assert!(
-            j_stream["opaque_blob_key"]
-                .as_str()
-                .unwrap()
-                .starts_with("shard-blobs/")
-        );
+        assert!(j_stream["opaque_blob_key"]
+            .as_str()
+            .unwrap()
+            .starts_with("shard-blobs/"));
 
         // 8. Verify `crate::p2p_exchange` public helpers and Code Mode `hera.getSwarmStrength()`
         assert_eq!(crate::p2p_exchange::SWARM_TURBO_CREDIT_MULTIPLIER, 1.5);
@@ -1573,14 +1582,14 @@ mod tests {
             let mut tampered = proof.clone();
             tampered.leaf_hash_sha256 =
                 "00000000000000000000000000000000000000000000000000000000deadbeef".to_string();
-            assert!(!crate::p2p_exchange::verify_merkle_inclusion_proof(&tampered));
+            assert!(!crate::p2p_exchange::verify_merkle_inclusion_proof(
+                &tampered
+            ));
         }
 
         // 10. Verify Layer 2 Post-P2P Iroh-style `endpoint_pubkey_id` + Network Roaming (`Wi-Fi -> 5G`) + CGNAT Relay
-        let expected_pubkey = crate::p2p_exchange::derive_node_endpoint_pubkey_id(
-            "DJLuna",
-            "hera-worker-luna-latam",
-        );
+        let expected_pubkey =
+            crate::p2p_exchange::derive_node_endpoint_pubkey_id("DJLuna", "hera-worker-luna-latam");
         assert!(expected_pubkey.starts_with("ed25519_"));
 
         // DJLuna roams from her Worker URL to a mobile 5G booth endpoint behind CGNAT:
@@ -1605,10 +1614,9 @@ mod tests {
             .unwrap();
         let resp_roam = app.call(req_roam).await.unwrap();
         assert_eq!(resp_roam.status(), StatusCode::OK);
-        let j_roam: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_roam.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_roam: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_roam.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_roam["endpoint_pubkey_id"], expected_pubkey);
         assert_eq!(j_roam["network_generation"], 2);
         assert_eq!(j_roam["swarm_credit_balance_mb"], 162.0);
@@ -1633,16 +1641,18 @@ mod tests {
             .unwrap();
         let resp_pman = app.call(req_pman).await.unwrap();
         assert_eq!(resp_pman.status(), StatusCode::OK);
-        let j_pman: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_pman.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_pman: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_pman.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_pman["status"], "SWARM_PARALLEL_MANIFEST_ISSUED");
         assert_eq!(j_pman["transport_protocol"], "HTTP/3-QUIC-MULTIPLEXED");
         assert_eq!(j_pman["total_blocks"], 10);
         assert!(j_pman["distinct_edge_guardians_striped"].as_u64().unwrap() >= 2);
         assert_eq!(j_pman["blocks"].as_array().unwrap().len(), 10);
-        assert_eq!(j_pman["blocks"][9]["aligned_offset_bytes"], 9 * 4_194_304u64);
+        assert_eq!(
+            j_pman["blocks"][9]["aligned_offset_bytes"],
+            9 * 4_194_304u64
+        );
 
         // 12. Verify Layer 4 Post-P2P Delta-CRDT (`GCounter` + `LWW-Element-Set`) Commutativity (`merge(A, B) == merge(B, A)`) & Idempotence (`merge(A, A) == A`)
         let mut delta_a = crate::p2p_exchange::SwarmCrdtDelta {
@@ -1691,10 +1701,9 @@ mod tests {
             .unwrap();
         let resp_crdt = app.call(req_crdt).await.unwrap();
         assert_eq!(resp_crdt.status(), StatusCode::OK);
-        let j_crdt: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_crdt.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_crdt: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_crdt.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_crdt["status"], "CRDT_DELTA_CONVERGED");
         assert!(j_crdt["gcounter_total_swarm_served_mb"].as_f64().unwrap() >= 548.3);
 
@@ -1716,19 +1725,15 @@ mod tests {
             .unwrap();
         let resp_sub = app.call(req_sub).await.unwrap();
         assert_eq!(resp_sub.status(), StatusCode::CREATED);
-        let j_sub: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_sub.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_sub: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_sub.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_sub["status"], "MOQ_SEMANTIC_TOPIC_SUBSCRIBED");
-        assert_eq!(j_sub["subscription"]["topic_uri"], "hera://swarm/8A/120-128");
-        assert!(
-            j_sub["immediate_matching_events"]
-                .as_array()
-                .unwrap()
-                .len()
-                >= 2
+        assert_eq!(
+            j_sub["subscription"]["topic_uri"],
+            "hera://swarm/8A/120-128"
         );
+        assert!(j_sub["immediate_matching_events"].as_array().unwrap().len() >= 2);
         assert_eq!(
             j_sub["immediate_matching_events"][0]["merkle_root_sha256"]
                 .as_str()
@@ -1757,16 +1762,12 @@ mod tests {
         let resp_hb_sub = app.call(req_hb_sub).await.unwrap();
         assert_eq!(resp_hb_sub.status(), StatusCode::OK);
         let j_hb_sub: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_hb_sub.into_body(), 1024 * 1024).await.unwrap(),
+            &to_bytes(resp_hb_sub.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
         )
         .unwrap();
-        assert!(
-            j_hb_sub["semantic_pubsub_events"]
-                .as_array()
-                .unwrap()
-                .len()
-                >= 2
-        );
+        assert!(j_hb_sub["semantic_pubsub_events"].as_array().unwrap().len() >= 2);
     }
 
     #[tokio::test]
@@ -1826,10 +1827,9 @@ mod tests {
             .unwrap();
         let resp_exp = app.call(req_exp).await.unwrap();
         assert_eq!(resp_exp.status(), StatusCode::OK);
-        let j_exp: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_exp.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_exp: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_exp.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_exp["track_count"], 2);
         assert!(j_exp["m3u8_content"].as_str().unwrap().contains("#EXTM3U"));
         assert!(j_exp["rekordbox_xml_content"]
@@ -1866,12 +1866,14 @@ mod tests {
             .unwrap();
         let resp_dna = app.call(req_dna).await.unwrap();
         assert_eq!(resp_dna.status(), StatusCode::OK);
-        let j_dna: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_dna.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_dna: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_dna.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_dna["dominant_bpm_zone"], "club_afro_guaracha_122_132");
-        assert!(j_dna["prompt_block"].as_str().unwrap().contains("VirtualDJ"));
+        assert!(j_dna["prompt_block"]
+            .as_str()
+            .unwrap()
+            .contains("VirtualDJ"));
 
         // 3. Verify Cloudflare Workers AI Free Default (`10,000 Neurons/day` at $0.00 + AI Gateway Cache Hit + Fallback)
         let req_ai = Request::builder()
@@ -1891,10 +1893,9 @@ mod tests {
             .unwrap();
         let resp_ai = app.call(req_ai).await.unwrap();
         assert_eq!(resp_ai.status(), StatusCode::OK);
-        let j_ai: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_ai.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_ai: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_ai.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_ai["backend_used"], "cloudflare_workers_ai_free");
         assert_eq!(
             j_ai["model_used"],
@@ -1920,10 +1921,9 @@ mod tests {
             .unwrap();
         let resp_cap = app.call(req_cap).await.unwrap();
         assert_eq!(resp_cap.status(), StatusCode::OK);
-        let j_cap: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_cap.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_cap: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_cap.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_cap["r2_egress_fee_usd_per_gb"], 0.0);
         assert_eq!(j_cap["pioneer_forensic_bounty_mb"], 5.0);
         assert_eq!(j_cap["primitives"].as_array().unwrap().len(), 7);
@@ -1932,7 +1932,10 @@ mod tests {
             .unwrap()
             .iter()
             .any(|p| p["id"] == "cf_calls_managed_turn"));
-        assert!(!j_cap["recent_moq_harmonic_events"].as_array().unwrap().is_empty());
+        assert!(!j_cap["recent_moq_harmonic_events"]
+            .as_array()
+            .unwrap()
+            .is_empty());
 
         // 2. Verify POST /api/v1/edge/forensic-cache/lookup hits on seeded track (< 2 ms, saves 420 ms laptop FFT CPU)
         let req_hit = Request::builder()
@@ -1950,10 +1953,9 @@ mod tests {
             .unwrap();
         let resp_hit = app.call(req_hit).await.unwrap();
         assert_eq!(resp_hit.status(), StatusCode::OK);
-        let j_hit: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_hit.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_hit: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_hit.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_hit["kv_hit"], true);
         assert_eq!(j_hit["cache_status"], "CLOUDFLARE_KV_EDGE_HIT");
         assert_eq!(j_hit["laptop_fft_cpu_ms_saved"], 420);
@@ -1983,10 +1985,9 @@ mod tests {
             .unwrap();
         let resp_store = app.call(req_store).await.unwrap();
         assert_eq!(resp_store.status(), StatusCode::CREATED);
-        let j_store: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_store.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_store: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_store.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_store["was_new_pioneer_entry"], true);
         assert_eq!(j_store["pioneer_bounty_credited_mb"], 5.0);
 
@@ -2012,10 +2013,9 @@ mod tests {
             .unwrap();
         let resp_d1 = app.call(req_d1).await.unwrap();
         assert_eq!(resp_d1.status(), StatusCode::OK);
-        let j_d1: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_d1.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_d1: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_d1.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_d1["status"], "CLOUDFLARE_D1_DNA_SYNCED_ZERO_COST");
         assert_eq!(j_d1["d1_cost_usd"], 0.0);
         assert!(j_d1["record"]["d1_upsert_sql"]
@@ -2040,10 +2040,9 @@ mod tests {
             .unwrap();
         let resp_vec = app.call(req_vec).await.unwrap();
         assert_eq!(resp_vec.status(), StatusCode::OK);
-        let j_vec: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_vec.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_vec: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_vec.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(
             j_vec["engine"],
             "cloudflare_vectorize_u64_simhash_camelot_hybrid"
@@ -2067,12 +2066,14 @@ mod tests {
             .unwrap();
         let resp_turn = app.call(req_turn).await.unwrap();
         assert_eq!(resp_turn.status(), StatusCode::OK);
-        let j_turn: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_turn.into_body(), 1024 * 1024).await.unwrap(),
-        )
-        .unwrap();
+        let j_turn: serde_json::Value =
+            serde_json::from_slice(&to_bytes(resp_turn.into_body(), 1024 * 1024).await.unwrap())
+                .unwrap();
         assert_eq!(j_turn["provider"], "cloudflare_calls_managed_turn_anycast");
-        assert_eq!(j_turn["protocol"], "rfc5766_channel_data_binary_chunk_relay");
+        assert_eq!(
+            j_turn["protocol"],
+            "rfc5766_channel_data_binary_chunk_relay"
+        );
         assert_eq!(j_turn["channel_number"], 0x4000);
         assert_eq!(j_turn["r2_bytes_used"], 0);
         assert_eq!(j_turn["free_tier_allowance_gb"], 1000.0);
@@ -2087,7 +2088,9 @@ mod tests {
         let resp_turn_proof = app.call(req_turn_proof).await.unwrap();
         assert_eq!(resp_turn_proof.status(), StatusCode::OK);
         let j_turn_proof: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_turn_proof.into_body(), 1024 * 1024).await.unwrap(),
+            &to_bytes(resp_turn_proof.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
         )
         .unwrap();
         assert_eq!(
@@ -2123,16 +2126,16 @@ mod tests {
 
         // Also test the persistent Desktop UDP P2P Seeder Daemon + Multi-STUN NAT Classifier + Port-Spray Client
         let state = std::sync::Arc::new(P2PMeshState::new("hera-desktop-daemon-test"));
-        let seed_tmp = std::env::temp_dir().join(format!("hera-seed-test-{}.bin", std::process::id()));
+        let seed_tmp =
+            std::env::temp_dir().join(format!("hera-seed-test-{}.bin", std::process::id()));
         let seed_bytes: Vec<u8> = (0..32_768usize)
             .map(|i| ((i.wrapping_mul(73) ^ (i >> 3)) & 0xFF) as u8)
             .collect();
         std::fs::write(&seed_tmp, &seed_bytes).expect("write temp seed file");
-        state
-            .local_files
-            .write()
-            .unwrap()
-            .insert("hera-seed-001".to_string(), seed_tmp.to_string_lossy().to_string());
+        state.local_files.write().unwrap().insert(
+            "hera-seed-001".to_string(),
+            seed_tmp.to_string_lossy().to_string(),
+        );
 
         let (daemon_status, served_counter) =
             crate::p2p::spawn_desktop_udp_p2p_daemon(state).expect("spawn UDP daemon");
@@ -2162,7 +2165,9 @@ mod tests {
             0,
         );
         assert!(missing_res.is_err());
-        assert!(missing_res.unwrap_err().contains("HERA_ERR_CHUNK_NOT_FOUND"));
+        assert!(missing_res
+            .unwrap_err()
+            .contains("HERA_ERR_CHUNK_NOT_FOUND"));
 
         // Verify Stage 3.5: RFC 5766 TURN ChannelData (0x4000) binary chunk relay when Symmetric CGNAT blocks direct spray
         let turn_report = crate::p2p::run_live_turn_channel_relay_p2p_proof(&audio_bytes)
@@ -2203,8 +2208,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_ticket_expires_via_server_clock_and_short_sha_safety() {
-        use axum::body::to_bytes;
         use crate::p2p::SwarmRouteRequest;
+        use axum::body::to_bytes;
 
         let state = P2PMeshState::new("hera-security-test-node");
         state.set_clock_override_unix(Some(2_000_000));
@@ -2228,7 +2233,9 @@ mod tests {
         let resp_ticket = app.clone().call(req_ticket).await.unwrap();
         assert_eq!(resp_ticket.status(), StatusCode::OK);
         let j_ticket: serde_json::Value = serde_json::from_slice(
-            &to_bytes(resp_ticket.into_body(), 1024 * 1024).await.unwrap(),
+            &to_bytes(resp_ticket.into_body(), 1024 * 1024)
+                .await
+                .unwrap(),
         )
         .unwrap();
         let signed_ticket_header = serde_json::to_string(&j_ticket["ticket"]).unwrap();
@@ -2241,7 +2248,7 @@ mod tests {
         // 2. Fetch ticket at t = 2_000_061 (expired: 61s > 60s TTL) with NO ?now_unix= query parameter
         state.set_clock_override_unix(Some(2_000_061));
         let req_expired = Request::builder()
-            .uri(&format!("/api/v1/swarm/shard/{}", blob_id))
+            .uri(format!("/api/v1/swarm/shard/{}", blob_id))
             .header("x-hera-swarm-ticket", &signed_ticket_header)
             .body(Body::empty())
             .unwrap();
@@ -2249,8 +2256,16 @@ mod tests {
         assert_eq!(resp_expired.status(), StatusCode::FORBIDDEN);
 
         // 3. issue_route_ticket with short audio_sha256 = "abc" (< 10 chars) does not panic
-        let cas_fp = crate::p2p::compute_cas_fingerprint("DaviDJ", "Ritual Del Sol (DaviDJ Original Club Master)", 122.0);
-        state.cas_audio_sha256.write().unwrap().insert(cas_fp, "abc".to_string());
+        let cas_fp = crate::p2p::compute_cas_fingerprint(
+            "DaviDJ",
+            "Ritual Del Sol (DaviDJ Original Club Master)",
+            122.0,
+        );
+        state
+            .cas_audio_sha256
+            .write()
+            .unwrap()
+            .insert(cas_fp, "abc".to_string());
         let short_sha_req = SwarmRouteRequest {
             requester_dj: "DJFoo".to_string(),
             track_id_or_cas: "hera-seed-001".to_string(),
@@ -2289,10 +2304,13 @@ mod tests {
             .method("POST")
             .uri("/api/v1/node/scan-local-dir")
             .header("content-type", "application/json")
-            .body(Body::from(serde_json::to_vec(&serde_json::json!({
-                "dj_handle": "DaviDJ",
-                "directory_path": "/tmp/test"
-            })).unwrap()))
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "dj_handle": "DaviDJ",
+                    "directory_path": "/tmp/test"
+                }))
+                .unwrap(),
+            ))
             .unwrap();
         let resp_scan_no_auth = app.clone().call(req_scan_no_auth).await.unwrap();
         assert_eq!(resp_scan_no_auth.status(), StatusCode::UNAUTHORIZED);
@@ -2303,10 +2321,13 @@ mod tests {
             .uri("/api/v1/node/scan-local-dir")
             .header("content-type", "application/json")
             .header("authorization", "Bearer wrong-token")
-            .body(Body::from(serde_json::to_vec(&serde_json::json!({
-                "dj_handle": "DaviDJ",
-                "directory_path": "/tmp/test"
-            })).unwrap()))
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "dj_handle": "DaviDJ",
+                    "directory_path": "/tmp/test"
+                }))
+                .unwrap(),
+            ))
             .unwrap();
         let resp_scan_bad_auth = app.clone().call(req_scan_bad_auth).await.unwrap();
         assert_eq!(resp_scan_bad_auth.status(), StatusCode::UNAUTHORIZED);
@@ -2317,10 +2338,13 @@ mod tests {
             .uri("/api/v1/node/scan-local-dir")
             .header("content-type", "application/json")
             .header("authorization", "Bearer test-secret-token-123")
-            .body(Body::from(serde_json::to_vec(&serde_json::json!({
-                "dj_handle": "DaviDJ",
-                "directory_path": "/nonexistent/test/dir/123"
-            })).unwrap()))
+            .body(Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "dj_handle": "DaviDJ",
+                    "directory_path": "/nonexistent/test/dir/123"
+                }))
+                .unwrap(),
+            ))
             .unwrap();
         let resp_scan_ok_auth = app.clone().call(req_scan_ok_auth).await.unwrap();
         assert_eq!(resp_scan_ok_auth.status(), StatusCode::BAD_REQUEST);
@@ -2342,7 +2366,10 @@ mod tests {
         let custom_ticket_sig = custom_ticket_res.ticket.hmac_signature.clone();
 
         // Prove signature changed from the default secret HMAC
-        assert_ne!(custom_ticket_sig, j_ticket["ticket"]["hmac_signature"].as_str().unwrap());
+        assert_ne!(
+            custom_ticket_sig,
+            j_ticket["ticket"]["hmac_signature"].as_str().unwrap()
+        );
 
         // Delivery succeeds with matching secret
         let ticket_json = serde_json::to_string(&custom_ticket_res.ticket).unwrap();
@@ -2364,7 +2391,9 @@ mod tests {
             None,
         );
         assert!(deliver_mismatch.is_err());
-        assert!(deliver_mismatch.unwrap_err().contains("Invalid or expired X-Hera-Swarm-Ticket"));
+        assert!(deliver_mismatch
+            .unwrap_err()
+            .contains("Invalid or expired X-Hera-Swarm-Ticket"));
 
         // Reset to default secrets
         state.set_swarm_secrets(
@@ -2427,7 +2456,9 @@ mod tests {
             .fetch_verified_shard(provider_addr.clone(), "shard-missing-404", None)
             .await;
         assert!(missing_err.is_err());
-        assert!(missing_err.unwrap_err().contains("HERA_ERR_SHARD_NOT_FOUND"));
+        assert!(missing_err
+            .unwrap_err()
+            .contains("HERA_ERR_SHARD_NOT_FOUND"));
     }
 
     #[cfg(feature = "native")]
@@ -2462,6 +2493,129 @@ mod tests {
         assert!(err_msg.contains("timed out") || err_msg.contains("failed"));
         assert!(elapsed < std::time::Duration::from_secs(2));
     }
+
+    #[test]
+    fn delivery_receipt_history_stays_bounded_at_max_cap_with_o1_ticket_replay_block() {
+        let state = crate::p2p::P2PMeshState::new("bounded-receipt-node");
+        state
+            .max_delivery_receipts
+            .store(16, std::sync::atomic::Ordering::SeqCst);
+
+        // Issue and redeem > 16 tickets
+        for i in 0..20 {
+            let req = crate::p2p::SwarmRouteRequest {
+                requester_dj: "DaviDJ".to_string(),
+                track_id_or_cas: "hera-seed-001".to_string(),
+                block_index: Some(i),
+            };
+            let route_res = state.issue_route_ticket(req).unwrap();
+            let ticket_json = serde_json::to_string(&route_res.ticket).unwrap();
+            let redeem_res = state.redeem_swarm_shard_delivery(
+                &route_res.ticket.opaque_blob_key,
+                &ticket_json,
+                None,
+            );
+            assert!(redeem_res.is_ok());
+
+            // Replay immediately -> must be blocked in O(1)
+            let replay_res = state.redeem_swarm_shard_delivery(
+                &route_res.ticket.opaque_blob_key,
+                &ticket_json,
+                None,
+            );
+            assert!(replay_res.is_err());
+            assert!(replay_res.unwrap_err().contains("Replay attack blocked"));
+        }
+
+        let receipts = state.delivery_receipts.read().unwrap();
+        assert_eq!(
+            receipts.len(),
+            16,
+            "delivery_receipts deque must stay bounded at cap"
+        );
+        let redeemed_ids = state.redeemed_ticket_ids.read().unwrap();
+        assert_eq!(
+            redeemed_ids.len(),
+            20,
+            "redeemed_ticket_ids must retain all redeemed ticket IDs for O(1) replay blocking"
+        );
+    }
+
+    #[tokio::test]
+    async fn mcp_jsonrpc_notifications_and_version_parity() {
+        let state = crate::p2p::P2PMeshState::new("mcp-notif-node");
+        let app = crate::router::build_hera_router(state);
+
+        // 1. Notification with no id -> 202 ACCEPTED with empty body
+        let req_notif = http::Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "method": "notifications/initialized"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_notif = tower_service::Service::call(&mut app.clone(), req_notif)
+            .await
+            .unwrap();
+        assert_eq!(resp_notif.status(), http::StatusCode::ACCEPTED);
+        let bytes = axum::body::to_bytes(resp_notif.into_body(), 1024)
+            .await
+            .unwrap();
+        assert!(
+            bytes.is_empty(),
+            "202 notification response body must be empty"
+        );
+
+        // 2. Request with id=none on generic method -> 202 ACCEPTED with empty body
+        let req_no_id = http::Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "method": "ping"
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_no_id = tower_service::Service::call(&mut app.clone(), req_no_id)
+            .await
+            .unwrap();
+        assert_eq!(resp_no_id.status(), http::StatusCode::ACCEPTED);
+
+        // 3. Initialize returns version == env!("CARGO_PKG_VERSION")
+        let req_init = http::Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header("content-type", "application/json")
+            .body(axum::body::Body::from(
+                serde_json::to_vec(&serde_json::json!({
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {}
+                }))
+                .unwrap(),
+            ))
+            .unwrap();
+        let resp_init = tower_service::Service::call(&mut app.clone(), req_init)
+            .await
+            .unwrap();
+        assert_eq!(resp_init.status(), http::StatusCode::OK);
+        let body_bytes = axum::body::to_bytes(resp_init.into_body(), 1024 * 64)
+            .await
+            .unwrap();
+        let body_val: serde_json::Value = serde_json::from_slice(&body_bytes).unwrap();
+        assert_eq!(
+            body_val["result"]["serverInfo"]["version"],
+            env!("CARGO_PKG_VERSION")
+        );
+        assert_eq!(body_val["result"]["serverInfo"]["version"], "0.6.0");
+    }
 }
-
-

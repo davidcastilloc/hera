@@ -106,10 +106,7 @@ impl P2PMeshState {
 
     /// Toggle P2P sharing for a DJ's uploaded songs (`p2p_sharing_enabled` is `true` by default).
     /// Only DJs on a higher plan (`pro_monthly`, `pro`, `founder_unlimited`) can turn P2P sharing OFF (`false`)!
-    pub fn set_p2p_sharing(
-        &self,
-        req: SetP2PSharingRequest,
-    ) -> Result<DjProfile, String> {
+    pub fn set_p2p_sharing(&self, req: SetP2PSharingRequest) -> Result<DjProfile, String> {
         let handle = req.dj_handle.trim();
         let updated_profile = {
             let mut guard = self

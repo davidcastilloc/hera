@@ -51,7 +51,9 @@ async fn duplex_rmcp_session_serves_initialize_ping_list_and_tool_calls() {
 
     let (server_stream, client_stream) = tokio::io::duplex(64 * 1024);
     let server_task =
-        tokio::spawn(async move { serve_mcp_io_rmcp(state, tokio::io::split(server_stream)).await });
+        tokio::spawn(
+            async move { serve_mcp_io_rmcp(state, tokio::io::split(server_stream)).await },
+        );
 
     let (client_read, mut client_write) = tokio::io::split(client_stream);
     let mut client_lines = BufReader::new(client_read).lines();

@@ -99,10 +99,7 @@ impl P2PMeshState {
         let mut byte_offset: u64 = 0;
         if let Some(rh) = range_header {
             let clean = rh.trim().trim_start_matches("bytes=");
-            if let Some(first_part) = clean
-                .split(|c| c == '-' || c == '.')
-                .find(|s| !s.is_empty())
-            {
+            if let Some(first_part) = clean.split(['-', '.']).find(|s| !s.is_empty()) {
                 byte_offset = first_part.trim().parse::<u64>().unwrap_or(0);
             }
         }
@@ -122,7 +119,10 @@ impl P2PMeshState {
         let normalized_blob = if sub.opaque_blob_key.starts_with("shard-blobs/") {
             sub.opaque_blob_key.clone()
         } else {
-            format!("shard-blobs/{}", sub.opaque_blob_key.trim_start_matches('/'))
+            format!(
+                "shard-blobs/{}",
+                sub.opaque_blob_key.trim_start_matches('/')
+            )
         };
 
         let sha_map = self
@@ -145,7 +145,9 @@ impl P2PMeshState {
 
         let passed = (sub.http_status == 200 || sub.http_status == 206)
             && !expected_sha256.is_empty()
-            && sub.returned_slice_sha256.eq_ignore_ascii_case(&expected_sha256);
+            && sub
+                .returned_slice_sha256
+                .eq_ignore_ascii_case(&expected_sha256);
 
         let mut owner_dj = String::new();
         let mut credit_balance_mb = 0.0f32;

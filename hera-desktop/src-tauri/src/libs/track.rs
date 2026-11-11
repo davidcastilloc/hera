@@ -205,7 +205,9 @@ fn enrich_track_with_hera_dsp(
     (final_bpm, final_camelot, final_energy, seal, pins)
 }
 
-fn parse_filename_metadata(path: &PathBuf) -> (Option<String>, String, Option<f64>, Option<String>) {
+fn parse_filename_metadata(
+    path: &PathBuf,
+) -> (Option<String>, String, Option<f64>, Option<String>) {
     let raw_stem = path
         .file_stem()
         .and_then(|s| s.to_str())

@@ -1,9 +1,7 @@
 //! 4-Stage Cascading Zero-Config UDP P2P Engine, Multi-STUN NAT Classifier,
 //! Persistent Desktop `8 KiB` Chunk Seeder Daemon, and Symmetric CGNAT 16-Port Spray (`src/p2p/nat_stun.rs`).
 
-use super::{
-    compute_sha256_bytes, compute_sha256_hex, compute_shard_merkle_tree, P2PMeshState,
-};
+use super::{compute_sha256_bytes, compute_sha256_hex, compute_shard_merkle_tree, P2PMeshState};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -106,9 +104,7 @@ fn query_stun_on_existing_socket(
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-pub fn diagnose_multi_stun_nat_on_socket(
-    socket: &std::net::UdpSocket,
-) -> MultiStunNatDiagnosis {
+pub fn diagnose_multi_stun_nat_on_socket(socket: &std::net::UdpSocket) -> MultiStunNatDiagnosis {
     use std::net::UdpSocket;
     use std::time::Duration;
 
@@ -235,28 +231,26 @@ pub fn spawn_desktop_udp_p2p_daemon(
                 } else if let Some(rest) = msg.strip_prefix("HERA_REQ_CHUNK:") {
                     let mut parts = rest.splitn(2, ':');
                     let track_id = parts.next().unwrap_or("hera-seed-001");
-                    let chunk_idx: usize = parts
-                        .next()
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(0);
+                    let chunk_idx: usize = parts.next().and_then(|s| s.parse().ok()).unwrap_or(0);
 
                     let chunk_size = 8192usize;
-                    let slice = match state.get_local_file_chunk_slice(track_id, chunk_idx, chunk_size) {
-                        Ok(s) => s,
-                        Err(_) => {
-                            let err_msg = b"HERA_ERR_CHUNK_NOT_FOUND";
-                            if let Some(ch) = turn_channel {
-                                let mut packet = Vec::with_capacity(4 + err_msg.len());
-                                packet.extend_from_slice(&ch.to_be_bytes());
-                                packet.extend_from_slice(&(err_msg.len() as u16).to_be_bytes());
-                                packet.extend_from_slice(err_msg);
-                                let _ = socket.send_to(&packet, peer_addr);
-                            } else {
-                                let _ = socket.send_to(err_msg, peer_addr);
+                    let slice =
+                        match state.get_local_file_chunk_slice(track_id, chunk_idx, chunk_size) {
+                            Ok(s) => s,
+                            Err(_) => {
+                                let err_msg = b"HERA_ERR_CHUNK_NOT_FOUND";
+                                if let Some(ch) = turn_channel {
+                                    let mut packet = Vec::with_capacity(4 + err_msg.len());
+                                    packet.extend_from_slice(&ch.to_be_bytes());
+                                    packet.extend_from_slice(&(err_msg.len() as u16).to_be_bytes());
+                                    packet.extend_from_slice(err_msg);
+                                    let _ = socket.send_to(&packet, peer_addr);
+                                } else {
+                                    let _ = socket.send_to(err_msg, peer_addr);
+                                }
+                                continue;
                             }
-                            continue;
-                        }
-                    };
+                        };
                     let digest = compute_sha256_bytes(&slice);
 
                     let body_len = 4 + 32 + slice.len();
@@ -331,7 +325,9 @@ pub fn request_chunk_from_peer_with_spray(
         let _ = sock.send_to(req_msg.as_bytes(), active_peer_addr);
         while let Ok((n, sender)) = sock.recv_from(&mut recv_buf) {
             if recv_buf[..n].starts_with(b"HERA_ERR_CHUNK_NOT_FOUND") {
-                return Err(format!("HERA_ERR_CHUNK_NOT_FOUND for {track_id}:{chunk_idx}"));
+                return Err(format!(
+                    "HERA_ERR_CHUNK_NOT_FOUND for {track_id}:{chunk_idx}"
+                ));
             }
             if n <= 36 {
                 if recv_buf[..n].starts_with(b"HERA_PUNCH_ACK") && active_peer_addr != sender {
@@ -404,7 +400,9 @@ pub fn request_chunk_via_turn_channel_relay(
                 &recv_buf[..n]
             };
             if body.starts_with(b"HERA_ERR_CHUNK_NOT_FOUND") {
-                return Err(format!("HERA_ERR_CHUNK_NOT_FOUND for {track_id}:{chunk_idx}"));
+                return Err(format!(
+                    "HERA_ERR_CHUNK_NOT_FOUND for {track_id}:{chunk_idx}"
+                ));
             }
             if body.len() <= 36 {
                 continue;
@@ -437,9 +435,13 @@ pub fn request_chunk_with_turn_fallback(
     track_id: &str,
     chunk_idx: u32,
 ) -> Result<(Vec<u8>, String), String> {
-    if let Ok(bytes) =
-        request_chunk_from_peer_with_spray(base_peer_addr, port_delta, spray_ports, track_id, chunk_idx)
-    {
+    if let Ok(bytes) = request_chunk_from_peer_with_spray(
+        base_peer_addr,
+        port_delta,
+        spray_ports,
+        track_id,
+        chunk_idx,
+    ) {
         return Ok((bytes, "STAGE_3_DIRECT_UDP_SPRAY".to_string()));
     }
     if let Some(relay) = turn_relay_addr {
@@ -449,10 +451,7 @@ pub fn request_chunk_with_turn_fallback(
             track_id,
             chunk_idx,
         )?;
-        return Ok((
-            bytes,
-            "STAGE_3_5_CLOUDFLARE_TURN_CHANNEL_RELAY".to_string(),
-        ));
+        return Ok((bytes, "STAGE_3_5_CLOUDFLARE_TURN_CHANNEL_RELAY".to_string()));
     }
     Err(format!(
         "Both Stage 3 UDP Spray and Stage 3.5 TURN Relay unavailable for {track_id} chunk {chunk_idx}"
@@ -485,7 +484,9 @@ pub struct UdpHolePunchTransferReport {
 /// RFC 5389 STUN Binding Request over an ephemeral UDP socket (`0.0.0.0:0`) to prove that a DJ terminal
 /// behind a router/NAT discovers its external IP:port automatically with zero router port-forwarding.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn probe_stun_public_endpoint(stun_host_port: &str) -> Result<StunPublicEndpointReport, String> {
+pub fn probe_stun_public_endpoint(
+    stun_host_port: &str,
+) -> Result<StunPublicEndpointReport, String> {
     use std::net::{ToSocketAddrs, UdpSocket};
     use std::time::Duration;
 
@@ -537,7 +538,10 @@ pub fn probe_stun_public_endpoint(stun_host_port: &str) -> Result<StunPublicEndp
             ];
             return Ok(StunPublicEndpointReport {
                 local_ephemeral_socket: local_addr,
-                public_mapped_endpoint: format!("{}.{}.{}.{}:{}", ip[0], ip[1], ip[2], ip[3], xport),
+                public_mapped_endpoint: format!(
+                    "{}.{}.{}.{}:{}",
+                    ip[0], ip[1], ip[2], ip[3], xport
+                ),
                 stun_server_used: stun_host_port.to_string(),
                 router_port_forwarding_required: false,
             });
@@ -615,14 +619,13 @@ pub fn run_live_udp_hole_punch_p2p_proof(
         .unwrap_or("")
         .to_string();
 
-    terminal_a
-        .send_to(b"HERA_PUNCH_SYN_FROM_A", &target_for_a)
-        .map_err(|e| e.to_string())?;
-    terminal_b
-        .send_to(b"HERA_PUNCH_SYN_FROM_B", &target_for_b)
-        .map_err(|e| e.to_string())?;
-
+    #[rustfmt::skip]
+    terminal_a.send_to(b"HERA_PUNCH_SYN_FROM_A", &target_for_a).map_err(|e| e.to_string())?;
+    #[rustfmt::skip]
+    terminal_b.send_to(b"HERA_PUNCH_SYN_FROM_B", &target_for_b).map_err(|e| e.to_string())?;
+    #[rustfmt::skip]
     let _ = terminal_a.recv_from(&mut reg_buf).map_err(|e| e.to_string())?;
+    #[rustfmt::skip]
     let _ = terminal_b.recv_from(&mut reg_buf).map_err(|e| e.to_string())?;
 
     let chunk_size = 8192usize;
@@ -647,11 +650,8 @@ pub fn run_live_udp_hole_punch_p2p_proof(
 
     let expected_sha256 = compute_sha256_hex(audio_payload);
     let received_sha256 = compute_sha256_hex(&received_audio);
-    let merkle = compute_shard_merkle_tree(
-        "shards/direct/cas_baiana_124_8a.shard",
-        &received_sha256,
-        0,
-    );
+    let merkle =
+        compute_shard_merkle_tree("shards/direct/cas_baiana_124_8a.shard", &received_sha256, 0);
     let stun_nat_probe = probe_stun_public_endpoint("stun.cloudflare.com:3478").ok();
 
     Ok(UdpHolePunchTransferReport {
@@ -683,7 +683,10 @@ pub fn run_live_turn_channel_relay_p2p_proof(
     let state = Arc::new(P2PMeshState::new("hera-turn-seeder-node"));
     let seed_tmp = std::env::temp_dir().join(format!("hera-turn-seed-{}.bin", std::process::id()));
     let _ = std::fs::write(&seed_tmp, audio_payload);
-    state.local_files.write().unwrap().insert("hera-seed-001".to_string(), seed_tmp.to_string_lossy().to_string());
+    state.local_files.write().unwrap().insert(
+        "hera-seed-001".to_string(),
+        seed_tmp.to_string_lossy().to_string(),
+    );
     let (daemon_status, _served_counter) = spawn_desktop_udp_p2p_daemon(state)?;
     let seeder_addr: SocketAddr = daemon_status
         .daemon_listen_socket
@@ -753,7 +756,10 @@ pub fn run_live_turn_channel_relay_p2p_proof(
         .map(|a| a.to_string())
         .unwrap_or_else(|_| "127.0.0.1:0".to_string());
 
-    let alloc_req: [u8; 20] = [0x00, 0x03, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x48, 0x45, 0x52, 0x41, 0x54, 0x55, 0x52, 0x4E, 0x41, 0x4C, 0x4C, 0x31];
+    let alloc_req: [u8; 20] = [
+        0x00, 0x03, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x48, 0x45, 0x52, 0x41, 0x54, 0x55, 0x52,
+        0x4E, 0x41, 0x4C, 0x4C, 0x31,
+    ];
     handshake_sock
         .send_to(&alloc_req, relay_addr)
         .map_err(|e| e.to_string())?;
@@ -766,7 +772,10 @@ pub fn run_live_turn_channel_relay_p2p_proof(
         return Err("Invalid TURN Allocate Response".to_string());
     }
 
-    let bind_req: [u8; 20] = [0x00, 0x09, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x48, 0x45, 0x52, 0x41, 0x54, 0x55, 0x52, 0x4E, 0x42, 0x4E, 0x44, 0x32];
+    let bind_req: [u8; 20] = [
+        0x00, 0x09, 0x00, 0x00, 0x21, 0x12, 0xA4, 0x42, 0x48, 0x45, 0x52, 0x41, 0x54, 0x55, 0x52,
+        0x4E, 0x42, 0x4E, 0x44, 0x32,
+    ];
     handshake_sock
         .send_to(&bind_req, relay_addr)
         .map_err(|e| e.to_string())?;
@@ -799,11 +808,8 @@ pub fn run_live_turn_channel_relay_p2p_proof(
 
     let expected_sha256 = compute_sha256_hex(audio_payload);
     let received_sha256 = compute_sha256_hex(&received_audio);
-    let merkle = compute_shard_merkle_tree(
-        "shards/turn/cas_baiana_124_8a.shard",
-        &received_sha256,
-        0,
-    );
+    let merkle =
+        compute_shard_merkle_tree("shards/turn/cas_baiana_124_8a.shard", &received_sha256, 0);
 
     Ok(TurnRelayTransferReport {
         stage_used: "STAGE_3_5_CLOUDFLARE_TURN_CHANNEL_RELAY".to_string(),
@@ -832,11 +838,8 @@ pub fn run_live_turn_channel_relay_p2p_proof(
     let chunk_size = 8192usize;
     let total_chunks = audio_payload.chunks(chunk_size).len();
     let expected_sha256 = compute_sha256_hex(audio_payload);
-    let merkle = compute_shard_merkle_tree(
-        "shards/turn/cas_baiana_124_8a.shard",
-        &expected_sha256,
-        0,
-    );
+    let merkle =
+        compute_shard_merkle_tree("shards/turn/cas_baiana_124_8a.shard", &expected_sha256, 0);
     Ok(TurnRelayTransferReport {
         stage_used: "STAGE_3_5_CLOUDFLARE_TURN_CHANNEL_RELAY".to_string(),
         turn_relay_socket: "turn.cloudflare.com:3478".to_string(),

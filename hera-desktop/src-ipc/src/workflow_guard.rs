@@ -85,8 +85,8 @@ fn extract_after<'a>(haystack: &'a str, needle: &str) -> Option<&'a str> {
 /// Verifies that Rust `tauri` (`Cargo.lock`) and NPM `@tauri-apps/{api,cli}` (`package.json`, `bun.lock`)
 /// share the exact same `major.minor` release required by `tauri build` pre-flight checks.
 pub fn verify_tauri_version_parity(repo_root: &Path) -> Result<(), String> {
-    let cargo_lock = fs::read_to_string(repo_root.join("Cargo.lock"))
-        .map_err(|e| format!("Cargo.lock: {e}"))?;
+    let cargo_lock =
+        fs::read_to_string(repo_root.join("Cargo.lock")).map_err(|e| format!("Cargo.lock: {e}"))?;
     let rust_ver = extract_after(&cargo_lock, "name = \"tauri\"\nversion = \"")
         .or_else(|| extract_after(&cargo_lock, "name = \"tauri\"\r\nversion = \""))
         .ok_or_else(|| "Cargo.lock: missing `tauri` package entry".to_string())?;

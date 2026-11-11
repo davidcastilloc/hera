@@ -48,8 +48,7 @@ fn default_storage_provider() -> String {
 }
 
 /// Core Swarm Motto: Every new node multiplies global R2 storage, daily request capacity, K-replication, and throughput.
-pub const SWARM_MOTTO: &str =
-    "Mientras más nodos de Hera, más fuerte es el sistema de enjambres";
+pub const SWARM_MOTTO: &str = "Mientras más nodos de Hera, más fuerte es el sistema de enjambres";
 
 /// Cloudflare Workers Free Tier R2 limit (10 GB = 10,000 MB) and Safe Water-Filling Cap (9,000 MB = $0 billable).
 pub const CF_WORKER_FREE_R2_LIMIT_MB: f32 = 10_000.0;
@@ -58,6 +57,12 @@ pub const CF_WORKER_SAFE_R2_CAP_MB: f32 = 9_000.0;
 /// Cloudflare Workers Free Tier daily requests limit (100,000 req/day) and Safe Cap (85,000 req/day = $0 billable).
 pub const CF_WORKER_FREE_REQ_LIMIT: u64 = 100_000;
 pub const CF_WORKER_SAFE_REQ_CAP: u64 = 85_000;
+
+/// Maximum number of ProofOfDeliveryReceipt instances retained in memory before FIFO eviction.
+pub const MAX_DELIVERY_RECEIPTS: usize = 10_000;
+
+/// Standard binary mebibyte (1 MiB = 1,048,576 bytes) for integer byte math.
+pub const BYTES_PER_MIB: u64 = 1_048_576;
 
 /// 4 MB aligned immutable streaming blocks (`4,194,304` bytes) -> 8.4x request efficiency on Cloudflare Free Tier.
 pub const SWARM_ALIGNED_BLOCK_BYTES: u64 = 4_194_304;
@@ -153,10 +158,10 @@ fn default_r2_quota() -> f32 {
 pub fn resolve_tier_r2_quota_mb(tier: &str) -> f32 {
     match tier {
         "trial_100mb" => 100.0,
-        "beta_mvp" | "free" => 5_120.0,       // 5 GB per Beta MVP DJ
-        "beta_vip_10gb" => 10_240.0,          // 10 GB per VIP Beta DJ
-        "pro_monthly" | "pro" => 51_200.0,    // 50 GB Cloudflare R2 in Pro Monthly
-        "founder_unlimited" => 1_000_000.0,   // Unlimited for DaviDJ
+        "beta_mvp" | "free" => 5_120.0,     // 5 GB per Beta MVP DJ
+        "beta_vip_10gb" => 10_240.0,        // 10 GB per VIP Beta DJ
+        "pro_monthly" | "pro" => 51_200.0,  // 50 GB Cloudflare R2 in Pro Monthly
+        "founder_unlimited" => 1_000_000.0, // Unlimited for DaviDJ
         _ => 5_120.0,
     }
 }

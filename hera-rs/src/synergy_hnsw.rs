@@ -62,18 +62,14 @@ pub fn synthesize_or_normalize_64d_embedding(track: &CrateTrackCandidate) -> [f3
 
         // Deterministic spectral-style Fourier harmonics across dimensions 8..64
         let mut hash: u64 = 0xcbf29ce484222325;
-        for b in track
-            .top_subgenre
-            .bytes()
-            .chain(track.groove_type.bytes())
-        {
+        for b in track.top_subgenre.bytes().chain(track.groove_type.bytes()) {
             hash ^= b as u64;
             hash = hash.wrapping_mul(0x100000001b3);
         }
-        for i in 8..64 {
+        for (i, v) in vec64.iter_mut().enumerate().skip(8) {
             let k = (i - 7) as f32;
             let phase = ((hash.rotate_left((i % 63) as u32) & 0xFFFF) as f32) / 65535.0;
-            vec64[i] = (angle * (1.0 + (k % 3.0)) + phase * std::f32::consts::PI).cos() * 0.35
+            *v = (angle * (1.0 + (k % 3.0)) + phase * std::f32::consts::PI).cos() * 0.35
                 + (bpm_norm * k * 0.25).sin() * 0.25
                 + energy * 0.20
                 + punch * 0.15;
@@ -131,7 +127,10 @@ pub fn prefilter_candidates_hnsw_for_spine(
     let mut anchor_indices = HashSet::new();
     let mut final_indices: Vec<usize> = Vec::with_capacity(cap);
     for anchor in &spine.anchors {
-        if let Some(pos) = candidates.iter().position(|c| c.track_id == anchor.track_id) {
+        if let Some(pos) = candidates
+            .iter()
+            .position(|c| c.track_id == anchor.track_id)
+        {
             if anchor_indices.insert(pos) {
                 final_indices.push(pos);
             }
@@ -157,8 +156,8 @@ pub fn prefilter_candidates_hnsw_for_spine(
     let probes = [probe_opener, probe_bridge, probe_peak];
 
     let per_probe_k = (cap / probes.len()).max(4) + 4;
-    let ranked_indices = query_or_build_cached_hnsw(&embeddings, &probes, per_probe_k)
-        .unwrap_or_default();
+    let ranked_indices =
+        query_or_build_cached_hnsw(&embeddings, &probes, per_probe_k).unwrap_or_default();
 
     // Fill remaining slots up to cap from interleaved nearest-neighbor probe order
     for idx in ranked_indices {
@@ -233,7 +232,8 @@ mod tests {
         let prefiltered = prefilter_candidates_hnsw(&library, 48);
         assert_eq!(prefiltered.len(), 48);
 
-        let crate_res = optimize_crate_2opt("HNSW 200 Scale Set", "steady_climb", library, Some(12));
+        let crate_res =
+            optimize_crate_2opt("HNSW 200 Scale Set", "steady_climb", library, Some(12));
         let elapsed = start.elapsed();
 
         assert_eq!(crate_res.total_tracks, 12);

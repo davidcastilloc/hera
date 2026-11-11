@@ -390,7 +390,7 @@ git commit -m "perf(dj-brain): cache CandleLocalDjModel in OnceLock and score re
   - `redeemed_ticket_ids: Arc<RwLock<HashSet<String>>>` ($O(1)$ replay lookup) + `delivery_receipts: Arc<RwLock<VecDeque<ProofOfDeliveryReceipt>>>` capped at `10_000`.
   - Internal `u64` byte counters (`BYTES_PER_MIB = 1_048_576`) keeping serialized `f32` `*_mb` fields (`#[cfg_attr(feature = "ts", ts(...))]` untouched so `hera-typings.ts` stays 100% compatible).
 
-- [ ] **Step 1: Write failing tests for JSON-RPC notification `202` compliance, `0.6.0` version parity, and `10_000`-cap `VecDeque` receipt pruning**
+- [x] **Step 1: Write failing tests for JSON-RPC notification `202` compliance, `0.6.0` version parity, and `10_000`-cap `VecDeque` receipt pruning**
 
 ```rust
 #[test]
@@ -400,13 +400,13 @@ fn delivery_receipt_history_stays_bounded_at_max_cap_with_o1_ticket_replay_block
 }
 ```
 
-- [ ] **Step 2: Implement MCP JSON-RPC parity, `HashSet` + `VecDeque` bounded state, `u64` byte math, `[workspace.lints]`, clippy fixes, and `cargo fmt --all`**
+- [x] **Step 2: Implement MCP JSON-RPC parity, `HashSet` + `VecDeque` bounded state, `u64` byte math, `[workspace.lints]`, clippy fixes, and `cargo fmt --all`**
 
 1. Fix `mcp_http.rs:33, 44` (`env!("CARGO_PKG_VERSION")` and `req.id.is_none() || req.method.starts_with("notifications/")` -> `StatusCode::ACCEPTED`).
 2. Add `redeemed_ticket_ids: Arc<RwLock<HashSet<String>>>` and `VecDeque` cap (`10_000`) in `state_init.rs` + `merkle_delivery.rs`, and compute quota/credit deltas in `u64` bytes before projecting `*_mb` `f32` fields.
 3. Add `[workspace.lints.clippy]` in root `Cargo.toml`, fix all 27 `clippy` warnings across `hera-rs` and `hera-ipc`, and run `cargo fmt --all`.
 
-- [ ] **Step 3: Run complete monorepo verification gate**
+- [x] **Step 3: Run complete monorepo verification gate**
 
 Run:
 - `cargo fmt --all -- --check`
@@ -416,7 +416,7 @@ Run:
 - `cargo test -p hera-node-rs`
 Expected: `0` fmt diffs, `0` clippy warnings, `0` Golden Master diffs, `6/6` architectural ratchets green, `42+` tests passing (`exit code 0`).
 
-- [ ] **Step 4: Mark `[x]`, append `ADR-030` in `docs/superpowers/DECISIONS.md`, and commit**
+- [x] **Step 4: Mark `[x]`, append `ADR-030` in `docs/superpowers/DECISIONS.md`, and commit**
 
 ```bash
 git add Cargo.toml hera-rs/ hera-desktop/ docs/superpowers/

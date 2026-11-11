@@ -101,7 +101,9 @@ pub fn query_or_build_cached_hnsw(
         });
     }
 
-    let cached = lock.as_ref().ok_or_else(|| "Index uninitialized".to_string())?;
+    let cached = lock
+        .as_ref()
+        .ok_or_else(|| "Index uninitialized".to_string())?;
     let mut probe_results: Vec<Vec<usize>> = Vec::with_capacity(probes.len());
 
     for probe in probes {
@@ -175,7 +177,11 @@ pub fn query_or_build_cached_hnsw(
                 .unwrap_or(std::cmp::Ordering::Equal)
                 .then_with(|| a.0.cmp(&b.0))
         });
-        let list: Vec<usize> = scored.into_iter().take(per_probe_k).map(|(idx, _)| idx).collect();
+        let list: Vec<usize> = scored
+            .into_iter()
+            .take(per_probe_k)
+            .map(|(idx, _)| idx)
+            .collect();
         probe_results.push(list);
     }
 

@@ -14,21 +14,12 @@ use crate::error::constant_time_eq;
 /// - When `N == 1`: `K = 1`
 /// - When `N == 2`: `K = 2`
 /// - When `N >= 3`: `K = 2` for cold/warm tracks, scaling to `K = 3..min(N, 5)` for hot tracks!
+#[rustfmt::skip]
 pub fn compute_elastic_replication_k(active_healthy_nodes: usize, heat_score: f32) -> u32 {
-    if active_healthy_nodes <= 1 {
-        return 1;
-    }
-    if active_healthy_nodes == 2 {
-        return 2;
-    }
+    if active_healthy_nodes <= 1 { return 1; }
+    if active_healthy_nodes == 2 { return 2; }
     let max_allowed = (active_healthy_nodes.min(5)) as u32;
-    if heat_score >= 8.0 {
-        max_allowed
-    } else if heat_score >= 3.0 {
-        3.min(max_allowed)
-    } else {
-        2
-    }
+    if heat_score >= 8.0 { max_allowed } else if heat_score >= 3.0 { 3.min(max_allowed) } else { 2 }
 }
 
 /// Computes the canonical SHA-256 hex digest of a track's verified audio master for double-seal
@@ -80,18 +71,13 @@ pub fn synthesize_deterministic_64b_custody_slice(
     audio_sha256: &str,
     byte_offset: u64,
 ) -> Vec<u8> {
+    #[rustfmt::skip]
     let seed_a = format!("SLICE-A|{}|{}|{}", opaque_blob_key, audio_sha256, byte_offset);
-    let seed_b = format!(
-        "SLICE-B|{}|{}|{}",
-        opaque_blob_key,
-        audio_sha256,
-        byte_offset ^ 0x55aa55aa
-    );
-    let block_a = compute_sha256_bytes(seed_a.as_bytes());
-    let block_b = compute_sha256_bytes(seed_b.as_bytes());
+    #[rustfmt::skip]
+    let seed_b = format!("SLICE-B|{}|{}|{}", opaque_blob_key, audio_sha256, byte_offset ^ 0x55aa55aa);
     let mut out = Vec::with_capacity(CUSTODY_PROOF_SLICE_BYTES);
-    out.extend_from_slice(&block_a);
-    out.extend_from_slice(&block_b);
+    out.extend_from_slice(&compute_sha256_bytes(seed_a.as_bytes()));
+    out.extend_from_slice(&compute_sha256_bytes(seed_b.as_bytes()));
     out
 }
 
@@ -144,6 +130,7 @@ pub fn compute_swarm_ticket_hmac_with_secret(
 
 /// Computes the HMAC-SHA256 signature for a 60-second `SwarmRedirectTicket` (`X-Hera-Swarm-Ticket`) with default secret.
 #[allow(clippy::too_many_arguments)]
+#[rustfmt::skip]
 pub fn compute_swarm_ticket_hmac(
     ticket_id: &str,
     requester_dj: &str,
@@ -163,6 +150,7 @@ pub fn compute_swarm_ticket_hmac(
 }
 
 /// Verifies HMAC signature and TTL window of a `SwarmRedirectTicket` with custom secret.
+#[rustfmt::skip]
 pub fn verify_swarm_redirect_ticket_with_secret(
     ticket: &SwarmRedirectTicket,
     current_unix: u64,
@@ -247,7 +235,8 @@ pub fn compute_shard_merkle_tree(
     let mut current_level = leaves.clone();
     while current_level.len() > 1 {
         let mut next_level = Vec::with_capacity(current_level.len() / 2);
-        for pair in current_level.chunks_exact(2) {
+        let (pairs, _) = current_level.as_chunks::<2>();
+        for pair in pairs {
             next_level.push(compute_merkle_parent_sha256(&pair[0], &pair[1]));
         }
         current_level = next_level;
@@ -288,7 +277,8 @@ pub fn generate_merkle_inclusion_proof(
         let sibling_idx = idx ^ 1;
         siblings.push(level_nodes[sibling_idx].clone());
         let mut next_level = Vec::with_capacity(level_nodes.len() / 2);
-        for pair in level_nodes.chunks_exact(2) {
+        let (pairs, _) = level_nodes.as_chunks::<2>();
+        for pair in pairs {
             next_level.push(compute_merkle_parent_sha256(&pair[0], &pair[1]));
         }
         level_nodes = next_level;
@@ -384,14 +374,18 @@ pub fn merge_swarm_crdt_deltas(a: &SwarmCrdtDelta, b: &SwarmCrdtDelta) -> SwarmC
 
     let mut lww_entries = a.lww_track_entries.clone();
     for (cas, eb) in &b.lww_track_entries {
+        #[rustfmt::skip]
         let replace = match lww_entries.get(cas) {
             Some(ea) => (eb.hlc_timestamp_ms, eb.tombstone, &eb.track.hera_seal, &eb.origin_endpoint_pubkey_id)
                 > (ea.hlc_timestamp_ms, ea.tombstone, &ea.track.hera_seal, &ea.origin_endpoint_pubkey_id),
             None => true,
         };
-        if replace { lww_entries.insert(cas.clone(), eb.clone()); }
+        if replace {
+            lww_entries.insert(cas.clone(), eb.clone());
+        }
     }
 
+    #[rustfmt::skip]
     let (origin_id, origin_pub) = if a.origin_node_id >= b.origin_node_id {
         (a.origin_node_id.clone(), a.origin_endpoint_pubkey_id.clone())
     } else {
@@ -508,6 +502,7 @@ pub fn are_camelot_keys_harmonically_compatible(sub_camelot: &str, target_camelo
 
 /// Pure-Rust FIPS 180-4 SHA-256 implementation (zero external crate dependencies, compiles to native & WASM).
 pub fn compute_sha256_bytes(data: &[u8]) -> [u8; 32] {
+    #[rustfmt::skip]
     const K: [u32; 64] = [
         0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
         0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -533,9 +528,11 @@ pub fn compute_sha256_bytes(data: &[u8]) -> [u8; 32] {
     }
     padded.extend_from_slice(&bit_len.to_be_bytes());
 
-    for chunk in padded.chunks_exact(64) {
+    let (chunks, _) = padded.as_chunks::<64>();
+    for chunk in chunks {
         let mut w = [0u32; 64];
-        for (i, word) in chunk.chunks_exact(4).enumerate() {
+        let (words, _) = chunk.as_chunks::<4>();
+        for (i, word) in words.iter().enumerate() {
             w[i] = u32::from_be_bytes([word[0], word[1], word[2], word[3]]);
         }
         for i in 16..64 {

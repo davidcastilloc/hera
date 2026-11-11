@@ -74,7 +74,6 @@ fn decode_media_source(
     ext_hint: Option<&str>,
     max_seconds: f32,
 ) -> Result<DecodedAudio, String> {
-
     let mut hint = Hint::new();
     if let Some(ext) = ext_hint {
         hint.with_extension(ext.trim_start_matches('.'));
@@ -215,9 +214,8 @@ pub fn audit_pcm_channels(
     let mut peak = 0.0_f32;
     let mut sum_sq = 0.0_f64;
 
-    let count_clip = |slice: &[f32]| -> usize {
-        slice.iter().filter(|&&s| s.abs() >= 0.999).count()
-    };
+    let count_clip =
+        |slice: &[f32]| -> usize { slice.iter().filter(|&&s| s.abs() >= 0.999).count() };
 
     let clipped_samples = if let Some(r) = right {
         count_clip(left) + count_clip(r)
@@ -249,14 +247,18 @@ pub fn audit_pcm_channels(
     let fft = planner.plan_fft_forward(n_fft);
 
     let hann: Vec<f32> = (0..n_fft)
-        .map(|i| {
-            0.5 * (1.0 - (2.0 * std::f32::consts::PI * (i as f32) / (n_fft as f32)).cos())
-        })
+        .map(|i| 0.5 * (1.0 - (2.0 * std::f32::consts::PI * (i as f32) / (n_fft as f32)).cos()))
         .collect();
 
     let mut mean_power = vec![0.0_f64; n_bins];
     let mut frame_count = 0usize;
-    let mut buf = vec![Complex { re: 0.0_f32, im: 0.0_f32 }; n_fft];
+    let mut buf = vec![
+        Complex {
+            re: 0.0_f32,
+            im: 0.0_f32
+        };
+        n_fft
+    ];
 
     let mut pos = 0usize;
     while pos + n_fft <= mono.len() {
@@ -290,8 +292,8 @@ pub fn audit_pcm_channels(
     let arith_mean = total_power / (n_bins as f64);
     let spectral_flatness = (geom_mean / arith_mean.max(1e-20)) as f32;
 
-    let is_synthetic_tone = (peak_to_mean_ratio > 0.35 && spectral_flatness < 1e-4)
-        || peak_to_mean_ratio > 0.65;
+    let is_synthetic_tone =
+        (peak_to_mean_ratio > 0.35 && spectral_flatness < 1e-4) || peak_to_mean_ratio > 0.65;
 
     // 4. Effective Bandwidth & Fake Lossless (Transcode) Detection
     let bin_hz = sample_rate as f32 / (n_fft as f32);
@@ -320,9 +322,9 @@ pub fn audit_pcm_channels(
 
     let active_threshold_db = ref_db - 42.0;
     let mut effective_bandwidth_hz = 0.0_f32;
-    for b in 0..n_bins {
+    for (b, &pdb) in power_db.iter().enumerate().take(n_bins) {
         let f = b as f32 * bin_hz;
-        if f >= 1000.0 && power_db[b] >= active_threshold_db {
+        if f >= 1000.0 && pdb >= active_threshold_db {
             effective_bandwidth_hz = f;
         }
     }
@@ -332,13 +334,13 @@ pub fn audit_pcm_channels(
     let mut pre_cnt = 0usize;
     let mut post_sum = 0.0_f32;
     let mut post_cnt = 0usize;
-    for b in 0..n_bins {
+    for (b, &pdb) in power_db.iter().enumerate().take(n_bins) {
         let f = b as f32 * bin_hz;
         if (13000.0..=15400.0).contains(&f) {
-            pre_sum += power_db[b];
+            pre_sum += pdb;
             pre_cnt += 1;
         } else if (16500.0..=20200.0).contains(&f) {
-            post_sum += power_db[b];
+            post_sum += pdb;
             post_cnt += 1;
         }
     }

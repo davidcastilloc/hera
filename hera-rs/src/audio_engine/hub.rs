@@ -106,7 +106,10 @@ impl AudioControllerHub {
         raw: PreallocatedDeckBuffer,
         source_path: Option<String>,
     ) -> Result<AudioTransportSnapshot, String> {
-        let resampled = Arc::new(resample_deck_buffer_to_rate(&raw, self.atomics.sample_rate)?);
+        let resampled = Arc::new(resample_deck_buffer_to_rate(
+            &raw,
+            self.atomics.sample_rate,
+        )?);
         if deck == DeckId::DeckA {
             let total = resampled.total_frames();
             if let Ok(mut meta) = self.deck_a_meta.lock() {
@@ -145,7 +148,9 @@ impl AudioControllerHub {
             }
             TransportCommand::SeekToSample(DeckId::DeckA, frame) => {
                 let clamped = frame.min(total);
-                self.atomics.playhead_frame.store(clamped, Ordering::Release);
+                self.atomics
+                    .playhead_frame
+                    .store(clamped, Ordering::Release);
                 if clamped < total {
                     self.atomics.ended.store(false, Ordering::Release);
                 }
@@ -288,8 +293,12 @@ impl RealtimeRenderWorker {
         }
 
         if self.atomics.command_epoch.load(Ordering::Acquire) == epoch_before {
-            self.atomics.playhead_frame.store(playhead, Ordering::Release);
-            self.atomics.is_playing.store(is_playing_a, Ordering::Release);
+            self.atomics
+                .playhead_frame
+                .store(playhead, Ordering::Release);
+            self.atomics
+                .is_playing
+                .store(is_playing_a, Ordering::Release);
             if any_deck_started_or_playing && !is_playing_a && total > 0 && playhead >= total {
                 self.atomics.ended.store(true, Ordering::Release);
             }

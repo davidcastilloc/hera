@@ -63,7 +63,10 @@ impl P2PMeshState {
             };
 
             let Ok(bytes) = std::fs::read(&path) else {
-                rejected.push(format!("{} [REJECTED: Could not read file bytes]", file_stem));
+                rejected.push(format!(
+                    "{} [REJECTED: Could not read file bytes]",
+                    file_stem
+                ));
                 continue;
             };
 
@@ -224,7 +227,8 @@ impl P2PMeshState {
             verified_tracks_shared: admitted.len(),
             quarantined_rejected_tracks: rejected.len(),
             edge_guardian_active: true,
-            swarm_credit_balance_mb: ((admitted.len() as f32) * 38.0 * SWARM_CREDIT_MULTIPLIER).max(150.0),
+            swarm_credit_balance_mb: ((admitted.len() as f32) * 38.0 * SWARM_CREDIT_MULTIPLIER)
+                .max(150.0),
             total_bytes_served_mb: (admitted.len() as f32) * 38.0,
             total_bytes_consumed_mb: 0.0,
             custody_audit_passes: 1,

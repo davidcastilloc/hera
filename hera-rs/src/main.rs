@@ -5,9 +5,7 @@ use std::env;
 use std::net::SocketAddr;
 
 fn extract_cli_flag(args: &[String], flag: &str) -> Option<String> {
-    args.windows(2)
-        .find(|w| w[0] == flag)
-        .map(|w| w[1].clone())
+    args.windows(2).find(|w| w[0] == flag).map(|w| w[1].clone())
 }
 
 #[tokio::main]
@@ -23,12 +21,12 @@ async fn main() {
     let dj_handle = extract_cli_flag(&args, "--dj")
         .or_else(|| env::var("HERA_DJ_HANDLE").ok())
         .unwrap_or_else(|| "DaviDJ".to_string());
-    let music_dir = extract_cli_flag(&args, "--music-dir")
-        .or_else(|| env::var("HERA_MUSIC_DIR").ok());
-    let public_url = extract_cli_flag(&args, "--public-url")
-        .or_else(|| env::var("HERA_PUBLIC_URL").ok());
-    let federate_url = extract_cli_flag(&args, "--federate-url")
-        .or_else(|| env::var("HERA_FEDERATE_URL").ok());
+    let music_dir =
+        extract_cli_flag(&args, "--music-dir").or_else(|| env::var("HERA_MUSIC_DIR").ok());
+    let public_url =
+        extract_cli_flag(&args, "--public-url").or_else(|| env::var("HERA_PUBLIC_URL").ok());
+    let federate_url =
+        extract_cli_flag(&args, "--federate-url").or_else(|| env::var("HERA_FEDERATE_URL").ok());
 
     let state = P2PMeshState::new(&node_id);
 

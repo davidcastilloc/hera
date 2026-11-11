@@ -33,9 +33,10 @@ impl P2PMeshState {
                     }
                 }
                 let cas_fp = compute_cas_fingerprint(&t.artist, &t.title, t.bpm);
-                let audio_sha = sha_map.get(&cas_fp).cloned().unwrap_or_else(|| {
-                    compute_canonical_audio_sha256(&cas_fp, &t.hera_seal, 38.0)
-                });
+                let audio_sha = sha_map
+                    .get(&cas_fp)
+                    .cloned()
+                    .unwrap_or_else(|| compute_canonical_audio_sha256(&cas_fp, &t.hera_seal, 38.0));
                 let opaque_blob_key = compute_opaque_shard_blob_key(&cas_fp, &audio_sha);
                 let merkle_tree = compute_shard_merkle_tree(&opaque_blob_key, &audio_sha, 0);
                 let simhash = compute_style_simhash_u64(t.bpm, &t.camelot_key, &t.top_subgenre);
@@ -69,12 +70,8 @@ impl P2PMeshState {
         };
         let bpm_min = req.bpm_min.unwrap_or(118.0).max(50.0);
         let bpm_max = req.bpm_max.unwrap_or(132.0).max(bpm_min);
-        let topic_uri = build_swarm_topic_uri(
-            &camelot,
-            bpm_min,
-            bpm_max,
-            req.subgenre_filter.as_deref(),
-        );
+        let topic_uri =
+            build_swarm_topic_uri(&camelot, bpm_min, bpm_max, req.subgenre_filter.as_deref());
         let sub = SwarmTopicSubscription {
             subscriber_node_id: req.subscriber_node_id.trim().to_string(),
             subscriber_dj: req.subscriber_dj.trim().to_string(),
@@ -120,7 +117,8 @@ impl P2PMeshState {
         let merged = if let Ok(mut guard) = self.crdt_state.write() {
             let mut next = merge_swarm_crdt_deltas(&guard, &incoming);
             next.origin_node_id = self.node_id.clone();
-            next.origin_endpoint_pubkey_id = derive_node_endpoint_pubkey_id("DaviDJ", &self.node_id);
+            next.origin_endpoint_pubkey_id =
+                derive_node_endpoint_pubkey_id("DaviDJ", &self.node_id);
             *guard = next.clone();
             next
         } else {
@@ -132,8 +130,7 @@ impl P2PMeshState {
             for entry in merged.lww_track_entries.values() {
                 if entry.tombstone {
                     cat_guard.retain(|t| {
-                        compute_cas_fingerprint(&t.artist, &t.title, t.bpm)
-                            != entry.cas_fingerprint
+                        compute_cas_fingerprint(&t.artist, &t.title, t.bpm) != entry.cas_fingerprint
                     });
                     continue;
                 }

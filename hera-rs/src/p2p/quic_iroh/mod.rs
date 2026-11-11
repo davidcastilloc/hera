@@ -76,4 +76,3 @@ impl SwarmQuicTransport for IrohQuicAdapter {
 
 #[cfg(feature = "native")]
 mod peer_transfer;
-

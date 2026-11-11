@@ -85,10 +85,7 @@ mod tests {
 
     #[test]
     fn format_m3u_entry_same_directory() {
-        let p = format_m3u_entry_path(
-            Path::new("/home/music/afro.flac"),
-            Path::new("/home/music"),
-        );
+        let p = format_m3u_entry_path(Path::new("/home/music/afro.flac"), Path::new("/home/music"));
         assert_eq!(p, "afro.flac");
     }
 }

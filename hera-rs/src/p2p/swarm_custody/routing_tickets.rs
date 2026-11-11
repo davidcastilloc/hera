@@ -121,11 +121,7 @@ impl P2PMeshState {
         let expires_at_unix = issued_at_unix + SWARM_TICKET_TTL_SECS;
         let aligned_offset_bytes = (block_index as u64) * SWARM_ALIGNED_BLOCK_BYTES;
         let short_sha: String = audio_sha256.chars().take(10).collect();
-        let ticket_id = format!(
-            "tkt-{}-{:x}",
-            short_sha,
-            issued_at_unix ^ nonce
-        );
+        let ticket_id = format!("tkt-{}-{:x}", short_sha, issued_at_unix ^ nonce);
         let hmac_signature = compute_swarm_ticket_hmac_with_secret(
             &ticket_id,
             &requester,
@@ -139,12 +135,9 @@ impl P2PMeshState {
             &secrets.ticket_hmac_secret,
         );
 
-        let merkle_root_sha256 = compute_shard_merkle_tree(
-            &opaque_blob_key,
-            &audio_sha256,
-            aligned_offset_bytes,
-        )
-        .merkle_root_sha256;
+        let merkle_root_sha256 =
+            compute_shard_merkle_tree(&opaque_blob_key, &audio_sha256, aligned_offset_bytes)
+                .merkle_root_sha256;
 
         let ticket = SwarmRedirectTicket {
             ticket_id,
@@ -220,9 +213,7 @@ impl P2PMeshState {
         let cas_fp = compute_cas_fingerprint(&track.artist, &track.title, track.bpm);
         let total_size_mb = req.file_size_mb.unwrap_or(38.0).clamp(4.0, 200.0);
         let total_bytes = (total_size_mb * 1024.0 * 1024.0).round() as u64;
-        let total_blocks = ((total_bytes + SWARM_ALIGNED_BLOCK_BYTES - 1)
-            / SWARM_ALIGNED_BLOCK_BYTES)
-            .max(1) as usize;
+        let total_blocks = total_bytes.div_ceil(SWARM_ALIGNED_BLOCK_BYTES).max(1) as usize;
 
         let mut blocks = Vec::with_capacity(total_blocks);
         let mut distinct_nodes = std::collections::HashSet::new();

@@ -125,20 +125,47 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/mcp/code-mode.d.ts", get(code_mode_dts_handler))
         .route("/api/v1/node/manifest", get(manifest_handler))
         .route("/api/v1/broker/stats", get(broker_stats_handler))
-        .route("/api/v1/broker/lookup-intel", post(broker_lookup_intel_handler))
-        .route("/api/v1/broker/resolve-bridge", post(broker_resolve_bridge_handler))
+        .route(
+            "/api/v1/broker/lookup-intel",
+            post(broker_lookup_intel_handler),
+        )
+        .route(
+            "/api/v1/broker/resolve-bridge",
+            post(broker_resolve_bridge_handler),
+        )
         .route("/api/v1/broker/similar", post(broker_similar_handler))
         .route("/api/v1/swarm/strength", get(swarm_strength_handler))
         .route("/api/v1/swarm/heartbeat", post(swarm_heartbeat_handler))
-        .route("/api/v1/swarm/route-ticket", post(swarm_route_ticket_handler))
-        .route("/api/v1/swarm/parallel-manifest", post(swarm_parallel_manifest_handler))
+        .route(
+            "/api/v1/swarm/route-ticket",
+            post(swarm_route_ticket_handler),
+        )
+        .route(
+            "/api/v1/swarm/parallel-manifest",
+            post(swarm_parallel_manifest_handler),
+        )
         .route("/api/v1/swarm/crdt-sync", post(swarm_crdt_sync_handler))
         .route("/api/v1/swarm/subscribe", post(swarm_subscribe_handler))
-        .route("/api/v1/swarm/shard/{blob_id}", get(swarm_shard_delivery_handler))
-        .route("/api/v1/swarm/custody-challenge", post(swarm_custody_challenge_handler))
-        .route("/api/v1/swarm/custody-probe/{blob_id}", get(swarm_custody_probe_handler))
-        .route("/api/v1/swarm/custody-audit", post(swarm_custody_audit_handler))
-        .route("/api/v1/swarm/quarantine", get(swarm_quarantine_list_handler))
+        .route(
+            "/api/v1/swarm/shard/{blob_id}",
+            get(swarm_shard_delivery_handler),
+        )
+        .route(
+            "/api/v1/swarm/custody-challenge",
+            post(swarm_custody_challenge_handler),
+        )
+        .route(
+            "/api/v1/swarm/custody-probe/{blob_id}",
+            get(swarm_custody_probe_handler),
+        )
+        .route(
+            "/api/v1/swarm/custody-audit",
+            post(swarm_custody_audit_handler),
+        )
+        .route(
+            "/api/v1/swarm/quarantine",
+            get(swarm_quarantine_list_handler),
+        )
         .route("/api/v1/node/scan-local-dir", post(scan_local_dir_handler))
         .route("/api/v1/dj/connect-drive", post(connect_dj_drive_handler))
         .route("/api/v1/dj/profiles", get(list_dj_profiles_handler))
@@ -150,30 +177,59 @@ pub fn build_hera_router(state: P2PMeshState) -> Router {
         .route("/api/v1/audio/analyze-pcm", post(analyze_pcm_handler))
         .route(
             "/api/v1/audio/analyze-file",
-            post(analyze_file_handler).layer(DefaultBodyLimit::max(if cfg!(target_arch = "wasm32") {
-                16 * 1024 * 1024
-            } else {
-                64 * 1024 * 1024
-            })),
+            post(analyze_file_handler).layer(DefaultBodyLimit::max(
+                if cfg!(target_arch = "wasm32") {
+                    16 * 1024 * 1024
+                } else {
+                    64 * 1024 * 1024
+                },
+            )),
         )
         .route("/api/v1/crates/build", post(build_crate_handler))
         .route("/api/v1/crates/set-spine", post(build_crate_handler))
         .route("/api/v1/crates/export", post(export_crate_handler))
-        .route("/api/v1/edge/cloudflare-capabilities", get(edge_capabilities_handler))
-        .route("/api/v1/edge/forensic-cache/lookup", post(edge_forensic_lookup_handler))
-        .route("/api/v1/edge/forensic-cache/store", post(edge_forensic_store_handler))
+        .route(
+            "/api/v1/edge/cloudflare-capabilities",
+            get(edge_capabilities_handler),
+        )
+        .route(
+            "/api/v1/edge/forensic-cache/lookup",
+            post(edge_forensic_lookup_handler),
+        )
+        .route(
+            "/api/v1/edge/forensic-cache/store",
+            post(edge_forensic_store_handler),
+        )
         .route("/api/v1/edge/d1-dna-sync", post(edge_d1_dna_sync_handler))
-        .route("/api/v1/edge/vectorize-match", post(edge_vectorize_match_handler))
+        .route(
+            "/api/v1/edge/vectorize-match",
+            post(edge_vectorize_match_handler),
+        )
         .route("/api/v1/p2p/search", get(p2p_search_handler))
         .route("/api/v1/p2p/announce", post(p2p_announce_handler))
         .route("/api/v1/p2p/peers", get(p2p_list_peers_handler))
-        .route("/api/v1/p2p/peers/register", post(p2p_register_peer_handler))
+        .route(
+            "/api/v1/p2p/peers/register",
+            post(p2p_register_peer_handler),
+        )
         .route("/api/v1/p2p/federate-sync", post(p2p_federate_sync_handler))
-        .route("/api/v1/p2p/export-federation", get(p2p_export_federation_handler))
+        .route(
+            "/api/v1/p2p/export-federation",
+            get(p2p_export_federation_handler),
+        )
         .route("/api/v1/p2p/stream/{track_id}", get(p2p_stream_handler))
-        .route("/api/v1/p2p/download/{track_id}", get(p2p_download_local_file_handler))
-        .route("/api/v1/p2p/turn-credentials", post(p2p_turn_credentials_handler))
-        .route("/api/v1/p2p/turn-relay-proof", post(p2p_turn_relay_proof_handler))
+        .route(
+            "/api/v1/p2p/download/{track_id}",
+            get(p2p_download_local_file_handler),
+        )
+        .route(
+            "/api/v1/p2p/turn-credentials",
+            post(p2p_turn_credentials_handler),
+        )
+        .route(
+            "/api/v1/p2p/turn-relay-proof",
+            post(p2p_turn_relay_proof_handler),
+        )
         .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
         .with_state(state)
 }
@@ -219,8 +275,13 @@ async fn scan_local_dir_handler(
     headers: HeaderMap,
     Json(req): Json<ScanLocalDirRequest>,
 ) -> Result<(StatusCode, Json<serde_json::Value>), HeraError> {
-    let auth = headers.get("authorization").or_else(|| headers.get("x-hera-node-token")).and_then(|v| v.to_str().ok());
-    state.verify_node_api_token(auth).map_err(HeraError::Unauthorized)?;
+    let auth = headers
+        .get("authorization")
+        .or_else(|| headers.get("x-hera-node-token"))
+        .and_then(|v| v.to_str().ok());
+    state
+        .verify_node_api_token(auth)
+        .map_err(HeraError::Unauthorized)?;
     match state.scan_local_directory(req) {
         Ok(res) => Ok((
             StatusCode::CREATED,
@@ -259,8 +320,13 @@ async fn p2p_federate_sync_handler(
     headers: HeaderMap,
     Json(req): Json<FederatedSyncRequest>,
 ) -> Result<impl IntoResponse, HeraError> {
-    let auth = headers.get("authorization").or_else(|| headers.get("x-hera-node-token")).and_then(|v| v.to_str().ok());
-    state.verify_node_api_token(auth).map_err(HeraError::Unauthorized)?;
+    let auth = headers
+        .get("authorization")
+        .or_else(|| headers.get("x-hera-node-token"))
+        .and_then(|v| v.to_str().ok());
+    state
+        .verify_node_api_token(auth)
+        .map_err(HeraError::Unauthorized)?;
     let resp = state.federate_sync(req);
     Ok((StatusCode::OK, Json(resp)))
 }
@@ -287,8 +353,13 @@ async fn p2p_download_local_file_handler(
     Path(track_id): Path<String>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, HeraError> {
-    let auth = headers.get("authorization").or_else(|| headers.get("x-hera-node-token")).and_then(|v| v.to_str().ok());
-    state.verify_node_api_token(auth).map_err(HeraError::Unauthorized)?;
+    let auth = headers
+        .get("authorization")
+        .or_else(|| headers.get("x-hera-node-token"))
+        .and_then(|v| v.to_str().ok());
+    state
+        .verify_node_api_token(auth)
+        .map_err(HeraError::Unauthorized)?;
     match state.get_local_file_bytes(&track_id) {
         Ok((path_str, bytes)) => {
             let content_type = if path_str.ends_with(".flac") {
@@ -462,7 +533,10 @@ async fn swarm_shard_delivery_handler(
             Ok((
                 StatusCode::OK,
                 [
-                    (http::header::CONTENT_TYPE, "application/octet-stream".to_string()),
+                    (
+                        http::header::CONTENT_TYPE,
+                        "application/octet-stream".to_string(),
+                    ),
                     (
                         http::header::CACHE_CONTROL,
                         "public, max-age=31536000, immutable".to_string(),
@@ -513,15 +587,25 @@ async fn swarm_custody_probe_handler(
     Path(blob_id): Path<String>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, HeraError> {
-    let range_hdr = headers.get(http::header::RANGE).and_then(|v| v.to_str().ok());
+    let range_hdr = headers
+        .get(http::header::RANGE)
+        .and_then(|v| v.to_str().ok());
     match state.probe_custody_64_bytes(&blob_id, range_hdr) {
         Ok((offset, slice, sha256)) => Ok((
             StatusCode::PARTIAL_CONTENT,
             [
-                (http::header::CONTENT_TYPE, "application/octet-stream".to_string()),
+                (
+                    http::header::CONTENT_TYPE,
+                    "application/octet-stream".to_string(),
+                ),
                 (
                     http::header::CONTENT_RANGE,
-                    format!("bytes {}..{}/{}", offset, offset + 63, SWARM_ALIGNED_BLOCK_BYTES),
+                    format!(
+                        "bytes {}..{}/{}",
+                        offset,
+                        offset + 63,
+                        SWARM_ALIGNED_BLOCK_BYTES
+                    ),
                 ),
                 (
                     http::header::HeaderName::from_static("x-hera-custody-slice-sha256"),
@@ -562,7 +646,10 @@ async fn openapi_handler(State(state): State<P2PMeshState>) -> impl IntoResponse
 
 async fn code_mode_dts_handler() -> impl IntoResponse {
     (
-        [(http::header::CONTENT_TYPE, "application/typescript; charset=utf-8")],
+        [(
+            http::header::CONTENT_TYPE,
+            "application/typescript; charset=utf-8",
+        )],
         get_typescript_sdk_definitions(),
     )
 }
@@ -586,8 +673,12 @@ async fn mcp_http_handler(
     Json(req): Json<JsonRpcRequest>,
 ) -> impl IntoResponse {
     match handle_mcp_request(req, &state) {
-        Some(resp) => (StatusCode::OK, Json(serde_json::to_value(resp).unwrap_or_default())),
-        None => (StatusCode::ACCEPTED, Json(serde_json::json!({ "status": "notification_ack" }))),
+        Some(resp) => (
+            StatusCode::OK,
+            Json(serde_json::to_value(resp).unwrap_or_default()),
+        )
+            .into_response(),
+        None => StatusCode::ACCEPTED.into_response(),
     }
 }
 
@@ -737,13 +828,16 @@ async fn analyze_file_handler(
     }
 }
 
-fn compute_analyze_file(q: AnalyzeFileQuery, body: Bytes) -> Result<Json<FullDspAnalysisResponse>, HeraError> {
+fn compute_analyze_file(
+    q: AnalyzeFileQuery,
+    body: Bytes,
+) -> Result<Json<FullDspAnalysisResponse>, HeraError> {
     let ext = q.ext.as_deref().unwrap_or("wav");
     let claimed_ext = q.claimed_ext.as_deref().unwrap_or(ext);
     let max_sec = q.max_seconds.unwrap_or(45.0).clamp(5.0, 90.0);
 
-    let decoded = decode_audio_bytes(&body, Some(ext), max_sec)
-        .map_err(HeraError::UnprocessableEntity)?;
+    let decoded =
+        decode_audio_bytes(&body, Some(ext), max_sec).map_err(HeraError::UnprocessableEntity)?;
 
     let forensics = audit_pcm_channels(
         &decoded.left,
@@ -942,7 +1036,10 @@ async fn edge_forensic_store_handler(
     State(state): State<P2PMeshState>,
     Json(req): Json<EdgeForensicStoreRequest>,
 ) -> impl IntoResponse {
-    (StatusCode::CREATED, Json(store_edge_forensic_cache(&state, req)))
+    (
+        StatusCode::CREATED,
+        Json(store_edge_forensic_cache(&state, req)),
+    )
 }
 
 async fn edge_d1_dna_sync_handler(Json(req): Json<D1DnaSyncRequest>) -> impl IntoResponse {
@@ -963,7 +1060,8 @@ async fn p2p_turn_credentials_handler(
     Json(issue_cloudflare_turn_credentials(&state, &req))
 }
 
-async fn p2p_turn_relay_proof_handler() -> Result<Json<crate::p2p::TurnRelayTransferReport>, HeraError> {
+async fn p2p_turn_relay_proof_handler(
+) -> Result<Json<crate::p2p::TurnRelayTransferReport>, HeraError> {
     let mut audio_bytes = Vec::with_capacity(262_144);
     for i in 0..262_144usize {
         audio_bytes.push(((i.wrapping_mul(73) ^ (i >> 3)) & 0xFF) as u8);
@@ -972,4 +1070,3 @@ async fn p2p_turn_relay_proof_handler() -> Result<Json<crate::p2p::TurnRelayTran
         .map(Json)
         .map_err(HeraError::Internal)
 }
-

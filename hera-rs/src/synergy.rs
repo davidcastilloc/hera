@@ -147,13 +147,19 @@ pub fn compute_camelot_synergy(key_a: &str, key_b: &str) -> (f32, String) {
     } else if raw_diff == 2 && l1 == l2 {
         (0.82, format!("Energy Boost +2 ({key_a} -> {key_b})"))
     } else if raw_diff == 7 && l1 == l2 {
-        (0.80, format!("Semitone Energy Surge +7 ({key_a} -> {key_b})"))
+        (
+            0.80,
+            format!("Semitone Energy Surge +7 ({key_a} -> {key_b})"),
+        )
     } else if circ_dist == 1 && l1 != l2 {
         (0.76, format!("Diagonal Modulation ({key_a} -> {key_b})"))
     } else if circ_dist == 2 {
         (0.62, format!("Two-Step Bridge ({key_a} -> {key_b})"))
     } else {
-        (0.28, format!("Harmonic Clash ({key_a} -> {key_b}, Drum-Only Swap)"))
+        (
+            0.28,
+            format!("Harmonic Clash ({key_a} -> {key_b}, Drum-Only Swap)"),
+        )
     }
 }
 
@@ -219,7 +225,10 @@ pub fn compute_bpm_synergy(bpm_a: f32, bpm_b: f32) -> (f32, f32, bool, String) {
 }
 
 /// Evaluate complete 4-Layer Synergy between Track A and Track B.
-pub fn evaluate_transition(a: &CrateTrackCandidate, b: &CrateTrackCandidate) -> TransitionTelemetry {
+pub fn evaluate_transition(
+    a: &CrateTrackCandidate,
+    b: &CrateTrackCandidate,
+) -> TransitionTelemetry {
     let (camelot_score, camelot_relation) = compute_camelot_synergy(&a.camelot_key, &b.camelot_key);
     let (bpm_score, bpm_delta_pct, is_poly, tempo_note) = compute_bpm_synergy(a.bpm, b.bpm);
 
@@ -240,11 +249,9 @@ pub fn evaluate_transition(a: &CrateTrackCandidate, b: &CrateTrackCandidate) -> 
     // Layer 4: 64D Style Embedding Cosine Similarity
     let style_score = cosine_similarity(&a.embedding_64d, &b.embedding_64d);
 
-    let total_synergy = (camelot_score * 0.34
-        + bpm_score * 0.28
-        + transient_score * 0.20
-        + style_score * 0.18)
-        .clamp(0.0, 1.0);
+    let total_synergy =
+        (camelot_score * 0.34 + bpm_score * 0.28 + transient_score * 0.20 + style_score * 0.18)
+            .clamp(0.0, 1.0);
 
     let mix_recommendation = if is_poly {
         format!(
@@ -255,9 +262,7 @@ pub fn evaluate_transition(a: &CrateTrackCandidate, b: &CrateTrackCandidate) -> 
             "VOCAL CLASH ALERT: Both Outro A & Intro B have active vocals — use 4-bar stem/EQ mid cut at Cue 4 ({camelot_relation})"
         )
     } else if camelot_score >= 0.90 && bpm_delta_pct <= 2.5 {
-        format!(
-            "Long 16-bar harmonic blend from Cue 4 -> Cue 1 ({camelot_relation}, {tempo_note})"
-        )
+        format!("Long 16-bar harmonic blend from Cue 4 -> Cue 1 ({camelot_relation}, {tempo_note})")
     } else {
         format!("8-bar rhythmic EQ swap at Cue 4 -> Cue 1 ({camelot_relation}, {tempo_note})")
     };
@@ -426,8 +431,7 @@ pub fn optimize_crate_with_spine(
         let desired_slot = if let Some(s) = anchor.slot {
             s.min(limit - 1)
         } else if let Some(p) = anchor.position {
-            ((p.clamp(0.0, 1.0) * (limit.saturating_sub(1) as f32)).round() as usize)
-                .min(limit - 1)
+            ((p.clamp(0.0, 1.0) * (limit.saturating_sub(1) as f32)).round() as usize).min(limit - 1)
         } else {
             match anchor
                 .role
@@ -526,8 +530,7 @@ pub fn optimize_crate_with_spine(
             if order.len() >= 4 {
                 for i in 0..(order.len() - 2) {
                     for k in (i + 2)..order.len() {
-                        let valid_rev =
-                            (i..=k).all(|s| pinned[s].is_none() || s == i + k - s);
+                        let valid_rev = (i..=k).all(|s| pinned[s].is_none() || s == i + k - s);
                         if !valid_rev {
                             continue;
                         }
@@ -548,8 +551,8 @@ pub fn optimize_crate_with_spine(
                 if pinned[i].is_some() {
                     continue;
                 }
-                for k in (i + 1)..order.len() {
-                    if pinned[k].is_some() {
+                for (k, p) in pinned.iter().enumerate().take(order.len()).skip(i + 1) {
+                    if p.is_some() {
                         continue;
                     }
                     order.swap(i, k);
@@ -741,6 +744,7 @@ fn build_rekordbox_xml(brief: &str, seq: &[CrateTrackCandidate]) -> String {
     xml
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_set_guide(
     brief: &str,
     energy_arc: &str,
@@ -849,18 +853,106 @@ mod tests {
     #[test]
     fn test_set_spine_builder_multi_scenario_simulation() {
         let pool = vec![
-            mock_track("t_opener", "Deep Sunset Opener", 122.0, "8A", 0.45, false, false),
-            mock_track("t_warmup_2", "Organic Terrace", 123.0, "8A", 0.55, false, false),
-            mock_track("t_bridge_9a", "Rolling Groove 9A", 125.0, "9A", 0.68, false, false),
-            mock_track("t_build_9a", "Acid Riser 9A", 127.0, "9A", 0.80, false, false),
-            mock_track("t_build_10a", "Hypnotic Tunnel 10A", 128.0, "10A", 0.88, false, false),
-            mock_track("t_peak_anthem", "Mainstage Peak Anthem", 130.0, "10A", 0.96, false, false),
-            mock_track("t_after_peak", "Melodic Release 10B", 126.0, "10B", 0.76, false, false),
-            mock_track("t_sunrise_closer", "Sunrise Emotional Closer", 124.0, "9B", 0.62, false, false),
+            mock_track(
+                "t_opener",
+                "Deep Sunset Opener",
+                122.0,
+                "8A",
+                0.45,
+                false,
+                false,
+            ),
+            mock_track(
+                "t_warmup_2",
+                "Organic Terrace",
+                123.0,
+                "8A",
+                0.55,
+                false,
+                false,
+            ),
+            mock_track(
+                "t_bridge_9a",
+                "Rolling Groove 9A",
+                125.0,
+                "9A",
+                0.68,
+                false,
+                false,
+            ),
+            mock_track(
+                "t_build_9a",
+                "Acid Riser 9A",
+                127.0,
+                "9A",
+                0.80,
+                false,
+                false,
+            ),
+            mock_track(
+                "t_build_10a",
+                "Hypnotic Tunnel 10A",
+                128.0,
+                "10A",
+                0.88,
+                false,
+                false,
+            ),
+            mock_track(
+                "t_peak_anthem",
+                "Mainstage Peak Anthem",
+                130.0,
+                "10A",
+                0.96,
+                false,
+                false,
+            ),
+            mock_track(
+                "t_after_peak",
+                "Melodic Release 10B",
+                126.0,
+                "10B",
+                0.76,
+                false,
+                false,
+            ),
+            mock_track(
+                "t_sunrise_closer",
+                "Sunrise Emotional Closer",
+                124.0,
+                "9B",
+                0.62,
+                false,
+                false,
+            ),
             // Distractors / wrong-key / vocal clash traps / polyrhythmic bridge tracks
-            mock_track("t_clash_3b", "Dissonant Industrial 3B", 138.0, "3B", 0.92, true, true),
-            mock_track("t_96_bass_closer", "Halftime 96 BPM Bass Outro", 96.0, "10A", 0.60, false, false),
-            mock_track("t_valley_ambient", "Deep Breakdown Interlude", 124.0, "9A", 0.36, false, false),
+            mock_track(
+                "t_clash_3b",
+                "Dissonant Industrial 3B",
+                138.0,
+                "3B",
+                0.92,
+                true,
+                true,
+            ),
+            mock_track(
+                "t_96_bass_closer",
+                "Halftime 96 BPM Bass Outro",
+                96.0,
+                "10A",
+                0.60,
+                false,
+                false,
+            ),
+            mock_track(
+                "t_valley_ambient",
+                "Deep Breakdown Interlude",
+                124.0,
+                "9A",
+                0.36,
+                false,
+                false,
+            ),
         ];
 
         // SCENARIO 1: Club Journey (8 tracks selected from 11) with Opener + Peak + Closer Anchors
@@ -894,13 +986,20 @@ mod tests {
             Some(8),
             &spine_s1,
         );
-        println!("\n=== SCENARIO 1: CLUB JOURNEY (OPENER + PEAK + CLOSER) ===\n{}", res_s1.set_guide_markdown);
+        println!(
+            "\n=== SCENARIO 1: CLUB JOURNEY (OPENER + PEAK + CLOSER) ===\n{}",
+            res_s1.set_guide_markdown
+        );
         assert_eq!(res_s1.sequence.len(), 8);
         assert_eq!(res_s1.sequence[0].track_id, "t_opener");
         assert_eq!(res_s1.sequence[5].track_id, "t_peak_anthem"); // 70% of 0..=7 is slot 5
         assert_eq!(res_s1.sequence[7].track_id, "t_sunrise_closer");
         assert_eq!(res_s1.pinned_slots, vec![0, 5, 7]);
-        assert!(res_s1.mean_synergy_score >= 0.85, "Synergy was {}", res_s1.mean_synergy_score);
+        assert!(
+            res_s1.mean_synergy_score >= 0.85,
+            "Synergy was {}",
+            res_s1.mean_synergy_score
+        );
         assert!(!res_s1.sequence.iter().any(|t| t.track_id == "t_clash_3b"));
 
         // SCENARIO 2: Custom Drawn "V-Valley Breakdown" Curve ([0.88, 0.36, 0.96])
@@ -915,14 +1014,23 @@ mod tests {
             Some(5),
             &spine_s2,
         );
-        println!("\n=== SCENARIO 2: CUSTOM V-VALLEY CURVE ===\n{}", res_s2.set_guide_markdown);
-        assert_eq!(res_s2.target_energy_curve, vec![0.88, 0.62, 0.36, 0.66, 0.96]);
+        println!(
+            "\n=== SCENARIO 2: CUSTOM V-VALLEY CURVE ===\n{}",
+            res_s2.set_guide_markdown
+        );
+        assert_eq!(
+            res_s2.target_energy_curve,
+            vec![0.88, 0.62, 0.36, 0.66, 0.96]
+        );
         // Slot 2 (the 0.36 valley) or adjacent mid slot should dip significantly below start and end
         let mid_min_energy = res_s2.sequence[1..=3]
             .iter()
             .map(|t| t.energy_score)
             .fold(1.0_f32, f32::min);
-        assert!(mid_min_energy <= 0.56, "Expected valley dip in middle slots, got {mid_min_energy}");
+        assert!(
+            mid_min_energy <= 0.56,
+            "Expected valley dip in middle slots, got {mid_min_energy}"
+        );
         assert!(res_s2.sequence[4].energy_score >= 0.88);
 
         // SCENARIO 3: 3:4 Polyrhythmic Bridge into Locked 96 BPM Closer Anchor
@@ -950,7 +1058,10 @@ mod tests {
             Some(5),
             &spine_s3,
         );
-        println!("\n=== SCENARIO 3: POLYRHYTHMIC BRIDGE TO 96 BPM CLOSER ===\n{}", res_s3.set_guide_markdown);
+        println!(
+            "\n=== SCENARIO 3: POLYRHYTHMIC BRIDGE TO 96 BPM CLOSER ===\n{}",
+            res_s3.set_guide_markdown
+        );
         assert_eq!(res_s3.sequence[4].track_id, "t_96_bass_closer");
         // The track placed at slot 3 right before 96 BPM (10A) should be t_build_10a (128 BPM, 10A -> exact 4:3 bridge!)
         assert_eq!(res_s3.sequence[3].track_id, "t_build_10a");

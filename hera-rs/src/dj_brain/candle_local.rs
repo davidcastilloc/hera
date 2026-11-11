@@ -207,12 +207,12 @@ pub fn score_transition_neural(
     ];
 
     // Blend neural tensor output with domain guardrails for interpretable booth confidence
-    let neural_synergy = round3((raw_scores[0] * 0.55 + cam * 0.25 + tempo_closeness * 0.20).clamp(0.0, 1.0));
+    let neural_synergy =
+        round3((raw_scores[0] * 0.55 + cam * 0.25 + tempo_closeness * 0.20).clamp(0.0, 1.0));
     let eq_swap_confidence = round3((raw_scores[1] * 0.60 + punch * 0.40).clamp(0.0, 1.0));
     let echo_out_confidence =
         round3((raw_scores[2] * 0.55 + (1.0 - tempo_closeness) * 0.45).clamp(0.0, 1.0));
-    let stem_blend_confidence =
-        round3((raw_scores[3] * 0.55 + cam * 0.45).clamp(0.0, 1.0));
+    let stem_blend_confidence = round3((raw_scores[3] * 0.55 + cam * 0.45).clamp(0.0, 1.0));
 
     let recommended_technique = if bpm_delta_ratio > 0.05 {
         "Echo-Out 3/4 Tail Freeze @ Cue 4 -> Hard Cut Cue 1".to_string()
@@ -249,7 +249,10 @@ mod tests {
         let s2 = score_transition_neural(124.0, 125.0, 0.72, 0.80, 0.95, 0.05)
             .expect("second candle CPU forward pass should match");
 
-        assert_eq!(s1, s2, "CandleLocalDjModel forward pass must be 100% deterministic");
+        assert_eq!(
+            s1, s2,
+            "CandleLocalDjModel forward pass must be 100% deterministic"
+        );
         assert!((0.0..=1.0).contains(&s1.neural_synergy));
         assert!((0.0..=1.0).contains(&s1.eq_swap_confidence));
         assert!((0.0..=1.0).contains(&s1.echo_out_confidence));
@@ -272,4 +275,3 @@ mod tests {
         assert!(clean.synergy_probability > clash.synergy_probability + 0.15);
     }
 }
-

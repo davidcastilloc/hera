@@ -146,12 +146,9 @@ pub async fn subscribe_audio_telemetry(
 
             let raw_opt = backend.poll_latest_telemetry();
             let snap = backend.snapshot();
-            if let Some(frame) = resolve_tick_telemetry_frame(
-                raw_opt,
-                &snap,
-                &mut last_real_frame,
-                &SYNTH_FRAME_SEQ,
-            ) {
+            if let Some(frame) =
+                resolve_tick_telemetry_frame(raw_opt, &snap, &mut last_real_frame, &SYNTH_FRAME_SEQ)
+            {
                 if on_frame.send(frame).is_err() {
                     break;
                 }

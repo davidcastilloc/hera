@@ -14,6 +14,7 @@ mod models_pubsub;
 mod models_swarm;
 pub mod nat_stun;
 pub mod quic_iroh;
+mod seed_data;
 mod state_init;
 pub mod swarm_custody;
 mod tier_policy;

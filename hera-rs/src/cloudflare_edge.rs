@@ -1,8 +1,8 @@
 use crate::p2p::{
     are_camelot_keys_harmonically_compatible, build_swarm_topic_uri,
-    compute_canonical_audio_sha256, compute_cas_fingerprint, compute_hera_seal,
-    compute_sha256_hex, compute_style_simhash_u64, P2PMeshState, P2PVerifiedTrack,
-    SwarmSemanticPubSubEvent, TURN_DEFAULT_CHANNEL_NUMBER,
+    compute_canonical_audio_sha256, compute_cas_fingerprint, compute_hera_seal, compute_sha256_hex,
+    compute_style_simhash_u64, P2PMeshState, P2PVerifiedTrack, SwarmSemanticPubSubEvent,
+    TURN_DEFAULT_CHANNEL_NUMBER,
 };
 use crate::structure::HotCuePoint;
 use serde::{Deserialize, Serialize};
@@ -268,8 +268,7 @@ pub fn lookup_edge_forensic_cache(
             .ok()
             .and_then(|m| m.get(&cas).cloned())
             .unwrap_or_else(|| compute_canonical_audio_sha256(&cas, &track.hera_seal, 38.0));
-        let simhash =
-            compute_style_simhash_u64(track.bpm, &track.camelot_key, &track.top_subgenre);
+        let simhash = compute_style_simhash_u64(track.bpm, &track.camelot_key, &track.top_subgenre);
         return EdgeForensicLookupResponse {
             cache_status: "CLOUDFLARE_KV_EDGE_HIT".to_string(),
             kv_hit: true,
@@ -488,10 +487,8 @@ pub fn query_edge_vectorize_matches(
                         compute_style_simhash_u64(t.bpm, &t.camelot_key, &t.top_subgenre);
                     let dist = (query_simhash ^ cand_simhash).count_ones();
                     let popcnt_pct = (((64 - dist) as f32 / 64.0) * 1000.0).round() / 10.0;
-                    let cam_ok = are_camelot_keys_harmonically_compatible(
-                        &req.camelot_key,
-                        &t.camelot_key,
-                    );
+                    let cam_ok =
+                        are_camelot_keys_harmonically_compatible(&req.camelot_key, &t.camelot_key);
                     let cam_score = if t.camelot_key.eq_ignore_ascii_case(&req.camelot_key) {
                         100.0
                     } else if cam_ok {
@@ -501,10 +498,9 @@ pub fn query_edge_vectorize_matches(
                     };
                     let bpm_diff = (t.bpm - req.bpm).abs();
                     let bpm_score = (100.0 - bpm_diff * 4.0).clamp(20.0, 100.0);
-                    let composite = ((popcnt_pct * 0.45 + cam_score * 0.35 + bpm_score * 0.20)
-                        * 10.0)
-                        .round()
-                        / 10.0;
+                    let composite =
+                        ((popcnt_pct * 0.45 + cam_score * 0.35 + bpm_score * 0.20) * 10.0).round()
+                            / 10.0;
                     let cas = compute_cas_fingerprint(&t.artist, &t.title, t.bpm);
                     let moq_uri = build_swarm_topic_uri(
                         &t.camelot_key,
@@ -572,8 +568,7 @@ pub fn get_cloudflare_edge_capabilities(state: &P2PMeshState) -> CloudflareEdgeC
                 .take(4)
                 .map(|t| {
                     let cas = compute_cas_fingerprint(&t.artist, &t.title, t.bpm);
-                    let simhash =
-                        compute_style_simhash_u64(t.bpm, &t.camelot_key, &t.top_subgenre);
+                    let simhash = compute_style_simhash_u64(t.bpm, &t.camelot_key, &t.top_subgenre);
                     SwarmSemanticPubSubEvent {
                         event_id: format!("moq-{}", &cas[..10.min(cas.len())]),
                         topic_uri: build_swarm_topic_uri(
@@ -589,7 +584,11 @@ pub fn get_cloudflare_edge_capabilities(state: &P2PMeshState) -> CloudflareEdgeC
                         bpm: t.bpm,
                         camelot_key: t.camelot_key.clone(),
                         style_simhash_u64: simhash,
-                        merkle_root_sha256: compute_canonical_audio_sha256(&cas, &t.hera_seal, 38.0),
+                        merkle_root_sha256: compute_canonical_audio_sha256(
+                            &cas,
+                            &t.hera_seal,
+                            38.0,
+                        ),
                         opaque_blob_key: format!("shard-blobs/{}.hbin", &cas[..16.min(cas.len())]),
                         hot_cues_count: t.hot_cues.len(),
                         prefetch_recommended: true,
@@ -706,7 +705,8 @@ pub fn issue_cloudflare_turn_credentials(
                 key_id.trim()
             );
             let body = format!("{{\"ttl\":{ttl}}}");
-            let config_str = crate::dj_brain::http_client::build_curl_stdin_config(&url, Some(&api_token));
+            let config_str =
+                crate::dj_brain::http_client::build_curl_stdin_config(&url, Some(&api_token));
             let mut cmd = std::process::Command::new("curl");
             cmd.args([
                 "--silent",
@@ -774,10 +774,9 @@ pub fn issue_cloudflare_turn_credentials(
     }
 
     let username = format!("1762643600:{}:{}", req.dj_handle.trim(), node_id);
-    let credential = compute_sha256_hex(
-        format!("hera-cf-calls-turn-v1:{username}:{ttl}").as_bytes(),
-    )[..32]
-        .to_string();
+    let credential =
+        compute_sha256_hex(format!("hera-cf-calls-turn-v1:{username}:{ttl}").as_bytes())[..32]
+            .to_string();
 
     TurnCredentialsResponse {
         status: "CLOUDFLARE_CALLS_TURN_READY_ZERO_R2".to_string(),

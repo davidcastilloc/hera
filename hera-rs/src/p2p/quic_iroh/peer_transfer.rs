@@ -35,7 +35,10 @@ impl IrohQuicAdapter {
     }
 
     /// Obtains or initializes the cached `iroh::Endpoint` for this adapter instance.
-    pub async fn get_or_init_endpoint(&self, accept_shards: bool) -> Result<&iroh::Endpoint, String> {
+    pub async fn get_or_init_endpoint(
+        &self,
+        accept_shards: bool,
+    ) -> Result<&iroh::Endpoint, String> {
         self.endpoint
             .get_or_try_init(|| async { self.bind_local_endpoint(accept_shards).await })
             .await
@@ -43,7 +46,8 @@ impl IrohQuicAdapter {
 
     /// Encodes an `iroh::EndpointAddr` into a portable `"iroh://<json>"` URI ticket.
     pub fn encode_endpoint_ticket(addr: &iroh::EndpointAddr) -> Result<String, String> {
-        let json = serde_json::to_string(addr).map_err(|e| format!("Failed to serialize EndpointAddr: {e}"))?;
+        let json = serde_json::to_string(addr)
+            .map_err(|e| format!("Failed to serialize EndpointAddr: {e}"))?;
         Ok(format!("iroh://{json}"))
     }
 
@@ -51,7 +55,8 @@ impl IrohQuicAdapter {
     pub fn decode_endpoint_ticket(ticket: &str) -> Result<iroh::EndpointAddr, String> {
         let trimmed = ticket.trim();
         let json_str = trimmed.strip_prefix("iroh://").unwrap_or(trimmed);
-        serde_json::from_str(json_str).map_err(|e| format!("Failed to parse EndpointAddr ticket: {e}"))
+        serde_json::from_str(json_str)
+            .map_err(|e| format!("Failed to parse EndpointAddr ticket: {e}"))
     }
 
     /// Spawns a background shard provider task serving shards from `store` over `HERA_IROH_SHARD_ALPN`.
@@ -76,14 +81,16 @@ impl IrohQuicAdapter {
                 };
                 let store_clone = Arc::clone(&store);
                 tokio::spawn(async move {
-                    let (mut send_stream, mut recv_stream) = match timeout(QUIC_STEP_TIMEOUT, conn.accept_bi()).await {
-                        Ok(Ok(streams)) => streams,
-                        _ => return,
-                    };
-                    let req_bytes = match timeout(QUIC_STEP_TIMEOUT, recv_stream.read_to_end(4096)).await {
-                        Ok(Ok(b)) => b,
-                        _ => return,
-                    };
+                    let (mut send_stream, mut recv_stream) =
+                        match timeout(QUIC_STEP_TIMEOUT, conn.accept_bi()).await {
+                            Ok(Ok(streams)) => streams,
+                            _ => return,
+                        };
+                    let req_bytes =
+                        match timeout(QUIC_STEP_TIMEOUT, recv_stream.read_to_end(4096)).await {
+                            Ok(Ok(b)) => b,
+                            _ => return,
+                        };
                     let req: QuicShardRequest = match serde_json::from_slice(&req_bytes) {
                         Ok(r) => r,
                         Err(_) => return,
@@ -98,7 +105,9 @@ impl IrohQuicAdapter {
                             None => b"HERA_ERR_SHARD_NOT_FOUND".to_vec(),
                         }
                     };
-                    if timeout(QUIC_STEP_TIMEOUT, send_stream.write_all(&payload)).await.is_ok()
+                    if timeout(QUIC_STEP_TIMEOUT, send_stream.write_all(&payload))
+                        .await
+                        .is_ok()
                         && send_stream.finish().is_ok()
                     {
                         let _ = timeout(QUIC_STEP_TIMEOUT, send_stream.stopped()).await;
@@ -119,10 +128,13 @@ impl IrohQuicAdapter {
         step_timeout: std::time::Duration,
     ) -> Result<QuicShardTransferReceipt, String> {
         let ep = self.get_or_init_endpoint(false).await?.clone();
-        let conn = timeout(step_timeout, ep.connect(remote_addr.clone(), HERA_IROH_SHARD_ALPN))
-            .await
-            .map_err(|_| format!("QUIC connect timed out after {:?}", step_timeout))?
-            .map_err(|e| format!("QUIC connect failed: {e}"))?;
+        let conn = timeout(
+            step_timeout,
+            ep.connect(remote_addr.clone(), HERA_IROH_SHARD_ALPN),
+        )
+        .await
+        .map_err(|_| format!("QUIC connect timed out after {:?}", step_timeout))?
+        .map_err(|e| format!("QUIC connect failed: {e}"))?;
 
         let (mut send_stream, mut recv_stream) = timeout(step_timeout, conn.open_bi())
             .await
@@ -134,7 +146,8 @@ impl IrohQuicAdapter {
             expected_sha256: expected_blake3_or_sha256.unwrap_or("").to_string(),
             requesting_node_id: self.node_id.clone(),
         };
-        let req_json = serde_json::to_vec(&req).map_err(|e| format!("Failed to serialize request: {e}"))?;
+        let req_json =
+            serde_json::to_vec(&req).map_err(|e| format!("Failed to serialize request: {e}"))?;
 
         timeout(step_timeout, send_stream.write_all(&req_json))
             .await
@@ -145,10 +158,13 @@ impl IrohQuicAdapter {
             .finish()
             .map_err(|e| format!("QUIC finish failed: {e}"))?;
 
-        let received = timeout(step_timeout, recv_stream.read_to_end(MAX_QUIC_SHARD_STREAM_BYTES))
-            .await
-            .map_err(|_| format!("QUIC read_to_end timed out after {:?}", step_timeout))?
-            .map_err(|e| format!("QUIC read_to_end failed: {e}"))?;
+        let received = timeout(
+            step_timeout,
+            recv_stream.read_to_end(MAX_QUIC_SHARD_STREAM_BYTES),
+        )
+        .await
+        .map_err(|_| format!("QUIC read_to_end timed out after {:?}", step_timeout))?
+        .map_err(|e| format!("QUIC read_to_end failed: {e}"))?;
 
         conn.close(0u8.into(), b"shard-verified");
 
@@ -180,7 +196,13 @@ impl IrohQuicAdapter {
         shard_id: &str,
         expected_blake3_or_sha256: Option<&str>,
     ) -> Result<QuicShardTransferReceipt, String> {
-        self.fetch_verified_shard_with_timeout(remote_addr, shard_id, expected_blake3_or_sha256, QUIC_STEP_TIMEOUT).await
+        self.fetch_verified_shard_with_timeout(
+            remote_addr,
+            shard_id,
+            expected_blake3_or_sha256,
+            QUIC_STEP_TIMEOUT,
+        )
+        .await
     }
 
     /// Fetches and verifies a shard given a ticket (`"iroh://<json>"` or direct json).
@@ -191,7 +213,8 @@ impl IrohQuicAdapter {
         expected_sha256: Option<&str>,
     ) -> Result<QuicShardTransferReceipt, String> {
         let remote_addr = Self::decode_endpoint_ticket(endpoint_ticket)?;
-        self.fetch_verified_shard(remote_addr, shard_id, expected_sha256).await
+        self.fetch_verified_shard(remote_addr, shard_id, expected_sha256)
+            .await
     }
 
     /// Loopback shard exchange leveraging `spawn_shard_provider` + `fetch_verified_shard`.
@@ -205,9 +228,13 @@ impl IrohQuicAdapter {
         map.insert(shard_id.to_string(), shard_bytes.to_vec());
         let store = Arc::new(RwLock::new(map));
 
-        let provider_adapter = IrohQuicAdapter::new(format!("{}-provider", self.node_id), self.bind_loopback_only);
+        let provider_adapter = IrohQuicAdapter::new(
+            format!("{}-provider", self.node_id),
+            self.bind_loopback_only,
+        );
         let provider_addr = provider_adapter.spawn_shard_provider(store).await?;
 
-        self.fetch_verified_shard(provider_addr, shard_id, Some(&expected_sha256)).await
+        self.fetch_verified_shard(provider_addr, shard_id, Some(&expected_sha256))
+            .await
     }
 }

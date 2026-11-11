@@ -362,8 +362,7 @@ fn extract_tauri_commands(source: &str) -> Result<Vec<String>, String> {
         let compact: String = attr_inner.chars().filter(|c| !c.is_whitespace()).collect();
         pos = attr_end + 1;
 
-        let is_tauri_cmd =
-            compact == "tauri::command" || compact.starts_with("tauri::command(");
+        let is_tauri_cmd = compact == "tauri::command" || compact.starts_with("tauri::command(");
         if !is_tauri_cmd {
             continue;
         }
@@ -397,8 +396,7 @@ fn extract_tauri_commands(source: &str) -> Result<Vec<String>, String> {
                         pos += 1;
                     }
                     if pos < len && bytes[pos] == b'(' {
-                        let close_vis =
-                            find_matching_bracket_in_clean(&cleaned, pos, b'(', b')')?;
+                        let close_vis = find_matching_bracket_in_clean(&cleaned, pos, b'(', b')')?;
                         pos = close_vis + 1;
                     }
                 }
@@ -559,11 +557,9 @@ fn parse_capabilities_permissions(capabilities_json_source: &str) -> Result<Vec<
     let mut permissions = Vec::with_capacity(arr.len());
     let mut seen = BTreeSet::new();
     for entry in arr {
-        let perm = entry
-            .as_str()
-            .ok_or_else(|| {
-                "Non-string entry in capabilities/main.json `permissions`".to_string()
-            })?;
+        let perm = entry.as_str().ok_or_else(|| {
+            "Non-string entry in capabilities/main.json `permissions`".to_string()
+        })?;
         if !seen.insert(perm.to_string()) {
             return Err(format!(
                 "Duplicate permission `{perm}` in capabilities/main.json"
@@ -640,7 +636,10 @@ fn audit_tauri_acl_triad(
     };
 
     let main_cleaned = strip_rust_comments(main_rs_source, true);
-    let main_compact: String = main_cleaned.chars().filter(|c| !c.is_whitespace()).collect();
+    let main_compact: String = main_cleaned
+        .chars()
+        .filter(|c| !c.is_whitespace())
+        .collect();
 
     let mut total_commands = 0usize;
 
@@ -1063,8 +1062,8 @@ fn ratchet_zero_os_absolute_paths_in_docs_and_plans() {
             .expect("repo-relative path")
             .to_string_lossy()
             .replace('\\', "/");
-        let content = fs::read_to_string(&path)
-            .unwrap_or_else(|err| panic!("Failed to read `{rel}`: {err}"));
+        let content =
+            fs::read_to_string(&path).unwrap_or_else(|err| panic!("Failed to read `{rel}`: {err}"));
         for (line_no, snippet) in find_os_user_path_violations(&content) {
             violations.push(format!("{rel}:{line_no} -> `{snippet}`"));
         }
@@ -1099,7 +1098,10 @@ fn ratchet_parsers_detect_simulated_violations() {
         pub fn valid_beta() {}
     "##;
     let cmds = extract_tauri_commands(synthetic_plugin).expect("parse synthetic plugin");
-    assert_eq!(cmds, vec!["valid_alpha".to_string(), "valid_beta".to_string()]);
+    assert_eq!(
+        cmds,
+        vec!["valid_alpha".to_string(), "valid_beta".to_string()]
+    );
 
     // 2. Verify triad detector handles both single-file and directory plugins and catches drift.
     let mut base_plugins = BTreeMap::new();
@@ -1157,9 +1159,13 @@ fn ratchet_parsers_detect_simulated_violations() {
         "hera_dj/submod.rs".to_string(),
         "#[tauri::command]\npub async fn extra_dj_cmd() {}\n".to_string(),
     );
-    let err_nested =
-        audit_tauri_acl_triad(&nested_drift_plugins, &valid_build, &valid_caps, &valid_main)
-            .expect_err("directory plugin drift must fail");
+    let err_nested = audit_tauri_acl_triad(
+        &nested_drift_plugins,
+        &valid_build,
+        &valid_caps,
+        &valid_main,
+    )
+    .expect_err("directory plugin drift must fail");
     assert!(err_nested.iter().any(|msg| msg.contains("hera-dj")));
 
     // 2c. Missing command in `build.rs` must fail.

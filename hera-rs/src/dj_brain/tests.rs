@@ -170,13 +170,25 @@ fn test_curl_stdin_config_format_and_zero_argv_secrets() {
 
     // Ensure curl command argv contains zero secrets and passes --config -
     let mut cmd = std::process::Command::new("curl");
-    cmd.args(["--silent", "--show-error", "--fail-with-body", "--config", "-"]);
-    let argv_strings: Vec<String> = cmd.get_args().map(|a| a.to_string_lossy().to_string()).collect();
+    cmd.args([
+        "--silent",
+        "--show-error",
+        "--fail-with-body",
+        "--config",
+        "-",
+    ]);
+    let argv_strings: Vec<String> = cmd
+        .get_args()
+        .map(|a| a.to_string_lossy().to_string())
+        .collect();
 
     assert!(argv_strings.contains(&"--config".to_string()));
     assert!(argv_strings.contains(&"-".to_string()));
     for arg in &argv_strings {
-        assert!(!arg.contains(secret), "Bearer token leaked into argv: {arg}");
+        assert!(
+            !arg.contains(secret),
+            "Bearer token leaked into argv: {arg}"
+        );
         assert!(!arg.contains("example.com"), "URL leaked into argv: {arg}");
     }
 }

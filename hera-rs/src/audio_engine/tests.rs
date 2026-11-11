@@ -5,6 +5,7 @@ use super::{
     TransportCommand, HOT_CUE_LABELS, MAX_SEEK_FRAME,
 };
 
+#[rustfmt::skip]
 fn encode_stereo_pcm16_wav(left: &[f32], right: &[f32], sample_rate: u32) -> Vec<u8> {
     let n = left.len().min(right.len());
     let data_size = (n as u32) * 4;
@@ -126,29 +127,14 @@ fn test_sample_accurate_jump_to_four_hot_cues() {
         PreallocatedDeckBuffer::from_stereo_frames(stereo, 48_000, cue_frames)
             .expect("valid stereo buffer"),
     );
+    #[rustfmt::skip]
     assert_eq!(
         buffer.hot_cues,
         [
-            HotCueSampleMarker {
-                num: 1,
-                label: "1:Intro",
-                frame_index: 100
-            },
-            HotCueSampleMarker {
-                num: 2,
-                label: "2:Breakdown",
-                frame_index: 1_200
-            },
-            HotCueSampleMarker {
-                num: 3,
-                label: "3:Drop",
-                frame_index: 4_800
-            },
-            HotCueSampleMarker {
-                num: 4,
-                label: "4:Outro",
-                frame_index: 9_600
-            },
+            HotCueSampleMarker { num: 1, label: "1:Intro", frame_index: 100 },
+            HotCueSampleMarker { num: 2, label: "2:Breakdown", frame_index: 1_200 },
+            HotCueSampleMarker { num: 3, label: "3:Drop", frame_index: 4_800 },
+            HotCueSampleMarker { num: 4, label: "4:Outro", frame_index: 9_600 },
         ]
     );
 
@@ -304,7 +290,9 @@ fn command_queue_concurrent_mpsc_pushes_lose_zero_commands() {
             let q_ref = std::sync::Arc::clone(&q);
             s.spawn(move || {
                 for i in 0..8u64 {
-                    while !q_ref.try_push(TransportCommand::SeekToSample(DeckId::DeckA, t * 100 + i)) {
+                    while !q_ref
+                        .try_push(TransportCommand::SeekToSample(DeckId::DeckA, t * 100 + i))
+                    {
                         std::thread::yield_now();
                     }
                 }
@@ -320,11 +308,16 @@ fn command_queue_concurrent_mpsc_pushes_lose_zero_commands() {
 
 #[test]
 fn realtime_worker_retires_replaced_deck_buffer_without_dropping_on_audio_thread() {
-    use super::hub::create_controller_and_worker;
     use super::backend::AudioBackendKind;
-    let (hub, mut worker) = create_controller_and_worker(AudioBackendKind::HeadlessClockFallback, 48_000);
-    let buf1 = PreallocatedDeckBuffer::from_stereo_frames(vec![0.1; 512], 48_000, [0, 64, 128, 192]).unwrap();
-    let buf2 = PreallocatedDeckBuffer::from_stereo_frames(vec![0.2; 512], 48_000, [0, 64, 128, 192]).unwrap();
+    use super::hub::create_controller_and_worker;
+    let (hub, mut worker) =
+        create_controller_and_worker(AudioBackendKind::HeadlessClockFallback, 48_000);
+    let buf1 =
+        PreallocatedDeckBuffer::from_stereo_frames(vec![0.1; 512], 48_000, [0, 64, 128, 192])
+            .unwrap();
+    let buf2 =
+        PreallocatedDeckBuffer::from_stereo_frames(vec![0.2; 512], 48_000, [0, 64, 128, 192])
+            .unwrap();
 
     hub.install_buffer(DeckId::DeckA, buf1, None).unwrap();
     let installed1 = hub.deck_buffer(DeckId::DeckA).unwrap();
@@ -337,8 +330,17 @@ fn realtime_worker_retires_replaced_deck_buffer_without_dropping_on_audio_thread
     hub.install_buffer(DeckId::DeckA, buf2, None).unwrap();
     worker.render_stereo_block(&mut out);
 
-    assert!(weak1.upgrade().is_some(), "Buffer 1 must NOT be dropped on the audio thread!");
+    assert!(
+        weak1.upgrade().is_some(),
+        "Buffer 1 must NOT be dropped on the audio thread!"
+    );
     let drained = hub.drain_retired_buffers();
-    assert!(drained >= 1, "hub.drain_retired_buffers() must drain retired buffers");
-    assert!(weak1.upgrade().is_none(), "Buffer 1 must be dropped after drain_retired_buffers()");
+    assert!(
+        drained >= 1,
+        "hub.drain_retired_buffers() must drain retired buffers"
+    );
+    assert!(
+        weak1.upgrade().is_none(),
+        "Buffer 1 must be dropped after drain_retired_buffers()"
+    );
 }

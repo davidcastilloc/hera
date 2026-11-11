@@ -290,8 +290,22 @@ fn test_turn_eval_derives_distinct_candidate_metrics_from_state_catalog() {
     {
         let mut cat = state_clash.catalog.write().unwrap();
         cat.clear();
-        let outro = HotCuePoint { num: 4, name: "o".into(), seconds: 200.0, bar_index: 96, role: "outro_vocals".into(), confidence: 0.9 };
-        let intro = HotCuePoint { num: 1, name: "i".into(), seconds: 1.0, bar_index: 0, role: "intro_vocals".into(), confidence: 0.9 };
+        let outro = HotCuePoint {
+            num: 4,
+            name: "o".into(),
+            seconds: 200.0,
+            bar_index: 96,
+            role: "outro_vocals".into(),
+            confidence: 0.9,
+        };
+        let intro = HotCuePoint {
+            num: 1,
+            name: "i".into(),
+            seconds: 1.0,
+            bar_index: 0,
+            role: "intro_vocals".into(),
+            confidence: 0.9,
+        };
         cat.push(make_test_track("x1", 120.0, "1A", vec![outro]));
         cat.push(make_test_track("x2", 136.0, "7B", vec![intro]));
     }
@@ -316,8 +330,10 @@ fn test_turn_eval_derives_distinct_candidate_metrics_from_state_catalog() {
 
     let get_synergy = |rep: &str| -> f32 {
         let m = "Sinergia Neural ";
-        rep.find(m).and_then(|p| rep[p + m.len()..].split('%').next())
-            .and_then(|s| s.trim().parse::<f32>().ok()).unwrap_or(0.0)
+        rep.find(m)
+            .and_then(|p| rep[p + m.len()..].split('%').next())
+            .and_then(|s| s.trim().parse::<f32>().ok())
+            .unwrap_or(0.0)
     };
 
     let syn_clean = get_synergy(&resp_clean.assistant_reply);
@@ -328,4 +344,3 @@ fn test_turn_eval_derives_distinct_candidate_metrics_from_state_catalog() {
         "Clean harmonic catalog pair (syn={syn_clean}%) must score > 15% higher than clash pair (syn={syn_clash}%)"
     );
 }
-

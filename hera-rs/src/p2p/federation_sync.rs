@@ -102,7 +102,8 @@ impl P2PMeshState {
                                 .find(|d| d.dj_handle.eq_ignore_ascii_case(&peer_dj))
                             {
                                 dj.edge_guardian_active = false;
-                                dj.custody_audit_failures = dj.custody_audit_failures.saturating_add(1);
+                                dj.custody_audit_failures =
+                                    dj.custody_audit_failures.saturating_add(1);
                             }
                         }
                         continue;
@@ -251,7 +252,10 @@ impl P2PMeshState {
 
         let trimmed_remote = remote_url.trim();
         if trimmed_remote.starts_with("https://") {
-            return Err("HTTPS not supported over plaintext TcpStream. Use HTTP federation endpoint.".to_string());
+            return Err(
+                "HTTPS not supported over plaintext TcpStream. Use HTTP federation endpoint."
+                    .to_string(),
+            );
         }
         let clean = trimmed_remote.trim_start_matches("http://");
         let host_port = clean.split('/').next().unwrap_or("127.0.0.1:8080");
@@ -299,7 +303,10 @@ impl P2PMeshState {
 
         if let Ok(mut c_guard) = self.catalog.write() {
             for trk in &sync_resp.federated_swarm_catalog {
-                if !c_guard.iter().any(|existing| existing.track_id == trk.track_id) {
+                if !c_guard
+                    .iter()
+                    .any(|existing| existing.track_id == trk.track_id)
+                {
                     c_guard.push(trk.clone());
                 }
             }

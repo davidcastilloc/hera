@@ -44,7 +44,8 @@ impl P2PMeshState {
 
         let now_unix = current_unix_override.unwrap_or_else(|| self.current_unix_secs());
         let secrets = self.get_swarm_secrets();
-        if !verify_swarm_redirect_ticket_with_secret(&ticket, now_unix, &secrets.ticket_hmac_secret) {
+        if !verify_swarm_redirect_ticket_with_secret(&ticket, now_unix, &secrets.ticket_hmac_secret)
+        {
             return Err(
                 "Invalid or expired X-Hera-Swarm-Ticket signature/TTL (60s window exceeded)"
                     .to_string(),
@@ -52,9 +53,9 @@ impl P2PMeshState {
         }
 
         let already_redeemed = self
-            .delivery_receipts
+            .redeemed_ticket_ids
             .read()
-            .map(|r| r.iter().any(|rec| rec.ticket_id == ticket.ticket_id))
+            .map(|r| r.contains(&ticket.ticket_id))
             .unwrap_or(false);
         if already_redeemed {
             return Err(format!(
@@ -80,9 +81,11 @@ impl P2PMeshState {
             ticket.aligned_offset_bytes,
         );
 
-        // 1 aligned block = 4 MB delivered -> 1.5x credit multiplier = 6.0 MB Turbo credit earned!
-        let mb_delivered = (ticket.aligned_length_bytes as f32) / (1024.0 * 1024.0);
-        let credits_earned = ((mb_delivered * SWARM_CREDIT_MULTIPLIER) * 100.0).round() / 100.0;
+        // Compute quota/credit deltas using integer u64 bytes (BYTES_PER_MIB = 1_048_576)
+        let delivered_bytes = ticket.aligned_length_bytes;
+        let mb_delivered = (delivered_bytes as f64 / BYTES_PER_MIB as f64) as f32;
+        let credits_earned =
+            (((mb_delivered * SWARM_CREDIT_MULTIPLIER) * 100.0).round() / 100.0) as f32;
 
         let mut owner_dj_name = String::new();
         if let Ok(mut p_guard) = self.peers.write() {
@@ -119,18 +122,29 @@ impl P2PMeshState {
         );
         let receipt = ProofOfDeliveryReceipt {
             receipt_id: format!("pod-{}", &receipt_sig[..12]),
-            ticket_id: ticket.ticket_id,
+            ticket_id: ticket.ticket_id.clone(),
             serving_node_id: ticket.target_node_id,
             requester_dj: ticket.requester_dj,
             opaque_blob_key: ticket.opaque_blob_key,
-            bytes_delivered: ticket.aligned_length_bytes,
+            bytes_delivered: delivered_bytes,
             megabytes_delivered: mb_delivered,
             credits_earned_mb: credits_earned,
             credit_multiplier: SWARM_CREDIT_MULTIPLIER,
             receipt_hmac: receipt_sig,
         };
+
+        if let Ok(mut set_guard) = self.redeemed_ticket_ids.write() {
+            set_guard.insert(ticket.ticket_id);
+        }
+
+        let cap = self
+            .max_delivery_receipts
+            .load(std::sync::atomic::Ordering::Relaxed);
         if let Ok(mut r_guard) = self.delivery_receipts.write() {
-            r_guard.push(receipt.clone());
+            r_guard.push_back(receipt.clone());
+            while r_guard.len() > cap {
+                r_guard.pop_front();
+            }
         }
 
         Ok((payload, receipt))

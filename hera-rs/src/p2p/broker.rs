@@ -64,15 +64,12 @@ impl P2PMeshState {
                 priority_rank: prio,
             };
 
+            #[rustfmt::skip]
             let entry = by_cas.entry(cas.clone()).or_insert_with(|| {
-                let simhash =
-                    compute_style_simhash_u64(trk.bpm, &trk.camelot_key, &trk.top_subgenre);
-                let audio_sha256 = sha_map.get(&cas).cloned().unwrap_or_else(|| {
-                    compute_canonical_audio_sha256(&cas, &trk.hera_seal, 38.0)
-                });
+                let simhash = compute_style_simhash_u64(trk.bpm, &trk.camelot_key, &trk.top_subgenre);
+                let audio_sha256 = sha_map.get(&cas).cloned().unwrap_or_else(|| compute_canonical_audio_sha256(&cas, &trk.hera_seal, 38.0));
                 let opaque_blob_key = compute_opaque_shard_blob_key(&cas, &audio_sha256);
-                let merkle_root_sha256 =
-                    compute_shard_merkle_tree(&opaque_blob_key, &audio_sha256, 0).merkle_root_sha256;
+                let merkle_root_sha256 = compute_shard_merkle_tree(&opaque_blob_key, &audio_sha256, 0).merkle_root_sha256;
                 let heat_score = heat_map.get(&cas).copied().unwrap_or(1.0);
                 let target_k = compute_elastic_replication_k(active_n, heat_score);
 
@@ -108,9 +105,8 @@ impl P2PMeshState {
             }
             entry.swarm_replicas_count += 1;
             entry.available_routes.push(route);
-            entry
-                .available_routes
-                .sort_by_key(|r| r.priority_rank);
+            #[rustfmt::skip]
+            entry.available_routes.sort_by_key(|r| r.priority_rank);
         }
 
         let mut list: Vec<BrokerIntelRecord> = by_cas.into_values().collect();
@@ -295,7 +291,8 @@ impl P2PMeshState {
 
         for rec in swarm_index {
             let hamming = (ref_sig ^ rec.style_simhash_u64).count_ones();
-            let popcnt_sim = ((64u32.saturating_sub(hamming) as f32) / 64.0 * 1000.0).round() / 10.0;
+            let popcnt_sim =
+                ((64u32.saturating_sub(hamming) as f32) / 64.0 * 1000.0).round() / 10.0;
             let (cam_score, _) = compute_camelot_synergy(&ref_cam, &rec.camelot_key);
             let (bpm_score, _, _, _) = compute_bpm_synergy(ref_bpm, rec.bpm);
             let combined = (((popcnt_sim / 100.0) * 0.40 + cam_score * 0.35 + bpm_score * 0.25)

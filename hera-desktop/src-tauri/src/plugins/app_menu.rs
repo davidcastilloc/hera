@@ -308,7 +308,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
                 "report_an_issue" => {
                     win.app_handle()
                         .opener()
-                        .open_url("https://github.com/davidcastilloc/hera/issues", None::<&str>)
+                        .open_url(
+                            "https://github.com/davidcastilloc/hera/issues",
+                            None::<&str>,
+                        )
                         .unwrap();
                 }
                 _ => {}

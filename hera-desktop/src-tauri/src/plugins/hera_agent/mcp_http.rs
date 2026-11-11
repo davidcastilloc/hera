@@ -29,10 +29,12 @@ async fn mcp_http_handler<R: Runtime>(
     let method = req.get("method").and_then(|v| v.as_str()).unwrap_or("");
     let params = req.get("params").cloned().unwrap_or_else(|| json!({}));
 
+    // Notifications (no `id` or `notifications/*`) do not expect a response frame (JSON-RPC 2.0 §4.1)
+    if id.is_none() || method.starts_with("notifications/") {
+        return StatusCode::ACCEPTED.into_response();
+    }
+
     match method {
-        "notifications/initialized" | "notifications/cancelled" => {
-            StatusCode::ACCEPTED.into_response()
-        }
         "initialize" => (
             StatusCode::OK,
             Json(json!({
@@ -41,7 +43,7 @@ async fn mcp_http_handler<R: Runtime>(
                 "result": {
                     "protocolVersion": "2024-11-05",
                     "capabilities": { "tools": { "listChanged": false } },
-                    "serverInfo": { "name": "hera-desktop-mcp", "version": "0.5.0" }
+                    "serverInfo": { "name": "hera-desktop-mcp", "version": env!("CARGO_PKG_VERSION") }
                 }
             })),
         )
