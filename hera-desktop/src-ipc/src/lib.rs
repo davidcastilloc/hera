@@ -28,7 +28,7 @@ mod tests {
 
     #[test]
     fn test_workspace_ipc_crate_ready() {
-        assert_eq!(env!("CARGO_PKG_VERSION"), "0.6.0");
-        assert_eq!(HERA_IPC_VERSION, "0.6.0");
+        assert_eq!(env!("CARGO_PKG_VERSION"), "0.6.1");
+        assert_eq!(HERA_IPC_VERSION, "0.6.1");
     }
 }

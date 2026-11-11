@@ -2996,7 +2996,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hera-desktop"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -3043,7 +3043,7 @@ dependencies = [
 
 [[package]]
 name = "hera-ipc"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "hera-node-rs",
  "serde",
@@ -3053,7 +3053,7 @@ dependencies = [
 
 [[package]]
 name = "hera-node-rs"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "axum",
  "candle-core",
