@@ -141,3 +141,48 @@ test('Modo Mini should morph between Booth Card, HUD Pill, and Full Workspace', 
     .element(getMainNavigation().getByRole('link', { name: 'Biblioteca' }))
     .toBeVisible();
 });
+
+test('BETA Onboarding Wizard modal and mixes filter toggle should be operable', async () => {
+  await setupScannedLibrary();
+
+  // 1. BETA badge click opens wizard modal
+  const betaBadgeBtn = page.getByRole('button', { name: 'BETA' });
+  await expect.element(betaBadgeBtn).toBeVisible();
+  await betaBadgeBtn.click();
+
+  await expect
+    .element(page.getByRole('dialog'))
+    .toBeVisible();
+  await expect
+    .element(page.getByText('Bienvenido a HERA Studio BETA'))
+    .toBeVisible();
+
+  // 2. Navigate wizard steps
+  const nextBtn = page.getByRole('button', { name: 'Siguiente' });
+  await nextBtn.click();
+  await expect
+    .element(page.getByText('Escaneo Inteligente & Criterio de Cabina'))
+    .toBeVisible();
+
+  await nextBtn.click();
+  await expect
+    .element(page.getByText('Integración de Cabina en Vivo'))
+    .toBeVisible();
+
+  const finishBtn = page.getByRole('button', { name: '¡Comenzar a Mezclar!' });
+  await finishBtn.click();
+
+  // 3. Mixes filter buttons should be present in Biblioteca toolbar
+  const under10mBtn = page.getByRole('button', { name: 'Pistas (< 10m)' });
+  const over10mBtn = page.getByRole('button', { name: 'Mixes (> 10m)' });
+  const allBtn = page.getByRole('button', { name: 'Todas' });
+
+  await expect.element(under10mBtn).toBeVisible();
+  await expect.element(over10mBtn).toBeVisible();
+  await expect.element(allBtn).toBeVisible();
+
+  await over10mBtn.click();
+  await allBtn.click();
+  await under10mBtn.click();
+});
+
