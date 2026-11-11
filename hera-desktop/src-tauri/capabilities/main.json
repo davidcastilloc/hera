@@ -61,6 +61,7 @@
     "hera-dj:allow-probe-ai-backend",
     "hera-dj:allow-list-ai-backends",
     "hera-dj:allow-scan-ai-connectivity",
+    "hera-dj:allow-cancel-library-scan",
     "hera-dj:allow-resolve-harmonic-bridge",
     "hera-dj:allow-download-p2p-track",
     "hera-dj:allow-set-mini-overlay-mode",

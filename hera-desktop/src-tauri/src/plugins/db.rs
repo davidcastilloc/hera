@@ -128,6 +128,11 @@ async fn scan_library<R: Runtime>(
             let mut track_paths = scan_dirs(&import_paths_for_scan, &SUPPORTED_TRACKS_EXTENSIONS);
             let scanned_paths_count = track_paths.len();
 
+            crate::plugins::hera_dj::workability::reset_scan_flag();
+
+            // Discard junk/system folders outright
+            track_paths.retain(|path| !crate::plugins::hera_dj::workability::is_junk_system_directory(path));
+
             if !refresh {
                 info!(
                     "Skipping {} files that are already in the library",
@@ -142,6 +147,9 @@ async fn scan_library<R: Runtime>(
                 scanned_paths_count.saturating_sub(track_paths.len())
             );
 
+            // Phase 1: Fast multi-software DB index (< 3s, 0% CPU)
+            let software_index = crate::plugins::hera_dj::workability::ExternalDjSoftwareIndex::build_fast_index();
+
             let progress = Arc::new(AtomicUsize::new(1));
             let total = track_paths.len();
 
@@ -152,31 +160,60 @@ async fn scan_library<R: Runtime>(
                 );
             }
 
-            info!("Importing audio metadata and DSP cues from {} files", total);
+            info!("Importing audio metadata and DSP cues from {} files with thermal throttling", total);
             let scan_logger = TimeLogger::new("Scanned all audio tracks".into());
 
-            let scanned_tracks = track_paths
-                .par_iter()
-                .map(|path| -> AnyResult<Track> {
-                    let p_current = progress.fetch_add(1, Ordering::SeqCst);
+            // Phase 2: Chunked thermal execution (chunk = 8 tracks) with cooperative pause
+            let mut scanned_tracks = Vec::with_capacity(total);
+            for chunk in track_paths.chunks(8) {
+                // Check cancellation request (< 100ms response)
+                if crate::plugins::hera_dj::workability::is_scan_cancelled() {
+                    info!("Scan cancelled by user; committing tracks processed so far");
+                    break;
+                }
 
-                    if p_current % 25 == 0 || p_current == total {
-                        info!("Processing tracks {:?}/{:?}", p_current, total);
-                        if let Some(ref w) = webview_for_scan {
-                            let _ = w.emit(
-                                IPCEvent::LibraryScanProgress.as_ref(),
-                                ScanProgress {
-                                    current: p_current,
-                                    total,
-                                },
-                            );
+                let chunk_results: Vec<Track> = chunk
+                    .iter()
+                    .filter_map(|path| {
+                        let p_current = progress.fetch_add(1, Ordering::SeqCst);
+                        if p_current % 10 == 0 || p_current == total {
+                            if let Some(ref w) = webview_for_scan {
+                                let _ = w.emit(
+                                    IPCEvent::LibraryScanProgress.as_ref(),
+                                    ScanProgress {
+                                        current: p_current,
+                                        total,
+                                    },
+                                );
+                            }
                         }
-                    }
 
-                    get_track_from_file(path)
-                })
-                .filter_map(Result::ok)
-                .collect::<Vec<Track>>();
+                        let mut track = get_track_from_file(path).ok()?;
+
+                        // Filter out short SFX / voice notes < 25 seconds
+                        if track.duration < 25 {
+                            return None;
+                        }
+
+                        // Apply pre-computed metadata from VirtualDJ / Rekordbox if available (0% CPU)
+                        if let Some(cached) = software_index.lookup(path) {
+                            if let Some(bpm) = cached.bpm {
+                                track.bpm = Some(bpm);
+                            }
+                            if let Some(ref key) = cached.key {
+                                track.camelot = Some(key.clone());
+                            }
+                        }
+
+                        Some(track)
+                    })
+                    .collect();
+
+                scanned_tracks.extend(chunk_results);
+
+                // 15ms cooperative sleep between chunks to keep CPU cool and prevent audio stutter
+                std::thread::sleep(std::time::Duration::from_millis(15));
+            }
 
             let failures = track_paths.len().saturating_sub(scanned_tracks.len());
             scan_logger.complete();

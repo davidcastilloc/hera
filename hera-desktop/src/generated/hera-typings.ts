@@ -24,6 +24,8 @@ export type AiConnectivityOnboardingReport = { recommended_mode: string, recomme
 
 export type AnchorArtistStat = { artist: string, track_count: number, };
 
+export type BpmUiBadgeInfo = { bpm: number, is_variable: boolean, entry_bpm?: number | null, exit_bpm?: number | null, badge_label: string, };
+
 export type CloudflareEdgeCapabilities = { control_plane: string, motto: string, active_swarm_nodes: number, kv_forensic_cache_entries: number, estimated_laptop_cpu_seconds_saved: number, d1_free_storage_gb: number, workers_ai_free_neurons_per_day: number, r2_egress_fee_usd_per_gb: number, pioneer_forensic_bounty_mb: number, turbo_credit_multiplier: number, primitives: Array<CloudflareServicePrimitive>, recent_moq_harmonic_events: Array<SwarmMoqHarmonicEvent>, };
 
 export type CloudflareFreeAiTurnRequest = { dj_handle: string, message: string, session_id?: string | null, style_dna?: DjStyleDnaProfile | null, daily_neurons_used_so_far?: number, cache_hit?: boolean, backend?: string | null, base_url?: string | null, model?: string | null, api_key?: string | null, max_tool_iterations?: number | null, commander_mode?: string | null, };
@@ -52,6 +54,8 @@ export type ExportCrateResponse = { crate_name: string, track_count: number, m3u
 
 export type ExportTrackItem = { track_id: string, artist: string, title: string, version?: string | null, file_path: string, bpm: number, camelot: string, duration_seconds: number, bitrate_kbps?: number, energy?: number, file_size_bytes?: number, is_video?: boolean, is_own_production?: boolean, hot_cues?: Array<HotCuePoint>, };
 
+export type FolderWorkabilityReport = { total_files_scanned: number, workable_tracks_under_10m: number, mixes_over_10m: number, short_sfx_discarded: number, ignored_junk_folders: number, vdj_cached_tracks: number, rekordbox_cached_tracks: number, };
+
 export type HarmonicBridgeStep = { step_number: number, track_id: string, artist: string, title: string, bpm: number, camelot: string, owner_dj: string, hera_seal: string, cue_in_seconds: number, cue_out_seconds: number, synergy_score: number, transition_tip: string, p2p_boost_free_promo?: boolean, boost_credit_cost_mb?: number, };
 
 export type HotCuePoint = { num: number, name: string, seconds: number, bar_index: number, role: string, confidence: number, };
@@ -73,6 +77,8 @@ export type PushVirtualDjLiveCrateResponse = { crate_name: string, total_tracks:
 export type ResolveHarmonicBridgeRequest = { origin_title: string, origin_artist: string, origin_bpm: number, origin_camelot: string, target_title: string, target_artist: string, target_bpm: number, target_camelot: string, };
 
 export type ResolveHarmonicBridgeResponse = { origin_summary: string, target_summary: string, harmonic_distance_steps: number, bridge_steps: Array<HarmonicBridgeStep>, preview_mix_window_seconds: number, swarm_catalog?: Array<SwarmCatalogItem>, stun_public_endpoint?: string | null, };
+
+export type ScanPhaseProgress = { phase: number, current: number, total: number, is_safe_dj_paused: boolean, phase_description: string, };
 
 export type SetMiniOverlayModeRequest = { mode: "full" | "card" | "pill", pinned?: boolean, };
 

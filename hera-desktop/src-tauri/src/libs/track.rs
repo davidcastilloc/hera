@@ -64,6 +64,24 @@ pub struct Track {
     #[sqlx(default)]
     #[ts(optional)]
     pub hera_seal: Option<String>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub is_video: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub is_mix_over_10m: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub has_audio_skips: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub is_variable_bpm: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub entry_bpm: Option<f64>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub exit_bpm: Option<f64>,
     #[sqlx(json, default)]
     #[ts(optional)]
     pub hot_cues: Option<Vec<HotCuePin>>,
@@ -373,6 +391,15 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                 camelot: Some(camelot),
                 energy: Some(energy),
                 hera_seal: Some(hera_seal),
+                is_video: Some({
+                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                    matches!(ext.as_str(), "mp4" | "mov" | "mkv" | "webm" | "m4v")
+                }),
+                is_mix_over_10m: Some(duration > 600),
+                has_audio_skips: Some(false),
+                is_variable_bpm: Some(false),
+                entry_bpm: None,
+                exit_bpm: None,
                 hot_cues: Some(hot_cues),
             })
         }
@@ -407,6 +434,15 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                     camelot: Some(camelot),
                     energy: Some(energy),
                     hera_seal: Some(hera_seal),
+                    is_video: Some({
+                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                        matches!(ext.as_str(), "mp4" | "mov" | "mkv" | "webm" | "m4v")
+                    }),
+                    is_mix_over_10m: Some(duration > 600),
+                    has_audio_skips: Some(false),
+                    is_variable_bpm: Some(false),
+                    entry_bpm: None,
+                    exit_bpm: None,
                     hot_cues: Some(hot_cues),
                 });
             }

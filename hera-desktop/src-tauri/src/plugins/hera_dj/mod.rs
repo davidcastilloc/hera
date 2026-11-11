@@ -6,6 +6,7 @@ mod p2p_download;
 #[cfg(test)]
 mod tests;
 mod virtualdj_live;
+pub mod workability;
 
 use hera_node_rs::audio_engine::create_default_audio_backend;
 use hera_node_rs::cloudflare_edge::{CloudflareEdgeCapabilities, get_cloudflare_edge_capabilities};
@@ -203,6 +204,12 @@ pub async fn scan_ai_connectivity(
     .map_err(|e| format!("Fallo en tarea scan_ai_connectivity: {e}"))?
 }
 
+#[tauri::command]
+pub async fn cancel_library_scan() -> Result<bool, String> {
+    workability::cancel_scan_flag();
+    Ok(true)
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     warm_desktop_udp_daemon_background();
     Builder::<R>::new("hera-dj")
@@ -219,6 +226,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             probe_ai_backend,
             list_ai_backends,
             scan_ai_connectivity,
+            cancel_library_scan,
             bridge_p2p::resolve_harmonic_bridge,
             p2p_download::download_p2p_track,
             mini_overlay::set_mini_overlay_mode,

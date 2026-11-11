@@ -9,10 +9,11 @@ use crate::agent_types::{
 };
 use crate::audio_types::{NativeAudioTelemetryFrame, NativePlayerSnapshot};
 use crate::dj_types::{
-    DownloadP2PTrackRequest, DownloadP2PTrackResponse, HarmonicBridgeStep, ProbeAiBackendResponse,
+    BpmUiBadgeInfo, DownloadP2PTrackRequest, DownloadP2PTrackResponse,
+    FolderWorkabilityReport, HarmonicBridgeStep, ProbeAiBackendResponse,
     PushVirtualDjLiveCrateRequest, PushVirtualDjLiveCrateResponse, ResolveHarmonicBridgeRequest,
-    ResolveHarmonicBridgeResponse, SetMiniOverlayModeRequest, SetMiniOverlayModeResponse,
-    SwarmCatalogItem, VirtualDjNowPlaying,
+    ResolveHarmonicBridgeResponse, ScanPhaseProgress, SetMiniOverlayModeRequest,
+    SetMiniOverlayModeResponse, SwarmCatalogItem, VirtualDjNowPlaying,
 };
 use hera_node_rs::cloudflare_edge::{
     CloudflareEdgeCapabilities, CloudflareServicePrimitive, SwarmMoqHarmonicEvent,
@@ -55,6 +56,7 @@ pub fn export_hera_typescript_bindings(generated_dir: &Path) -> Result<String, S
         export_decl::<AiBackendOption>(&cfg),
         export_decl::<AiConnectivityOnboardingReport>(&cfg),
         export_decl::<AnchorArtistStat>(&cfg),
+        export_decl::<BpmUiBadgeInfo>(&cfg),
         export_decl::<CloudflareEdgeCapabilities>(&cfg),
         export_decl::<CloudflareFreeAiTurnRequest>(&cfg),
         export_decl::<CloudflareFreeAiTurnResponse>(&cfg),
@@ -69,6 +71,7 @@ pub fn export_hera_typescript_bindings(generated_dir: &Path) -> Result<String, S
         export_decl::<ExportCrateRequest>(&cfg),
         export_decl::<ExportCrateResponse>(&cfg),
         export_decl::<ExportTrackItem>(&cfg),
+        export_decl::<FolderWorkabilityReport>(&cfg),
         export_decl::<HarmonicBridgeStep>(&cfg),
         export_decl::<HotCuePoint>(&cfg),
         export_decl::<McpHostIntegrationGuide>(&cfg),
@@ -80,6 +83,7 @@ pub fn export_hera_typescript_bindings(generated_dir: &Path) -> Result<String, S
         export_decl::<PushVirtualDjLiveCrateResponse>(&cfg),
         export_decl::<ResolveHarmonicBridgeRequest>(&cfg),
         export_decl::<ResolveHarmonicBridgeResponse>(&cfg),
+        export_decl::<ScanPhaseProgress>(&cfg),
         export_decl::<SetMiniOverlayModeRequest>(&cfg),
         export_decl::<SetMiniOverlayModeResponse>(&cfg),
         export_decl::<StartAgentTurnRequest>(&cfg),

@@ -150,6 +150,12 @@ impl DB {
                 camelot = ?,
                 energy = ?,
                 hera_seal = ?,
+                is_video = ?,
+                is_mix_over_10m = ?,
+                has_audio_skips = ?,
+                is_variable_bpm = ?,
+                entry_bpm = ?,
+                exit_bpm = ?,
                 hot_cues = ?
             WHERE id = ?
             "#,
@@ -171,6 +177,12 @@ impl DB {
         .bind(track.camelot.as_deref().unwrap_or("8A"))
         .bind(track.energy.unwrap_or(0.80))
         .bind(&track.hera_seal)
+        .bind(track.is_video.unwrap_or(false))
+        .bind(track.is_mix_over_10m.unwrap_or(false))
+        .bind(track.has_audio_skips.unwrap_or(false))
+        .bind(track.is_variable_bpm.unwrap_or(false))
+        .bind(track.entry_bpm)
+        .bind(track.exit_bpm)
         .bind(json!(track.hot_cues.as_deref().unwrap_or(&[])))
         .bind(&track.id)
         .execute(&mut self.connection)
@@ -208,8 +220,9 @@ impl DB {
                 INSERT INTO tracks (
                     id, path, title, album, album_artist, artists, genres, year,
                     duration, track_no, track_of, disk_no, disk_of, is_compilation,
-                    bpm, camelot, energy, hera_seal, hot_cues
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    bpm, camelot, energy, hera_seal, is_video, is_mix_over_10m,
+                    has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 "#,
             )
             .bind(&track.id)
@@ -230,6 +243,12 @@ impl DB {
             .bind(track.camelot.as_deref().unwrap_or("8A"))
             .bind(track.energy.unwrap_or(0.80))
             .bind(&track.hera_seal)
+            .bind(track.is_video.unwrap_or(false))
+            .bind(track.is_mix_over_10m.unwrap_or(false))
+            .bind(track.has_audio_skips.unwrap_or(false))
+            .bind(track.is_variable_bpm.unwrap_or(false))
+            .bind(track.entry_bpm)
+            .bind(track.exit_bpm)
             .bind(json!(track.hot_cues.as_deref().unwrap_or(&[])))
             .execute(&mut *tx)
             .await?;
@@ -266,6 +285,12 @@ impl DB {
                     camelot = ?,
                     energy = ?,
                     hera_seal = ?,
+                    is_video = ?,
+                    is_mix_over_10m = ?,
+                    has_audio_skips = ?,
+                    is_variable_bpm = ?,
+                    entry_bpm = ?,
+                    exit_bpm = ?,
                     hot_cues = ?
                 WHERE id = ?
                 "#,
@@ -287,6 +312,12 @@ impl DB {
             .bind(track.camelot.as_deref().unwrap_or("8A"))
             .bind(track.energy.unwrap_or(0.80))
             .bind(&track.hera_seal)
+            .bind(track.is_video.unwrap_or(false))
+            .bind(track.is_mix_over_10m.unwrap_or(false))
+            .bind(track.has_audio_skips.unwrap_or(false))
+            .bind(track.is_variable_bpm.unwrap_or(false))
+            .bind(track.entry_bpm)
+            .bind(track.exit_bpm)
             .bind(json!(track.hot_cues.as_deref().unwrap_or(&[])))
             .bind(&track.id)
             .execute(&mut *tx)

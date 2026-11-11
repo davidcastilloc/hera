@@ -28,7 +28,7 @@ const ZERO_COMMAND_PLUGIN_FILES: &[&str] = &[
 ];
 
 /// Exact count of `#[tauri::command]` functions across the 8 internal plugins in `v0.6.0`.
-const EXPECTED_TAURI_COMMANDS_COUNT: usize = 58;
+const EXPECTED_TAURI_COMMANDS_COUNT: usize = 59;
 
 /// Strict line-count ceilings (`content.lines().count()`) for module facades,
 /// pre-existing ADR-013 P2P submodules, route coordinators, and IPC bridges.

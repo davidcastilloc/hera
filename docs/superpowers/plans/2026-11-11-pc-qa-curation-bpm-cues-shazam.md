@@ -20,7 +20,7 @@
   - **Archivos:** `hera-rs/src/dj_learning/curation_rules.rs` (`<= 349` LOC), `hera-rs/src/synergy.rs`.
   - **Entrega:** Soporte mixto Audio + Video, filtro duro `< 10 min` (`<= 600s`) que deriva mixes a un área lógica de Mixes sin mover archivos en disco, Parejas Ganadoras (*«Perdóname mi vida → Conquístame»*) con bonus en 2-Opt usando `entry_bpm`/`exit_bpm`, y Exclusiones (*«Clavelito ya no»*).
 
-- [ ] **Task 6: Contratos Hexagonales (`hera-ipc`), Migración SQLite `06`, Descubridor de Material Trabajable y Escáner Estratégico Cancelable**
+- [x] **Task 6: Contratos Hexagonales (`hera-ipc`), Migración SQLite `06`, Descubridor de Material Trabajable y Escáner Estratégico Cancelable**
   - **Archivos:** `hera-desktop/src-ipc/src/dj_types.rs` (`<= 349` LOC), `hera-desktop/src-tauri/src/migrations/06_create_dj_learning_tables.sql`, `hera-desktop/src-tauri/src/libs/track.rs`, `hera-desktop/src-tauri/src/libs/database.rs`, `hera-desktop/src-tauri/src/plugins/db.rs`, `hera-desktop/src-tauri/src/plugins/config.rs`.
   - **Estrategia Inteligente y Térmica:**
     1. **Fase 1 (0% CPU, < 3s):** Ingesta masiva instantánea de BPM, Key y Cues desde bases de datos existentes (`VirtualDJ database.xml`, `Rekordbox xml`, `Traktor nml` y Serato/ID3 tags).

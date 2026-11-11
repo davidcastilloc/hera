@@ -68,7 +68,7 @@ fn test_tauri_v2_acl_triad_parity() {
         "CARGO_MANIFEST_DIR"
     )))
     .unwrap();
-    assert_eq!(report.commands_checked, 58);
+    assert_eq!(report.commands_checked, 59);
 }
 
 #[test]
@@ -86,3 +86,21 @@ fn test_native_audio_state_snapshot_and_telemetry_mapping() {
     assert!((after_vol.volume - 0.75).abs() < 1e-6);
     let _ = DeckId::DeckA;
 }
+
+#[test]
+fn test_workability_junk_folders_and_duration_classification() {
+    use workability::{classify_track_duration, is_junk_system_directory, DurationCategory};
+    use std::path::Path;
+
+    // Junk folder filtering
+    assert!(is_junk_system_directory(Path::new("D:/$RECYCLE.BIN/deleted.mp3")));
+    assert!(is_junk_system_directory(Path::new("/home/dj/Music/WhatsApp Audio/sample.mp3")));
+    assert!(is_junk_system_directory(Path::new("C:/System Volume Information/track.wav")));
+    assert!(!is_junk_system_directory(Path::new("/home/dj/Music/Salsa/Grupo Niche.mp3")));
+
+    // Duration classification
+    assert_eq!(classify_track_duration(15.0), DurationCategory::ShortSfxOrDiscard);
+    assert_eq!(classify_track_duration(240.0), DurationCategory::WorkableTrack);
+    assert_eq!(classify_track_duration(900.0), DurationCategory::MixOver10m);
+}
+

@@ -161,3 +161,35 @@ pub struct VirtualDjNowPlaying {
     pub title: String,
     pub source_path: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct FolderWorkabilityReport {
+    pub total_files_scanned: usize,
+    pub workable_tracks_under_10m: usize,
+    pub mixes_over_10m: usize,
+    pub short_sfx_discarded: usize,
+    pub ignored_junk_folders: usize,
+    pub vdj_cached_tracks: usize,
+    pub rekordbox_cached_tracks: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct BpmUiBadgeInfo {
+    pub bpm: f64,
+    pub is_variable: bool,
+    #[ts(optional = nullable)]
+    pub entry_bpm: Option<f64>,
+    #[ts(optional = nullable)]
+    pub exit_bpm: Option<f64>,
+    pub badge_label: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct ScanPhaseProgress {
+    pub phase: u8, // 1 = instant DB import (< 3s), 2 = throttled deep DSP
+    pub current: usize,
+    pub total: usize,
+    pub is_safe_dj_paused: bool,
+    pub phase_description: String,
+}
+
