@@ -318,3 +318,13 @@
      - **Task 9 (Verification & QA Sign-off):** 100% tests passing across all crates and ratchets. All modules <= 349 LOC. Zero disk file mutations.
 
 
+
+### [2026-11-11] ADR-032: Architectural Wishlist — Pure `bun build` Migration & Frontend Toolchain Simplification
+
+- **Context:** `hera-desktop` currently relies on `vp` (`vite-plus` by VoidZero) with a multi-plugin pipeline (`@stylexjs/unplugin`, `tanstackRouter`, `reactCompilerPreset`, `@lingui/vite-plugin`, `vite-plugin-svgr`). While fast, this introduces an external toolchain layer on top of Bun and enforces strict CSS restrictions (e.g. StyleX AST bans on CSS shorthands).
+- **Wishlist & Long-Term Proposal:**
+  1. **Icon Simplification:** Replace `vite-plugin-svgr` with direct React SVG components (e.g. Lucide React or inlined `<svg>` icons).
+  2. **Compiler Overhead Removal:** Remove `babel-plugin-react-compiler`; standard React 19 + Zustand works with minimal overhead in an Electron/Tauri desktop environment.
+  3. **Lightweight i18n:** Replace Lingui with a lightweight pure-TypeScript dictionary hook (`~30 LOC`), eliminating the Babel macro and compiler plugin.
+  4. **Manual Route Tree:** Replace `@tanstack/router-plugin/vite` by declaring routes explicitly in TypeScript.
+  5. **CSS Migration Path (The Core Pre-requisite):** Migrate StyleX components to CSS Modules (`*.module.css`) or Tailwind CSS v4 (Rust/LightningCSS CLI). Once StyleX AST extraction is removed, `hera-desktop` can compile directly using native `bun build` and pure Tauri v2 integration, completely eliminating `vp`, Babel, and Vite plugins.
