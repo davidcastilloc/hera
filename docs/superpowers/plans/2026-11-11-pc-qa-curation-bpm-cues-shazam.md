@@ -20,9 +20,13 @@
   - **Archivos:** `hera-rs/src/dj_learning/curation_rules.rs` (`<= 349` LOC), `hera-rs/src/synergy.rs`.
   - **Entrega:** Soporte mixto Audio + Video, filtro duro `< 10 min` (`<= 600s`) que deriva mixes a un área lógica de Mixes sin mover archivos en disco, Parejas Ganadoras (*«Perdóname mi vida → Conquístame»*) con bonus en 2-Opt usando `entry_bpm`/`exit_bpm`, y Exclusiones (*«Clavelito ya no»*).
 
-- [ ] **Task 6: Contratos Hexagonales (`hera-ipc`), Migración SQLite `06`, Descubridor de Material Trabajable y Escáner Cancelable**
+- [ ] **Task 6: Contratos Hexagonales (`hera-ipc`), Migración SQLite `06`, Descubridor de Material Trabajable y Escáner Estratégico Cancelable**
   - **Archivos:** `hera-desktop/src-ipc/src/dj_types.rs` (`<= 349` LOC), `hera-desktop/src-tauri/src/migrations/06_create_dj_learning_tables.sql`, `hera-desktop/src-tauri/src/libs/track.rs`, `hera-desktop/src-tauri/src/libs/database.rs`, `hera-desktop/src-tauri/src/plugins/db.rs`, `hera-desktop/src-tauri/src/plugins/config.rs`.
-  - **Entrega:** Columnas y tablas SQLite para Mixes `> 10m`, saltos de CD, BPM variable, Parejas Ganadoras y pistas retiradas; escáner en 2 fases con botón **Cancelar** (`AtomicBool` y `cancel_library_scan`) y descarte previo de audios `< 30s` / carpetas basura.
+  - **Estrategia Inteligente y Térmica:**
+    1. **Fase 1 (0% CPU, < 3s):** Ingesta masiva instantánea de BPM, Key y Cues desde bases de datos existentes (`VirtualDJ database.xml`, `Rekordbox xml`, `Traktor nml` y Serato/ID3 tags).
+    2. **Fase 2 (CPU Bounded & Throttle Térmico):** Lotes pequeños (`chunk = 8 canciones`) usando máximo `num_cpus - 2` hilos con pausas cooperativas (`15ms`) para no recalentar la CPU ni congelar la PC.
+    3. **Modo Cabina (Safe DJ Mode):** Si el reproductor de audio o el software de DJ está en Play, el análisis masivo de fondo se suspende automáticamente al 100%.
+    4. **Filtro de Material Trabajable:** Descarte inmediato de carpetas de sistema/mensajería, exclusión de audios `< 25s`, derivación de Mixes `> 10m` (`> 600s`) al área lógica de Mixes (sin mover archivos) y botón **Cancelar** instantáneo (`AtomicBool` y comando `cancel_library_scan`).
 
 - [ ] **Task 7: System Tray Tooltip Nativo en Vivo (`TrayIconBuilder`) y Herramientas en `/agent`**
   - **Archivos:** `hera-desktop/src-tauri/src/main.rs`, `hera-desktop/src-tauri/src/plugins/hera_dj/tray_and_learning.rs` (`<= 349` LOC), `hera-desktop/src-tauri/src/plugins/hera_agent/`.
