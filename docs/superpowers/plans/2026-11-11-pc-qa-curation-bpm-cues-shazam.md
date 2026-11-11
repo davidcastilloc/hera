@@ -41,19 +41,19 @@
 - `BpmAnalysisReport { bpm: f32, entry_bpm: f32, exit_bpm: f32, bpm_min_detected: f32, bpm_max_detected: f32, tempo_drift_bpm: f32, tempo_drift_pct: f32, window_iqr_bpm: f32, is_variable_bpm: bool, bpm_confidence: f32, bpm_needs_review: bool, detected_rhythm_family: String, tempo_stability_label: String, tempo_map_points: Vec<TempoAnchorPoint> }`
 - `pub fn analyze_bpm_consensus(mono: &[f32], sample_rate: u32, external_hint: Option<ExternalBpmHint>) -> BpmAnalysisReport`
 
-- [ ] **Step 1: Add failing unit tests for all 5 BPM failure modes**
+- [x] **Step 1: Add failing unit tests for all 5 BPM failure modes**
   Create deterministic synthetic PCM tests in `hera-rs/tests/bpm_engine_qa.rs`:
   1. `test_salsa_tumbao_and_campana_resolves_to_82_108_bpm` (`94.0 BPM` Salsa with NO beat-1 kick, syncopated baby-bass *tumbao* on beats `2.5` & `4`, campana/martillo in `800–3500 Hz`, and `15s` rubato piano intro -> must detect `94.0 ± 0.5 BPM`, NOT `125.3 BPM` `4/3x` or `188 BPM` `2x`).
   2. `test_variable_bpm_live_band_drift_tracks_entry_and_exit_bpm` (live band accelerating smoothly from `90.0 BPM` in verse to `96.5 BPM` in montuno -> `is_variable_bpm == true`, `entry_bpm ~ 90.0`, `exit_bpm ~ 96.5`, `tempo_drift_bpm >= 5.5`, even if an erroneous static VDJ hint of `129.0` is supplied).
   3. `test_tecnomerengue_132_to_160_bpm_not_folded_in_half` (`148.0 BPM` and `158.0 BPM` binary tambora/synth brass + 16th-note `4.5–10 kHz` güira -> `bpm ~ 148.0` / `158.0`, `top_subgenre == "Tecnomerengue"`, never folded to `79.0 BPM`).
   4. `test_fractional_vinyl_tempo_not_falsely_integer_snapped` (`92.35 BPM` steady analog rip -> preserves `92.35 ± 0.08 BPM` instead of snapping to `92.0`).
   5. `test_consensus_arbiter_resolves_octave_mismatch_with_genre_prior` (`184.0 BPM` external tag on Salsa orchestra metadata -> folded to `92.0 BPM` via harmonic consensus).
-- [ ] **Step 2: Run `cargo test -p hera-node-rs --test bpm_engine_qa` to capture RED receipt**
-- [ ] **Step 3: Implement `multiband_onset.rs`, `window_tracker.rs` (12s sliding windows + Viterbi continuity), `latin_heuristics.rs`, and `consensus_ai.rs`**
+- [x] **Step 2: Run `cargo test -p hera-node-rs --test bpm_engine_qa` to capture RED receipt**
+- [x] **Step 3: Implement `multiband_onset.rs`, `window_tracker.rs` (12s sliding windows + Viterbi continuity), `latin_heuristics.rs`, and `consensus_ai.rs`**
   Ensure WASM compatibility (`wasm32-unknown-unknown --features cloudflare --no-default-features`) by gating optional `CandleLocalDjModel` tie-breaker behind `#[cfg(feature = "native")]` with a pure-Rust heuristic fallback on WASM.
-- [ ] **Step 4: Run `cargo test -p hera-node-rs` (including `golden_masters` and `architectural_ratchets`) + WASM check + `clippy -D warnings`**
+- [x] **Step 4: Run `cargo test -p hera-node-rs` (including `golden_masters` and `architectural_ratchets`) + WASM check + `clippy -D warnings`**
   Expected: `0` failed, `0` warnings, `0` golden master diffs.
-- [ ] **Step 5: Mark `[x]` and commit atomically**
+- [x] **Step 5: Mark `[x]` and commit atomically**
   Commit: `feat(dsp): add 5-layer multi-window BPM engine for Salsa, variable BPM, and Tecnomerengue`
 
 ---

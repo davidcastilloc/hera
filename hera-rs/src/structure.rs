@@ -174,10 +174,13 @@ pub fn analyze_structure_and_style(
         high_env.push(h_e);
     }
 
-    // 1. BPM Estimation via Sub+Mid Onset Autocorrelation (or hint)
+    // 1. BPM Estimation via 5-Layer Consensus BPM Engine (or explicit hint)
     let bpm = match bpm_hint {
         Some(b) if b > 40.0 => normalize_dj_bpm(b),
-        _ => estimate_bpm_from_flux(&sub_flux, &mid_flux, frame_dt),
+        _ => {
+            let report = crate::bpm_engine::analyze_bpm_consensus(mono, sample_rate, None);
+            report.bpm
+        }
     };
     let beat_sec = 60.0 / bpm.max(60.0);
     let bar_sec = 4.0 * beat_sec;
@@ -407,6 +410,7 @@ pub fn analyze_structure_and_style(
     }
 }
 
+#[allow(dead_code)]
 fn estimate_bpm_from_flux(sub_flux: &[f32], mid_flux: &[f32], frame_dt: f32) -> f32 {
     let n_all = sub_flux.len().min(mid_flux.len());
     if n_all < 128 {
@@ -664,6 +668,8 @@ fn infer_subgenre(bpm: f32, groove_type: &str, punch_index: f32) -> String {
         } else {
             "House / Club".to_string()
         }
+    } else if (132.0..=162.0).contains(&bpm) {
+        "Tecnomerengue".to_string()
     } else {
         "Electronic / Club Crossover".to_string()
     }

@@ -9,9 +9,9 @@ use std::path::{Component, Path, PathBuf};
 /// it falls back cleanly to `track_path.to_string_lossy().into_owned()` without panicking.
 pub fn format_m3u_entry_path(track_path: &Path, playlist_parent: &Path) -> String {
     if let Some(relative) = pure_diff_paths(track_path, playlist_parent) {
-        relative.to_string_lossy().into_owned()
+        relative.to_string_lossy().replace('\\', "/")
     } else {
-        track_path.to_string_lossy().into_owned()
+        track_path.to_string_lossy().replace('\\', "/")
     }
 }
 
