@@ -1,4 +1,5 @@
 import * as stylex from '@stylexjs/stylex';
+import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -17,6 +18,8 @@ type Props = {
   tracksOverride?: Track[];
   tracks?: Track[];
   crateName?: string;
+  mixesFilter?: 'all' | 'under10m' | 'over10m';
+  onMixesFilterChange?: (filter: 'all' | 'under10m' | 'over10m') => void;
 };
 
 const FORMAT_LABELS: Record<DjExportFormat, string> = {
@@ -31,14 +34,16 @@ export default function HeraDjToolbar({
   tracksOverride,
   tracks: tracksProp,
   crateName = 'Hera_Booth_Crate',
+  mixesFilter = 'under10m',
+  onMixesFilterChange,
 }: Props) {
   const storeTracks = useLibraryStore((state) => state.tracks);
   const tracks = tracksOverride ?? tracksProp ?? storeTracks;
 
   const [selectedFormat, setSelectedFormat] =
     useState<DjExportFormat>('virtualdj');
-  const [busyAction, setBusyAction] = useState<'spine' | 'export' | null>(null);
-  const [inlineDone, setInlineDone] = useState<'spine' | 'export' | null>(null);
+  const [busyAction, setBusyAction] = useState<'spine' | 'export' | 'cancel' | null>(null);
+  const [inlineDone, setInlineDone] = useState<'spine' | 'export' | 'cancel' | null>(null);
   const refreshing = useLibraryStore((state) => state.refreshing);
   const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -100,6 +105,16 @@ export default function HeraDjToolbar({
     }
   };
 
+  const handleCancelScan = async () => {
+    setBusyAction('cancel');
+    try {
+      await invoke('plugin:hera-dj|cancel_library_scan');
+      flashDone('cancel');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   const trackCountLabel = useMemo(
     () => (tracks.length === 1 ? '1 pista' : `${tracks.length} pistas`),
     [tracks.length],
@@ -113,9 +128,57 @@ export default function HeraDjToolbar({
       <div {...stylex.props(styles.leftMeta)}>
         <h1 {...stylex.props(styles.crateTitle)}>{title}</h1>
         <span {...stylex.props(styles.budgetPill)}>{trackCountLabel}</span>
+
+        {onMixesFilterChange ? (
+          <div {...stylex.props(styles.filterGroup)} role="group" aria-label="Filtro de duración">
+            <button
+              type="button"
+              onClick={() => onMixesFilterChange('under10m')}
+              {...stylex.props(
+                styles.filterPill,
+                mixesFilter === 'under10m' && styles.filterPillActive,
+              )}
+            >
+              Pistas (&lt; 10m)
+            </button>
+            <button
+              type="button"
+              onClick={() => onMixesFilterChange('over10m')}
+              {...stylex.props(
+                styles.filterPill,
+                mixesFilter === 'over10m' && styles.filterPillActive,
+              )}
+            >
+              Mixes (&gt; 10m)
+            </button>
+            <button
+              type="button"
+              onClick={() => onMixesFilterChange('all')}
+              {...stylex.props(
+                styles.filterPill,
+                mixesFilter === 'all' && styles.filterPillActive,
+              )}
+            >
+              Todas
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div {...stylex.props(styles.rightActions)}>
+        {refreshing ? (
+          <button
+            type="button"
+            onClick={() => void handleCancelScan()}
+            disabled={busyAction === 'cancel'}
+            title="Detener escaneo inmediatamente de forma segura"
+            {...stylex.props(styles.cancelScanBtn)}
+          >
+            <Icon name="x" size={13} color="#f87171" />
+            <span>{busyAction === 'cancel' ? 'Cancelando…' : 'Cancelar Escaneo'}</span>
+          </button>
+        ) : null}
+
         <button
           type="button"
           onClick={() => void handleQuickImportFolder()}
@@ -296,6 +359,51 @@ const styles = stylex.create({
     cursor: 'pointer',
     lineHeight: 1.2,
     transition: 'opacity 0.15s ease-out',
+  },
+  cancelScanBtn: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '5px',
+    paddingBlock: '6px',
+    paddingInline: '10px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#f87171',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    lineHeight: 1.2,
+  },
+  filterGroup: {
+    display: 'flex',
+    alignItems: 'center',
+    columnGap: '4px',
+    backgroundColor: '#171c24',
+    padding: '2px',
+    borderRadius: '6px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+  },
+  filterPill: {
+    background: 'none',
+    border: 'none',
+    color: '#8e98a8',
+    fontSize: '11px',
+    fontWeight: 500,
+    paddingBlock: '3px',
+    paddingInline: '8px',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    outline: 'none',
+  },
+  filterPillActive: {
+    backgroundColor: '#232a36',
+    color: '#2dd4bf',
+    fontWeight: 600,
   },
   disabledControl: {
     opacity: 0.45,

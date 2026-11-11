@@ -2,10 +2,12 @@ import { NavigationMenu } from '@base-ui/react/navigation-menu';
 import * as stylex from '@stylexjs/stylex';
 import { Link } from '@tanstack/react-router';
 import type { LinkProps } from '@tanstack/react-router';
+import { useState } from 'react';
 
 import { useAgentStore } from '../lib/agent-store';
 import useLibraryStore from '../lib/store';
 import Icon, { type IconName } from './Icon';
+import OnboardingWizardModal from './OnboardingWizardModal';
 import ProgressBar from './ProgressBar';
 import TrackListStatus from './TrackListStatus';
 
@@ -45,6 +47,7 @@ function NavItem({ to, label, icon, isLiveRunning = false }: NavItemProps) {
 }
 
 export default function Navigation() {
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const isAgentRunning = useAgentStore(
     (state) => state.runningSessionIds.length > 0,
   );
@@ -81,11 +84,24 @@ export default function Navigation() {
             />
           </svg>
           <span {...stylex.props(styles.brandTitle)}>HERA</span>
+          <button
+            type="button"
+            onClick={() => setShowOnboarding(true)}
+            title="Aviso y guía del Release BETA"
+            {...stylex.props(styles.betaBadgeBtn)}
+          >
+            BETA
+          </button>
           <span
             {...stylex.props(styles.brandStatusDot)}
             title="Motor de audio listo"
           />
         </div>
+
+        <OnboardingWizardModal
+          isOpen={showOnboarding}
+          onClose={() => setShowOnboarding(false)}
+        />
 
         <NavigationMenu.Root
           orientation="vertical"
@@ -211,6 +227,21 @@ const styles = stylex.create({
     fontWeight: 700,
     letterSpacing: '0.08em',
     color: '#edeff3',
+  },
+  betaBadgeBtn: {
+    background: 'rgba(20, 184, 166, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(20, 184, 166, 0.35)',
+    borderRadius: '999px',
+    color: '#2dd4bf',
+    fontSize: '10px',
+    fontWeight: 700,
+    letterSpacing: '0.05em',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    cursor: 'pointer',
+    outline: 'none',
   },
   brandStatusDot: {
     marginLeft: 'auto',

@@ -108,6 +108,28 @@ export default function TrackRow(props: Props) {
       </div>
       <div {...stylex.props(cellStyles.cell, cellStyles.title)}>
         <span {...stylex.props(cellStyles.titleText)}>{track.title}</span>
+        {track.is_video === true && (
+          <span {...stylex.props(cellStyles.badgeVideo)} title="Pista de Video (Crate mixto)">
+            VIDEO
+          </span>
+        )}
+        {track.has_audio_skips === true && (
+          <span {...stylex.props(cellStyles.badgeGlitch)} title="⚠️ Detectado posible salto / CD rayado">
+            ⚠️ Salto
+          </span>
+        )}
+        {track.is_variable_bpm === true && (
+          <span
+            {...stylex.props(cellStyles.badgeVariableBpm)}
+            title={
+              track.entry_bpm != null && track.exit_bpm != null
+                ? `BPM variable: ${track.entry_bpm.toFixed(1)} -> ${track.exit_bpm.toFixed(1)}`
+                : 'BPM variable en vivo'
+            }
+          >
+            BPM~
+          </span>
+        )}
         {props.showArtistInTitle === true && track.artists.length > 0 && (
           <span {...stylex.props(cellStyles.artistInTitle)}>
             {'— '}
@@ -265,6 +287,48 @@ const cellStyles = stylex.create({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  badgeVideo: {
+    fontSize: '9.5px',
+    fontWeight: 700,
+    letterSpacing: '0.04em',
+    color: '#38bdf8',
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(56, 189, 248, 0.3)',
+    borderRadius: '4px',
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    flexShrink: 0,
+  },
+  badgeGlitch: {
+    fontSize: '9.5px',
+    fontWeight: 700,
+    letterSpacing: '0.03em',
+    color: '#f87171',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderRadius: '4px',
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    flexShrink: 0,
+  },
+  badgeVariableBpm: {
+    fontSize: '9.5px',
+    fontWeight: 700,
+    letterSpacing: '0.03em',
+    color: '#f59e0b',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderRadius: '4px',
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    flexShrink: 0,
   },
   duration: {
     width: '70px',

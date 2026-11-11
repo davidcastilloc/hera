@@ -1,7 +1,7 @@
 import * as stylex from '@stylexjs/stylex';
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import HeraDjToolbar from '../components/HeraDjToolbar';
 import TrackList from '../components/TrackList';
@@ -31,6 +31,7 @@ export const Route = createFileRoute('/library')({
 
 function ViewLibrary() {
   const { playlists } = Route.useLoaderData();
+  const [mixesFilter, setMixesFilter] = useState<'all' | 'under10m' | 'over10m'>('under10m');
 
   const config = useSuspenseQuery(configQuery).data;
   const { data: tracks, isLoading } = useQuery(allTracksQuery);
@@ -41,11 +42,20 @@ function ViewLibrary() {
     }
   }, [tracks]);
 
-  const filteredTracks = useFilteredTracks(
+  const sortedTracks = useFilteredTracks(
     tracks ?? [],
     config.library_sort_by,
     config.library_sort_order,
   );
+
+  const filteredTracks = useMemo(() => {
+    if (mixesFilter === 'all') return sortedTracks;
+    return sortedTracks.filter((t) => {
+      const isMix = t.is_mix_over_10m === true || (t.duration != null && t.duration > 600);
+      return mixesFilter === 'over10m' ? isMix : !isMix;
+    });
+  }, [sortedTracks, mixesFilter]);
+
   useGlobalTrackListStatus(filteredTracks);
 
   return (
@@ -54,6 +64,8 @@ function ViewLibrary() {
         title="Biblioteca"
         tracksOverride={filteredTracks}
         crateName="Hera_Active_Set"
+        mixesFilter={mixesFilter}
+        onMixesFilterChange={setMixesFilter}
       />
       <div {...stylex.props(styles.listViewport)}>
         <TrackListStates isLoading={isLoading} tracks={filteredTracks}>
