@@ -229,7 +229,7 @@ const styles = stylex.create({
     color: '#edeff3',
   },
   betaBadgeBtn: {
-    background: 'rgba(20, 184, 166, 0.12)',
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: 'rgba(20, 184, 166, 0.35)',

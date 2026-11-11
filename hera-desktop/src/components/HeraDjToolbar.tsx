@@ -389,8 +389,8 @@ const styles = stylex.create({
     borderColor: '#232a36',
   },
   filterPill: {
-    background: 'none',
-    border: 'none',
+    backgroundColor: 'transparent',
+    borderStyle: 'none',
     color: '#8e98a8',
     fontSize: '11px',
     fontWeight: 500,

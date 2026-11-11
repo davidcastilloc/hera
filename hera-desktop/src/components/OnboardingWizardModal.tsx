@@ -209,8 +209,8 @@ const styles = stylex.create({
     color: '#8b949e',
   },
   closeBtn: {
-    background: 'none',
-    border: 'none',
+    backgroundColor: 'transparent',
+    borderStyle: 'none',
     color: '#8b949e',
     cursor: 'pointer',
     padding: '4px',
@@ -344,7 +344,7 @@ const styles = stylex.create({
   },
   primaryBtn: {
     backgroundColor: '#14b8a6',
-    border: 'none',
+    borderStyle: 'none',
     color: '#041c18',
     fontSize: '12.5px',
     fontWeight: 600,
