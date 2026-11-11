@@ -31,16 +31,16 @@ pub fn evaluate_latin_heuristics(
 
     if is_tecnomerengue_profile {
         let mut tecno_bpm = raw_bpm;
-        // 2/3x polyrhythmic cross-tempo resolution: e.g. ~98-112 BPM -> * 1.5 -> ~147-168 BPM
-        if (96.0..=114.0).contains(&tecno_bpm) {
+        // 2/3x polyrhythmic cross-tempo resolution: e.g. ~98-115 BPM -> * 1.5 -> ~147-172 BPM
+        if (98.0..=115.0).contains(&tecno_bpm) {
             tecno_bpm *= 1.5;
         }
-        // 1/2x half-tempo alias resolution: e.g. 65..82 BPM -> * 2.0 -> 130..164 BPM
-        else if (60.0..96.0).contains(&tecno_bpm) {
+        // 1/2x half-tempo alias resolution: e.g. 60..98 BPM -> * 2.0 -> 120..196 BPM
+        else if (60.0..98.0).contains(&tecno_bpm) {
             tecno_bpm *= 2.0;
         }
 
-        if (130.0..=165.0).contains(&tecno_bpm) {
+        if (128.0..=165.0).contains(&tecno_bpm) {
             return LatinClassification {
                 rhythm_family: "Tecnomerengue".to_string(),
                 candidate_bpm: tecno_bpm,
@@ -56,8 +56,8 @@ pub fn evaluate_latin_heuristics(
 
     if is_salsa_profile {
         let mut salsa_bpm = raw_bpm;
-        // 4/3x alias resolution: e.g. ~124-144 BPM -> * 0.75 -> 93-108 BPM
-        if (118.0..=145.0).contains(&salsa_bpm) {
+        // 4/3x alias resolution: e.g. ~107-145 BPM -> * 0.75 -> 80.25-108.75 BPM
+        if (107.0..=145.0).contains(&salsa_bpm) {
             salsa_bpm *= 0.75;
         }
         // 2x double-time alias resolution: e.g. 164-216 BPM -> * 0.5 -> 82-108 BPM
