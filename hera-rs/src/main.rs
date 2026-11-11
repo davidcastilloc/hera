@@ -15,6 +15,45 @@ async fn main() {
         .iter()
         .any(|a| a == "--mcp" || a == "mcp" || a == "serve");
 
+    if let Some(path) = extract_cli_flag(&args, "--analyze") {
+        match std::fs::read(&path) {
+            Ok(bytes) => {
+                let ext = std::path::Path::new(&path)
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("mp3");
+                match hera_node_rs::forensics::decode_audio_bytes(&bytes, Some(ext), 90.0) {
+                    Ok(decoded) => {
+                        let report = hera_node_rs::bpm_engine::analyze_bpm_consensus(
+                            &decoded.mono,
+                            decoded.sample_rate,
+                            None,
+                        );
+                        let structure = hera_node_rs::structure::analyze_structure_and_style(
+                            &decoded.mono,
+                            decoded.sample_rate,
+                            Some(decoded.duration_seconds),
+                            None,
+                        );
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&serde_json::json!({
+                                "file": path,
+                                "bpm_report": report,
+                                "structure": structure
+                            }))
+                            .unwrap()
+                        );
+                        return;
+                    }
+                    Err(e) => eprintln!("Decode error: {e}"),
+                }
+            }
+            Err(e) => eprintln!("Read error: {e}"),
+        }
+        return;
+    }
+
     let node_id = extract_cli_flag(&args, "--node-id")
         .or_else(|| env::var("HERA_NODE_ID").ok())
         .unwrap_or_else(|| "hera-vps-node-01".to_string());

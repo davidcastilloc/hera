@@ -24,10 +24,8 @@ pub fn evaluate_latin_heuristics(
     let clave_ratio = clave_sum / total;
     let guiro_ratio = guiro_sum / total;
 
-    // Tecnomerengue signature: prominent 16th-note güira (>= 40% of total novelty, or >= 28% with fast tempo)
-    // and binary tambora hits.
-    let is_tecnomerengue_profile = guiro_ratio >= 0.40
-        || (guiro_ratio >= 0.28 && (clave_ratio + sub_ratio) >= 0.30);
+    // Tecnomerengue signature: dominant 16th-note güira sizzle (>= 38% and exceeding clave)
+    let is_tecnomerengue_profile = guiro_ratio >= 0.38 && guiro_ratio > clave_ratio;
 
     if is_tecnomerengue_profile {
         let mut tecno_bpm = raw_bpm;
@@ -40,19 +38,27 @@ pub fn evaluate_latin_heuristics(
             tecno_bpm *= 2.0;
         }
 
-        if (128.0..=165.0).contains(&tecno_bpm) {
+        if (128.0..=160.0).contains(&tecno_bpm) {
             return LatinClassification {
                 rhythm_family: "Tecnomerengue".to_string(),
                 candidate_bpm: tecno_bpm,
                 confidence: 0.94,
             };
+        } else if tecno_bpm > 160.0 {
+            let folded = tecno_bpm * 0.5;
+            if (80.0..=108.0).contains(&folded) {
+                return LatinClassification {
+                    rhythm_family: "Salsa".to_string(),
+                    candidate_bpm: folded,
+                    confidence: 0.95,
+                };
+            }
         }
     }
 
-    // Salsa signature: prominent Clave/Campana (>= 22%), subdued kick on beat 1 (<= 25%),
-    // and syncopated baby-bass tumbao / congas.
-    let is_salsa_profile = (clave_ratio >= 0.22 && sub_ratio <= 0.25)
-        || (clave_ratio >= 0.18 && low_ratio >= 0.05 && sub_ratio <= 0.28);
+    // Salsa signature: prominent Clave/Campana/Bongo, low sub-kick on beat 1 (<= 28%)
+    let is_salsa_profile = (clave_ratio >= 0.20 && sub_ratio <= 0.28)
+        || (clave_ratio >= 0.18 && low_ratio >= 0.05 && sub_ratio <= 0.30);
 
     if is_salsa_profile {
         let mut salsa_bpm = raw_bpm;
@@ -68,7 +74,7 @@ pub fn evaluate_latin_heuristics(
             salsa_bpm *= 2.0;
         }
 
-        if (82.0..=108.0).contains(&salsa_bpm) {
+        if (80.0..=109.0).contains(&salsa_bpm) {
             return LatinClassification {
                 rhythm_family: "Salsa".to_string(),
                 candidate_bpm: salsa_bpm,

@@ -179,7 +179,14 @@ pub fn analyze_structure_and_style(
         Some(b) if b > 40.0 => normalize_dj_bpm(b),
         _ => {
             let report = crate::bpm_engine::analyze_bpm_consensus(mono, sample_rate, None);
-            report.bpm
+            let mut b = report.bpm;
+            if report.detected_rhythm_family != "Tecnomerengue" && b > 156.0 {
+                b *= 0.5;
+            }
+            while b < 72.0 {
+                b *= 2.0;
+            }
+            b
         }
     };
     let beat_sec = 60.0 / bpm.max(60.0);
