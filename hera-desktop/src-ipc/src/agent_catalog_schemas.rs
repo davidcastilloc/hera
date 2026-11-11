@@ -101,10 +101,7 @@ pub fn desktop_extra_mcp_tools() -> Vec<Value> {
             "description": "Rename an existing SQLite playlist by ID.",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "playlist_id": { "type": "string" },
-                    "name": { "type": "string" }
-                },
+                "properties": { "playlist_id": { "type": "string" }, "name": { "type": "string" } },
                 "required": ["playlist_id", "name"]
             }
         }),
@@ -219,10 +216,7 @@ pub fn desktop_extra_mcp_tools() -> Vec<Value> {
             "description": "Read UTF-8 text content from a local file (such as playlists, XML/NML configs, logs, or scripts) with optional line bounds.",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "path": { "type": "string" },
-                    "max_bytes": { "type": "integer", "default": 32768 }
-                },
+                "properties": { "path": { "type": "string" }, "max_bytes": { "type": "integer", "default": 32768 } },
                 "required": ["path"]
             }
         }),
@@ -231,10 +225,7 @@ pub fn desktop_extra_mcp_tools() -> Vec<Value> {
             "description": "Write UTF-8 text content to a local file, creating parent directories if needed.",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "path": { "type": "string" },
-                    "content": { "type": "string" }
-                },
+                "properties": { "path": { "type": "string" }, "content": { "type": "string" } },
                 "required": ["path", "content"]
             }
         }),
@@ -243,10 +234,7 @@ pub fn desktop_extra_mcp_tools() -> Vec<Value> {
             "description": "Move or rename a local file or directory on disk (e.g. organizing audio files into clean folders).",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "from_path": { "type": "string" },
-                    "to_path": { "type": "string" }
-                },
+                "properties": { "from_path": { "type": "string" }, "to_path": { "type": "string" } },
                 "required": ["from_path", "to_path"]
             }
         }),
@@ -259,6 +247,44 @@ pub fn desktop_extra_mcp_tools() -> Vec<Value> {
                     "target": { "type": "string", "description": "File path, folder path, or application executable/URI" }
                 },
                 "required": ["target"]
+            }
+        }),
+        json!({
+            "name": "record_golden_pair",
+            "description": "Save a proven DJ transition pair into memory with an acoustic synergy bonus (+0.38 by default) for harmonic crate generation.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "from_track_id": { "type": "string", "description": "ID of the outgoing track" },
+                    "to_track_id": { "type": "string", "description": "ID of the incoming track" },
+                    "custom_bonus": { "type": "number", "description": "Optional synergy score bonus (default 0.38)", "default": 0.38 },
+                    "note": { "type": "string", "description": "Optional note regarding why this transition works" }
+                },
+                "required": ["from_track_id", "to_track_id"]
+            }
+        }),
+        json!({
+            "name": "exclude_track_curation",
+            "description": "Permanently exclude a track or title pattern from future automated AI DJ crate suggestions without deleting the file from disk.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "track_id": { "type": "string", "description": "Optional specific SQLite track ID to exclude" },
+                    "title_pattern": { "type": "string", "description": "Optional title/artist substring pattern (e.g. 'Clavelito') to exclude" },
+                    "reason": { "type": "string", "description": "Reason for exclusion (e.g. 'tired track', 'scratched intro', 'client request')" }
+                }
+            }
+        }),
+        json!({
+            "name": "record_dj_feedback",
+            "description": "Store a natural language DJ preference or curatorial rule into long-term memory for the AI assistant.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "category": { "type": "string", "description": "Category: 'genre', 'pacing', 'energy', 'venue', or 'general'", "default": "general" },
+                    "rule_text": { "type": "string", "description": "The exact DJ rule or preference text" }
+                },
+                "required": ["rule_text"]
             }
         }),
     ]
@@ -300,7 +326,7 @@ mod tests {
     #[test]
     fn test_unified_mcp_tools_catalog_and_confirmation_gate() {
         let extra = desktop_extra_mcp_tools();
-        assert_eq!(extra.len(), 22);
+        assert_eq!(extra.len(), 25);
         let unified = build_unified_mcp_tools_list();
         assert!(unified.len() >= 42, "got {} tools", unified.len());
         let names: BTreeSet<&str> = unified

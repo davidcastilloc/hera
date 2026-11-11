@@ -104,3 +104,20 @@ fn test_workability_junk_folders_and_duration_classification() {
     assert_eq!(classify_track_duration(900.0), DurationCategory::MixOver10m);
 }
 
+#[test]
+fn test_format_now_playing_tray_tooltip() {
+    use virtualdj_live::format_now_playing_tray_tooltip;
+
+    let empty_tooltip = format_now_playing_tray_tooltip(None);
+    assert_eq!(empty_tooltip, "HERA BETA · Cabina lista");
+
+    let playing = VirtualDjNowPlaying {
+        artist: "Joe Arroyo".to_string(),
+        title: "La Rebelión".to_string(),
+        source_path: "tracklist.txt".to_string(),
+    };
+    let playing_tooltip = format_now_playing_tray_tooltip(Some(&playing));
+    assert_eq!(playing_tooltip, "HERA BETA · Sonando: Joe Arroyo - La Rebelión");
+}
+
+

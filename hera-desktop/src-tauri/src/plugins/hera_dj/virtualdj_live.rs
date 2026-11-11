@@ -205,3 +205,15 @@ pub async fn read_virtualdj_now_playing() -> Result<Option<VirtualDjNowPlaying>,
     .await
     .map_err(|e| format!("Fallo en tarea read_virtualdj_now_playing: {e}"))?
 }
+
+/// Generates live System Tray tooltip text matching the format:
+/// `HERA BETA · Sonando: <Artista> - <Título>` or `HERA BETA · Cabina lista`
+pub fn format_now_playing_tray_tooltip(now_playing: Option<&VirtualDjNowPlaying>) -> String {
+    match now_playing {
+        Some(track) if !track.artist.is_empty() && !track.title.is_empty() => {
+            format!("HERA BETA · Sonando: {} - {}", track.artist, track.title)
+        }
+        _ => "HERA BETA · Cabina lista".to_string(),
+    }
+}
+

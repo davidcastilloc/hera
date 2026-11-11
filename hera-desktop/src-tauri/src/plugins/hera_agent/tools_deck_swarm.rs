@@ -270,6 +270,9 @@ pub(super) async fn execute_tool_inner<R: Runtime>(
     if let Some(res) = execute_library_tool(ctx, tool_name, args).await {
         return res;
     }
+    if let Some(res) = execute_curation_feedback_tool(ctx, session_id, tool_name, args).await {
+        return res;
+    }
     if let Some(res) = execute_playlist_vdj_tool(ctx, session_id, tool_name, args).await {
         return res;
     }

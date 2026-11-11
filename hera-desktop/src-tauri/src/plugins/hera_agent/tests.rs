@@ -209,5 +209,50 @@ async fn test_local_mcp_auth_and_sqlite_playlist_and_os_tools() {
     .unwrap();
     assert!(dir_res.get("entries").and_then(|v| v.as_array()).is_some());
 
+    // 5. Execute curatorial tools: golden pairs, excluded tracks, and DJ feedback
+    let gp_res = dispatch_unified_agent_tool(
+        &ctx,
+        None,
+        "record_golden_pair",
+        json!({
+            "from_track_id": "trk-01",
+            "to_track_id": "trk-02",
+            "custom_bonus": 0.42,
+            "note": "Transición épica en 125 BPM"
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(gp_res["success"], true);
+    assert_eq!(gp_res["bonus"], 0.42);
+
+    let ex_res = dispatch_unified_agent_tool(
+        &ctx,
+        None,
+        "exclude_track_curation",
+        json!({
+            "title_pattern": "Clavelito",
+            "reason": "Pista desgastada"
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(ex_res["success"], true);
+    assert_eq!(ex_res["title_pattern"], "Clavelito");
+
+    let fb_res = dispatch_unified_agent_tool(
+        &ctx,
+        Some("session-test"),
+        "record_dj_feedback",
+        json!({
+            "category": "energy",
+            "rule_text": "Subir la energía después de la hora 2"
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(fb_res["success"], true);
+    assert_eq!(fb_res["category"], "energy");
+
     srv_handle.abort();
 }

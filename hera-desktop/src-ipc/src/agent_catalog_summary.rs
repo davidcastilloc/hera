@@ -34,6 +34,9 @@ pub fn human_tool_title(tool_name: &str) -> String {
         "analyze_audio_file" => "Analizar audio".to_string(),
         "detect_track_cues" => "Detectar 4 Hot Cues".to_string(),
         "build_dj_style_dna" => "Calcular perfil musical".to_string(),
+        "record_golden_pair" => "Guardar pareja de oro".to_string(),
+        "exclude_track_curation" => "Excluir pista de curación".to_string(),
+        "record_dj_feedback" => "Aprender regla DJ".to_string(),
         _ => "Ejecutar herramienta".to_string(),
     }
 }
@@ -176,6 +179,38 @@ pub fn summarize_tool_execution(
                             420
                         )
                     ),
+                )
+            }
+            "record_golden_pair" => {
+                let from = val.get("from_track").and_then(|v| v.as_str()).unwrap_or("Pista A");
+                let to = val.get("to_track").and_then(|v| v.as_str()).unwrap_or("Pista B");
+                let bonus = val.get("bonus").and_then(|v| v.as_f64()).unwrap_or(0.38);
+                (
+                    title,
+                    format!("Pareja guardada (+{bonus:.2})"),
+                    format!("transición: {from} -> {to}\nbonus de sinergia: +{bonus:.2}"),
+                )
+            }
+            "exclude_track_curation" => {
+                let pat = val
+                    .get("title_pattern")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| val.get("track_id").and_then(|v| v.as_str()))
+                    .unwrap_or("Pista");
+                let reason = val.get("reason").and_then(|v| v.as_str()).unwrap_or("Exclusión DJ");
+                (
+                    title,
+                    format!("Excluida: {pat}"),
+                    format!("criterio: {pat}\nmotivo: {reason}"),
+                )
+            }
+            "record_dj_feedback" => {
+                let cat = val.get("category").and_then(|v| v.as_str()).unwrap_or("general");
+                let rule = val.get("rule_text").and_then(|v| v.as_str()).unwrap_or("");
+                (
+                    title,
+                    format!("Regla [{cat}]: {}", truncate_chars(rule, 36)),
+                    format!("categoría: {cat}\nregla: {rule}"),
                 )
             }
             _ => {

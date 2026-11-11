@@ -4,6 +4,7 @@ mod mcp_http;
 mod smart_intent;
 #[cfg(test)]
 mod tests;
+mod tools_curation;
 mod tools_deck_swarm;
 mod tools_host;
 mod tools_library;
@@ -59,6 +60,8 @@ pub use hera_ipc::agy_stream::*;
 pub use mcp_http::*;
 #[allow(unused_imports)]
 pub use smart_intent::*;
+#[allow(unused_imports)]
+pub use tools_curation::*;
 #[allow(unused_imports)]
 pub use tools_deck_swarm::*;
 #[allow(unused_imports)]
