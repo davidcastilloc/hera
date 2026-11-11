@@ -12,7 +12,7 @@
 - [x] **Task 1: Motor BPM de 5 Capas (`hera-rs/src/bpm_engine/`)**  
   Implementado en `2dc50e2` y `fa05a6c`. 5/5 tests unitarios pasando (`bpm_engine_qa.rs`).
 
-- [ ] **Task 2: Detector Forense de Saltos / CD Rayado (*«21. Eres tú»*) y Decodificador Cancelable (`<= 600s`)**
+- [x] **Task 2: Detector Forense de Saltos / CD Rayado (*«21. Eres tú»*) y Decodificador Cancelable (`<= 600s`)**
   - **Archivos:** `hera-rs/src/forensics_glitch.rs` (`<= 349` LOC), `hera-rs/src/forensics.rs`, `hera-rs/src/lib.rs`.
   - **Entrega:** Detección de paquetes corruptos, micro-cortes de energía y bucles de buffer repetido (efecto CD rayado) sin romper el Golden Master de `forensics_and_4_hot_cues`, más decodificación segura cancelable para audio y video (`.mp4`, `.mov`, `.mkv`).
 
