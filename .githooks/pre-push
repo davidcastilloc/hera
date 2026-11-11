@@ -7,16 +7,32 @@ echo "[*] Ejecutando verificaciones pre-push de HERA..."
 # 1. Verificación y suite completa de tests en el workspace Rust
 if command -v cargo >/dev/null 2>&1; then
     echo "[+] Verificando compilación Rust (cargo check --workspace)..."
-    cargo check --workspace || {
+    cargo check --workspace --locked || {
         echo "[!] Error en cargo check --workspace. Push abortado."
         exit 1
     }
 
-    echo "[+] Ejecutando suite completa de tests Rust (hera-node-rs + hera-ipc)..."
-    cargo test -p hera-node-rs -p hera-ipc || {
-        echo "[!] Fallaron los tests en hera-node-rs / hera-ipc. Push abortado."
-        exit 1
-    }
+    # Verificar compilación WASM si el target está instalado
+    if rustup target list --installed 2>/dev/null | grep -q "wasm32-unknown-unknown"; then
+        echo "[+] Verificando target Cloudflare WASM en hera-rs..."
+        cargo check --manifest-path hera-rs/Cargo.toml --target wasm32-unknown-unknown --features cloudflare --no-default-features --locked || {
+            echo "[!] Falló compilación Cloudflare WASM en hera-rs. Push abortado."
+            exit 1
+        }
+    fi
+
+    echo "[+] Ejecutando suite de tests Rust (hera-node-rs + hera-ipc)..."
+    if command -v cargo-nextest >/dev/null 2>&1; then
+        cargo nextest run --locked -p hera-node-rs -p hera-ipc || {
+            echo "[!] Fallaron los tests con nextest. Push abortado."
+            exit 1
+        }
+    else
+        cargo test --locked -p hera-node-rs -p hera-ipc || {
+            echo "[!] Fallaron los tests en hera-node-rs / hera-ipc. Push abortado."
+            exit 1
+        }
+    fi
 else
     echo "[!] 'cargo' no encontrado en PATH. Omitiendo tests Rust."
 fi

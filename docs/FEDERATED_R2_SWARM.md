@@ -4,6 +4,8 @@
 > **Regla de Oro:** *«La mejor decisión es por el bien del enjambre siempre.»*  
 > **Runtime:** `hera-node-rs v0.6.0` (`native` Desktop/VPS + `cloudflare` Workers WASM + R2 + D1 + Vectorize)
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/davidcastilloc/hera/tree/main/hera-rs)
+
 ![Concepto y Arquitectura del Enjambre P2P Simbiótico de HERA v0.6.0](../assets/hera_swarm_concept.jpg)
 
 ---

@@ -1,57 +1,143 @@
-name: HERA Community CI (Lean PR & Manual Gate)
+name: HERA Community CI (Lean PR & Filtered Gate)
 
 on:
   pull_request:
     branches: ["main"]
-    paths-ignore:
-      - "**.md"
-      - "docs/**"
-      - "assets/**"
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  CARGO_INCREMENTAL: "0"
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  CARGO_TERM_COLOR: "always"
 
 jobs:
-  hera-fast-gate:
-    name: Pure Rust DSP, IPC Guardian & Desktop Bundle Gate
+  filter:
+    name: Filter Changed Paths
     runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      desktop: ${{ steps.filter.outputs.desktop }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust stable toolchain + wasm32 target
+      - name: Evaluate Changed Paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - '.cargo/**'
+              - 'hera-rs/**'
+              - 'hera-desktop/src-ipc/**'
+              - '.github/workflows/ci.yml'
+            desktop:
+              - 'hera-desktop/**'
+              - 'hera-desktop/src-ipc/**'
+              - '.github/workflows/ci.yml'
+
+  rust-gate:
+    name: Pure Rust DSP, IPC Guardian & WASM Target Check
+    needs: filter
+    if: needs.filter.outputs.rust == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install lld Linker for aarch64
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lld
+
+      - name: Install Rust Stable Toolchain + wasm32 Target
         uses: dtolnay/rust-toolchain@stable
         with:
+          profile: minimal
           targets: wasm32-unknown-unknown
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
 
       - name: Rust Cargo Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: . -> target
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Cargo Check, WASM Gate & Headless IPC/ACL/Hygiene Guardian (hera-rs + hera-ipc)
+      - name: Verify Workspace Check & Cloudflare WASM Target
         run: |
-          cargo check
-          cargo check --manifest-path hera-rs/Cargo.toml --target wasm32-unknown-unknown --features cloudflare --no-default-features
-          cargo test -p hera-ipc
-          cargo test -p hera-node-rs
+          cargo check --locked
+          cargo check --manifest-path hera-rs/Cargo.toml --target wasm32-unknown-unknown --features cloudflare --no-default-features --locked
 
-      - name: Setup Bun 1.4.4 & Node.js 24
+      - name: Run Test Suite (cargo-nextest)
+        run: |
+          cargo nextest run --locked -p hera-ipc
+          cargo nextest run --locked -p hera-node-rs
+
+  desktop-gate:
+    name: HERA Desktop Format, Typecheck, Unit Tests & Production Build
+    needs: filter
+    if: needs.filter.outputs.desktop == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun 1.4.4
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.4"
 
-      - name: Setup Node.js 24 runtime for Vite+
+      - name: Cache Bun Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('hera-desktop/bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Setup Node.js 24 Runtime for Vite+
         uses: actions/setup-node@v4
         with:
           node-version: "24"
 
-      - name: Verify HERA Desktop Format, Typecheck, Unit Tests & Bundle Build
+      - name: Install Dependencies & Run Desktop Verification
         working-directory: hera-desktop
         run: |
-          bun install --ignore-scripts
+          bun install --frozen-lockfile
           bun run check
           bun run test
           bun run build
+
+  ci-gate:
+    name: CI Aggregated Status Gate
+    if: always()
+    needs: [filter, rust-gate, desktop-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate Overall CI Status
+        run: |
+          RUST_RESULT="${{ needs.rust-gate.result }}"
+          DESKTOP_RESULT="${{ needs.desktop-gate.result }}"
+          echo "Rust Gate Result:    $RUST_RESULT"
+          echo "Desktop Gate Result: $DESKTOP_RESULT"
+
+          if [ "$RUST_RESULT" = "failure" ] || [ "$RUST_RESULT" = "cancelled" ] || \
+             [ "$DESKTOP_RESULT" = "failure" ] || [ "$DESKTOP_RESULT" = "cancelled" ]; then
+            echo "CI validation failed!"
+            exit 1
+          fi
+          echo "All required checks passed or were safely skipped."

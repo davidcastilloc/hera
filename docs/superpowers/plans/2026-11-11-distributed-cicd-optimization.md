@@ -1,0 +1,35 @@
+# Plan: Infraestructura Distribuida "Zero-Central-Tax" (hera + hera-cloud)
+
+- [x] **Fase 1: Perfiles Cargo, Enlazador `lld` en ARM64, `Dockerfile` y `.gitignore`**
+  - [x] Actualizar perfiles `[profile.dev]`, `[profile.release]` y `[profile.release-lowmem]` en `hera/Cargo.toml`
+  - [x] Actualizar perfiles `[profile.dev]`, `[profile.release]` y `[profile.release-lowmem]` en `hera-cloud/Cargo.toml`
+  - [x] Crear `.cargo/config.toml` con `link-arg=-fuse-ld=lld` para `aarch64` en `hera` y `hera-cloud`
+  - [x] Optimizar `hera/hera-rs/Dockerfile`
+  - [x] Actualizar `.gitignore` y `moon.yml`
+- [x] **Fase 2: Instaladores Pure-Rust con Compilación Local SIMD**
+  - [x] Actualizar `hera/install.sh` y `hera/deploy/install-node.sh` con selección SIMD vs `release-lowmem`
+  - [x] Actualizar `hera/install.ps1`
+  - [x] Eliminar `hera/.github/workflows/release-binaries.yml` y actualizar skills de agentes si corresponde
+- [x] **Fase 3: Deploy to Cloudflare & Caché Incremental WASM `zstd` en `hera-rs`**
+  - [x] Crear `hera/hera-rs/scripts/cf-build.sh`
+  - [x] Crear `hera/hera-rs/package.json` y generar `package-lock.json`
+  - [x] Actualizar `hera/hera-rs/wrangler.toml` con guarda `WORKERS_CI=1`
+  - [x] Añadir botón "Deploy to Cloudflare" en `README.md`, `hera-rs/README.md` y `docs/FEDERATED_R2_SWARM.md`
+- [x] **Fase 4: Auto-Despliegue, Previews y Limpieza en `hera-cloud`**
+  - [x] Crear `hera-cloud/scripts/cf-build.sh`
+  - [x] Crear `hera-cloud/package.json` y generar `package-lock.json`
+  - [x] Actualizar `hera-cloud/wrangler.toml` con guarda `WORKERS_CI=1`
+  - [x] Crear `hera-cloud/.github/workflows/cleanup-preview.yml`
+  - [x] Crear `hera-cloud/scripts/setup-cloudflare-previews.sh` y documentar en `docs/CLOUDFLARE_BUILDS_SETUP.md`
+- [x] **Fase 5: Fusión Quirúrgica en GitHub Actions (`ci.yml` y `release.yml`)**
+  - [x] Actualizar `hera/.github/workflows/ci.yml` (`dorny/paths-filter`, `ubuntu-24.04-arm`, `ci-gate`, `lld`, `nextest`)
+  - [x] Actualizar `hera-cloud/.github/workflows/ci.yml`
+  - [x] Verificar y asegurar timeouts/caché en `hera/.github/workflows/release.yml`
+- [x] **Fase 6: Endurecimiento de `.githooks/` (Pure-Rust Pre-Commit & Pre-Push)**
+  - [x] Endurecer `hera/.githooks/pre-commit` y `pre-push`
+  - [x] Configurar `.githooks/` en `hera-cloud`
+- [x] **Gate Final de Verificación (RDD con recibos de terminal `exit code 0`)**
+  - [x] Verificación de `cargo check --locked` nativo y WASM en `hera` y `hera-cloud`
+  - [x] Verificación de tests en `hera` y `hera-cloud`
+  - [x] Sintaxis shell validada
+  - [x] Registro de ADRs en `DECISIONS.md`

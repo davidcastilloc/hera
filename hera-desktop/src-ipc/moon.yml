@@ -17,7 +17,7 @@ tasks:
       - '/Cargo.lock'
 
   test:
-    command: 'cargo test -p hera-ipc'
+    command: 'if command -v cargo-nextest >/dev/null 2>&1; then cargo nextest run -p hera-ipc; else cargo test -p hera-ipc; fi'
     inputs:
       - 'src/**/*'
       - 'Cargo.toml'

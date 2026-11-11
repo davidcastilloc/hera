@@ -8,6 +8,7 @@
 **«Todo es posible si lo imaginas: De la intención musical al booth del DJ en segundos»**  
 **🐝 Lema del Enjambre: *«Mientras más nodos de Hera, más fuerte es el sistema de enjambres»***
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/davidcastilloc/hera/tree/main/hera-rs)
 [![Pure Rust](https://img.shields.io/badge/Rust-100%25%20Pure%20Rust%20v0.6.0-dea584.svg?style=flat&logo=rust)](hera-rs/)
 [![Tauri v2](https://img.shields.io/badge/Desktop-Tauri%20v2%20%2B%20React%2019-24C8D8.svg?style=flat&logo=tauri)](hera-desktop/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)

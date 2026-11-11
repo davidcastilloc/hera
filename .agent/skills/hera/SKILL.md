@@ -27,7 +27,7 @@ Convertir intención musical en búsquedas federadas, candidatos comparables, an
 
 # Reglas obligatorias para el agente
 
-- **Paso 0 Auto-Update:** Ejecutar siempre primero `ensure_hera_updated` o `scripts/ensure_latest_hera.py` para garantizar que las skills y los binarios (`hera` y `hera-node`) estén al día.
+- **Paso 0 Auto-Update:** Compilar localmente con SIMD nativo (`cargo build --release -p hera-node-rs --bin hera-node`) o ejecutar `hera-update` para mantener el nodo al día.
 - **Fase 1 Anti-Duplicados:** Antes de iniciar cualquier descarga (`download_track`), validar contra el repertorio local con `audit_repertoire(check_queries=[...])` (fuzzy matching `>= 85%`) y deduplicación global CAS (`content_sha256` / `u64` SimHash) para omitir pistas existentes (`[SKIP - YA EXISTE]`).
 - **Promoción Local In-Place:** Para pistas locales (`provider="local"`, `cand_*` o rutas en disco), invocar directamente `analyze_track`, `analyze_batch` o `identify_track` sin pasar por `download_track` (se promueven *in-place* a `trk_*` sin duplicar en `quarantine/`).
 - **Calibración Acústica de BPM Exacto:** En proyectos propios con archivo `.als` (Ableton Live), extraer el `<Tempo>` exacto del proyecto DAW como fuente de verdad; para pistas sin DAW, aplicar corrección de octava Half/Double-Time por género y desempate armónico antes de exportar a VirtualDJ/Rekordbox.

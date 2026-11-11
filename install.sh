@@ -61,7 +61,7 @@ esac
 
 # --- 2. Directorio de Instalación ---
 HERA_DIR="${HOME}/hera"
-if [ -d ".git" ] && [ -f "pyproject.toml" ]; then
+if [ -d ".git" ] && [ -f "Cargo.toml" ]; then
   HERA_DIR="$(pwd)"
   echo -e "${GREEN}[*]${NC} Ejecutando desde repositorio local: ${BOLD}${HERA_DIR}${NC}"
 else
@@ -94,14 +94,18 @@ install_sys_deps() {
 
 install_sys_deps
 
-# --- 4. Instalador de Python Ultra-Rápido (uv) ---
-echo -e "\n${CYAN}${BOLD}==> [2/6] Verificando entorno Python (uv)...${NC}"
-if ! command -v uv &>/dev/null; then
-  echo -e "${GREEN}[*]${NC} Instalando 'uv' (gestor de Python ultraligero sin tocar el sistema)..."
-  curl -LsSf https://astral.sh/uv/install.sh | sh
-  export PATH="${HOME}/.local/bin:${PATH}"
+# --- 4. Toolchain Rust Minimal (Zero Python, Pure-Rust Engine) ---
+echo -e "\n${CYAN}${BOLD}==> [2/6] Verificando compilador Rust (rustup minimal)...${NC}"
+if ! command -v cargo &>/dev/null; then
+  echo -e "${GREEN}[*]${NC} Instalando Rust toolchain minimal..."
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
 fi
-echo -e "${GREEN}[OK]${NC} uv listo: $(uv --version)"
+if [ -f "${HOME}/.cargo/env" ]; then
+  # shellcheck disable=SC1091
+  source "${HOME}/.cargo/env"
+fi
+export PATH="${HOME}/.cargo/bin:${PATH}"
+echo -e "${GREEN}[OK]${NC} Rust listo: $(cargo --version)"
 
 # --- 5. Descargar Binario Nativo de slskd (Soulseek Daemon) ---
 echo -e "\n${CYAN}${BOLD}==> [3/6] Instalando demonio Soulseek P2P (slskd ${SLSKD_ARCH})...${NC}"
@@ -154,22 +158,21 @@ else
   git pull --rebase origin main --quiet || true
 fi
 
-# Crear entorno virtual con uv si no existe
-if [ ! -d ".venv" ]; then
-  uv venv .venv --python 3.11 2>/dev/null || uv venv .venv
-fi
-export VIRTUAL_ENV="${HERA_DIR}/.venv"
-export PATH="${HERA_DIR}/.venv/bin:${PATH}"
+# Compilar binario nativo Rust (hera-node) con SIMD nativo o release-lowmem
+echo -e "${GREEN}[*]${NC} Compilando motor de audio nativo hera-node..."
+RAM_MB=$(awk '/MemTotal/ {printf "%.0f", $2/1024}' /proc/meminfo 2>/dev/null || sysctl -n hw.memsize 2>/dev/null | awk '{printf "%.0f", $1/1048576}' || echo 4096)
+TARGET_DIR=$(cargo metadata --manifest-path "${HERA_DIR}/hera-rs/Cargo.toml" --format-version 1 --no-deps | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')
 
-# Instalar dependencias
-echo -e "${GREEN}[*]${NC} Instalando/actualizando dependencias de Python..."
-uv pip install -e ".[analysis]" --quiet || uv pip install -e "." --quiet
-
-# Compilar binario nativo Rust (hera-node) si cargo está disponible y sincronizar Skills globales
-if [ -f "${HERA_DIR}/scripts/ensure_latest_hera.py" ]; then
-  echo -e "${GREEN}[*]${NC} Ejecutando auto-verificador de binarios (hera-node) y sincronización de Skills..."
-  "${HERA_DIR}/.venv/bin/python" "${HERA_DIR}/scripts/ensure_latest_hera.py" --no-pull || true
+if [ "${RAM_MB:-4096}" -lt 2500 ]; then
+  echo -e "${GREEN}[*]${NC} Host con RAM limitada (${RAM_MB} MB): compilando con perfil release-lowmem..."
+  CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=1 cargo build --manifest-path "${HERA_DIR}/hera-rs/Cargo.toml" --profile release-lowmem --locked --bin hera-node
+  cp "${TARGET_DIR}/release-lowmem/hera-node" "${HERA_DIR}/bin/hera-node"
+else
+  echo -e "${GREEN}[*]${NC} Compilando hera-node optimizado con SIMD nativo (-C target-cpu=native)..."
+  CARGO_INCREMENTAL=0 RUSTFLAGS="-C target-cpu=native" cargo build --manifest-path "${HERA_DIR}/hera-rs/Cargo.toml" --release --locked --bin hera-node
+  cp "${TARGET_DIR}/release/hera-node" "${HERA_DIR}/bin/hera-node"
 fi
+chmod +x "${HERA_DIR}/bin/hera-node"
 
 # --- 8. Generar Configuración de slskd con Puertos Abiertos y 11 Salas ---
 SLSKD_CFG="${HERA_DIR}/bin/slskd.yml"
@@ -339,18 +342,19 @@ else
   NEW_REV="$(git rev-parse --short HEAD)"
   echo -e "${GREEN}[OK]${NC} Codigo actualizado: ${BOLD}${OLD_REV} -> ${NEW_REV}${NC}"
 
-  # Actualizar paquetes de Python si uv está disponible
-  export PATH="${HOME}/.local/bin:${HERA_DIR}/.venv/bin:${PATH}"
-  if command -v uv &>/dev/null && [ -d "${HERA_DIR}/.venv" ]; then
-    echo -e "${GREEN}[*]${NC} Actualizando dependencias de Python..."
-    uv pip install -e ".[analysis]" --quiet 2>/dev/null || uv pip install -e "." --quiet
-  fi
+  # Recompilar binario Rust hera-node
+  echo -e "${GREEN}[*]${NC} Recompilando motor nativo Rust (hera-node)..."
+  RAM_MB=$(awk '/MemTotal/ {printf "%.0f", $2/1024}' /proc/meminfo 2>/dev/null || sysctl -n hw.memsize 2>/dev/null | awk '{printf "%.0f", $1/1048576}' || echo 4096)
+  TARGET_DIR=$(cargo metadata --manifest-path "${HERA_DIR}/hera-rs/Cargo.toml" --format-version 1 --no-deps | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')
 
-  # Recompilar binario Rust hera-node y sincronizar Skills globales
-  if [ -f "${HERA_DIR}/scripts/ensure_latest_hera.py" ] && [ -x "${HERA_DIR}/.venv/bin/python" ]; then
-    echo -e "${GREEN}[*]${NC} Actualizando binario nativo Rust (hera-node) y Skills globales..."
-    "${HERA_DIR}/.venv/bin/python" "${HERA_DIR}/scripts/ensure_latest_hera.py" --no-pull || true
+  if [ "${RAM_MB:-4096}" -lt 2500 ]; then
+    CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=1 cargo build --manifest-path "${HERA_DIR}/hera-rs/Cargo.toml" --profile release-lowmem --locked --bin hera-node
+    cp "${TARGET_DIR}/release-lowmem/hera-node" "${HERA_DIR}/bin/hera-node"
+  else
+    CARGO_INCREMENTAL=0 RUSTFLAGS="-C target-cpu=native" cargo build --manifest-path "${HERA_DIR}/hera-rs/Cargo.toml" --release --locked --bin hera-node
+    cp "${TARGET_DIR}/release/hera-node" "${HERA_DIR}/bin/hera-node"
   fi
+  chmod +x "${HERA_DIR}/bin/hera-node"
 
   # Reiniciar servicio para aplicar cambios en caliente
   echo -e "${GREEN}[*]${NC} Reiniciando servicios de Hera..."
@@ -438,7 +442,7 @@ ExecStart=${HERA_DIR}/bin/slskd --app-dir ${HERA_DIR}/bin
 Restart=always
 RestartSec=5s
 LimitNOFILE=65536
-Environment="PATH=${HERA_DIR}/.venv/bin:${HERA_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+Environment="PATH=${HERA_DIR}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 [Install]
 WantedBy=multi-user.target
@@ -480,5 +484,5 @@ echo -e "  • Detener nodo:    ${BOLD}hera-stop${NC}       (o sudo systemctl st
 echo -e "  • Actualizar nodo: ${BOLD}hera-update${NC}     (o hera update)"
 echo -e "  • Desinstalar:     ${BOLD}hera-uninstall${NC}"
 echo -e "  • Logs en vivo:    ${BOLD}journalctl -u hera -f${NC} (o cat ${HERA_DIR}/logs/slskd.log)"
-echo -e "  • CLI de Hera:     ${BOLD}${HERA_DIR}/.venv/bin/hera --help${NC}"
+echo -e "  • CLI de Hera:     ${BOLD}${HERA_DIR}/bin/hera-node --help${NC}"
 echo -e "${GREEN}================================================================${NC}\n"

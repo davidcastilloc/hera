@@ -150,9 +150,7 @@ test('BETA Onboarding Wizard modal and mixes filter toggle should be operable', 
   await expect.element(betaBadgeBtn).toBeVisible();
   await betaBadgeBtn.click();
 
-  await expect
-    .element(page.getByRole('dialog'))
-    .toBeVisible();
+  await expect.element(page.getByRole('dialog')).toBeVisible();
   await expect
     .element(page.getByText('Bienvenido a HERA Studio BETA'))
     .toBeVisible();
@@ -185,4 +183,3 @@ test('BETA Onboarding Wizard modal and mixes filter toggle should be operable', 
   await allBtn.click();
   await under10mBtn.click();
 });
-

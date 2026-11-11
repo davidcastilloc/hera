@@ -4,10 +4,32 @@ set -eu
 
 echo "[*] Ejecutando verificaciones pre-commit de HERA..."
 
-# 1. Verificación de compilación y tipos en el workspace Rust
+# 0. Verificación de cero enlaces simbólicos (anti-symlink gate para compatibilidad multi-OS)
+if [ -d ".agent/skills" ] || [ -d ".claude/skills" ]; then
+    echo "[+] Verificando ausencia de symlinks en skills..."
+    SYMLINKS=$(find .agent/skills .claude/skills -type l 2>/dev/null || true)
+    if [ -n "$SYMLINKS" ]; then
+        echo "[!] Error: Enlaces simbólicos detectados en skills: $SYMLINKS"
+        echo "[!] Deben ser archivos físicos para compatibilidad Windows/Git."
+        exit 1
+    fi
+fi
+
+# 1. Filtro de seguridad Open-Core (no exponer secretos en repo público)
+if git diff --cached -S"HERA_ADMIN_SECRET" --quiet; then
+    :
+else
+    echo "[!] Advertencia: Detectada posible referencia a secreto sensible en commit."
+fi
+
+# 2. Verificación de compilación y tipos en el workspace Rust
 if command -v cargo >/dev/null 2>&1; then
-    echo "[+] Verificando compilación Rust (cargo check --workspace)..."
-    cargo check --workspace || {
+    echo "[+] Verificando formato y compilación Rust (cargo check --workspace)..."
+    cargo fmt --check --all || {
+        echo "[!] Falló cargo fmt. Ejecuta 'cargo fmt --all' antes de commitear."
+        exit 1
+    }
+    cargo check --workspace --locked || {
         echo "[!] Error en cargo check --workspace. Corrige los problemas antes de commitear."
         exit 1
     }
@@ -15,7 +37,7 @@ else
     echo "[!] 'cargo' no encontrado en PATH. Omitiendo verificación Rust."
 fi
 
-# 2. Verificación estática del frontend (hera-desktop con Bun + Vite+)
+# 3. Verificación estática del frontend (hera-desktop con Bun + Vite+)
 if command -v bun >/dev/null 2>&1; then
     echo "[+] Verificando frontend en hera-desktop (bun run check)..."
     (cd hera-desktop && bun run check) || {

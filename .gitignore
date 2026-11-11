@@ -4,7 +4,12 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
+# Build artifacts (anchored)
+/build/
+/hera-rs/build/
+/target/
+.npm/
+*.tar.zst
 develop-eggs/
 dist/
 downloads/

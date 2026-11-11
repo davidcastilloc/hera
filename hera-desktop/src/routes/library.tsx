@@ -31,7 +31,9 @@ export const Route = createFileRoute('/library')({
 
 function ViewLibrary() {
   const { playlists } = Route.useLoaderData();
-  const [mixesFilter, setMixesFilter] = useState<'all' | 'under10m' | 'over10m'>('under10m');
+  const [mixesFilter, setMixesFilter] = useState<
+    'all' | 'under10m' | 'over10m'
+  >('under10m');
 
   const config = useSuspenseQuery(configQuery).data;
   const { data: tracks, isLoading } = useQuery(allTracksQuery);
@@ -51,7 +53,8 @@ function ViewLibrary() {
   const filteredTracks = useMemo(() => {
     if (mixesFilter === 'all') return sortedTracks;
     return sortedTracks.filter((t) => {
-      const isMix = t.is_mix_over_10m === true || (t.duration != null && t.duration > 600);
+      const isMix =
+        t.is_mix_over_10m === true || (t.duration != null && t.duration > 600);
       return mixesFilter === 'over10m' ? isMix : !isMix;
     });
   }, [sortedTracks, mixesFilter]);

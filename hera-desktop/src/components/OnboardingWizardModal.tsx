@@ -1,5 +1,6 @@
 import * as stylex from '@stylexjs/stylex';
 import { useState } from 'react';
+
 import Icon from './Icon';
 
 type Props = {
@@ -13,7 +14,12 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
   if (!isOpen) return null;
 
   return (
-    <div {...stylex.props(styles.overlay)} role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+    <div
+      {...stylex.props(styles.overlay)}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="onboarding-title"
+    >
       <div {...stylex.props(styles.card)}>
         {/* Header */}
         <div {...stylex.props(styles.header)}>
@@ -42,16 +48,18 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
                 Bienvenido a HERA Studio BETA
               </h2>
               <p {...stylex.props(styles.description)}>
-                HERA es tu motor de curación y DJ Copilot 100% en Rust nativo (sin Python).
-                Diseñado para operar en cabina con baja latencia y alta fidelidad sonora.
+                HERA es tu motor de curación y DJ Copilot 100% en Rust nativo
+                (sin Python). Diseñado para operar en cabina con baja latencia y
+                alta fidelidad sonora.
               </p>
               <div {...stylex.props(styles.alertBox)}>
                 <strong {...stylex.props(styles.alertHeading)}>
                   Nota del Release BETA:
                 </strong>
                 <p {...stylex.props(styles.alertText)}>
-                  Estamos calibrando el motor con DJs en vivo. Tu música física nunca se altera,
-                  no se renombra ni se borra del disco. Todas las clasificaciones son puramente lógicas.
+                  Estamos calibrando el motor con DJs en vivo. Tu música física
+                  nunca se altera, no se renombra ni se borra del disco. Todas
+                  las clasificaciones son puramente lógicas.
                 </p>
               </div>
             </div>
@@ -66,20 +74,28 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
                 Escaneo Inteligente & Criterio de Cabina
               </h2>
               <p {...stylex.props(styles.description)}>
-                El nuevo escáner térmico procesa tu música con total respeto por tu CPU:
+                El nuevo escáner térmico procesa tu música con total respeto por
+                tu CPU:
               </p>
               <ul {...stylex.props(styles.featureList)}>
                 <li {...stylex.props(styles.featureItem)}>
-                  <strong>Caché Ultrarrápido:</strong> Si usas VirtualDJ o Rekordbox, lee sus bases de datos en &lt; 3 segundos sin gastar procesador.
+                  <strong>Caché Ultrarrápido:</strong> Si usas VirtualDJ o
+                  Rekordbox, lee sus bases de datos en &lt; 3 segundos sin
+                  gastar procesador.
                 </li>
                 <li {...stylex.props(styles.featureItem)}>
-                  <strong>Protección Térmica:</strong> Escaneo en lotes de 8 pistas con pausas cooperativas para evitar que tu laptop se caliente.
+                  <strong>Protección Térmica:</strong> Escaneo en lotes de 8
+                  pistas con pausas cooperativas para evitar que tu laptop se
+                  caliente.
                 </li>
                 <li {...stylex.props(styles.featureItem)}>
-                  <strong>Filtro de Mixes (&gt; 10 min):</strong> Las sesiones largas y sets se aíslan en la pestaña de mixes sin saturar tus crates rápidos.
+                  <strong>Filtro de Mixes (&gt; 10 min):</strong> Las sesiones
+                  largas y sets se aíslan en la pestaña de mixes sin saturar tus
+                  crates rápidos.
                 </li>
                 <li {...stylex.props(styles.featureItem)}>
-                  <strong>Detección de Saltos de CD:</strong> Identifica pistas dañadas o rayadas antes de que suenen en vivo.
+                  <strong>Detección de Saltos de CD:</strong> Identifica pistas
+                  dañadas o rayadas antes de que suenen en vivo.
                 </li>
               </ul>
             </div>
@@ -99,16 +115,20 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
               <div {...stylex.props(styles.cardsGrid)}>
                 <div {...stylex.props(styles.miniCard)}>
                   <Icon name="crateList" size={20} color="#14b8a6" />
-                  <h4 {...stylex.props(styles.miniCardTitle)}>VirtualDJ Live</h4>
+                  <h4 {...stylex.props(styles.miniCardTitle)}>
+                    VirtualDJ Live
+                  </h4>
                   <p {...stylex.props(styles.miniCardText)}>
-                    Envía crates directamente a tu carpeta VirtualDJ con 4 Hot Cues acústicos listos.
+                    Envía crates directamente a tu carpeta VirtualDJ con 4 Hot
+                    Cues acústicos listos.
                   </p>
                 </div>
                 <div {...stylex.props(styles.miniCard)}>
                   <Icon name="sliders" size={20} color="#f59e0b" />
                   <h4 {...stylex.props(styles.miniCardTitle)}>Modo Mini</h4>
                   <p {...stylex.props(styles.miniCardText)}>
-                    Presiona Ctrl+Shift+M para una barra compacta tipo HUD mientras mezclas en pantalla completa.
+                    Presiona Ctrl+Shift+M para una barra compacta tipo HUD
+                    mientras mezclas en pantalla completa.
                   </p>
                 </div>
               </div>
@@ -182,7 +202,8 @@ const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '16px 20px',
+    paddingBlock: '16px',
+    paddingInline: '20px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
     borderBottomColor: '#1a202c',
@@ -202,7 +223,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: 'rgba(20, 184, 166, 0.3)',
     borderRadius: '999px',
-    padding: '2px 8px',
+    paddingBlock: '2px',
+    paddingInline: '8px',
   },
   stepCounter: {
     fontSize: '12px',
@@ -220,7 +242,8 @@ const styles = stylex.create({
     justifyContent: 'center',
   },
   body: {
-    padding: '24px 20px',
+    paddingBlock: '24px',
+    paddingInline: '20px',
     minHeight: '260px',
   },
   stepContent: {
@@ -246,13 +269,19 @@ const styles = stylex.create({
     fontSize: '17px',
     fontWeight: 700,
     color: '#f0f3f6',
-    margin: '0 0 8px 0',
+    marginTop: '0',
+    marginRight: '0',
+    marginBottom: '8px',
+    marginLeft: '0',
   },
   description: {
     fontSize: '13px',
     color: '#9ba3af',
     lineHeight: 1.5,
-    margin: '0 0 16px 0',
+    marginTop: '0',
+    marginRight: '0',
+    marginBottom: '16px',
+    marginLeft: '0',
     maxWidth: '460px',
   },
   alertBox: {
@@ -261,7 +290,8 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: 'rgba(20, 184, 166, 0.2)',
     borderRadius: '8px',
-    padding: '12px 14px',
+    paddingBlock: '12px',
+    paddingInline: '14px',
     textAlign: 'left',
     width: '100%',
   },
@@ -295,7 +325,8 @@ const styles = stylex.create({
   cardsGrid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
-    gap: '12px',
+    rowGap: '12px',
+    columnGap: '12px',
     width: '100%',
     marginTop: '6px',
     textAlign: 'left',
@@ -312,7 +343,10 @@ const styles = stylex.create({
     fontSize: '13px',
     fontWeight: 600,
     color: '#f0f3f6',
-    margin: '8px 0 4px 0',
+    marginTop: '8px',
+    marginRight: '0',
+    marginBottom: '4px',
+    marginLeft: '0',
   },
   miniCardText: {
     fontSize: '11.5px',
@@ -324,7 +358,8 @@ const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: '14px 20px',
+    paddingBlock: '14px',
+    paddingInline: '20px',
     borderTopWidth: '1px',
     borderTopStyle: 'solid',
     borderTopColor: '#1a202c',
@@ -338,7 +373,8 @@ const styles = stylex.create({
     color: '#c9d1d9',
     fontSize: '12.5px',
     fontWeight: 500,
-    padding: '6px 14px',
+    paddingBlock: '6px',
+    paddingInline: '14px',
     borderRadius: '6px',
     cursor: 'pointer',
   },
@@ -348,7 +384,8 @@ const styles = stylex.create({
     color: '#041c18',
     fontSize: '12.5px',
     fontWeight: 600,
-    padding: '6px 16px',
+    paddingBlock: '6px',
+    paddingInline: '16px',
     borderRadius: '6px',
     cursor: 'pointer',
   },

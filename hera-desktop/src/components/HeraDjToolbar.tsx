@@ -42,8 +42,12 @@ export default function HeraDjToolbar({
 
   const [selectedFormat, setSelectedFormat] =
     useState<DjExportFormat>('virtualdj');
-  const [busyAction, setBusyAction] = useState<'spine' | 'export' | 'cancel' | null>(null);
-  const [inlineDone, setInlineDone] = useState<'spine' | 'export' | 'cancel' | null>(null);
+  const [busyAction, setBusyAction] = useState<
+    'spine' | 'export' | 'cancel' | null
+  >(null);
+  const [inlineDone, setInlineDone] = useState<
+    'spine' | 'export' | 'cancel' | null
+  >(null);
   const refreshing = useLibraryStore((state) => state.refreshing);
   const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -53,7 +57,7 @@ export default function HeraDjToolbar({
     };
   }, []);
 
-  const flashDone = (which: 'spine' | 'export') => {
+  const flashDone = (which: 'spine' | 'export' | 'cancel') => {
     if (doneTimerRef.current) clearTimeout(doneTimerRef.current);
     setInlineDone(which);
     doneTimerRef.current = setTimeout(() => {
@@ -130,7 +134,11 @@ export default function HeraDjToolbar({
         <span {...stylex.props(styles.budgetPill)}>{trackCountLabel}</span>
 
         {onMixesFilterChange ? (
-          <div {...stylex.props(styles.filterGroup)} role="group" aria-label="Filtro de duración">
+          <div
+            {...stylex.props(styles.filterGroup)}
+            role="group"
+            aria-label="Filtro de duración"
+          >
             <button
               type="button"
               onClick={() => onMixesFilterChange('under10m')}
@@ -174,8 +182,10 @@ export default function HeraDjToolbar({
             title="Detener escaneo inmediatamente de forma segura"
             {...stylex.props(styles.cancelScanBtn)}
           >
-            <Icon name="x" size={13} color="#f87171" />
-            <span>{busyAction === 'cancel' ? 'Cancelando…' : 'Cancelar Escaneo'}</span>
+            <Icon name="x" size={14} color="#f87171" />
+            <span>
+              {busyAction === 'cancel' ? 'Cancelando…' : 'Cancelar Escaneo'}
+            </span>
           </button>
         ) : null}
 

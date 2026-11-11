@@ -4,6 +4,8 @@
 *One single `Axum` codebase that compiles to **HERA Desktop (`Tauri v2`)**, **Cloudflare Workers (`wasm32-unknown-unknown`)**, and **Standalone Micro-VPS (`~10 MB RAM`)**.*  
 **Swarm Motto:** *«Mientras más nodos de Hera, más fuerte es el sistema de enjambres»*
 
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/davidcastilloc/hera/tree/main/hera-rs)
+
 ---
 
 ## ⚡ Why 100% Pure Rust for Hera?

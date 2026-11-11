@@ -2619,6 +2619,5 @@ mod tests {
             body_val["result"]["serverInfo"]["version"],
             env!("CARGO_PKG_VERSION")
         );
-        assert_eq!(body_val["result"]["serverInfo"]["version"], "0.6.0");
     }
 }

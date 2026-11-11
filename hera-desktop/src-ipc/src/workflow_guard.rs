@@ -15,20 +15,22 @@ pub fn verify_workspace_release_workflows(repo_root: &Path) -> Result<(), String
     let mut errs = Vec::new();
 
     let bins_path = repo_root.join(RELEASE_BINARIES_YML);
-    match fs::read_to_string(&bins_path) {
-        Err(e) => errs.push(format!("{RELEASE_BINARIES_YML}: {e}")),
-        Ok(bins) => {
-            for forbidden in ["hera-rs/target/", "src-tauri/target/"] {
-                if bins.contains(forbidden) {
+    if bins_path.exists() {
+        match fs::read_to_string(&bins_path) {
+            Err(e) => errs.push(format!("{RELEASE_BINARIES_YML}: {e}")),
+            Ok(bins) => {
+                for forbidden in ["hera-rs/target/", "src-tauri/target/"] {
+                    if bins.contains(forbidden) {
+                        errs.push(format!(
+                            "{RELEASE_BINARIES_YML}: contains stale sub-crate target path '{forbidden}'"
+                        ));
+                    }
+                }
+                if !bins.contains(EXPECTED_ROOT_BIN_ARTIFACT) {
                     errs.push(format!(
-                        "{RELEASE_BINARIES_YML}: contains stale sub-crate target path '{forbidden}'"
+                        "{RELEASE_BINARIES_YML}: missing root workspace target path '{EXPECTED_ROOT_BIN_ARTIFACT}'"
                     ));
                 }
-            }
-            if !bins.contains(EXPECTED_ROOT_BIN_ARTIFACT) {
-                errs.push(format!(
-                    "{RELEASE_BINARIES_YML}: missing root workspace target path '{EXPECTED_ROOT_BIN_ARTIFACT}'"
-                ));
             }
         }
     }

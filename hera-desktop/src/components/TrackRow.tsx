@@ -109,12 +109,18 @@ export default function TrackRow(props: Props) {
       <div {...stylex.props(cellStyles.cell, cellStyles.title)}>
         <span {...stylex.props(cellStyles.titleText)}>{track.title}</span>
         {track.is_video === true && (
-          <span {...stylex.props(cellStyles.badgeVideo)} title="Pista de Video (Crate mixto)">
+          <span
+            {...stylex.props(cellStyles.badgeVideo)}
+            title="Pista de Video (Crate mixto)"
+          >
             VIDEO
           </span>
         )}
         {track.has_audio_skips === true && (
-          <span {...stylex.props(cellStyles.badgeGlitch)} title="⚠️ Detectado posible salto / CD rayado">
+          <span
+            {...stylex.props(cellStyles.badgeGlitch)}
+            title="⚠️ Detectado posible salto / CD rayado"
+          >
             ⚠️ Salto
           </span>
         )}

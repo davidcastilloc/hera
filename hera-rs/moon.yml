@@ -14,7 +14,7 @@ tasks:
       - '/Cargo.lock'
 
   test:
-    command: 'cargo test -p hera-node-rs'
+    command: 'if command -v cargo-nextest >/dev/null 2>&1; then cargo nextest run -p hera-node-rs; else cargo test -p hera-node-rs; fi'
     inputs:
       - 'src/**/*'
       - 'Cargo.toml'

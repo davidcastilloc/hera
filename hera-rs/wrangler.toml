@@ -15,7 +15,7 @@ HERA_NODE_ID = "hera-cf-edge-node"
 HERA_BETA_R2_QUOTA_MB = "5120" # 5 GB (5,120 MB) per selected Founding Beta MVP DJ (~130 lossless FLACs)
 
 [build]
-command = "cargo install -q worker-build --version 0.1.3 && worker-build --release -- --features cloudflare --no-default-features"
+command = "if [ \"${WORKERS_CI:-0}\" = \"1\" ] && [ -f build/worker/shim.mjs ]; then echo '[HERA] Using prebuilt WASM shim from cf-build.sh'; else (command -v worker-build >/dev/null 2>&1 || cargo install -q worker-build --locked --version 0.1.3) && worker-build --release -- --locked --features cloudflare --no-default-features; fi"
 
 [[d1_databases]]
 binding = "HERA_DB"

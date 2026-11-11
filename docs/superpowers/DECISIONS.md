@@ -317,6 +317,29 @@
      - **Task 8 (Studio UI & Onboarding):** `OnboardingWizardModal.tsx`, `BETA` navigation badge, cancel scan button, mixes filter pills, and audio/video badges (`TrackRow.tsx`).
      - **Task 9 (Verification & QA Sign-off):** 100% tests passing across all crates and ratchets. All modules <= 349 LOC. Zero disk file mutations.
 
+### [2026-11-11] ADR-033: Zero-Central-Tax Distributed CI/CD, Local SIMD & Cloudflare Edge Guardian Automation
+
+- **Context:** Binary compilation and release pipelines were previously centralized via GitHub Actions (`release-binaries.yml`), consuming GitHub Actions compute minutes while distributing precompiled generic binaries lacking host CPU SIMD acceleration (`AVX2`/`AVX-512`/`NEON`). Furthermore, legacy Python hooks and scripts lingered in installers (`install.sh`, `install.ps1`, `deploy/install-node.sh`), and Cloudflare deployments lacked fast incremental build caches and non-blocking PR paths.
+- **Decision:**
+  1. **Local Native Compilation with SIMD / RAM Adaptive Profiles (`Cargo.toml`, `install.sh`, `install.ps1`, `deploy/install-node.sh`):**
+     - Retired `release-binaries.yml`; users and agent VPS hosts compile `hera-node` locally with `-C target-cpu=native` for hosts with `>= 2.5 GB` RAM.
+     - Added `[profile.release-lowmem]` (`inherits = "release"`, `lto = "thin"`, `codegen-units = 4`) for low-memory hosts (`< 2.5 GB` RAM) preventing OOM Killer (`137`).
+     - Added `[profile.dev]` with `debug = "line-tables-only"` and package debug suppression to accelerate local development check cycles.
+     - Created `.cargo/config.toml` targeting `aarch64-unknown-linux-gnu` with `link-arg=-fuse-ld=lld`.
+  2. **Community Edge Guardian Cloudflare Deploy Button & WASM Build Caching (`hera-rs/`):**
+     - Added Deploy to Cloudflare button to `README.md`, `hera-rs/README.md`, and `docs/FEDERATED_R2_SWARM.md`.
+     - Created `hera-rs/scripts/cf-build.sh` with dual `zstd` cached archives (`hera-cargo-home.tar.zst` and `hera-target-deps.tar.zst`) stored under `$HOME/.npm` for sub-25s Cloudflare Workers Builds.
+     - Configured `hera-rs/package.json` with `wrangler: ^4.160.1` and guard `WORKERS_CI=1` in `wrangler.toml` preventing redundant worker-build compilations.
+  3. **Continuous Deployment & Workers Previews in `hera-cloud`:**
+     - Configured `scripts/cf-build.sh`, `package.json`, and `wrangler.toml` in `hera-cloud`.
+     - Created `.github/workflows/cleanup-preview.yml` for automated teardown of ephemeral branch previews on PR closure.
+     - Documented setup and created idempotent staging resource provisioner `scripts/setup-cloudflare-previews.sh`.
+  4. **Non-Blocking CI Filter Gate & Fast ARM64 Runners (`.github/workflows/ci.yml`):**
+     - Wired `dorny/paths-filter@v3` on `ubuntu-latest` with conditional `rust-gate` and `desktop-gate` jobs and an aggregated `ci-gate` (`if: always()`) preventing stuck pending statuses on documentation PRs.
+     - Accelerated Rust verification using `ubuntu-24.04-arm` runners with `lld` linker, minimal toolchain, `cargo-nextest`, and `Swatinem/rust-cache@v2`.
+  5. **Pure-Rust Git Hooks Hardening (`.githooks/`):**
+     - Hardened `pre-commit` and `pre-push` with zero-symlink gates, sensitive secret leak checks, `cargo fmt --check`, `cargo check --workspace`, and native/wasm tests across both repositories.
+
 
 
 ### [2026-11-11] ADR-032: Architectural Wishlist — Pure `bun build` Migration & Frontend Toolchain Simplification
