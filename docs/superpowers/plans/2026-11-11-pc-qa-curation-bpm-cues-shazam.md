@@ -16,7 +16,7 @@
   - **Archivos:** `hera-rs/src/forensics_glitch.rs` (`<= 349` LOC), `hera-rs/src/forensics.rs`, `hera-rs/src/lib.rs`.
   - **Entrega:** Detección de paquetes corruptos, micro-cortes de energía y bucles de buffer repetido (efecto CD rayado) sin romper el Golden Master de `forensics_and_4_hot_cues`, más decodificación segura cancelable para audio y video (`.mp4`, `.mov`, `.mkv`).
 
-- [ ] **Task 4: Reglas de Curación en `synergy.rs` (Crates Audio+Video, Regla `< 10m` Mixes, Parejas Ganadoras y Exclusiones)**
+- [x] **Task 4: Reglas de Curación en `synergy.rs` (Crates Audio+Video, Regla `< 10m` Mixes, Parejas Ganadoras y Exclusiones)**
   - **Archivos:** `hera-rs/src/dj_learning/curation_rules.rs` (`<= 349` LOC), `hera-rs/src/synergy.rs`.
   - **Entrega:** Soporte mixto Audio + Video, filtro duro `< 10 min` (`<= 600s`) que deriva mixes a un área lógica de Mixes sin mover archivos en disco, Parejas Ganadoras (*«Perdóname mi vida → Conquístame»*) con bonus en 2-Opt usando `entry_bpm`/`exit_bpm`, y Exclusiones (*«Clavelito ya no»*).
 

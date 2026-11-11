@@ -3,6 +3,7 @@ pub mod audio_engine;
 pub mod bpm_engine;
 pub mod cloudflare_edge;
 pub mod code_mode;
+pub mod curation_rules;
 pub mod dj_brain;
 pub mod error;
 pub mod export;

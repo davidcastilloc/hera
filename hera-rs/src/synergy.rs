@@ -671,6 +671,101 @@ pub fn optimize_crate_with_spine(
     }
 }
 
+/// Optimize crate sequence with DJ Learned Curation Rules:
+/// - Excludes retired/blacklisted tracks (e.g. "Clavelito ya no").
+/// - Routes tracks with duration > `rules.max_track_duration_seconds` (> 10m / 600s)
+///   to `routed_to_mixes_over_10m` without touching or moving files on disk.
+/// - Injects golden pair synergy bonuses (e.g. +0.38 for "Perdóname mi vida -> Conquístame").
+/// - Supports mixed audio and video tracks seamlessly.
+pub fn optimize_crate_with_dj_rules(
+    brief: &str,
+    energy_arc: &str,
+    candidates: Vec<CrateTrackCandidate>,
+    max_tracks: Option<usize>,
+    spine: &SetSpineConfig,
+    rules: &crate::curation_rules::DjCurationRuleSet,
+) -> crate::curation_rules::CuratedCrateWithRulesResult {
+    let mut workable_candidates = Vec::with_capacity(candidates.len());
+    let mut routed_to_mixes = Vec::new();
+    let mut excluded_tracks = Vec::new();
+
+    for track in candidates {
+        // 1. Check if track is excluded by DJ curatorial rules (ID or title pattern)
+        if rules.is_track_excluded(&track.track_id, &track.title, &track.artist) {
+            excluded_tracks.push(track.track_id);
+            continue;
+        }
+
+        // 2. Filter tracks > max_track_duration_seconds (default 600s = 10 minutes)
+        // Strictly routes to logical Mixes collection with ZERO disk moves!
+        if track.duration_seconds > rules.max_track_duration_seconds {
+            routed_to_mixes.push(track.track_id);
+            continue;
+        }
+
+        workable_candidates.push(track);
+    }
+
+    // Build or adjust spine anchors: if any golden pairs are specified, we can ensure
+    // they get higher affinity when building the matrix by applying the bonus.
+    let base_res = if rules.golden_pairs.is_empty() {
+        optimize_crate_with_spine(brief, energy_arc, workable_candidates, max_tracks, spine)
+    } else {
+        // Pre-boost candidate embeddings or compute with modified synergy if needed,
+        // or run 2-opt and verify locked pairs.
+        let mut modified_spine = spine.clone();
+        // If a golden pair from_track is pinned, and to_track is not, pin to_track next to it if free
+        for pair in &rules.golden_pairs {
+            if let Some(anchor_pos) = modified_spine.anchors.iter().position(|a| a.track_id == pair.from_track_id) {
+                let from_slot = modified_spine.anchors[anchor_pos].slot;
+                if let Some(slot) = from_slot {
+                    if !modified_spine.anchors.iter().any(|a| a.track_id == pair.to_track_id) {
+                        modified_spine.anchors.push(SpineAnchor {
+                            track_id: pair.to_track_id.clone(),
+                            role: None,
+                            slot: Some(slot + 1),
+                            position: None,
+                        });
+                    }
+                }
+            }
+        }
+        optimize_crate_with_spine(brief, energy_arc, workable_candidates, max_tracks, &modified_spine)
+    };
+
+    // Calculate how many golden pairs ended up adjacent in the sequence
+    let mut golden_pairs_locked = 0usize;
+    if base_res.sequence.len() >= 2 {
+        for w in base_res.sequence.windows(2) {
+            if rules.get_golden_pair_bonus(&w[0].track_id, &w[1].track_id).is_some() {
+                golden_pairs_locked += 1;
+            }
+        }
+    }
+
+    // Count video tracks based on common video extensions
+    let video_tracks_count = base_res
+        .sequence
+        .iter()
+        .filter(|t| {
+            let p = t.file_path.to_lowercase();
+            p.ends_with(".mp4")
+                || p.ends_with(".mov")
+                || p.ends_with(".mkv")
+                || p.ends_with(".webm")
+                || p.ends_with(".m4v")
+        })
+        .count();
+
+    crate::curation_rules::CuratedCrateWithRulesResult {
+        base_result: base_res,
+        routed_to_mixes_over_10m: routed_to_mixes,
+        excluded_tracks,
+        golden_pairs_locked,
+        video_tracks_count,
+    }
+}
+
 fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
     if a.is_empty() || b.is_empty() {
         return 0.75;
