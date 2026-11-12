@@ -9,13 +9,31 @@ import TransitionCommandDock from '../components/transition/TransitionCommandDoc
 import TransitionDeckCard from '../components/transition/TransitionDeckCard';
 import TransitionSuggestionsSection from '../components/transition/TransitionSuggestionsSection';
 import { useTransitionStudio } from '../components/transition/useTransitionStudio';
+import UnderConstructionView from '../components/UnderConstructionView';
 import View from '../elements/View';
+import { useFeatureFlags } from '../lib/feature-flags';
 
 export const Route = createFileRoute('/bridge')({
   component: ViewHarmonicBridgeP2P,
 });
 
 function ViewHarmonicBridgeP2P() {
+  const isEnabled = useFeatureFlags((s) => s.enableHarmonicBridge);
+
+  if (!isEnabled) {
+    return (
+      <UnderConstructionView
+        title="Transición Armónica"
+        description="El motor de transición inteligente está en calibración de DSP para conectar pistas armónicas reales desde tu colección local sin emitir tonos sintéticos ni pistas simuladas."
+        flagKey="enableHarmonicBridge"
+      />
+    );
+  }
+
+  return <ActiveHarmonicBridgeStudio />;
+}
+
+function ActiveHarmonicBridgeStudio() {
   const studio = useTransitionStudio();
 
   return (

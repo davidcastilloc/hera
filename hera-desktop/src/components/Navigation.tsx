@@ -5,6 +5,7 @@ import type { LinkProps } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { useAgentStore } from '../lib/agent-store';
+import { useFeatureFlags } from '../lib/feature-flags';
 import useLibraryStore from '../lib/store';
 import Icon, { type IconName } from './Icon';
 import OnboardingWizardModal from './OnboardingWizardModal';
@@ -51,6 +52,9 @@ export default function Navigation() {
   const isAgentRunning = useAgentStore(
     (state) => state.runningSessionIds.length > 0,
   );
+  const enableHarmonicBridge = useFeatureFlags((s) => s.enableHarmonicBridge);
+  const enableStyleDna = useFeatureFlags((s) => s.enableStyleDna);
+  const showLabsBadge = useFeatureFlags((s) => s.showLabsBadgeInNav);
 
   return (
     <aside {...stylex.props(styles.rail)} aria-label="Navegación principal">
@@ -118,8 +122,20 @@ export default function Navigation() {
             />
             <NavItem to="/artists" label="Artistas" icon="artists" />
             <NavItem to="/playlists" label="Playlists" icon="crateList" />
-            <NavItem to="/bridge" label="Transición" icon="bridge" />
-            <NavItem to="/dna" label="Mi Estilo" icon="dna" />
+            {enableHarmonicBridge ? (
+              <NavItem
+                to="/bridge"
+                label={showLabsBadge ? 'Transición [LAB]' : 'Transición'}
+                icon="bridge"
+              />
+            ) : null}
+            {enableStyleDna ? (
+              <NavItem
+                to="/dna"
+                label={showLabsBadge ? 'Mi Estilo [LAB]' : 'Mi Estilo'}
+                icon="dna"
+              />
+            ) : null}
             <NavItem to="/settings" label="Ajustes" icon="sliders" />
           </NavigationMenu.List>
         </NavigationMenu.Root>

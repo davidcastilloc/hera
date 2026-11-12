@@ -3,8 +3,10 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 
 import View from '../elements/View';
+import UnderConstructionView from '../components/UnderConstructionView';
 import DatabaseBridge from '../lib/bridge-database';
 import { computeDjStyleDna, type DjStyleDnaProfile } from '../lib/bridge-hera';
+import { useFeatureFlags } from '../lib/feature-flags';
 import useLibraryStore from '../lib/store';
 
 export const Route = createFileRoute('/dna')({
@@ -61,6 +63,22 @@ function PreferenceSwitchRow({
 }
 
 function ViewDjStyleDna() {
+  const isEnabled = useFeatureFlags((s) => s.enableStyleDna);
+
+  if (!isEnabled) {
+    return (
+      <UnderConstructionView
+        title="Mi Estilo (DJ Style DNA)"
+        description="El perfilador de ADN acústico está en desarrollo para calcular métricas armónicas y de energía reales directamente sobre las pistas de tu biblioteca y sesiones de cabina."
+        flagKey="enableStyleDna"
+      />
+    );
+  }
+
+  return <ActiveDjStyleDnaStudio />;
+}
+
+function ActiveDjStyleDnaStudio() {
   const tracks = useLibraryStore((state) => state.tracks);
 
   const [preferredSoftware, setPreferredSoftware] =

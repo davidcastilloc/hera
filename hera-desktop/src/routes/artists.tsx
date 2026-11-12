@@ -1,4 +1,4 @@
-import { useLingui } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import {
   createFileRoute,
   Outlet,
@@ -8,8 +8,8 @@ import {
 
 import SideNav from '../components/SideNav';
 import SideNavLink from '../components/SideNavLink';
-import TrackListStates from '../components/TrackListStates';
 import View from '../elements/View';
+import * as ViewMessage from '../elements/ViewMessage';
 import DatabaseBridge from '../lib/bridge-database';
 import player from '../lib/player';
 
@@ -89,8 +89,21 @@ function ViewArtists() {
     >
       {pathname !== '/artists' ? (
         <Outlet />
+      ) : artists.length === 0 ? (
+        <ViewMessage.Notice>
+          <p>
+            <Trans>No se encontraron artistas en la biblioteca</Trans>
+          </p>
+          <ViewMessage.Sub>
+            <Trans>Las canciones indexadas aparecerán organizadas por artista una vez procesadas</Trans>
+          </ViewMessage.Sub>
+        </ViewMessage.Notice>
       ) : (
-        <TrackListStates isLoading={false} tracks={[]} />
+        <ViewMessage.Notice>
+          <p>
+            <Trans>Selecciona un artista de la barra lateral</Trans>
+          </p>
+        </ViewMessage.Notice>
       )}
     </View>
   );
