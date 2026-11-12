@@ -340,6 +340,32 @@
   5. **Pure-Rust Git Hooks Hardening (`.githooks/`):**
      - Hardened `pre-commit` and `pre-push` with zero-symlink gates, sensitive secret leak checks, `cargo fmt --check`, `cargo check --workspace`, and native/wasm tests across both repositories.
 
+### [2026-11-12] ADR-034: Live QA Session 01, Production Feature Flags & 2-Phase High-Speed Scanning Architecture
+
+- **Context:** The first live QA session on David Castillo's DJ laptop (`qa`, Windows 11) using real-world DJ collections (~50,000 files) revealed 16 critical operational and architectural findings (`docs/qa/2026-11-12-qa-session-01.md`):
+  1. `checkForLibraryRefresh()` fired automatically on boot without user consent, locking UI for 5.8m, then crashing SQLite with `UNIQUE constraint failed: tracks.path`.
+  2. Heavy synchronous Symphonia PCM decoding + FFT on every scanned track caused extreme scanning latency (~1s per track instead of milliseconds).
+  3. UI buttons disabled abruptly with zero motion feedback, creating the illusion of a frozen app.
+  4. Incomplete/mockup views (`/bridge` with hardcoded strings and synthetic WebAudio beeps; `/dna` with static percentages; settings with legacy Museeks 2017 options) undermined pro DJ trust.
+  5. Route `/artists` showed a false "Tu biblioteca de cabina está vacía" error because an unselected state passed `tracks={[]}` to the global welcome card.
+- **Decision:**
+  1. **Production Feature Flags Policy & Clean Navigation (`hera-desktop/src/lib/feature-flags.ts`, `Navigation.tsx`):**
+     - Established the core production law: *Any feature not 100% finished with real data must be turned off in production.*
+     - Implemented reactive Zustand store `useFeatureFlags` with `localStorage` persistence, defaulting `enableHarmonicBridge: false`, `enableStyleDna: false`, and `enableExperimentalFileManager: false`.
+     - Omitted `/bridge` and `/dna` from `Navigation.tsx` so production users only see 100% production-ready modules (`Biblioteca`, `Agente`, `Artistas`, `Playlists`, `Ajustes`).
+     - Wrapped direct route access with `UnderConstructionView.tsx` (`HERA LABS · EN DESARROLLO`) and a direct button to return to `/library`.
+  2. **Artists Route Parity Fix (`hera-desktop/src/routes/artists.tsx`):**
+     - Replaced hardcoded `TrackListStates` empty card with contextual `ViewMessage.Notice` explaining that artists are listed in the sidebar or populated upon scan.
+  3. **2-Phase High-Speed Scanning Architecture (Fase 1 vs Fase 2):**
+     - **Phase 1 (ID3/Metadata via Lofty):** Ingest title, artist, BPM tag, duration, and path at `< 2ms` per file (~50,000 files in ~15s).
+     - **Phase 2 (DSP Deep Analysis via Symphonia + RustFFT):** Run 4 Hot Cues, harmonic key, and spectral forensics on-demand (when loaded into decks or via an idle background worker pool).
+  4. **SQLite Resilient Ingestion:**
+     - Replace `INSERT INTO tracks` with `INSERT OR REPLACE INTO tracks` to eliminate duplicate path crashes.
+  5. **Frameless Tactile Window & Audit Trail Ledger:**
+     - Set `decorations: false` in Tauri v2 and build a 100% React `CustomTitleBar` with `data-tauri-drag-region`.
+     - Implement `AuditTrailLedger` under `%APPDATA%\hera\audit\` recording all UI interactions, cue triggers, and errors for DJ Style DNA training and developer debugging.
+
+
 
 
 ### [2026-11-11] ADR-032: Architectural Wishlist — Pure `bun build` Migration & Frontend Toolchain Simplification
