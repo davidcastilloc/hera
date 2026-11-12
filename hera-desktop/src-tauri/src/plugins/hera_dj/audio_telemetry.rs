@@ -100,7 +100,7 @@ pub(crate) fn resolve_tick_telemetry_frame(
         return None;
     }
     if snap.backend_kind != "headless_clock" {
-        if let Some(ref mut last) = last_real_frame {
+        if let Some(last) = last_real_frame {
             last.rms_left *= 0.96;
             last.rms_right *= 0.96;
             for bin in last.spectrum_bins.iter_mut() {
