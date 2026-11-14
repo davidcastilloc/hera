@@ -1,6 +1,7 @@
 pub mod consensus_ai;
 pub mod latin_heuristics;
 pub mod multiband_onset;
+pub mod v2_core;
 pub mod window_tracker;
 
 use serde::{Deserialize, Serialize};
@@ -119,12 +120,17 @@ pub fn analyze_bpm_consensus(
         0.0
     };
 
-    // Layer 4: Consensus Arbiter with External Hint (VDJ / ID3)
-    let final_bpm = arbitrate_bpm_consensus(
-        latin_res.candidate_bpm,
-        external_hint.as_ref(),
-        &latin_res.rhythm_family,
-    );
+    // Layer 4: Consensus Arbiter (Mixxx QM-DSP + Beatgrid Phase Lock + Latin Matrix v2)
+    let nov_v2 = v2_core::multiband_onset::extract_multiband_novelty(mono, sample_rate);
+    let hint_v2 = external_hint.as_ref().map(|h| v2_core::hints::BpmHint {
+        bpm: h.bpm as f64,
+        source: v2_core::hints::HintSource::UserProvided,
+        weight: h.confidence.clamp(0.0, 1.0) as f64,
+    });
+    let res_v2 = v2_core::consensus_ai::analyze_bpm_consensus_v2(&nov_v2, hint_v2);
+    let final_bpm = res_v2.final_bpm as f32;
+    let family_label = format!("{:?}", res_v2.groove_family);
+    let v2_confidence = res_v2.confidence as f32;
 
     let is_variable = window_res.is_variable || scaled_drift >= 2.0 || scaled_drift_pct >= 2.2;
     let stability_label = if is_variable {
@@ -152,9 +158,9 @@ pub fn analyze_bpm_consensus(
         tempo_drift_pct: scaled_drift_pct,
         window_iqr_bpm: 0.5,
         is_variable_bpm: is_variable,
-        bpm_confidence: latin_res.confidence,
-        bpm_needs_review: is_variable && latin_res.confidence < 0.85,
-        detected_rhythm_family: latin_res.rhythm_family,
+        bpm_confidence: v2_confidence,
+        bpm_needs_review: is_variable && v2_confidence < 0.85,
+        detected_rhythm_family: family_label,
         tempo_stability_label: stability_label,
         tempo_map_points: scaled_anchors,
     }
