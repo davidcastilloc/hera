@@ -84,7 +84,8 @@ impl ScanScheduler {
 
     pub fn pop_next(&self) -> Option<(String, ScanPriority)> {
         let mut guard = self.inner.lock().unwrap();
-        for (idx, q) in guard.queues.iter_mut().enumerate() {
+        let inner = &mut *guard;
+        for (idx, q) in inner.queues.iter_mut().enumerate() {
             while let Some(id) = q.pop_front() {
                 let prio = match idx {
                     0 => ScanPriority::P0Immediate,
@@ -92,8 +93,8 @@ impl ScanScheduler {
                     2 => ScanPriority::P2FastBackground,
                     _ => ScanPriority::P3FullElastic,
                 };
-                if guard.in_flight_or_queued.get(&id) == Some(&prio) {
-                    guard.in_flight_or_queued.remove(&id);
+                if inner.in_flight_or_queued.get(&id) == Some(&prio) {
+                    inner.in_flight_or_queued.remove(&id);
                     return Some((id, prio));
                 }
             }
