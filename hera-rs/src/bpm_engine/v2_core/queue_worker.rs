@@ -145,3 +145,4 @@ fn median_f64(values: &mut [f64]) -> f64 {
     } else {
         0.5 * (values[mid - 1] + values[mid])
     }
+}
