@@ -2294,6 +2294,7 @@ pub mod queue {
             let bound = (self.worker_threads * 2).max(4);
             let (in_tx, in_rx): (Sender<QueueTrackInput>, Receiver<QueueTrackInput>) =
                 bounded(bound);
+            let in_rx = Arc::new(Mutex::new(in_rx));
             let (out_tx, out_rx) = bounded(bound * 2);
 
             let seen_hashes = Arc::new(Mutex::new(HashSet::<String>::with_capacity(total)));
@@ -2313,7 +2314,7 @@ pub mod queue {
 
             let mut workers = Vec::with_capacity(self.worker_threads);
             for _ in 0..self.worker_threads {
-                let rx = in_rx.clone();
+                let rx = Arc::clone(&in_rx);
                 let tx = out_tx.clone();
                 let vdj = self.vdj_db.clone();
                 let seen = Arc::clone(&seen_hashes);
