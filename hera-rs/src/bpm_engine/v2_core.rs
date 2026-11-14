@@ -1212,7 +1212,7 @@ pub mod phase_lock {
         }
 
         // Bloques de 28.0 s (avance 14.0 s): 2.3x más nitidez espectral e inmune a cortes vía peso coh^2
-        let block_sec = 28.0_f64.min(duration_sec.max(8.0));
+        let block_sec = 20.0_f64.min((duration_sec * 0.38).max(8.0));
         let step_sec = (block_sec * 0.5).max(4.0);
         let mut blocks: Vec<(Vec<(f64, f64)>, f64)> = Vec::new();
         let mut t_start = 0.0_f64;
@@ -1312,10 +1312,10 @@ pub mod phase_lock {
         let mut weighted_sum = 0.0_f64;
         for (peaks, w_sum) in blocks {
             let (coh, _) = single_block_phase_coherence(peaks, bpm, *w_sum);
-            // Elevar al cuadrado silencia automáticamente el bloque puntual donde cae un corte/redoble
-            weighted_sum += (coh * coh) * (*w_sum);
+            let c2 = coh * coh;
+            weighted_sum += (c2 * c2) * (*w_sum);
         }
-        (weighted_sum / total_weight).sqrt()
+        (weighted_sum / total_weight).powf(0.25)
     }
 
     #[inline]
