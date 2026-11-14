@@ -112,3 +112,46 @@
             Some(82.0)
         );
     }
+
+    #[test]
+    fn test_wiener_khinchin_acf_parity_under_1e10() {
+        let win_len = 1024_usize;
+        let min_lag = 40_usize;
+        let max_acf_lag = 700_usize;
+        let slice: Vec<f64> = (0..win_len)
+            .map(|i| ((i as f64) * 0.13).sin().abs() + 0.3 * ((i as f64) * 0.05).cos())
+            .collect();
+        let norm = slice.iter().map(|x| x * x).sum::<f64>().max(1e-9);
+
+        let n_fft = (win_len * 2).next_power_of_two();
+        let mut planner = FftPlanner::<f64>::new();
+        let fft_fwd = planner.plan_fft_forward(n_fft);
+        let fft_inv = planner.plan_fft_inverse(n_fft);
+        let mut fft_buf = vec![Complex { re: 0.0_f64, im: 0.0_f64 }; n_fft];
+        let mut acf_fft = vec![0.0_f64; max_acf_lag + 1];
+
+        super::qm_comb_tracker::linear_acf_wiener_khinchin(
+            &slice,
+            norm,
+            min_lag,
+            max_acf_lag,
+            n_fft,
+            fft_fwd.as_ref(),
+            fft_inv.as_ref(),
+            &mut fft_buf,
+            &mut acf_fft,
+        );
+
+        for l in min_lag..=max_acf_lag {
+            let mut sc = 0.0_f64;
+            for i in l..win_len {
+                sc += slice[i] * slice[i - l];
+            }
+            let acf_loop = (sc / norm).max(0.0);
+            assert!(
+                (acf_loop - acf_fft[l]).abs() < 1e-10,
+                "lag {l}: loop={acf_loop} fft={}",
+                acf_fft[l]
+            );
+        }
+    }

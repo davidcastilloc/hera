@@ -1,5 +1,41 @@
     use super::multiband_onset::MultibandNovelty;
     use super::*;
+    use rustfft::Fft;
+
+    /// Calcula la autocorrelación lineal exacta sum_{i=l..win_len} x[i] * x[i - l] en O(M log M)
+    /// mediante el teorema de Wiener-Khinchin con zero-padding (M >= 2 * win_len).
+    #[inline]
+    pub(crate) fn linear_acf_wiener_khinchin(
+        slice: &[f64],
+        norm_energy: f64,
+        min_lag: usize,
+        max_acf_lag: usize,
+        n_fft: usize,
+        fft_fwd: &dyn Fft<f64>,
+        fft_inv: &dyn Fft<f64>,
+        fft_buf: &mut [Complex<f64>],
+        out_acf: &mut [f64],
+    ) {
+        let w_len = slice.len();
+        for (i, &val) in slice.iter().enumerate() {
+            fft_buf[i] = Complex { re: val, im: 0.0 };
+        }
+        for item in &mut fft_buf[w_len..n_fft] {
+            *item = Complex { re: 0.0, im: 0.0 };
+        }
+
+        fft_fwd.process(fft_buf);
+        for c in &mut fft_buf[..n_fft] {
+            let mag_sq = c.re * c.re + c.im * c.im;
+            *c = Complex { re: mag_sq, im: 0.0 };
+        }
+        fft_inv.process(fft_buf);
+
+        let inv_scale = 1.0 / ((n_fft as f64) * norm_energy.max(1e-9));
+        for l in min_lag..=max_acf_lag {
+            out_acf[l] = (fft_buf[l].re * inv_scale).max(0.0);
+        }
+    }
 
     #[derive(Debug, Clone)]
     pub struct QmTempoAnalysis {
@@ -44,6 +80,12 @@
         let mut acf_comp = vec![0.0_f64; max_acf_lag + 1];
         let mut acf_sub = vec![0.0_f64; max_acf_lag + 1];
 
+        let n_fft = (win_len * 2).next_power_of_two();
+        let mut acf_planner = FftPlanner::<f64>::new();
+        let fft_fwd = acf_planner.plan_fft_forward(n_fft);
+        let fft_inv = acf_planner.plan_fft_inverse(n_fft);
+        let mut fft_buf = vec![Complex { re: 0.0_f64, im: 0.0_f64 }; n_fft];
+
         for w in 0..num_wins {
             let start = w * win_hop;
             let comp_slice = &nov.composite[start..start + win_len];
@@ -56,16 +98,28 @@
                 continue;
             }
 
-            for l in min_lag..=max_acf_lag {
-                let mut sc = 0.0_f64;
-                let mut ss = 0.0_f64;
-                for i in l..win_len {
-                    sc += comp_slice[i] * comp_slice[i - l];
-                    ss += sub_slice[i] * sub_slice[i - l];
-                }
-                acf_comp[l] = (sc / comp_norm).max(0.0);
-                acf_sub[l] = (ss / sub_norm).max(0.0);
-            }
+            linear_acf_wiener_khinchin(
+                comp_slice,
+                comp_norm,
+                min_lag,
+                max_acf_lag,
+                n_fft,
+                fft_fwd.as_ref(),
+                fft_inv.as_ref(),
+                &mut fft_buf,
+                &mut acf_comp,
+            );
+            linear_acf_wiener_khinchin(
+                sub_slice,
+                sub_norm,
+                min_lag,
+                max_acf_lag,
+                n_fft,
+                fft_fwd.as_ref(),
+                fft_inv.as_ref(),
+                &mut fft_buf,
+                &mut acf_sub,
+            );
 
             for lag in min_lag..=max_lag {
                 let mut comb_c = 0.0_f64;
