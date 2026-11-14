@@ -23,20 +23,20 @@
 //!    - `src/bpm_engine/queue.rs` (~235 líneas): orquestador `HeraBatchQueue`, canales acotados y lotes SQLite
 //!    - `src/bpm_engine/queue_worker.rs` (~165 líneas): worker individual con hash parcial 64 KB y extracto `3×22s`
 
-use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
-use std::f32::consts::PI;
-use std::fmt;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Instant;
+pub use std::cmp::Ordering;
+pub use std::collections::{HashMap, HashSet};
+pub use std::f32::consts::PI;
+pub use std::fmt;
+pub use std::path::{Path, PathBuf};
+pub use std::process::{Command, Stdio};
+pub use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering as AtomicOrdering};
+pub use std::sync::{Arc, Mutex};
+pub use std::thread;
+pub use std::time::Instant;
 
-use rustfft::num_complex::Complex;
-use rustfft::FftPlanner;
-use serde::{Deserialize, Serialize};
+pub use rustfft::num_complex::Complex;
+pub use rustfft::FftPlanner;
+pub use serde::{Deserialize, Serialize};
 
 // ============================================================================
 // CONSTANTES BASE (SIN ASUMIR 44.1 kHz FIJO EN EL CÁLCULO DE FPS NI BINES FFT)
