@@ -132,7 +132,6 @@
         h2 ^= samples.len() as u64;
         format!("{:016x}{:016x}", h1, h2)
     }
-}
 
 #[inline]
 fn median_f64(values: &mut [f64]) -> f64 {
