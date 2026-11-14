@@ -122,7 +122,7 @@ pub fn analyze_bpm_consensus(
 
     // Layer 4: Consensus Arbiter (Mixxx QM-DSP + Beatgrid Phase Lock + Latin Matrix v2)
     let mut planner = rustfft::FftPlanner::<f32>::new();
-    let nov_v2 = v2_core::multiband_onset::extract_multiband_novelty(mono, 0.0, &mut planner);
+    let nov_v2 = v2_core::multiband_onset::extract_multiband_novelty(mono, sample_rate, 0.0, &mut planner);
     let hint_v2 = external_hint.as_ref().map(|h| v2_core::hints::BpmHint {
         bpm: h.bpm as f64,
         source: v2_core::hints::HintSource::UserProvided,
