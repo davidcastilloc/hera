@@ -134,7 +134,7 @@
     }
 
 #[inline]
-fn median_f64(values: &mut [f64]) -> f64 {
+pub(crate) fn median_f64(values: &mut [f64]) -> f64 {
     if values.is_empty() {
         return 0.0;
     }

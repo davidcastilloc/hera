@@ -12,6 +12,7 @@ pub mod key_engine;
 pub mod camelot_wheel;
 pub mod queue;
 pub mod queue_worker;
+pub(crate) use queue_worker::median_f64;
 
 #[cfg(test)]
 mod tests;
