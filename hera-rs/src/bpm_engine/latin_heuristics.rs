@@ -75,11 +75,15 @@ pub fn evaluate_latin_heuristics(
         }
 
         if (80.0..=109.0).contains(&salsa_bpm) {
-            return LatinClassification {
-                rhythm_family: "Salsa".to_string(),
-                candidate_bpm: salsa_bpm,
-                confidence: 0.95,
-            };
+            let score_raw = beatgrid_phase_score(novelty, raw_bpm);
+            let score_salsa = beatgrid_phase_score(novelty, salsa_bpm);
+            if score_salsa > score_raw * 1.02 {
+                return LatinClassification {
+                    rhythm_family: "Salsa".to_string(),
+                    candidate_bpm: salsa_bpm,
+                    confidence: 0.95,
+                };
+            }
         }
     }
 
@@ -94,5 +98,60 @@ pub fn evaluate_latin_heuristics(
         },
         candidate_bpm: raw_bpm,
         confidence: 0.70,
+    }
+}
+
+/// Evaluates how strongly a candidate BPM aligns with real percussive onsets across the track.
+/// Computes the maximum phase-aligned beatgrid energy minus off-beat energy.
+fn beatgrid_phase_score(novelty: &MultibandNovelty, bpm: f32) -> f32 {
+    if bpm <= 0.0 || novelty.frame_dt <= 0.0 || novelty.sub_kick.is_empty() {
+        return 0.0;
+    }
+    let frame_rate = 1.0 / novelty.frame_dt;
+    let period = (60.0 / bpm) * frame_rate;
+    if period < 2.0 {
+        return 0.0;
+    }
+
+    let len = novelty.sub_kick.len();
+    let phases = 16usize;
+    let mut best_score = f32::NEG_INFINITY;
+
+    for p in 0..phases {
+        let phi = (p as f32 / phases as f32) * period;
+        let mut on_beat_sum = 0.0f32;
+        let mut off_beat_sum = 0.0f32;
+        let mut count = 0usize;
+
+        let mut pos = phi;
+        while (pos as usize) + 1 < len {
+            let idx = pos.round() as usize;
+            if idx < len {
+                on_beat_sum += 0.50 * novelty.sub_kick[idx]
+                    + 0.25 * novelty.low_body[idx]
+                    + 0.25 * novelty.perc_clave[idx];
+            }
+            let off_idx = (pos + period * 0.5).round() as usize;
+            if off_idx < len {
+                off_beat_sum += 0.50 * novelty.sub_kick[off_idx]
+                    + 0.25 * novelty.low_body[off_idx]
+                    + 0.25 * novelty.perc_clave[off_idx];
+            }
+            count += 1;
+            pos += period;
+        }
+
+        if count > 0 {
+            let score = (on_beat_sum - 0.5 * off_beat_sum) / (count as f32);
+            if score > best_score {
+                best_score = score;
+            }
+        }
+    }
+
+    if best_score.is_finite() {
+        best_score
+    } else {
+        0.0
     }
 }
