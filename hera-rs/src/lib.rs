@@ -1,6 +1,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub mod audio_engine;
 pub mod bpm_engine;
+pub mod scanner;
 pub mod cloudflare_edge;
 pub mod code_mode;
 pub mod curation_rules;
