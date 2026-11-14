@@ -90,7 +90,7 @@ pub fn analyze_fast_windows(
     let key = detect_song_key(&key_samples, sample_rate, &mut planner);
     FastScanResult {
         bpm: final_bpm,
-        camelot_key: key.camelot_code,
+        camelot_key: key.camelot,
         is_transition_candidate: !samples_b.is_empty()
             && is_transition_candidate(res_a.bpm, bpm_b),
         is_fake_320kbps: is_fake_320kbps(effective_bandwidth_hz, claimed_bitrate_kbps),
