@@ -1601,7 +1601,7 @@ pub mod consensus_ai {
         for &seed in &base_seeds {
             for &r in &ratios {
                 let c = seed * r;
-                if (55.0..=210.0).contains(&c) {
+                if (70.0..=190.0).contains(&c) {
                     // Evita duplicados dentro de ±0.8 BPM
                     if !candidates.iter().any(|existing| (existing.0 - c).abs() < 0.85) {
                         let tag = if (r - 1.0).abs() < 1e-3 {
