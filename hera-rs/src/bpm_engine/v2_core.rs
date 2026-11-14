@@ -2122,7 +2122,7 @@ pub mod queue {
     use super::key_engine::{detect_song_key, MusicalKeyResult};
     use super::multiband_onset::{extract_multiband_novelty, trim_leading_trailing_silence};
     use super::*;
-    use crossbeam_channel::{bounded, Receiver, Sender};
+    use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 
     #[derive(Debug, Clone, Serialize, Deserialize)]
     pub struct QueueTrackInput {
@@ -2243,9 +2243,10 @@ pub mod queue {
             }
 
             let bound = (self.worker_threads * 2).max(4);
-            let (in_tx, in_rx): (Sender<QueueTrackInput>, Receiver<QueueTrackInput>) =
-                bounded(bound);
-            let (out_tx, out_rx) = bounded(bound * 2);
+            let (in_tx, in_rx_raw): (SyncSender<QueueTrackInput>, Receiver<QueueTrackInput>) =
+                sync_channel(bound);
+            let in_rx = Arc::new(Mutex::new(in_rx_raw));
+            let (out_tx, out_rx) = sync_channel(bound * 2);
 
             let seen_hashes = Arc::new(Mutex::new(HashSet::<String>::with_capacity(total)));
             let cancel_feeder = Arc::clone(&cancel_flag);
@@ -2271,7 +2272,10 @@ pub mod queue {
 
                 workers.push(thread::spawn(move || {
                     let mut planner = FftPlanner::<f32>::new();
-                    while let Ok(job) = rx.recv() {
+                    while let Ok(job) = {
+                        let guard = rx.lock().unwrap();
+                        guard.recv()
+                    } {
                         if cancel_w.load(AtomicOrdering::Relaxed) {
                             break;
                         }

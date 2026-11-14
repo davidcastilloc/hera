@@ -121,15 +121,15 @@ pub fn analyze_bpm_consensus(
     };
 
     // Layer 4: Consensus Arbiter (Mixxx QM-DSP + Beatgrid Phase Lock + Latin Matrix v2)
-    let nov_v2 = v2_core::multiband_onset::extract_multiband_novelty(mono, sample_rate);
+    let mut planner = rustfft::FftPlanner::<f32>::new();
+    let nov_v2 = v2_core::multiband_onset::extract_multiband_novelty(mono, 0.0, &mut planner);
     let hint_v2 = external_hint.as_ref().map(|h| v2_core::hints::BpmHint {
         bpm: h.bpm as f64,
         source: v2_core::hints::HintSource::UserProvided,
-        weight: h.confidence.clamp(0.0, 1.0) as f64,
     });
     let res_v2 = v2_core::consensus_ai::analyze_bpm_consensus_v2(&nov_v2, hint_v2);
-    let final_bpm = res_v2.final_bpm as f32;
-    let family_label = format!("{:?}", res_v2.groove_family);
+    let final_bpm = res_v2.bpm as f32;
+    let family_label = format!("{:?}", res_v2.detected_style);
     let v2_confidence = res_v2.confidence as f32;
 
     let is_variable = window_res.is_variable || scaled_drift >= 2.0 || scaled_drift_pct >= 2.2;
