@@ -3,14 +3,150 @@ import { listen } from '@tauri-apps/api/event';
 import { useEffect } from 'react';
 
 import LibraryAPI from '../api/LibraryAPI';
-import type { IPCEvent, ScanProgress, Track } from '../generated/typings';
+import type { Config, IPCEvent, ScanProgress, SortBy, Track } from '../generated/typings';
 import {
   type ScannerRowPatch,
   type ScannerTelemetry,
+  type TrackWithScanMeta,
+  markTracksRecentlyUpdated,
   useScannerStore,
 } from '../lib/scanner-v3';
 import queryClient from '../lib/query-client';
-import { allTracksQuery } from '../lib/queries';
+import { allTracksQuery, configQuery } from '../lib/queries';
+import useLibraryStore from '../lib/store';
+
+/**
+ * Deduplicated O(N + M) merge by `id`. Existing tracks are updated in-place,
+ * newly indexed tracks are appended.
+ */
+export function mergeIncomingTrackBatch(
+  existing: Track[],
+  incoming: Track[],
+): Track[] {
+  if (!incoming || incoming.length === 0) return existing;
+  if (!existing || existing.length === 0) return [...incoming];
+
+  const existingMap = new Map<string, number>();
+  const result: Track[] = existing.map((t, idx) => {
+    existingMap.set(t.id, idx);
+    return t;
+  });
+
+  for (const track of incoming) {
+    const idx = existingMap.get(track.id);
+    if (idx !== undefined) {
+      result[idx] = { ...result[idx], ...track };
+    } else {
+      existingMap.set(track.id, result.length);
+      result.push(track);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Remove track IDs from an existing track array.
+ */
+export function removeTrackIds(
+  existing: Track[],
+  removedIds: string[],
+): Track[] {
+  if (!removedIds || removedIds.length === 0 || !existing || existing.length === 0) {
+    return existing;
+  }
+  const removeSet = new Set(removedIds);
+  return existing.filter((t) => !removeSet.has(t.id));
+}
+
+/**
+ * Apply scanner row patches to tracks.
+ */
+export function applyRowPatchesToTracks(
+  existing: Track[],
+  patches: ScannerRowPatch[],
+): Track[] {
+  if (!patches || patches.length === 0 || !existing || existing.length === 0) {
+    return existing;
+  }
+  const patchMap = new Map<string, ScannerRowPatch>();
+  for (const p of patches) {
+    patchMap.set(p.track_id, p);
+  }
+
+  return existing.map((track) => {
+    const p = patchMap.get(track.id);
+    if (!p) return track;
+    const patched: Track = {
+      ...track,
+      bpm: p.bpm !== undefined ? (p.bpm ?? undefined) : track.bpm,
+      camelot: p.camelot !== undefined ? (p.camelot ?? undefined) : track.camelot,
+      energy: p.energy !== undefined ? (p.energy ?? undefined) : track.energy,
+      duration: p.duration !== undefined && p.duration !== null ? p.duration : track.duration,
+      hot_cues: p.hot_cues !== undefined ? (p.hot_cues ?? undefined) : track.hot_cues,
+    };
+    const meta = patched as TrackWithScanMeta;
+    if (p.scan_level !== undefined) {
+      meta.scan_level = p.scan_level;
+    }
+    if (p.is_transition_candidate !== undefined) {
+      meta.is_transition_candidate = p.is_transition_candidate;
+    }
+    if (p.is_fake_320kbps !== undefined) {
+      meta.is_fake_320kbps = p.is_fake_320kbps;
+    }
+    return patched;
+  });
+}
+
+/**
+ * Returns true only if pointer is inside the table AND the sort column is BPM or Camelot.
+ */
+export function shouldFreezeSortPatches(
+  isPointerInsideTable: boolean,
+  sortBy?: SortBy,
+): boolean {
+  return Boolean(isPointerInsideTable && (sortBy === 'Bpm' || sortBy === 'Camelot'));
+}
+
+export function applyPatchesToCaches(patches: ScannerRowPatch[]): void {
+  if (!patches || patches.length === 0) return;
+  queryClient.setQueryData<Track[]>(allTracksQuery.queryKey, (old) => {
+    if (!old) return old;
+    return applyRowPatchesToTracks(old, patches);
+  });
+  useLibraryStore.setState((state) => ({
+    tracks: applyRowPatchesToTracks(state.tracks, patches),
+  }));
+  markTracksRecentlyUpdated(patches.map((p) => p.track_id));
+}
+
+export function flushFrozenPatches(): void {
+  const frozen = useScannerStore.getState().clearFrozenPatches();
+  if (frozen.length > 0) {
+    applyPatchesToCaches(frozen);
+  }
+}
+
+export function addTracksToCaches(incoming: Track[]): void {
+  if (!incoming || incoming.length === 0) return;
+  queryClient.setQueryData<Track[]>(allTracksQuery.queryKey, (old) => {
+    return mergeIncomingTrackBatch(old ?? [], incoming);
+  });
+  useLibraryStore.setState((state) => ({
+    tracks: mergeIncomingTrackBatch(state.tracks, incoming),
+  }));
+}
+
+export function removeTracksFromCaches(removedIds: string[]): void {
+  if (!removedIds || removedIds.length === 0) return;
+  queryClient.setQueryData<Track[]>(allTracksQuery.queryKey, (old) => {
+    return removeTrackIds(old ?? [], removedIds);
+  });
+  useLibraryStore.setState((state) => ({
+    tracks: removeTrackIds(state.tracks, removedIds),
+  }));
+}
 
 /**
  * Handle Library-related app events, like refreshing and progress status
@@ -32,35 +168,44 @@ function LibraryEvents() {
       useScannerStore.getState().setTelemetry(payload);
     });
 
-    const p3 = listen<ScannerRowPatch[]>('hera:scanner-rows-updated', ({ payload }) => {
-      if (!Array.isArray(payload) || payload.length === 0) return;
-      const patchMap = new Map<string, ScannerRowPatch>();
-      for (const p of payload) {
-        patchMap.set(p.track_id, p);
+    const p3 = listen<Track[]>('hera:scanner-tracks-added', ({ payload }) => {
+      if (Array.isArray(payload) && payload.length > 0) {
+        addTracksToCaches(payload);
       }
-      queryClient.setQueryData<Track[]>(allTracksQuery.queryKey, (old) => {
-        if (!old) return old;
-        return old.map((track) => {
-          const p = patchMap.get(track.id);
-          if (!p) return track;
-          return {
-            ...track,
-            bpm: p.bpm ?? track.bpm,
-            camelot: p.camelot ?? track.camelot,
-            energy: p.energy ?? track.energy,
-            scan_level: p.scan_level ?? track.scan_level,
-            is_transition_candidate:
-              p.is_transition_candidate ?? track.is_transition_candidate,
-            is_fake_320kbps: p.is_fake_320kbps ?? track.is_fake_320kbps,
-          };
-        });
-      });
+    });
+
+    const p4 = listen<string[]>('hera:scanner-tracks-removed', ({ payload }) => {
+      if (Array.isArray(payload) && payload.length > 0) {
+        removeTracksFromCaches(payload);
+      }
+    });
+
+    const p5 = listen<ScannerRowPatch[]>('hera:scanner-rows-updated', ({ payload }) => {
+      if (!Array.isArray(payload) || payload.length === 0) return;
+
+      const config = queryClient.getQueryData<Config>(configQuery.queryKey);
+      const isPointerInside = useScannerStore.getState().isPointerInsideTable;
+
+      if (shouldFreezeSortPatches(isPointerInside, config?.library_sort_by)) {
+        useScannerStore.getState().queueFrozenPatches(payload);
+      } else {
+        applyPatchesToCaches(payload);
+      }
+    });
+
+    const unsubscribeScanner = useScannerStore.subscribe((state, prevState) => {
+      if (prevState.isPointerInsideTable && !state.isPointerInsideTable) {
+        flushFrozenPatches();
+      }
     });
 
     return () => {
       void p1.then((unlisten) => unlisten());
       void p2.then((unlisten) => unlisten());
       void p3.then((unlisten) => unlisten());
+      void p4.then((unlisten) => unlisten());
+      void p5.then((unlisten) => unlisten());
+      unsubscribeScanner();
     };
   }, []);
 

@@ -8,12 +8,17 @@ import { useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type React from 'react';
-import { useCallback, useId, useImperativeHandle, useRef } from 'react';
+import { useCallback, useEffect, useId, useImperativeHandle, useRef } from 'react';
 
 import Scrollable from '../elements/Scrollable';
 import type { Track } from '../generated/typings';
 import useDndSensors from '../hooks/useDnDSensors';
 import usePlayingTrackID from '../hooks/usePlayingTrackID';
+import {
+  scheduleViewportBoost,
+  type TrackWithScanMeta,
+  useScannerStore,
+} from '../lib/scanner-v3';
 import type { TrackListVirtualizer } from '../types/museeks';
 import TrackListHeader from './TrackListHeader';
 import TrackRow, { type TrackRowEvents } from './TrackRow';
@@ -107,6 +112,28 @@ export default function TrackListDefault(props: Props) {
     [onReorder, tracks],
   );
 
+  const virtualItems = virtualizer.getVirtualItems();
+  const firstIndex = virtualItems.length > 0 ? virtualItems[0].index : -1;
+  const lastIndex =
+    virtualItems.length > 0 ? virtualItems[virtualItems.length - 1].index : -1;
+
+  useEffect(() => {
+    if (firstIndex === -1 || lastIndex === -1) return;
+    const visiblePendingIds: string[] = [];
+    for (let i = firstIndex; i <= lastIndex && i < tracks.length; i++) {
+      const t = tracks[i];
+      if (t) {
+        const meta = t as TrackWithScanMeta;
+        if ((meta.scan_level ?? 0) < 1) {
+          visiblePendingIds.push(t.id);
+        }
+      }
+    }
+    if (visiblePendingIds.length > 0) {
+      scheduleViewportBoost(visiblePendingIds);
+    }
+  }, [firstIndex, lastIndex, tracks.length]);
+
   return (
     <DndContext
       onDragEnd={onDragEnd}
@@ -122,6 +149,8 @@ export default function TrackListDefault(props: Props) {
           role="listbox"
           aria-multiselectable="true"
           aria-label={t`Track list`}
+          onMouseEnter={() => useScannerStore.getState().setPointerInsideTable(true)}
+          onMouseLeave={() => useScannerStore.getState().setPointerInsideTable(false)}
           {...stylex.props(styles.rows)}
           style={{
             height: `${virtualizer.getTotalSize()}px`,
@@ -132,7 +161,7 @@ export default function TrackListDefault(props: Props) {
             strategy={verticalListSortingStrategy}
           >
             {/* Only the visible items in the virtualizer, manually positioned to be in view */}
-            {virtualizer.getVirtualItems().map((virtualItem) => {
+            {virtualItems.map((virtualItem) => {
               const track = tracks[virtualItem.index];
               return (
                 <TrackRow

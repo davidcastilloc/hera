@@ -2,7 +2,12 @@ import { useSortable } from '@dnd-kit/sortable';
 import * as stylex from '@stylexjs/stylex';
 import type React from 'react';
 
-import { cancelHoverPrewarm, scheduleHoverPrewarm } from '../lib/scanner-v3';
+import {
+  cancelHoverPrewarm,
+  scheduleHoverPrewarm,
+  type TrackWithScanMeta,
+  useScannerStore,
+} from '../lib/scanner-v3';
 import type { Track } from '../generated/typings';
 import useFormattedDuration from '../hooks/useFormattedDuration';
 import PlayingIndicator from './PlayingIndicator';
@@ -53,6 +58,15 @@ export default function TrackRow(props: Props) {
 
   const duration = useFormattedDuration(track.duration);
 
+  const tMeta = track as TrackWithScanMeta;
+  const hasBpm = track.bpm != null && track.bpm > 0;
+  const hasCamelot = Boolean(track.camelot && track.camelot.trim().length > 0);
+  const isPendingDsp = (tMeta.scan_level ?? 0) < 1 && (!hasBpm || !hasCamelot);
+  const hasFullCues =
+    (tMeta.scan_level ?? 0) >= 2 ||
+    (track.hot_cues != null && track.hot_cues.length >= 4);
+  const isFreshGlow = useScannerStore((s) => Boolean(s.recentlyUpdatedIds[track.id]));
+
   const {
     attributes,
     listeners,
@@ -98,6 +112,7 @@ export default function TrackRow(props: Props) {
         trackStyles.track,
         isEvenRow && trackStyles.trackEvenRow,
         selected && trackStyles.trackSelected,
+        isFreshGlow && !selected && trackStyles.trackFreshGlow,
         isSelectedWithSelectedAbove && trackStyles.selectedWithSelectedAbove,
         isDragging && trackStyles.isDragging,
         isDropIndicatorVisible && trackStyles.isDraggedOver,
@@ -149,23 +164,46 @@ export default function TrackRow(props: Props) {
       {props.simplified !== true && (
         <>
           <div {...stylex.props(cellStyles.cell, cellStyles.bpm)}>
-            {track.bpm != null ? `${track.bpm.toFixed(1)}` : '—'}
+            {hasBpm ? (
+              track.bpm!.toFixed(1)
+            ) : isPendingDsp ? (
+              <span {...stylex.props(cellStyles.bpmPending)} title="Detectando BPM…">
+                ···
+              </span>
+            ) : (
+              '—'
+            )}
           </div>
           <div {...stylex.props(cellStyles.cell, cellStyles.camelot)}>
-            <span
-              {...stylex.props(
-                cellStyles.camelotBadge,
-                selected && cellStyles.camelotBadgeSelected,
-              )}
-            >
-              {track.camelot ?? '8A'}
-            </span>
+            {hasCamelot ? (
+              <span
+                {...stylex.props(
+                  cellStyles.camelotBadge,
+                  selected && cellStyles.camelotBadgeSelected,
+                )}
+              >
+                {track.camelot}
+              </span>
+            ) : (
+              <span
+                {...stylex.props(cellStyles.camelotPending)}
+                title="Detectando tono armónico…"
+              >
+                ···
+              </span>
+            )}
           </div>
           <div
             {...stylex.props(cellStyles.cell, cellStyles.hotCues)}
             title="Puntos: Entrada · Calma · Clímax · Salida"
           >
-            <div {...stylex.props(cellStyles.cueRail)}>
+            <div
+              {...stylex.props(cellStyles.cueRail)}
+              style={{
+                opacity: hasFullCues ? 1 : 0.22,
+                transition: 'opacity 0.25s ease',
+              }}
+            >
               {CUE_SLOTS.map((cue) => (
                 <span
                   key={cue.num}
@@ -181,10 +219,11 @@ export default function TrackRow(props: Props) {
         {...stylex.props(
           cellStyles.cell,
           cellStyles.duration,
+          track.duration === 0 && cellStyles.durationPending,
           props.simplified === true && cellStyles.rightAligned,
         )}
       >
-        {duration}
+        {track.duration === 0 ? '--:--' : duration}
       </div>
       {props.simplified !== true && (
         <>
@@ -223,6 +262,10 @@ const trackStyles = stylex.create({
   trackSelected: {
     backgroundColor: 'var(--active-item-bg)',
     color: 'var(--active-item-color)',
+  },
+  trackFreshGlow: {
+    backgroundColor: 'rgba(20, 184, 166, 0.11)',
+    transition: 'background-color 0.55s ease-out',
   },
   selectedWithSelectedAbove: {
     borderTopColor: 'rgba(45, 212, 191, 0.24)',
@@ -346,6 +389,9 @@ const cellStyles = stylex.create({
     fontVariantNumeric: 'tabular-nums',
     color: '#8e98a8',
   },
+  durationPending: {
+    color: '#64748b',
+  },
   artist: {
     width: '16%',
     flexShrink: 0,
@@ -368,6 +414,10 @@ const cellStyles = stylex.create({
     fontVariantNumeric: 'tabular-nums',
     fontWeight: 600,
     color: '#edeff3',
+  },
+  bpmPending: {
+    color: '#64748b',
+    fontWeight: 400,
   },
   camelot: {
     width: '58px',
@@ -397,6 +447,23 @@ const cellStyles = stylex.create({
     backgroundColor: 'rgba(12, 14, 18, 0.55)',
     borderColor: 'rgba(45, 212, 191, 0.45)',
     color: '#2dd4bf',
+  },
+  camelotPending: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    fontSize: '11px',
+    fontWeight: 600,
+    lineHeight: 1.35,
+    fontVariantNumeric: 'tabular-nums',
+    backgroundColor: 'rgba(23, 28, 36, 0.7)',
+    color: '#64748b',
   },
   hotCues: {
     width: '76px',

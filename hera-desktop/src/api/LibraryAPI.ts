@@ -52,7 +52,9 @@ async function scan(
       refresh,
     );
     const allTracks = await DatabaseBridge.getAllTracks();
-    useLibraryStore.setState({ tracks: allTracks });
+    if (allTracks.length > 0 || useLibraryStore.getState().tracks.length === 0) {
+      useLibraryStore.setState({ tracks: allTracks });
+    }
     await queryClient.invalidateQueries();
 
     if (scanResult.track_count > 0) {
@@ -62,12 +64,13 @@ async function scan(
 
       toastManager.add({ title: message, type: 'success', timeout: 5000 });
     } else if (scanResult.playlist_count === 0) {
+      const currentTrackCount = Math.max(allTracks.length, useLibraryStore.getState().tracks.length);
       toastManager.add({
         title:
-          allTracks.length === 0
-            ? 'No se encontraron archivos de audio (MP3, WAV, FLAC, AIFF, M4A, OGG) en la carpeta seleccionada.'
-            : `Biblioteca al día (${allTracks.length} pista(s) listas en cabina).`,
-        type: allTracks.length === 0 ? 'warning' : 'info',
+          currentTrackCount === 0
+            ? 'No se encontraron archivos compatibles (MP3, WAV, FLAC, AIFF, M4A, MP4, MOV, WEBM, MKV) en la carpeta seleccionada.'
+            : `Biblioteca al día (${currentTrackCount} pista(s) listas en cabina).`,
+        type: currentTrackCount === 0 ? 'warning' : 'info',
         timeout: 5000,
       });
     }

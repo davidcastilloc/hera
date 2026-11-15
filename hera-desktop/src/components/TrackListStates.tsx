@@ -8,6 +8,7 @@ import LibraryAPI from '../api/LibraryAPI';
 import * as ViewMessage from '../elements/ViewMessage';
 import type { Track, TrackGroup } from '../generated/typings';
 import useInvalidate from '../hooks/useInvalidate';
+import { useScannerStore } from '../lib/scanner-v3';
 import useLibraryStore from '../lib/store';
 import Icon from './Icon';
 
@@ -21,7 +22,10 @@ export default function TrackListStates(props: Props) {
   const { isLoading, tracks, children } = props;
 
   const refreshing = useLibraryStore((state) => state.refreshing);
+  const refresh = useLibraryStore((state) => state.refresh);
   const search = useLibraryStore((state) => state.search);
+  const { phase, indexedDone, fastDone, total, tracksPerSec, etaSec, governorActive } =
+    useScannerStore();
   const invalidate = useInvalidate();
   const navigate = useNavigate();
 
@@ -61,7 +65,7 @@ export default function TrackListStates(props: Props) {
       multiple: true,
       filters: [
         {
-          name: 'Audio DJ (MP3, WAV, FLAC, AIFF, M4A, OGG, OPUS)',
+          name: 'Audio/Video DJ (MP3, WAV, FLAC, AIFF, M4A, MP4, MOV, WEBM, MKV)',
           extensions: [
             'mp3',
             'wav',
@@ -73,6 +77,11 @@ export default function TrackListStates(props: Props) {
             'ogg',
             'opus',
             'weba',
+            'mp4',
+            'm4v',
+            'mov',
+            'webm',
+            'mkv',
           ],
         },
       ],
@@ -94,14 +103,56 @@ export default function TrackListStates(props: Props) {
     );
   }
 
-  if (refreshing) {
+  // Non-blocking: only show discovery card when library is completely empty and no search active
+  if (refreshing && tracks.length === 0 && search === '') {
+    const displayTotal = total > 0 ? total : refresh.total;
+    const displayCurrent = fastDone > 0 ? fastDone : (indexedDone && indexedDone > 0 ? indexedDone : refresh.current);
+
     return (
-      <ViewMessage.Notice>
-        <p>Analizando pistas y metadatos de tu biblioteca</p>
-        <ViewMessage.Sub>
-          Extrayendo duración, BPM, tono armónico y puntos de frase...
-        </ViewMessage.Sub>
-      </ViewMessage.Notice>
+      <div {...stylex.props(styles.emptyViewport)}>
+        <div {...stylex.props(styles.discoveryCard)}>
+          <div {...stylex.props(styles.statusHeader)}>
+            <div {...stylex.props(styles.glowingPill)}>
+              <span {...stylex.props(styles.pulseDot)} />
+              <span>
+                {phase === 'indexing'
+                  ? 'Indexando pistas'
+                  : governorActive
+                    ? 'Modo Cabina (1 hilo)'
+                    : 'Analizando BPM y tono'}
+              </span>
+            </div>
+            {displayTotal > 0 && (
+              <span {...stylex.props(styles.counterBadge)}>
+                {displayCurrent} / {displayTotal}
+                {tracksPerSec > 0 ? ` · ${tracksPerSec.toFixed(0)}/s` : ''}
+                {etaSec > 0 ? ` · ~${etaSec}s` : ''}
+              </span>
+            )}
+          </div>
+
+          <h2 {...stylex.props(styles.emptyTitle)}>
+            Preparando biblioteca de cabina…
+          </h2>
+
+          <p {...stylex.props(styles.emptyBody)}>
+            Indexando archivos y extrayendo BPM, tono armónico y 4 Hot Cues de frase.
+            Las pistas aparecerán aquí en vivo en cuanto se procesen los primeros archivos.
+          </p>
+
+          <div {...stylex.props(styles.progressBarRail)}>
+            <div
+              {...stylex.props(styles.progressBarFill)}
+              style={{
+                width:
+                  displayTotal > 0
+                    ? `${Math.min(100, Math.round((displayCurrent / displayTotal) * 100))}%`
+                    : '15%',
+              }}
+            />
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -118,7 +169,7 @@ export default function TrackListStates(props: Props) {
           </h2>
 
           <p {...stylex.props(styles.emptyBody)}>
-            Añade tus carpetas o pistas sueltas de audio (FLAC, WAV, AIFF o MP3,
+            Añade tus carpetas o pistas sueltas de audio y video (FLAC, WAV, AIFF, MP3, MP4,
             incluso sin etiquetas ID3) para detectar BPM, tono armónico, 4 Hot
             Cues de frase y preparar crates para VirtualDJ, Rekordbox o Traktor.
           </p>
@@ -190,6 +241,70 @@ const styles = stylex.create({
     justifyContent: 'center',
     padding: '28px',
     backgroundColor: '#0c0e12',
+  },
+  discoveryCard: {
+    maxWidth: '540px',
+    width: '100%',
+    paddingBlock: '32px',
+    paddingInline: '32px',
+    backgroundColor: '#12161d',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    rowGap: '14px',
+  },
+  statusHeader: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: '12px',
+  },
+  glowingPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '8px',
+    paddingBlock: '4px',
+    paddingInline: '10px',
+    borderRadius: '999px',
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(20, 184, 166, 0.28)',
+    color: '#2dd4bf',
+    fontSize: '12px',
+    fontWeight: 600,
+    letterSpacing: '0.01em',
+  },
+  pulseDot: {
+    width: '7px',
+    height: '7px',
+    borderRadius: '999px',
+    backgroundColor: '#2dd4bf',
+  },
+  counterBadge: {
+    color: '#8e98a8',
+    fontSize: '12px',
+    fontWeight: 500,
+    fontVariantNumeric: 'tabular-nums',
+  },
+  progressBarRail: {
+    width: '100%',
+    height: '4px',
+    borderRadius: '2px',
+    backgroundColor: '#171c24',
+    overflow: 'hidden',
+    marginTop: '6px',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#14b8a6',
+    borderRadius: '2px',
+    transition: 'width 0.3s ease-out',
   },
   emptyCard: {
     maxWidth: '540px',
