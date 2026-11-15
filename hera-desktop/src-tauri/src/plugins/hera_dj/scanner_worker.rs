@@ -10,18 +10,60 @@ use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{Connection, SqliteConnection};
 use tauri::{AppHandle, Emitter, Runtime};
 
-use hera_node_rs::bpm_engine::v2_core::audio_ingest::{load_audio_mono_native_sr, ProcessLimiter};
+use hera_node_rs::bpm_engine::v2_core::audio_ingest::ProcessLimiter;
 use hera_node_rs::scanner::fast_seek::run_fast_scan_on_file;
 use hera_node_rs::scanner::full_pass::run_full_pass_on_file;
-use hera_node_rs::scanner::scheduler::{ScanPriority, ScanScheduler};
+use hera_node_rs::scanner::scheduler::ScanPriority;
 
 use crate::libs::db_scanner_queries::{
     apply_scanner_batch_updates, count_scanner_levels, delete_short_sfx_tracks,
-    load_pending_full_pass_jobs, load_pending_scanner_jobs, ScannerRowUpdate,
+    fetch_track_path_and_level, load_pending_full_pass_jobs, load_pending_scanner_jobs,
+    ScannerRowUpdate,
 };
 use crate::libs::track::HotCuePin;
 
 static DAEMON_STARTED: AtomicBool = AtomicBool::new(false);
+
+fn probe_duration_fast_secs(path: &Path) -> u32 {
+    let is_video = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "webm" | "mkv" | "mp4" | "mov" | "avi" | "flv" | "m4v"));
+
+    if !is_video {
+        let lofty_dur = lofty::probe::Probe::open(path)
+            .ok()
+            .and_then(|p| {
+                p.options(lofty::config::ParseOptions::new().read_cover_art(false))
+                    .read()
+                    .ok()
+            })
+            .map(|tf| tf.properties().duration().as_secs() as u32)
+            .unwrap_or(0);
+        if lofty_dur > 0 {
+            return lofty_dur;
+        }
+    }
+
+    let mut cmd = std::process::Command::new("ffprobe");
+    cmd.args([
+        "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+    ])
+    .arg(path);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd.output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<f64>().ok())
+        .filter(|d| d.is_finite() && *d > 0.0)
+        .map(|d| d.round() as u32)
+        .unwrap_or(0)
+}
 
 struct ProcessedTrackOutcome {
     update: ScannerRowUpdate,
@@ -66,20 +108,23 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
             .map(|n| (n.get() / 2).clamp(2, 6))
             .unwrap_or(4);
         let (tx, rx) = mpsc::channel::<ProcessedTrackOutcome>();
-        let cache = Arc::new(Mutex::new(HashMap::<String, (String, i64)>::new()));
+        let (missing_tx, missing_rx) = mpsc::channel::<(String, ScanPriority)>();
+        let cache = Arc::new(Mutex::new(HashMap::<String, (String, i64, u32)>::new()));
         let limiter = Arc::new(ProcessLimiter::new(2));
         let sched = super::scanner_v3::global_scheduler().clone();
 
-        // Seed initial cache from SQLite (< 2ms)
-        if let Ok(rows) = sqlx::query_as::<_, (String, String, i64)>(
-            "SELECT id, path, scan_level FROM tracks WHERE scan_level < 2 LIMIT 512",
+        // Seed initial cache from SQLite
+        if let Ok(rows) = sqlx::query_as::<_, (String, String, i64, i64)>(
+            "SELECT id, path, scan_level, duration FROM tracks WHERE scan_level < 2 LIMIT 50000",
         ).fetch_all(&mut conn).await {
             let mut g = cache.lock().unwrap();
-            for (id, path, lvl) in rows { g.insert(id, (path, lvl)); }
+            for (id, path, lvl, dur) in rows { g.insert(id, (path, lvl, dur.max(0) as u32)); }
         }
 
         for idx in 0..num_workers {
-            let (sched_w, cache_w, limiter_w, tx_w) = (Arc::clone(&sched), Arc::clone(&cache), Arc::clone(&limiter), tx.clone());
+            let (sched_w, cache_w, limiter_w, tx_w, missing_tx_w) = (
+                Arc::clone(&sched), Arc::clone(&cache), Arc::clone(&limiter), tx.clone(), missing_tx.clone(),
+            );
             std::thread::Builder::new().name(format!("hera-dsp-worker-{idx}")).spawn(move || loop {
                 if idx >= sched_w.governor.effective_workers() {
                     std::thread::sleep(Duration::from_millis(250));
@@ -88,18 +133,15 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                 let Some((track_id, prio)) = sched_w.wait_next(Duration::from_millis(250)) else { continue; };
                 if super::workability::is_scan_cancelled() && prio >= ScanPriority::P2FastBackground { continue; }
                 let cached = { cache_w.lock().unwrap().get(&track_id).cloned() };
-                let Some((path, current_level)) = cached else { continue; };
+                let Some((path, current_level, cached_dur)) = cached else {
+                    let _ = missing_tx_w.send((track_id, prio));
+                    continue;
+                };
 
                 let path_obj = Path::new(&path);
                 let is_level_2 = prio == ScanPriority::P0Immediate || prio == ScanPriority::P3FullElastic;
-
-                let probed_dur = lofty::probe::Probe::open(path_obj).ok()
-                    .and_then(|p| p.options(lofty::config::ParseOptions::new().read_cover_art(false)).read().ok())
-                    .map(|tf| tf.properties().duration().as_secs() as u32).unwrap_or(0);
-                let real_dur = if probed_dur > 0 { probed_dur } else {
-                    load_audio_mono_native_sr(path_obj, Some(&limiter_w)).map(|d| d.duration_sec.round() as u32).unwrap_or(0)
-                };
-                let duration_opt = if real_dur > 0 { Some(real_dur) } else { None };
+                let measured_dur = if cached_dur > 0 { 0 } else { probe_duration_fast_secs(path_obj) };
+                let duration_opt = if measured_dur > 0 { Some(measured_dur) } else { None };
 
                 if is_level_2 {
                     if current_level >= 2 { continue; }
@@ -203,10 +245,22 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                 {
                     let mut g = cache.lock().unwrap();
                     for u in &updates_to_apply {
-                        if let Some(entry) = g.get_mut(&u.track_id) { entry.1 = entry.1.max(u.scan_level); }
+                        if let Some(entry) = g.get_mut(&u.track_id) {
+                            entry.1 = entry.1.max(u.scan_level);
+                            if let Some(d) = u.duration_sec { entry.2 = d; }
+                        }
                     }
                 }
                 let _ = app_handle.emit("hera:scanner-rows-updated", &patches_to_emit);
+            }
+
+            // Resolve scrolled/hovered track_ids that missed in-memory cache
+            while let Ok((miss_id, miss_prio)) = missing_rx.try_recv() {
+                if let Ok(Some((path, lvl))) = fetch_track_path_and_level(&mut conn, &miss_id).await {
+                    cache.lock().unwrap().entry(miss_id.clone()).or_insert((path, lvl, 0));
+                    let needs_work = if miss_prio == ScanPriority::P0Immediate || miss_prio == ScanPriority::P3FullElastic { lvl < 2 } else { lvl < 1 };
+                    if needs_work { sched.enqueue_or_promote(miss_id, miss_prio); }
+                }
             }
 
             // 2. Refill scheduler when low
@@ -216,7 +270,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                         let mut ids = Vec::with_capacity(pending_fast.len());
                         let mut g = cache.lock().unwrap();
                         for (id, path, lvl) in pending_fast {
-                            g.insert(id.clone(), (path, lvl));
+                            g.entry(id.clone()).and_modify(|e| { e.0 = path.clone(); e.1 = lvl; }).or_insert((path, lvl, 0));
                             ids.push(id);
                         }
                         drop(g);
@@ -227,7 +281,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                                 let mut ids = Vec::with_capacity(pending_full.len());
                                 let mut g = cache.lock().unwrap();
                                 for (id, path) in pending_full {
-                                    g.insert(id.clone(), (path, 1));
+                                    g.entry(id.clone()).and_modify(|e| { e.0 = path.clone(); e.1 = e.1.max(1); }).or_insert((path, 1, 0));
                                     ids.push(id);
                                 }
                                 drop(g);

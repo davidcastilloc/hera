@@ -377,3 +377,18 @@
   3. **Lightweight i18n:** Replace Lingui with a lightweight pure-TypeScript dictionary hook (`~30 LOC`), eliminating the Babel macro and compiler plugin.
   4. **Manual Route Tree:** Replace `@tanstack/router-plugin/vite` by declaring routes explicitly in TypeScript.
   5. **CSS Migration Path (The Core Pre-requisite):** Migrate StyleX components to CSS Modules (`*.module.css`) or Tailwind CSS v4 (Rust/LightningCSS CLI). Once StyleX AST extraction is removed, `hera-desktop` can compile directly using native `bun build` and pure Tauri v2 integration, completely eliminating `vp`, Babel, and Vite plugins.
+
+
+### [2026-11-15] ADR-035: Scanner v3.1 Streaming Parallel Indexer, 200ms WAL Worker Daemon & Real-Time Progressive Library UX
+
+- **Context:** Even after splitting scanning into 2 phases, large DJ/Video-DJ libraries suffered slow perceived discovery, missing live progress feedback in `/library`, blocking spinners when `refreshing === true`, placeholder `'8A'`/empty values on unanalyzed rows, full-file video decoding on Level 1 metadata passes, and missed test execution for `.test.tsx` unit specs.
+- **Decision:**
+  1. **Streaming Parallel Level 0 Indexer (`hera-desktop/src-tauri/src/libs/fast_library_scan.rs`, `workability.rs`, `database.rs`):**
+     - Replaced blocking sequential loops with a bounded `WalkDir` producer feeding `rayon::par_iter()` workers, flushing the first **60 tracks** (`< 200 ms`) and subsequent batches of **250 tracks** atomically into SQLite WAL while emitting `hera:scanner-tracks-added` and `hera:scanner-telemetry`.
+     - Hydrated cached VirtualDJ `<Song>` and `<Poi>` metadata (`normalize_lookup_path`), excluded `waveform_peaks_blob` (`NULL AS waveform_peaks_blob`) in `DB::get_all_tracks`, normalized SQLite sentinel values (`bpm <= 0.0 -> None`, `camelot == "" -> None`), and preserved `duration == 0` video/tagless files until Level 1 DSP instead of dropping them prematurely.
+  2. **Condvar Background DSP Daemon (`hera-rs/src/scanner/scheduler.rs`, `hera-desktop/src-tauri/src/plugins/hera_dj/scanner_worker.rs`):**
+     - Upgraded `ScanScheduler` with `Condvar` wakeup (`wait_next`, `enqueue_batch`, `clear_background_queues`) across `P0Immediate` (hover), `P1Viewport` (visible rows), `P2FastBackground` (Level 1 BPM/Key), and `P3FullElastic` (Level 2 4 Hot Cues + Waveform).
+     - Spawned `scanner_worker.rs` obeying `AutoGigGovernor` (`effective_workers()`), batching SQLite WAL updates every `200 ms`, emitting `hera:scanner-rows-updated` / `hera:scanner-tracks-removed` / `hera:scanner-telemetry`, avoiding full-file video decoding on Level 1 (`probe_duration_fast_secs` via `lofty` / `ffprobe` only when `duration == 0`), and resolving cache-missed `P0`/`P1` scrolled IDs via `fetch_track_path_and_level`.
+  3. **Non-Blocking Real-Time UX & Test Parity (`TrackListStates.tsx`, `LibraryEvents.tsx`, `TrackListDefault.tsx`, `TrackRow.tsx`, `ScannerStatusPill.tsx`, `HeraDjToolbar.tsx`, `settings.library.tsx`, `vitest.config.ts`):**
+     - Removed blocking overlays whenever `tracks.length > 0`, wired hover (`300 ms`) + viewport (`120 ms`) priority boosting, added pointer Sort-Freeze (`Bpm` / `Camelot`), replaced fake `'8A'` fallbacks with honest `···` / `--:--` states and animated Hot Cue pins + `#14b8a6` highlight, and included `**/*.test.tsx` in Vitest `unit` with `VITE_PLUGINS` (excluding `tanstack-router` file watcher).
+  4. **Pitfall:** Always keep OS-specific drive-letter or user-home absolute paths out of `docs/superpowers/`, keep `plugins/hera_dj/*.rs` at `<= 349` lines per `architectural_ratchets`, and annotate `i64` `ts-rs` optional DTO fields with `#[ts(optional, type = "number")]` so TypeScript does not emit `bigint`.

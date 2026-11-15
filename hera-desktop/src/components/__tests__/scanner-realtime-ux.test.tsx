@@ -18,12 +18,12 @@ vi.mock('@tanstack/react-router', async (importOriginal) => {
 
 vi.mock('@tauri-apps/api/core', () => ({
   isTauri: () => false,
-  invoke: vi.fn().mockResolvedValue(0),
+  invoke: vi.fn<(...args: unknown[]) => Promise<number>>().mockResolvedValue(0),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
-  open: vi.fn(),
-  ask: vi.fn(),
+  open: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
+  ask: vi.fn<(...args: unknown[]) => Promise<boolean>>(),
 }));
 
 import type { HotCuePin, Track } from '../../generated/typings';
@@ -163,7 +163,7 @@ describe('scanner-realtime-ux UI components', () => {
   });
 
   it('TrackRow displays ··· (NOT 8A) and --:-- when bpm, camelot and duration are pending', () => {
-    const pendingTrack: TrackWithScanMeta = {
+    const pendingTrack: Track = {
       id: 'pending-1',
       path: 'C:/Music/Pending.mp3',
       title: 'Cancion En Cola',
@@ -206,7 +206,7 @@ describe('scanner-realtime-ux UI components', () => {
       { num: 3, name: 'Drop', seconds: 64, color: '#ef4444', role: 'drop' },
       { num: 4, name: 'Outro', seconds: 190, color: '#f59e0b', role: 'outro' },
     ];
-    const analyzedTrack: TrackWithScanMeta = {
+    const analyzedTrack: Track = {
       ...mockTrack1,
       bpm: 126.4,
       camelot: '11B',

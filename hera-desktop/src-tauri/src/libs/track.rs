@@ -68,7 +68,7 @@ pub struct Track {
     #[ts(optional)]
     pub is_video: Option<bool>,
     #[sqlx(default)]
-    #[ts(optional)]
+    #[ts(optional, type = "number")]
     pub scan_level: Option<i64>,
     #[sqlx(default)]
     #[ts(optional)]

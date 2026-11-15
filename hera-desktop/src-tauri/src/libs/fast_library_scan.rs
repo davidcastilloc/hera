@@ -185,6 +185,8 @@ pub async fn execute_streaming_library_scan<R: Runtime>(
     });
 
     let mut total_scanned = 0usize;
+    let mut total_cached_fast = 0usize;
+    let mut total_cached_full = 0usize;
     let mut total_raw_candidates = 0usize;
     let mut current_batch = Vec::with_capacity(250);
     let mut target_batch_size = 60usize;
@@ -200,8 +202,11 @@ pub async fn execute_streaming_library_scan<R: Runtime>(
         total_raw_candidates += 1;
 
         if current_batch.len() >= target_batch_size {
-            let count = commit_batch(&current_batch, &software_index, db_state, refresh, app_handle).await?;
+            let (count, fast_c, full_c) =
+                commit_batch(&current_batch, &software_index, db_state, refresh, app_handle).await?;
             total_scanned += count;
+            total_cached_fast += fast_c;
+            total_cached_full += full_c;
             current_batch.clear();
             target_batch_size = 250;
 
@@ -221,8 +226,8 @@ pub async fn execute_streaming_library_scan<R: Runtime>(
                 json!({
                     "phase": "indexing",
                     "indexedDone": total_scanned,
-                    "fastDone": total_scanned,
-                    "fullDone": 0,
+                    "fastDone": total_cached_fast,
+                    "fullDone": total_cached_full,
                     "total": est_total,
                     "tracksPerSec": (tracks_per_sec * 10.0).round() / 10.0,
                     "etaSec": 0,
@@ -233,8 +238,11 @@ pub async fn execute_streaming_library_scan<R: Runtime>(
     }
 
     if !current_batch.is_empty() && !is_scan_cancelled() {
-        let count = commit_batch(&current_batch, &software_index, db_state, refresh, app_handle).await?;
+        let (count, fast_c, full_c) =
+            commit_batch(&current_batch, &software_index, db_state, refresh, app_handle).await?;
         total_scanned += count;
+        total_cached_fast += fast_c;
+        total_cached_full += full_c;
         current_batch.clear();
     }
 
@@ -249,13 +257,18 @@ pub async fn execute_streaming_library_scan<R: Runtime>(
 
     let elapsed = start_time.elapsed().as_secs_f64().max(0.001);
     let tracks_per_sec = (final_total as f64) / elapsed;
+    let next_phase = if total_cached_fast < final_total && !is_scan_cancelled() {
+        "analyzing"
+    } else {
+        "idle"
+    };
     let _ = app_handle.emit(
         "hera:scanner-telemetry",
         json!({
-            "phase": "indexing",
+            "phase": next_phase,
             "indexedDone": final_total,
-            "fastDone": final_total,
-            "fullDone": 0,
+            "fastDone": total_cached_fast,
+            "fullDone": total_cached_full,
             "total": final_total,
             "tracksPerSec": (tracks_per_sec * 10.0).round() / 10.0,
             "etaSec": 0,
@@ -283,17 +296,19 @@ async fn commit_batch<R: Runtime>(
     db: &DBState,
     refresh: bool,
     app: &AppHandle<R>,
-) -> AnyResult<usize> {
+) -> AnyResult<(usize, usize, usize)> {
     if batch_paths.is_empty() {
-        return Ok(0);
+        return Ok((0, 0, 0));
     }
     let batch = process_batch_parallel(batch_paths, index);
     let batch_len = batch.len();
+    let fast_cached = batch.iter().filter(|t| t.scan_level.unwrap_or(0) >= 1).count();
+    let full_cached = batch.iter().filter(|t| t.scan_level.unwrap_or(0) >= 2).count();
     if !batch.is_empty() {
         let mut guard = db.get_lock().await;
         guard.upsert_scanned_tracks_batch(&batch, refresh).await?;
         drop(guard);
         let _ = app.emit("hera:scanner-tracks-added", &batch);
     }
-    Ok(batch_len)
+    Ok((batch_len, fast_cached, full_cached))
 }

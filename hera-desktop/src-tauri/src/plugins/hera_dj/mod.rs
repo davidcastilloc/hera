@@ -219,7 +219,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::<R>::new("hera-dj")
         .setup(|app, _api| {
             app.manage(NativeAudioState(create_default_audio_backend()));
-            scanner_worker::spawn_scanner_daemon(app.handle().clone());
+            scanner_worker::spawn_scanner_daemon(app.clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

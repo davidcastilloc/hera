@@ -3,7 +3,10 @@ import { create } from 'zustand';
 
 import type { HotCuePin, Track } from '../generated/typings';
 
-export type TrackWithScanMeta = Track & {
+export type TrackWithScanMeta = Omit<
+  Track,
+  'scan_level' | 'is_transition_candidate' | 'is_fake_320kbps' | 'waveform_peaks_blob'
+> & {
   scan_level?: number | null;
   is_transition_candidate?: boolean | null;
   is_fake_320kbps?: boolean | null;

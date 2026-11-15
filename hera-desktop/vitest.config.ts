@@ -12,8 +12,15 @@ export default defineConfig({
         test: {
           name: 'unit',
           environment: 'node',
-          include: ['**/*.test.ts'],
+          include: ['**/*.test.ts', '**/*.test.tsx'],
         },
+        plugins: VITE_PLUGINS.filter(
+          (p) =>
+            !p ||
+            typeof p !== 'object' ||
+            !('name' in p) ||
+            !String(p.name).includes('tanstack-router'),
+        ),
       },
       {
         test: {

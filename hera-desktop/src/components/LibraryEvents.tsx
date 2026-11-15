@@ -7,7 +7,6 @@ import type { Config, IPCEvent, ScanProgress, SortBy, Track } from '../generated
 import {
   type ScannerRowPatch,
   type ScannerTelemetry,
-  type TrackWithScanMeta,
   markTracksRecentlyUpdated,
   useScannerStore,
 } from '../lib/scanner-v3';
@@ -84,17 +83,16 @@ export function applyRowPatchesToTracks(
       energy: p.energy !== undefined ? (p.energy ?? undefined) : track.energy,
       duration: p.duration !== undefined && p.duration !== null ? p.duration : track.duration,
       hot_cues: p.hot_cues !== undefined ? (p.hot_cues ?? undefined) : track.hot_cues,
+      scan_level: p.scan_level !== undefined ? (p.scan_level ?? undefined) : track.scan_level,
+      is_transition_candidate:
+        p.is_transition_candidate !== undefined
+          ? (p.is_transition_candidate ?? undefined)
+          : track.is_transition_candidate,
+      is_fake_320kbps:
+        p.is_fake_320kbps !== undefined
+          ? (p.is_fake_320kbps ?? undefined)
+          : track.is_fake_320kbps,
     };
-    const meta = patched as TrackWithScanMeta;
-    if (p.scan_level !== undefined) {
-      meta.scan_level = p.scan_level;
-    }
-    if (p.is_transition_candidate !== undefined) {
-      meta.is_transition_candidate = p.is_transition_candidate;
-    }
-    if (p.is_fake_320kbps !== undefined) {
-      meta.is_fake_320kbps = p.is_fake_320kbps;
-    }
     return patched;
   });
 }
