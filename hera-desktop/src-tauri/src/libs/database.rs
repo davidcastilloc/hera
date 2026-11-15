@@ -11,7 +11,7 @@ use super::track::{Track, TrackGroup};
 
 // Single source of truth for supported audio formats (extension, MIME type).
 // KEEP IN SYNC with Tauri's file associations in tauri.conf.json
-pub const SUPPORTED_AUDIO_FORMATS: [(&str, &str); 11] = [
+pub const SUPPORTED_AUDIO_FORMATS: [(&str, &str); 16] = [
     ("mp3", "audio/mpeg"), /* mp3 / mp4 */
     ("aac", "audio/aac"),
     ("m4a", "audio/mp4"),
@@ -23,13 +23,18 @@ pub const SUPPORTED_AUDIO_FORMATS: [(&str, &str); 11] = [
     ("opus", "audio/opus"),
     ("flac", "audio/flac"), /* Flac */
     ("weba", "audio/webm"), /* Web media */
+    ("mp4", "video/mp4"),
+    ("m4v", "video/mp4"),
+    ("mov", "video/quicktime"),
+    ("webm", "video/webm"),
+    ("mkv", "video/x-matroska"),
 ];
 
 // Derived at compile time from SUPPORTED_AUDIO_FORMATS
-pub const SUPPORTED_TRACKS_EXTENSIONS: [&str; 11] = {
-    let mut exts = [""; 11];
+pub const SUPPORTED_TRACKS_EXTENSIONS: [&str; 16] = {
+    let mut exts = [""; 16];
     let mut i = 0;
-    while i < 11 {
+    while i < 16 {
         exts[i] = SUPPORTED_AUDIO_FORMATS[i].0;
         i += 1;
     }

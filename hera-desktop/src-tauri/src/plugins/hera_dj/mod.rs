@@ -6,6 +6,7 @@ mod p2p_download;
 #[cfg(test)]
 mod tests;
 mod virtualdj_live;
+pub mod vdj_xml_parser;
 pub mod workability;
 
 use hera_node_rs::audio_engine::create_default_audio_backend;

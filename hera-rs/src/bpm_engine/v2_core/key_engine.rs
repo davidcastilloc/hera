@@ -293,3 +293,8 @@
             0.0
         }
     }
+
+    pub fn detect_song_key_auto(samples: &[f32], sample_rate: u32) -> MusicalKeyResult {
+        let mut planner = rustfft::FftPlanner::<f32>::new();
+        detect_song_key(samples, sample_rate, &mut planner)
+    }

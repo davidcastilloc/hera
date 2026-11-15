@@ -75,70 +75,14 @@ impl ExternalDjSoftwareIndex {
 
     fn parse_vdj_database_file(&mut self, path: &Path) {
         let Ok(file) = File::open(path) else { return };
-        let reader = BufReader::new(file);
-
-        let mut current_filepath: Option<String> = None;
-        let mut current_bpm: Option<f64> = None;
-        let mut current_key: Option<String> = None;
-        let mut current_cues = 0usize;
-
-        for line_res in reader.lines() {
-            let Ok(line) = line_res else { continue };
-            let trimmed = line.trim();
-
-            if trimmed.starts_with("<Song ") {
-                if let Some(fp) = current_filepath.take() {
-                    let key = fp.replace('\\', "/").to_lowercase();
-                    self.vdj_entries.insert(
-                        key,
-                        CachedDjSoftwareMetadata {
-                            bpm: current_bpm,
-                            key: current_key.take(),
-                            cues_count: current_cues,
-                        },
-                    );
-                }
-                current_bpm = None;
-                current_key = None;
-                current_cues = 0;
-
-                if let Some(pos) = trimmed.find("FilePath=\"") {
-                    let rest = &trimmed[pos + 10..];
-                    if let Some(end) = rest.find('"') {
-                        current_filepath = Some(rest[..end].to_string());
-                    }
-                }
-            } else if trimmed.starts_with("<Bpm ") {
-                if let Some(pos) = trimmed.find("Value=\"") {
-                    let rest = &trimmed[pos + 7..];
-                    if let Some(end) = rest.find('"') {
-                        if let Ok(val) = rest[..end].parse::<f64>() {
-                            if val > 30.0 && val < 300.0 {
-                                current_bpm = Some(val);
-                            }
-                        }
-                    }
-                }
-            } else if trimmed.starts_with("<Key ") {
-                if let Some(pos) = trimmed.find("Value=\"") {
-                    let rest = &trimmed[pos + 7..];
-                    if let Some(end) = rest.find('"') {
-                        current_key = Some(rest[..end].to_string());
-                    }
-                }
-            } else if trimmed.starts_with("<Poi ") {
-                current_cues += 1;
-            }
-        }
-
-        if let Some(fp) = current_filepath {
-            let key = fp.replace('\\', "/").to_lowercase();
+        let parsed = super::vdj_xml_parser::parse_vdj_database_reader(BufReader::new(file));
+        for (key, entry) in parsed {
             self.vdj_entries.insert(
                 key,
                 CachedDjSoftwareMetadata {
-                    bpm: current_bpm,
-                    key: current_key,
-                    cues_count: current_cues,
+                    bpm: entry.bpm,
+                    key: entry.key,
+                    cues_count: entry.cues_count,
                 },
             );
         }

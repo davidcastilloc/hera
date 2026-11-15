@@ -149,11 +149,9 @@ fn enrich_track_with_hera_dsp(
             tag_bpm.map(|b| b as f32),
         );
         let final_bpm = tag_bpm.unwrap_or(structure.bpm as f64);
-        let mut key_planner = rustfft::FftPlanner::<f32>::new();
-        let v2_key = hera_node_rs::bpm_engine::v2_core::key_engine::detect_song_key(
+        let v2_key = hera_node_rs::bpm_engine::v2_core::key_engine::detect_song_key_auto(
             &decoded.mono,
             decoded.sample_rate,
-            &mut key_planner,
         );
         let final_camelot = tag_camelot.unwrap_or(v2_key.camelot);
         let final_energy = (structure.energy_score as f64).clamp(0.35, 0.99);
