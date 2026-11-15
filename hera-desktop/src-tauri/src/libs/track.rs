@@ -117,6 +117,7 @@ fn enrich_track_with_hera_dsp(
     duration_secs: u32,
     tag_bpm: Option<f64>,
     tag_camelot: Option<String>,
+    predecoded: Option<hera_node_rs::forensics::DecodedAudio>,
 ) -> (f64, String, f64, String, Vec<HotCuePin>) {
     let ext = path
         .extension()
@@ -124,7 +125,12 @@ fn enrich_track_with_hera_dsp(
         .unwrap_or("flac")
         .to_lowercase();
 
-    if let Ok(decoded) = hera_node_rs::forensics::decode_audio_file_partial(path, 45.0) {
+    let decoded_res = match predecoded {
+        Some(d) => Ok(d),
+        None => hera_node_rs::forensics::decode_audio_file_partial(path, 45.0),
+    };
+
+    if let Ok(decoded) = decoded_res {
         let forensics = hera_node_rs::forensics::audit_pcm_channels(
             &decoded.left,
             decoded.right.as_deref(),
@@ -143,7 +149,13 @@ fn enrich_track_with_hera_dsp(
             tag_bpm.map(|b| b as f32),
         );
         let final_bpm = tag_bpm.unwrap_or(structure.bpm as f64);
-        let final_camelot = tag_camelot.unwrap_or_else(|| structure.camelot_key.clone());
+        let mut key_planner = rustfft::FftPlanner::<f32>::new();
+        let v2_key = hera_node_rs::bpm_engine::v2_core::key_engine::detect_song_key(
+            &decoded.mono,
+            decoded.sample_rate,
+            &mut key_planner,
+        );
+        let final_camelot = tag_camelot.unwrap_or(v2_key.camelot);
         let final_energy = (structure.energy_score as f64).clamp(0.35, 0.99);
         let seal = hera_node_rs::p2p::compute_hera_seal(
             track_id,
@@ -359,7 +371,7 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
             let duration =
                 u32::try_from(tagged_file.properties().duration().as_secs()).unwrap_or(0);
             let (bpm, camelot, energy, hera_seal, hot_cues) =
-                enrich_track_with_hera_dsp(path, &id, &title, duration, tag_bpm, tag_camelot);
+                enrich_track_with_hera_dsp(path, &id, &title, duration, tag_bpm, tag_camelot, None);
 
             Ok(Track {
                 id,
@@ -414,6 +426,7 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                     duration,
                     stem_bpm,
                     stem_camelot,
+                    Some(decoded),
                 );
                 return Ok(Track {
                     id,

@@ -155,3 +155,37 @@
             );
         }
     }
+
+    #[test]
+    fn symphonia_decodes_48khz_wav_without_ffmpeg_fallback() {
+        let dir = std::env::temp_dir();
+        let wav_path = dir.join("hera_test_48khz_h1.wav");
+        let sr: u32 = 48_000;
+        let num_samples = sr * 4;
+        let data_bytes = num_samples * 2;
+        let mut buf = Vec::with_capacity(44 + data_bytes as usize);
+        buf.extend_from_slice(b"RIFF");
+        buf.extend_from_slice(&(36 + data_bytes).to_le_bytes());
+        buf.extend_from_slice(b"WAVE");
+        buf.extend_from_slice(b"fmt ");
+        buf.extend_from_slice(&16_u32.to_le_bytes());
+        buf.extend_from_slice(&1_u16.to_le_bytes()); // PCM
+        buf.extend_from_slice(&1_u16.to_le_bytes()); // mono
+        buf.extend_from_slice(&sr.to_le_bytes());
+        buf.extend_from_slice(&(sr * 2).to_le_bytes());
+        buf.extend_from_slice(&2_u16.to_le_bytes());
+        buf.extend_from_slice(&16_u16.to_le_bytes());
+        buf.extend_from_slice(b"data");
+        buf.extend_from_slice(&data_bytes.to_le_bytes());
+        for i in 0..num_samples {
+            let t = (i as f32) / (sr as f32);
+            let s = ((2.0 * std::f32::consts::PI * 440.0 * t).sin() * 16000.0) as i16;
+            buf.extend_from_slice(&s.to_le_bytes());
+        }
+        std::fs::write(&wav_path, &buf).expect("write temp wav");
+        let decoded = super::audio_ingest::load_audio_mono_native_sr(&wav_path, None)
+            .expect("decode 48kHz wav");
+        let _ = std::fs::remove_file(&wav_path);
+        assert!(!decoded.used_ffmpeg_fallback);
+        assert_eq!(decoded.sample_rate, 48_000);
+    }

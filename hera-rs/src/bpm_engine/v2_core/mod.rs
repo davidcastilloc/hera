@@ -3,6 +3,7 @@ pub use types::*;
 
 pub mod hints;
 pub mod audio_ingest;
+pub(crate) mod ffmpeg_hash;
 pub mod multiband_onset;
 pub mod qm_comb_tracker;
 pub mod phase_lock;

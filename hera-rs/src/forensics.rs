@@ -90,11 +90,17 @@ fn decode_media_source(
 
     let mut format = probed.format;
     let track = format
-        .default_track()
+        .tracks()
+        .iter()
+        .find(|t| {
+            t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL
+                && (t.codec_params.sample_rate.is_some() || t.codec_params.channels.is_some())
+        })
+        .or_else(|| format.default_track())
         .ok_or_else(|| "No decodable audio track found in container".to_string())?;
 
     let track_id = track.id;
-    let sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
+    let mut sample_rate = track.codec_params.sample_rate.unwrap_or(44100);
     let total_frames = track.codec_params.n_frames;
 
     let mut decoder = symphonia::default::get_codecs()
@@ -113,6 +119,9 @@ fn decode_media_source(
         match decoder.decode(&packet) {
             Ok(audio_buf) => {
                 let spec = *audio_buf.spec();
+                if spec.rate > 0 {
+                    sample_rate = spec.rate;
+                }
                 let channels = spec.channels.count();
                 let frames = audio_buf.frames();
                 let mut sample_buf = SampleBuffer::<f32>::new(frames as u64, spec);
