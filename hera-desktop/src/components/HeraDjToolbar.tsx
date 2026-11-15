@@ -11,6 +11,7 @@ import {
   exportCrateToDjSoftware,
   type DjExportFormat,
 } from '../lib/bridge-hera';
+import { useScannerStore } from '../lib/scanner-v3';
 import useLibraryStore from '../lib/store';
 import Icon from './Icon';
 
@@ -50,6 +51,8 @@ export default function HeraDjToolbar({
     'spine' | 'export' | 'cancel' | null
   >(null);
   const refreshing = useLibraryStore((state) => state.refreshing);
+  const { total: scannerTotal, fastDone } = useScannerStore();
+  const isScanActive = refreshing || (scannerTotal > 0 && fastDone < scannerTotal);
   const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -76,6 +79,7 @@ export default function HeraDjToolbar({
     const paths = Array.isArray(selected) ? selected : [selected];
     if (paths.length > 0) {
       await LibraryAPI.addLibraryFolders(paths);
+      void LibraryAPI.scan();
     }
   };
 
@@ -176,7 +180,7 @@ export default function HeraDjToolbar({
       </div>
 
       <div {...stylex.props(styles.rightActions)}>
-        {refreshing ? (
+        {isScanActive ? (
           <button
             type="button"
             onClick={() => void handleCancelScan()}

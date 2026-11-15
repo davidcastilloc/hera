@@ -1,7 +1,7 @@
 import { Trans, useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { Link, createFileRoute } from '@tanstack/react-router';
 import { ask, open } from '@tauri-apps/plugin-dialog';
 import { useCallback } from 'react';
 
@@ -13,6 +13,7 @@ import Button from '../elements/Button';
 import Flexbox from '../elements/Flexbox';
 import useInvalidate, { useInvalidateCallback } from '../hooks/useInvalidate';
 import { configQuery } from '../lib/queries';
+import { useScannerStore } from '../lib/scanner-v3';
 import useLibraryStore from '../lib/store';
 
 export const Route = createFileRoute('/settings/library')({
@@ -24,6 +25,11 @@ function ViewSettingsLibrary() {
   const libraryFolders = config.library_folders;
 
   const isLibraryRefreshing = useLibraryStore((state) => state.refreshing);
+  const { total, fastDone, fullDone, tracksPerSec, etaSec, governorActive } =
+    useScannerStore();
+  const isScanningActive =
+    isLibraryRefreshing || (total > 0 && fastDone < total);
+
   const invalidate = useInvalidate();
   const { t } = useLingui();
 
@@ -44,6 +50,52 @@ function ViewSettingsLibrary() {
 
   return (
     <>
+      {isScanningActive && (
+        <div {...stylex.props(styles.scanProgressCard)}>
+          <div {...stylex.props(styles.scanCardHeader)}>
+            <div {...stylex.props(styles.scanCardTitleRow)}>
+              <span {...stylex.props(styles.scanLiveDot)} />
+              <span {...stylex.props(styles.scanCardTitle)}>
+                {governorActive
+                  ? 'Escaneo en Modo Cabina (1 hilo activo)'
+                  : 'Escaneando biblioteca en vivo'}
+              </span>
+            </div>
+            <Link to="/library" {...stylex.props(styles.liveLibraryLink)}>
+              Ver pistas entrando en vivo →
+            </Link>
+          </div>
+          <div {...stylex.props(styles.scanCardMetrics)}>
+            <div {...stylex.props(styles.scanMetricItem)}>
+              <span {...stylex.props(styles.scanMetricLabel)}>Progreso</span>
+              <span {...stylex.props(styles.scanMetricValue)}>
+                {total > 0 ? `${fastDone} / ${total}` : 'Detectando…'}
+              </span>
+            </div>
+            <div {...stylex.props(styles.scanMetricItem)}>
+              <span {...stylex.props(styles.scanMetricLabel)}>Velocidad</span>
+              <span {...stylex.props(styles.scanMetricValue)}>
+                {tracksPerSec.toFixed(1)} pistas/s
+              </span>
+            </div>
+            {etaSec > 0 && (
+              <div {...stylex.props(styles.scanMetricItem)}>
+                <span {...stylex.props(styles.scanMetricLabel)}>Tiempo restante</span>
+                <span {...stylex.props(styles.scanMetricValue)}>~{etaSec}s</span>
+              </div>
+            )}
+            {fullDone > 0 && (
+              <div {...stylex.props(styles.scanMetricItem)}>
+                <span {...stylex.props(styles.scanMetricLabel)}>Hot Cues</span>
+                <span {...stylex.props(styles.scanMetricValue)}>
+                  {fullDone} / {total}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <Setting.Section>
         <Setting.Title>
           <Trans>Files</Trans>
@@ -162,6 +214,75 @@ function ViewSettingsLibrary() {
 }
 
 const styles = stylex.create({
+  scanProgressCard: {
+    backgroundColor: '#12161d',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '8px',
+    padding: '16px 20px',
+    marginBottom: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '12px',
+  },
+  scanCardHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: '12px',
+    flexWrap: 'wrap',
+  },
+  scanCardTitleRow: {
+    display: 'flex',
+    alignItems: 'center',
+    columnGap: '8px',
+  },
+  scanLiveDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '999px',
+    backgroundColor: '#14b8a6',
+  },
+  scanCardTitle: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#edeff3',
+  },
+  liveLibraryLink: {
+    color: '#2dd4bf',
+    fontSize: '13px',
+    fontWeight: 600,
+    textDecoration: 'none',
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '4px',
+    transition: 'opacity 0.15s ease',
+  },
+  scanCardMetrics: {
+    display: 'flex',
+    alignItems: 'center',
+    columnGap: '24px',
+    rowGap: '8px',
+    flexWrap: 'wrap',
+  },
+  scanMetricItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '2px',
+  },
+  scanMetricLabel: {
+    fontSize: '11px',
+    color: '#8e98a8',
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+  },
+  scanMetricValue: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#edeff3',
+    fontVariantNumeric: 'tabular-nums',
+  },
   libraryFolders: {
     listStyle: 'none',
     paddingBlock: '8px',

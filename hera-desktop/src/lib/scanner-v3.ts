@@ -1,17 +1,30 @@
 import { invoke } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 
+import type { HotCuePin, Track } from '../generated/typings';
+
+export type TrackWithScanMeta = Track & {
+  scan_level?: number | null;
+  is_transition_candidate?: boolean | null;
+  is_fake_320kbps?: boolean | null;
+  waveform_peaks_blob?: number[] | null;
+};
+
 export interface ScannerRowPatch {
   track_id: string;
   bpm?: number | null;
   camelot?: string | null;
   energy?: number | null;
+  duration?: number | null;
+  hot_cues?: HotCuePin[] | null;
   scan_level?: number | null;
   is_transition_candidate?: boolean | null;
   is_fake_320kbps?: boolean | null;
 }
 
 export interface ScannerTelemetry {
+  phase?: 'indexing' | 'analyzing' | 'idle';
+  indexedDone?: number;
   fastDone: number;
   fullDone: number;
   total: number;
@@ -23,13 +36,50 @@ export interface ScannerTelemetry {
 interface ScannerStoreState extends ScannerTelemetry {
   isPointerInsideTable: boolean;
   pendingFrozenPatches: ScannerRowPatch[];
+  recentlyUpdatedIds: Record<string, number>;
   setTelemetry: (t: Partial<ScannerTelemetry>) => void;
   setPointerInsideTable: (inside: boolean) => void;
   queueFrozenPatches: (patches: ScannerRowPatch[]) => void;
   clearFrozenPatches: () => ScannerRowPatch[];
+  markTracksRecentlyUpdated: (ids: string[]) => void;
+}
+
+let recentGlowCleanupTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleRecentGlowCleanup(
+  get: () => ScannerStoreState,
+  set: (updater: (s: ScannerStoreState) => Partial<ScannerStoreState>) => void,
+) {
+  if (recentGlowCleanupTimer) clearTimeout(recentGlowCleanupTimer);
+  recentGlowCleanupTimer = setTimeout(() => {
+    const currentNow = Date.now();
+    const currentMap = get().recentlyUpdatedIds;
+    const nextMap: Record<string, number> = {};
+    let changed = false;
+
+    for (const [id, ts] of Object.entries(currentMap)) {
+      if (currentNow - ts < 750) {
+        nextMap[id] = ts;
+      } else {
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      set((state) => ({ ...state, recentlyUpdatedIds: nextMap }));
+    }
+
+    if (Object.keys(nextMap).length > 0) {
+      scheduleRecentGlowCleanup(get, set);
+    } else {
+      recentGlowCleanupTimer = null;
+    }
+  }, 780);
 }
 
 export const useScannerStore = create<ScannerStoreState>((set, get) => ({
+  phase: 'idle',
+  indexedDone: 0,
   fastDone: 0,
   fullDone: 0,
   total: 0,
@@ -38,6 +88,7 @@ export const useScannerStore = create<ScannerStoreState>((set, get) => ({
   governorActive: false,
   isPointerInsideTable: false,
   pendingFrozenPatches: [],
+  recentlyUpdatedIds: {},
   setTelemetry: (t) => set((state) => ({ ...state, ...t })),
   setPointerInsideTable: (inside) => set({ isPointerInsideTable: inside }),
   queueFrozenPatches: (patches) =>
@@ -49,7 +100,23 @@ export const useScannerStore = create<ScannerStoreState>((set, get) => ({
     set({ pendingFrozenPatches: [] });
     return pending;
   },
+  markTracksRecentlyUpdated: (ids) => {
+    if (!ids || ids.length === 0) return;
+    const now = Date.now();
+    set((state) => {
+      const next = { ...state.recentlyUpdatedIds };
+      for (const id of ids) {
+        next[id] = now;
+      }
+      return { ...state, recentlyUpdatedIds: next };
+    });
+    scheduleRecentGlowCleanup(get, set);
+  },
 }));
+
+export function markTracksRecentlyUpdated(ids: string[]): void {
+  useScannerStore.getState().markTracksRecentlyUpdated(ids);
+}
 
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 let viewportTimer: ReturnType<typeof setTimeout> | null = null;
