@@ -17,7 +17,7 @@ use crate::libs::database::{DB, SUPPORTED_PLAYLISTS_EXTENSIONS, SUPPORTED_TRACKS
 use crate::libs::error::{AnyResult, MuseeksError, handle_fatal_error};
 use crate::libs::events::IPCEvent;
 use crate::libs::playlist::Playlist;
-use crate::libs::track::{Track, TrackGroup, get_track_from_file, get_track_id_for_path};
+use crate::libs::track::{Track, TrackGroup, get_indexed_track_fast, get_track_id_for_path};
 use crate::libs::utils::{TimeLogger, scan_dirs};
 
 use super::config::get_storage_dir;
@@ -187,7 +187,7 @@ async fn scan_library<R: Runtime>(
                             }
                         }
 
-                        let mut track = get_track_from_file(path).ok()?;
+                        let mut track = get_indexed_track_fast(path).ok()?;
 
                         // Filter out short SFX / voice notes < 25 seconds
                         if track.duration < 25 {
@@ -209,6 +209,17 @@ async fn scan_library<R: Runtime>(
                     .collect();
 
                 scanned_tracks.extend(chunk_results);
+                let _ = app_handle.emit(
+                    "hera:scanner-telemetry",
+                    serde_json::json!({
+                        "fastDone": scanned_tracks.len(),
+                        "fullDone": 0,
+                        "total": total_tracks,
+                        "tracksPerSec": 120.0,
+                        "etaSec": 0,
+                        "governorActive": false
+                    }),
+                );
 
                 // 15ms cooperative sleep between chunks to keep CPU cool and prevent audio stutter
                 std::thread::sleep(std::time::Duration::from_millis(15));

@@ -516,6 +516,120 @@ pub fn get_tracks_from_paths(mut files: Vec<PathBuf>) -> Vec<AnyResult<Track>> {
         .collect::<Vec<_>>()
 }
 
+pub fn get_indexed_track_fast(path: &PathBuf) -> AnyResult<Track> {
+    let id = get_track_id_for_path(path)?;
+    let (stem_artist, stem_title, stem_bpm, stem_camelot) = parse_filename_metadata(path);
+    let ext_lower = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|s| s.to_ascii_lowercase())
+        .unwrap_or_default();
+    let is_video = matches!(ext_lower.as_str(), "mp4" | "m4v" | "mov" | "webm" | "mkv");
+
+    let parse_opts = ParseOptions::new().read_cover_art(false);
+    match Probe::open(path).and_then(|p| p.options(parse_opts).read()) {
+        Ok(tagged_file) => {
+            let tag = tagged_file
+                .primary_tag()
+                .or_else(|| tagged_file.first_tag());
+            let properties = tagged_file.properties();
+            let duration = u32::try_from(properties.duration().as_secs()).unwrap_or(0);
+            let title = tag
+                .and_then(|t| t.title())
+                .map(|s| s.into_owned())
+                .filter(|s| !s.is_empty())
+                .unwrap_or(stem_title);
+            let artist = tag
+                .and_then(|t| t.artist())
+                .map(|s| s.into_owned())
+                .filter(|s| !s.is_empty())
+                .or(stem_artist)
+                .unwrap_or_else(|| "Unknown Artist".to_string());
+            let album = tag
+                .and_then(|t| t.album())
+                .map(|s| s.into_owned())
+                .filter(|s| !s.is_empty())
+                .unwrap_or_else(|| "Unknown".to_string());
+            let tag_bpm = tag
+                .and_then(|t| t.get_string(&ItemKey::Bpm))
+                .and_then(|s| s.trim().parse::<f64>().ok())
+                .filter(|b| (45.0..=230.0).contains(b))
+                .or(stem_bpm);
+            let tag_camelot = tag
+                .and_then(|t| t.get_string(&ItemKey::InitialKey))
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .or(stem_camelot);
+
+            Ok(Track {
+                id,
+                path: path.to_string_lossy().into_owned(),
+                title,
+                album,
+                album_artist: artist.clone(),
+                artists: vec![artist],
+                genres: Vec::new(),
+                year: tag.and_then(|t| t.year()).map(|y| y as u16),
+                duration,
+                track_no: tag.and_then(|t| t.track()),
+                track_of: tag.and_then(|t| t.track_total()),
+                disk_no: tag.and_then(|t| t.disk()),
+                disk_of: tag.and_then(|t| t.disk_total()),
+                is_compilation: false,
+                bpm: tag_bpm,
+                camelot: tag_camelot,
+                energy: None,
+                hera_seal: None,
+                is_video: Some(is_video),
+                is_mix_over_10m: Some(duration > 600),
+                has_audio_skips: Some(false),
+                is_variable_bpm: Some(false),
+                entry_bpm: None,
+                exit_bpm: None,
+                hot_cues: None,
+                scan_level: Some(0),
+                is_transition_candidate: None,
+                is_fake_320kbps: None,
+                waveform_peaks_blob: None,
+            })
+        }
+        Err(_) => {
+            let artist = stem_artist.unwrap_or_else(|| "Unknown Artist".to_string());
+            Ok(Track {
+                id,
+                path: path.to_string_lossy().into_owned(),
+                title: stem_title,
+                album: "Single / Cabina".to_string(),
+                album_artist: artist.clone(),
+                artists: vec![artist],
+                genres: Vec::new(),
+                year: None,
+                duration: 0,
+                track_no: None,
+                track_of: None,
+                disk_no: None,
+                disk_of: None,
+                is_compilation: false,
+                bpm: stem_bpm,
+                camelot: stem_camelot,
+                energy: None,
+                hera_seal: None,
+                is_video: Some(is_video),
+                is_mix_over_10m: Some(false),
+                has_audio_skips: Some(false),
+                is_variable_bpm: Some(false),
+                entry_bpm: None,
+                exit_bpm: None,
+                hot_cues: None,
+                scan_level: Some(0),
+                is_transition_candidate: None,
+                is_fake_320kbps: None,
+                waveform_peaks_blob: None,
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
