@@ -12,6 +12,8 @@ mod command_queue;
 #[cfg(feature = "audio-device")]
 pub mod cpal_backend;
 mod decoder;
+#[cfg(not(target_arch = "wasm32"))]
+mod decoder_ffmpeg;
 #[cfg(feature = "native")]
 pub mod dsp_chain;
 #[cfg(all(test, feature = "native"))]

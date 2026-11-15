@@ -87,19 +87,70 @@ impl PreallocatedDeckBuffer {
     pub fn decode_from_bytes(bytes: &[u8], ext_hint: Option<&str>) -> Result<Self, String> {
         let cursor = Cursor::new(bytes.to_vec());
         let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
-        decode_media_source(mss, ext_hint)
+        decode_media_source(mss, ext_hint, None)
     }
 
     /// Stream-decode an audio file directly from disk via `std::fs::File` and `MediaSourceStream`.
     pub fn decode_from_file(path: &Path) -> Result<Self, String> {
-        let file = std::fs::File::open(path)
-            .map_err(|e| format!("Failed to open audio file {}: {e}", path.display()))?;
+        Self::decode_from_file_with_cues(path, None)
+    }
+
+    /// Stream-decode an audio/video file, optionally reusing precomputed Hot Cues (`< 80 ms` load).
+    pub fn decode_from_file_with_cues(
+        path: &Path,
+        known_cues_sec: Option<[f64; 4]>,
+    ) -> Result<Self, String> {
         let ext = path
             .extension()
             .and_then(|e| e.to_str())
             .map(|s| s.to_lowercase());
-        let mss = MediaSourceStream::new(Box::new(file), Default::default());
-        decode_media_source(mss, ext.as_deref())
+
+        #[cfg(not(target_arch = "wasm32"))]
+        if matches!(ext.as_deref(), Some("webm" | "mkv" | "flv")) {
+            let (interleaved_stereo, sample_rate) =
+                super::decoder_ffmpeg::decode_stereo_via_ffmpeg(path)?;
+            return Ok(Self::build_from_stereo(
+                interleaved_stereo,
+                sample_rate,
+                known_cues_sec,
+            ));
+        }
+
+        let symphonia_res = std::fs::File::open(path)
+            .map_err(|e| format!("Failed to open audio file {}: {e}", path.display()))
+            .and_then(|file| {
+                let mss = MediaSourceStream::new(Box::new(file), Default::default());
+                decode_media_source(mss, ext.as_deref(), known_cues_sec)
+            });
+
+        #[cfg(not(target_arch = "wasm32"))]
+        if symphonia_res.is_err() {
+            if let Ok((interleaved_stereo, sample_rate)) =
+                super::decoder_ffmpeg::decode_stereo_via_ffmpeg(path)
+            {
+                return Ok(Self::build_from_stereo(
+                    interleaved_stereo,
+                    sample_rate,
+                    known_cues_sec,
+                ));
+            }
+        }
+
+        symphonia_res
+    }
+
+    fn build_from_stereo(
+        interleaved_stereo: Vec<f32>,
+        sample_rate: u32,
+        known_cues_sec: Option<[f64; 4]>,
+    ) -> Self {
+        let total_frames = (interleaved_stereo.len() / 2) as u64;
+        let hot_cue_frames = match known_cues_sec {
+            Some(secs) => secs.map(|s| (s.max(0.0) * f64::from(sample_rate)).round() as u64),
+            None => compute_hot_cue_frames(&interleaved_stereo, sample_rate, total_frames),
+        };
+        Self::from_stereo_frames(interleaved_stereo, sample_rate, hot_cue_frames)
+            .expect("build_from_stereo: non-empty stereo")
     }
 
     /// Total number of stereo `(L, R)` sample frames in this buffer.
@@ -137,6 +188,7 @@ pub fn load_deck_buffer_from_file(path: &Path) -> Result<PreallocatedDeckBuffer,
 fn decode_media_source(
     mss: MediaSourceStream,
     ext_hint: Option<&str>,
+    known_cues_sec: Option<[f64; 4]>,
 ) -> Result<PreallocatedDeckBuffer, String> {
     let mut hint = Hint::new();
     if let Some(ext) = ext_hint {
@@ -154,11 +206,17 @@ fn decode_media_source(
 
     let mut format = probed.format;
     let track = format
-        .default_track()
+        .tracks()
+        .iter()
+        .find(|t| {
+            t.codec_params.codec != symphonia::core::codecs::CODEC_TYPE_NULL
+                && (t.codec_params.sample_rate.is_some() || t.codec_params.channels.is_some())
+        })
+        .or_else(|| format.default_track())
         .ok_or_else(|| "No decodable audio track found in container".to_string())?;
 
     let track_id = track.id;
-    let sample_rate = track.codec_params.sample_rate.unwrap_or(44_100).max(1);
+    let mut sample_rate = track.codec_params.sample_rate.unwrap_or(44_100).max(1);
     let reserve_frames = track
         .codec_params
         .n_frames
@@ -193,6 +251,9 @@ fn decode_media_source(
         match decoder.decode(&packet) {
             Ok(audio_buf) => {
                 let spec = *audio_buf.spec();
+                if spec.rate > 0 {
+                    sample_rate = spec.rate;
+                }
                 let channels = spec.channels.count();
                 let frames = audio_buf.frames();
                 if frames == 0 || channels == 0 {
@@ -232,9 +293,11 @@ fn decode_media_source(
         return Err("Decoded audio stream contains zero samples".to_string());
     }
 
-    let total_frames = (interleaved_stereo.len() / 2) as u64;
-    let hot_cue_frames = compute_hot_cue_frames(&interleaved_stereo, sample_rate, total_frames);
-    PreallocatedDeckBuffer::from_stereo_frames(interleaved_stereo, sample_rate, hot_cue_frames)
+    Ok(PreallocatedDeckBuffer::build_from_stereo(
+        interleaved_stereo,
+        sample_rate,
+        known_cues_sec,
+    ))
 }
 
 fn compute_hot_cue_frames(
