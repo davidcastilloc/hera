@@ -84,6 +84,10 @@
     "hera-agent:allow-start-agent-turn",
     "hera-agent:allow-cancel-agent-turn",
     "hera-agent:allow-resolve-agent-approval",
+    "hera-dj:allow-scanner-boost-viewport",
+    "hera-dj:allow-scanner-prewarm-track",
+    "hera-dj:allow-scanner-notify-deck-track",
+    "hera-dj:allow-scanner-set-deck-playing",
     "sleepblocker:allow-enable",
     "sleepblocker:allow-disable",
     "mcp-bridge:default"

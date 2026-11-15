@@ -3,6 +3,7 @@ mod audio_transport;
 mod bridge_p2p;
 mod mini_overlay;
 mod p2p_download;
+mod scanner_v3;
 #[cfg(test)]
 mod tests;
 mod virtualdj_live;
@@ -219,6 +220,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            scanner_v3::scanner_boost_viewport,
+            scanner_v3::scanner_prewarm_track,
+            scanner_v3::scanner_notify_deck_track,
+            scanner_v3::scanner_set_deck_playing,
             compute_style_dna,
             export_crate,
             build_dj_set_spine,

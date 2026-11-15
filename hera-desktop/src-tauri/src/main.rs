@@ -3,7 +3,6 @@
 
 mod libs;
 mod plugins;
-mod scanner_ipc;
 
 use libs::init::init;
 use libs::utils::get_theme_from_name;
