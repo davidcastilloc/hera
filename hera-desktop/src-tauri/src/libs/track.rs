@@ -69,6 +69,18 @@ pub struct Track {
     pub is_video: Option<bool>,
     #[sqlx(default)]
     #[ts(optional)]
+    pub scan_level: Option<i64>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub is_transition_candidate: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub is_fake_320kbps: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub waveform_peaks_blob: Option<Vec<u8>>,
+    #[sqlx(default)]
+    #[ts(optional)]
     pub is_mix_over_10m: Option<bool>,
     #[sqlx(default)]
     #[ts(optional)]
@@ -411,6 +423,10 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                 entry_bpm: None,
                 exit_bpm: None,
                 hot_cues: Some(hot_cues),
+                scan_level: Some(1),
+                is_transition_candidate: None,
+                is_fake_320kbps: None,
+                waveform_peaks_blob: None,
             })
         }
         Err(err) => {
@@ -455,6 +471,10 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                     entry_bpm: None,
                     exit_bpm: None,
                     hot_cues: Some(hot_cues),
+                    scan_level: Some(1),
+                    is_transition_candidate: None,
+                    is_fake_320kbps: None,
+                    waveform_peaks_blob: None,
                 });
             }
             warn!("Failed to read audio file: \"{}\". File {:?}", err, path);

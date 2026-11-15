@@ -217,19 +217,25 @@ impl DB {
      * unique key (like track.path)
      */
     pub async fn insert_tracks(&mut self, tracks: Vec<Track>) -> AnyResult<()> {
-        let mut tx = self.connection.begin().await?;
+        for chunk in tracks.chunks(1000) {
+            let mut tx = self.connection.begin().await?;
 
-        for track in tracks {
-            sqlx::query(
-                r#"
-                INSERT INTO tracks (
-                    id, path, title, album, album_artist, artists, genres, year,
-                    duration, track_no, track_of, disk_no, disk_of, is_compilation,
-                    bpm, camelot, energy, hera_seal, is_video, is_mix_over_10m,
-                    has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                "#,
-            )
+            for track in chunk {
+                sqlx::query(
+                    r#"
+                    INSERT INTO tracks (
+                        id, path, title, album, album_artist, artists, genres, year,
+                        duration, track_no, track_of, disk_no, disk_of, is_compilation,
+                        bpm, camelot, energy, hera_seal, is_video, is_mix_over_10m,
+                        has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(path) DO UPDATE SET
+                        title = excluded.title,
+                        bpm = excluded.bpm,
+                        camelot = excluded.camelot,
+                        scan_level = MAX(tracks.scan_level, excluded.scan_level)
+                    "#,
+                )
             .bind(&track.id)
             .bind(&track.path)
             .bind(&track.title)
@@ -260,6 +266,7 @@ impl DB {
         }
 
         tx.commit().await?;
+        }
         Ok(())
     }
 
