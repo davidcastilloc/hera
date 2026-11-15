@@ -3,7 +3,8 @@ mod audio_transport;
 mod bridge_p2p;
 mod mini_overlay;
 mod p2p_download;
-mod scanner_v3;
+pub mod scanner_v3;
+mod scanner_worker;
 #[cfg(test)]
 mod tests;
 mod virtualdj_live;
@@ -209,6 +210,7 @@ pub async fn scan_ai_connectivity(
 #[tauri::command]
 pub async fn cancel_library_scan() -> Result<bool, String> {
     workability::cancel_scan_flag();
+    scanner_v3::global_scheduler().clear_background_queues();
     Ok(true)
 }
 
@@ -217,6 +219,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::<R>::new("hera-dj")
         .setup(|app, _api| {
             app.manage(NativeAudioState(create_default_audio_backend()));
+            scanner_worker::spawn_scanner_daemon(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

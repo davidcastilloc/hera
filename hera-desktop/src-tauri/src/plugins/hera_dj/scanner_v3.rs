@@ -5,7 +5,12 @@ use hera_node_rs::scanner::scheduler::{ScanPriority, ScanScheduler};
 static GLOBAL_SCANNER_SCHEDULER: OnceLock<Arc<ScanScheduler>> = OnceLock::new();
 
 pub fn global_scheduler() -> &'static Arc<ScanScheduler> {
-    GLOBAL_SCANNER_SCHEDULER.get_or_init(|| Arc::new(ScanScheduler::new(4)))
+    GLOBAL_SCANNER_SCHEDULER.get_or_init(|| {
+        let workers = std::thread::available_parallelism()
+            .map(|n| (n.get() / 2).clamp(2, 6))
+            .unwrap_or(4);
+        Arc::new(ScanScheduler::new(workers))
+    })
 }
 
 #[tauri::command]
