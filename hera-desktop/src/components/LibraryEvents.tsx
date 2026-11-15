@@ -10,7 +10,7 @@ import {
   useScannerStore,
 } from '../lib/scanner-v3';
 import queryClient from '../lib/query-client';
-import { allTracksQuery } from '../hooks/useAllTracks';
+import { allTracksQuery } from '../lib/queries';
 
 /**
  * Handle Library-related app events, like refreshing and progress status
