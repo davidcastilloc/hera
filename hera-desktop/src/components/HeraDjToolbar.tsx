@@ -4,6 +4,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import LibraryAPI from '../api/LibraryAPI';
+import { ScannerStatusPill } from './ScannerStatusPill';
 import type { Track } from '../generated/typings';
 import {
   buildSetSpineForLibrary,
@@ -132,6 +133,7 @@ export default function HeraDjToolbar({
       <div {...stylex.props(styles.leftMeta)}>
         <h1 {...stylex.props(styles.crateTitle)}>{title}</h1>
         <span {...stylex.props(styles.budgetPill)}>{trackCountLabel}</span>
+        <ScannerStatusPill />
 
         {onMixesFilterChange ? (
           <div

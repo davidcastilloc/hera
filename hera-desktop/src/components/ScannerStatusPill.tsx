@@ -1,52 +1,34 @@
-import React from 'react';
+import * as stylex from '@stylexjs/stylex';
+import { useScannerStore } from '../lib/scanner-v3';
 
-export interface ScannerStatusPillProps {
-  fastDone: number;
-  fullDone: number;
-  total: number;
-  sortFrozen: boolean;
-  onUnfreezeSort?: () => void;
-}
+const styles = stylex.create({
+  pill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    fontSize: 12,
+    padding: '3px 10px',
+    borderRadius: 999,
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    color: '#14b8a6',
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+  },
+});
 
-export const ScannerStatusPill: React.FC<ScannerStatusPillProps> = ({
-  fastDone,
-  fullDone,
-  total,
-  sortFrozen,
-  onUnfreezeSort,
-}) => {
-  if (total === 0) return null;
+export function ScannerStatusPill() {
+  const { fastDone, fullDone, total, tracksPerSec, governorActive } =
+    useScannerStore();
+
+  if (total === 0 || (fastDone >= total && fullDone >= total)) {
+    return null;
+  }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-      <span
-        style={{
-          padding: '2px 8px',
-          borderRadius: 999,
-          background: 'rgba(20, 184, 166, 0.14)',
-          color: '#14b8a6',
-          fontWeight: 600,
-        }}
-      >
-        ⚡ FAST {fastDone}/{total} · FULL {fullDone}/{total}
-      </span>
-      {sortFrozen && (
-        <button
-          type="button"
-          onClick={onUnfreezeSort}
-          style={{
-            padding: '2px 8px',
-            borderRadius: 999,
-            border: '1px solid rgba(250, 204, 21, 0.4)',
-            background: 'rgba(250, 204, 21, 0.12)',
-            color: '#facc15',
-            cursor: 'pointer',
-            fontSize: 11,
-          }}
-        >
-          Orden congelado · Actualizar
-        </button>
-      )}
-    </div>
+    <span {...stylex.props(styles.pill)}>
+      {governorActive ? 'Modo Cabina (1 hilo)' : `Escaneando ${tracksPerSec.toFixed(1)}/s`}
+      {' · '}
+      {fastDone}/{total}
+    </span>
   );
-};
+}

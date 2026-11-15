@@ -2,6 +2,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import * as stylex from '@stylexjs/stylex';
 import type React from 'react';
 
+import { cancelHoverPrewarm, scheduleHoverPrewarm } from '../lib/scanner-v3';
 import type { Track } from '../generated/typings';
 import useFormattedDuration from '../hooks/useFormattedDuration';
 import PlayingIndicator from './PlayingIndicator';
@@ -80,6 +81,8 @@ export default function TrackRow(props: Props) {
     // oxlint-disable-next-line jsx_a11y/click-events-have-key-events - given by ...listeners
     <li
       onDoubleClick={() => onPlaybackStart(track.id)}
+      onMouseEnter={() => scheduleHoverPrewarm(track.id)}
+      onMouseLeave={cancelHoverPrewarm}
       onMouseDown={(e) => onTrackSelect(e, track.id, index)}
       onClick={(e) => onTrackSelect(e, track.id, index)}
       onContextMenu={(e) => onContextMenu(e, track.id, index)}

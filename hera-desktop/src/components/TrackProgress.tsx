@@ -8,6 +8,7 @@ import usePlayingTrackCurrentTime from '../hooks/usePlayingTrackCurrentTime';
 import { getFourHotCuesForTrack } from '../lib/bridge-hera';
 import player from '../lib/player';
 import LiveSpectrumCanvas from './LiveSpectrumCanvas';
+import { WaveformPeaksCanvas } from './WaveformPeaksCanvas';
 
 type Props = {
   trackPlaying: Track;
@@ -66,6 +67,10 @@ export default function TrackProgress(props: Props) {
         onMouseLeave={hideTooltip}
       >
         <Slider.Track {...stylex.props(styles.trackProgress)}>
+          <WaveformPeaksCanvas
+            peaks={trackPlaying.waveform_peaks_blob}
+            progressPct={(elapsed / Math.max(1, trackPlaying.duration)) * 100}
+          />
           <LiveSpectrumCanvas />
           <Slider.Indicator {...stylex.props(styles.trackRange)} />
           {hotCues.map((cue) => {
