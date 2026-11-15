@@ -61,18 +61,23 @@ pub fn run_full_pass_from_pcm(
     let key_res = detect_song_key(samples, sample_rate, &mut planner);
 
     let dur_sec = (samples.len() as f64) / (sample_rate.max(8_000) as f64);
-    let bar_sec = (60.0 / bpm_res.bpm.max(60.0)) * 4.0;
     let first_beat = bpm_res.first_beat_sec.clamp(0.0, dur_sec.max(0.0));
-    let phrase_in = (first_beat + bar_sec * 8.0).min((dur_sec * 0.35).max(first_beat));
-    let main_drop = (first_beat + bar_sec * 16.0).min((dur_sec * 0.55).max(phrase_in));
-    let mix_out = (dur_sec - bar_sec * 8.0).max(main_drop);
-
-    let hot_cues = vec![
-        FullHotCue { num: 1, name: "1.1.1 Downbeat".into(), seconds: first_beat },
-        FullHotCue { num: 2, name: "Phrase In".into(), seconds: phrase_in },
-        FullHotCue { num: 3, name: "Main Drop".into(), seconds: main_drop },
-        FullHotCue { num: 4, name: "Mix Out".into(), seconds: mix_out },
-    ];
+    let structure = crate::structure::analyze_structure_and_style(
+        samples,
+        sample_rate,
+        Some(dur_sec as f32),
+        Some(bpm_res.bpm as f32),
+    );
+    let hot_cues: Vec<FullHotCue> = structure
+        .hot_cues
+        .into_iter()
+        .take(4)
+        .map(|c| FullHotCue {
+            num: c.num,
+            name: c.name,
+            seconds: c.seconds as f64,
+        })
+        .collect();
 
     FullPassResult {
         bpm: bpm_res.bpm,
@@ -81,6 +86,16 @@ pub fn run_full_pass_from_pcm(
         hot_cues,
         waveform_peaks_blob: build_waveform_peaks_blob(samples, 256),
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run_full_pass_on_file(
+    path: &std::path::Path,
+    hint: Option<BpmHint>,
+    limiter: Option<&crate::bpm_engine::v2_core::audio_ingest::ProcessLimiter>,
+) -> Result<FullPassResult, crate::bpm_engine::v2_core::types::EngineError> {
+    let dec = crate::bpm_engine::v2_core::audio_ingest::load_audio_mono_native_sr(path, limiter)?;
+    Ok(run_full_pass_from_pcm(&dec.samples, dec.sample_rate, hint))
 }
 
 #[cfg(test)]

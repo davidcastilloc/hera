@@ -1,32 +1,64 @@
 use crate::forensics::audit_pcm_channels;
-#[cfg(not(target_arch = "wasm32"))]
-use crate::forensics::decode_audio_bytes;
 use crate::p2p::compute_hera_seal;
 use crate::structure::analyze_structure_and_style;
 use serde_json::{json, Value};
 
 pub(super) fn analyze_batch_args(args: &Value) -> Result<Value, String> {
-    let paths = args
+    let paths: Vec<String> = args
         .get("file_paths")
         .and_then(|v| v.as_array())
-        .ok_or_else(|| "`file_paths` array is required".to_string())?;
+        .ok_or_else(|| "`file_paths` array is required".to_string())?
+        .iter()
+        .filter_map(|v| v.as_str().map(str::to_string))
+        .collect();
     let bpm_hint = args
         .get("bpm_hint")
         .and_then(|v| v.as_f64())
         .map(|f| f as f32);
-    let mut results = Vec::with_capacity(paths.len());
-    for p_val in paths {
-        if let Some(p_str) = p_val.as_str() {
-            let sub_arg = json!({
-                "file_path": p_str,
-                "bpm_hint": bpm_hint
-            });
-            match analyze_single_track_arg(&sub_arg) {
-                Ok(r) => results.push(r),
-                Err(e) => results.push(json!({ "file_path": p_str, "error": e })),
+
+    #[cfg(not(target_arch = "wasm32"))]
+    let results: Vec<Value> = {
+        use std::sync::{atomic::{AtomicUsize, Ordering}, Mutex};
+        let workers = std::thread::available_parallelism()
+            .map(|n| n.get().saturating_sub(1).max(1))
+            .unwrap_or(2)
+            .min(paths.len().max(1));
+        let next_idx = AtomicUsize::new(0);
+        let out = Mutex::new(vec![Value::Null; paths.len()]);
+        std::thread::scope(|s| {
+            for _ in 0..workers {
+                s.spawn(|| {
+                    loop {
+                        let i = next_idx.fetch_add(1, Ordering::Relaxed);
+                        if i >= paths.len() {
+                            break;
+                        }
+                        let p_str = &paths[i];
+                        let sub_arg = json!({ "file_path": p_str, "bpm_hint": bpm_hint });
+                        let val = match analyze_single_track_arg(&sub_arg) {
+                            Ok(r) => r,
+                            Err(e) => json!({ "file_path": p_str, "error": e }),
+                        };
+                        if let Ok(mut guard) = out.lock() {
+                            guard[i] = val;
+                        }
+                    }
+                });
             }
-        }
-    }
+        });
+        out.into_inner().unwrap_or_default()
+    };
+
+    #[cfg(target_arch = "wasm32")]
+    let results: Vec<Value> = paths
+        .iter()
+        .map(|p_str| {
+            let sub_arg = json!({ "file_path": p_str, "bpm_hint": bpm_hint });
+            analyze_single_track_arg(&sub_arg)
+                .unwrap_or_else(|e| json!({ "file_path": p_str, "error": e }))
+        })
+        .collect();
+
     Ok(json!({
         "processed": results.len(),
         "results": results
@@ -42,25 +74,25 @@ pub(super) fn analyze_single_track_arg(args: &Value) -> Result<Value, String> {
     if let Some(fp) = args.get("file_path").and_then(|v| v.as_str()) {
         #[cfg(not(target_arch = "wasm32"))]
         {
-            let bytes =
-                std::fs::read(fp).map_err(|e| format!("Failed to read audio file `{fp}`: {e}"))?;
-            let ext = std::path::Path::new(fp)
+            let path = std::path::Path::new(fp);
+            let ext = path
                 .extension()
                 .and_then(|e| e.to_str())
                 .unwrap_or("wav");
-            let decoded = decode_audio_bytes(&bytes, Some(ext), 90.0)?;
-            let forensics = audit_pcm_channels(
-                &decoded.left,
-                decoded.right.as_deref(),
-                decoded.sample_rate,
-                ext,
-            );
-            let structure = analyze_structure_and_style(
-                &decoded.mono,
-                decoded.sample_rate,
-                Some(decoded.duration_seconds),
+            let dec = crate::bpm_engine::v2_core::audio_ingest::load_audio_mono_native_sr(path, None)
+                .map_err(|e| format!("Failed to decode `{fp}`: {e:?}"))?;
+            let forensics = audit_pcm_channels(&dec.samples, None, dec.sample_rate, ext);
+            let mut structure = analyze_structure_and_style(
+                &dec.samples,
+                dec.sample_rate,
+                Some(dec.duration_sec as f32),
                 bpm_hint,
             );
+            let v2_key = crate::bpm_engine::v2_core::key_engine::detect_song_key_auto(
+                &dec.samples,
+                dec.sample_rate,
+            );
+            structure.camelot_key = v2_key.camelot;
             let seal = compute_hera_seal(
                 fp,
                 structure.bpm,

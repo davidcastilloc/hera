@@ -107,13 +107,8 @@ impl PreallocatedDeckBuffer {
 
         #[cfg(not(target_arch = "wasm32"))]
         if matches!(ext.as_deref(), Some("webm" | "mkv" | "flv")) {
-            let (interleaved_stereo, sample_rate) =
-                super::decoder_ffmpeg::decode_stereo_via_ffmpeg(path)?;
-            return Ok(Self::build_from_stereo(
-                interleaved_stereo,
-                sample_rate,
-                known_cues_sec,
-            ));
+            let (stereo, sr) = super::decoder_ffmpeg::decode_stereo_via_ffmpeg(path)?;
+            return Ok(Self::build_from_stereo(stereo, sr, known_cues_sec));
         }
 
         let symphonia_res = std::fs::File::open(path)

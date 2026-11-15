@@ -56,6 +56,7 @@ const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
 /// Leaf-First sliced Rust module directories across the `v0.6.0` workspace.
 const SLICED_SUBMODULE_DIRS: &[(&str, usize)] = &[
     ("hera-rs/src/bpm_engine", 349),
+    ("hera-rs/src/scanner", 349),
     ("hera-rs/src/mcp", 349),
     ("hera-rs/src/code_mode", 349),
     ("hera-rs/src/dj_brain", 349),
