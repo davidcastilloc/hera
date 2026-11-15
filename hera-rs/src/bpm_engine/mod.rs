@@ -120,17 +120,62 @@ pub fn analyze_bpm_consensus(
         0.0
     };
 
-    // Layer 4: Consensus Arbiter (Mixxx QM-DSP + Beatgrid Phase Lock + Latin Matrix v2)
+    // Layer 4: Consensus Arbiter (Mixxx QM-DSP + Beatgrid Phase Lock + Latin Heuristics)
     let mut planner = rustfft::FftPlanner::<f32>::new();
-    let nov_v2 = v2_core::multiband_onset::extract_multiband_novelty(mono, sample_rate, 0.0, &mut planner);
-    let hint_v2 = external_hint.as_ref().map(|h| v2_core::hints::BpmHint {
-        bpm: h.bpm as f64,
-        source: v2_core::hints::HintSource::UserProvided,
-    });
+    let nov_v2 =
+        v2_core::multiband_onset::extract_multiband_novelty(mono, sample_rate, 0.0, &mut planner);
+    let has_genre_hint = external_hint
+        .as_ref()
+        .and_then(|h| h.genre.as_deref())
+        .is_some_and(|g| !g.trim().is_empty());
+    let is_latin_layer3 =
+        latin_res.rhythm_family == "Salsa" || latin_res.rhythm_family == "Tecnomerengue";
+    let hint_v2 = if has_genre_hint || is_latin_layer3 {
+        None
+    } else {
+        external_hint.as_ref().map(|h| v2_core::hints::BpmHint {
+            bpm: h.bpm as f64,
+            source: v2_core::hints::HintSource::UserProvided,
+        })
+    };
     let res_v2 = v2_core::consensus_ai::analyze_bpm_consensus_v2(&nov_v2, hint_v2);
-    let final_bpm = res_v2.bpm as f32;
-    let family_label = format!("{:?}", res_v2.detected_style);
-    let v2_confidence = res_v2.confidence as f32;
+    let v2_bpm = res_v2.bpm as f32;
+    let is_v2_club_veto = matches!(
+        res_v2.detected_style,
+        v2_core::latin_heuristics::GrooveStyle::FourOnTheFloorClub
+            | v2_core::latin_heuristics::GrooveStyle::UrbanLatinFourFourHybrid
+    );
+    let family_label = if latin_res.rhythm_family == "Tecnomerengue" {
+        "Tecnomerengue".to_string()
+    } else if latin_res.rhythm_family == "Salsa" && !is_v2_club_veto {
+        "Salsa".to_string()
+    } else if res_v2.detected_style == v2_core::latin_heuristics::GrooveStyle::MerengueDrive
+        && (128.0..=165.0).contains(&v2_bpm)
+    {
+        "Tecnomerengue".to_string()
+    } else if res_v2.detected_style == v2_core::latin_heuristics::GrooveStyle::SalsaTumbao {
+        "Salsa".to_string()
+    } else {
+        format!("{:?}", res_v2.detected_style)
+    };
+    let acoustic_bpm =
+        if family_label == "Salsa" && (80.0..=109.0).contains(&latin_res.candidate_bpm) {
+            latin_res.candidate_bpm
+        } else if family_label == "Tecnomerengue" {
+            if (128.0..=165.0).contains(&v2_bpm) {
+                v2_bpm
+            } else {
+                latin_res.candidate_bpm
+            }
+        } else {
+            v2_bpm
+        };
+    let final_bpm = arbitrate_bpm_consensus(acoustic_bpm, external_hint.as_ref(), &family_label);
+    let v2_confidence = if family_label == "Salsa" {
+        latin_res.confidence.max(res_v2.confidence)
+    } else {
+        res_v2.confidence
+    };
 
     let is_variable = window_res.is_variable || scaled_drift >= 2.0 || scaled_drift_pct >= 2.2;
     let stability_label = if is_variable {

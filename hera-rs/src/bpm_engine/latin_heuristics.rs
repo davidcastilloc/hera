@@ -75,9 +75,10 @@ pub fn evaluate_latin_heuristics(
         }
 
         if (80.0..=109.0).contains(&salsa_bpm) {
+            let deals_alias = (salsa_bpm - raw_bpm).abs() >= 0.5;
             let score_raw = beatgrid_phase_score(novelty, raw_bpm);
             let score_salsa = beatgrid_phase_score(novelty, salsa_bpm);
-            if score_salsa > score_raw * 1.02 {
+            if !deals_alias || score_salsa > score_raw * 1.02 {
                 return LatinClassification {
                     rhythm_family: "Salsa".to_string(),
                     candidate_bpm: salsa_bpm,
