@@ -4,21 +4,16 @@ use sqlx::sqlite::{SqliteAutoVacuum, SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{Connection, SqliteConnection};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use tauri::Emitter;
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use tokio::sync::{Mutex, MutexGuard};
 use ts_rs::TS;
 
-use crate::libs::database::{DB, SUPPORTED_PLAYLISTS_EXTENSIONS, SUPPORTED_TRACKS_EXTENSIONS};
+use crate::libs::database::{DB, SUPPORTED_PLAYLISTS_EXTENSIONS};
 use crate::libs::error::{AnyResult, MuseeksError, handle_fatal_error};
-use crate::libs::events::IPCEvent;
 use crate::libs::playlist::Playlist;
-use crate::libs::track::{Track, TrackGroup, get_indexed_track_fast, get_track_id_for_path};
-use crate::libs::utils::{TimeLogger, scan_dirs};
+use crate::libs::track::{Track, TrackGroup, get_track_id_for_path};
 
 use super::config::get_storage_dir;
 use hera_ipc::format_m3u_entry_path;
@@ -71,17 +66,17 @@ async fn setup() -> AnyResult<DB> {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/generated/typings.ts")]
 pub struct ScanProgress {
-    current: usize,
-    total: usize,
+    pub current: usize,
+    pub total: usize,
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "../../src/generated/typings.ts")]
 pub struct ScanResult {
-    track_count: usize,
-    track_failures: usize,
-    playlist_count: usize,
-    playlist_failures: usize,
+    pub track_count: usize,
+    pub track_failures: usize,
+    pub playlist_count: usize,
+    pub playlist_failures: usize,
 }
 
 /** ----------------------------------------------------------------------------
@@ -100,14 +95,12 @@ async fn scan_library<R: Runtime>(
     import_paths: Vec<PathBuf>,
     refresh: bool,
 ) -> AnyResult<ScanResult> {
-    let webview_window = window.get_webview_window("main");
+    let app_handle = window.app_handle().clone();
 
     info!("Importing paths to library:");
     for path in &import_paths {
         info!("  - {:?}", path)
     }
-
-    let mut scan_result = ScanResult::default();
 
     let existing_paths = if !refresh {
         let mut db = db_state.get_lock().await;
@@ -120,139 +113,24 @@ async fn scan_library<R: Runtime>(
         HashSet::new()
     };
 
-    let import_paths_for_scan = import_paths.clone();
-    let webview_for_scan = webview_window.clone();
-    let (tracks, track_failures, playlist_paths) = tauri::async_runtime::spawn_blocking(
-        move || -> AnyResult<(Vec<Track>, usize, Vec<PathBuf>)> {
-            let mut track_paths = scan_dirs(&import_paths_for_scan, &SUPPORTED_TRACKS_EXTENSIONS);
-            let scanned_paths_count = track_paths.len();
-
-            crate::plugins::hera_dj::workability::reset_scan_flag();
-
-            // Discard junk/system folders outright
-            track_paths.retain(|path| !crate::plugins::hera_dj::workability::is_junk_system_directory(path));
-
-            if !refresh {
-                info!(
-                    "Skipping {} files that are already in the library",
-                    existing_paths.len()
-                );
-                track_paths.retain(|path| !existing_paths.contains(path));
-            }
-
-            info!("Found {} files to import", track_paths.len());
-            info!(
-                "{} tracks already imported (they will be skipped)",
-                scanned_paths_count.saturating_sub(track_paths.len())
-            );
-
-            // Phase 1: Fast multi-software DB index (< 3s, 0% CPU)
-            let software_index = crate::plugins::hera_dj::workability::ExternalDjSoftwareIndex::build_fast_index();
-
-            let progress = Arc::new(AtomicUsize::new(1));
-            let total = track_paths.len();
-
-            if let Some(ref w) = webview_for_scan {
-                let _ = w.emit(
-                    IPCEvent::LibraryScanProgress.as_ref(),
-                    ScanProgress { current: 0, total },
-                );
-            }
-
-            info!("Importing audio metadata and DSP cues from {} files with thermal throttling", total);
-            let scan_logger = TimeLogger::new("Scanned all audio tracks".into());
-
-            // Phase 2: Chunked thermal execution (chunk = 8 tracks) with cooperative pause
-            let mut scanned_tracks = Vec::with_capacity(total);
-            for chunk in track_paths.chunks(8) {
-                // Check cancellation request (< 100ms response)
-                if crate::plugins::hera_dj::workability::is_scan_cancelled() {
-                    info!("Scan cancelled by user; committing tracks processed so far");
-                    break;
-                }
-
-                let chunk_results: Vec<Track> = chunk
-                    .iter()
-                    .filter_map(|path| {
-                        let p_current = progress.fetch_add(1, Ordering::SeqCst);
-                        if p_current % 10 == 0 || p_current == total {
-                            if let Some(ref w) = webview_for_scan {
-                                let _ = w.emit(
-                                    IPCEvent::LibraryScanProgress.as_ref(),
-                                    ScanProgress {
-                                        current: p_current,
-                                        total,
-                                    },
-                                );
-                            }
-                        }
-
-                        let mut track = get_indexed_track_fast(path).ok()?;
-
-                        // Filter out short SFX / voice notes < 25 seconds
-                        if track.duration < 25 {
-                            return None;
-                        }
-
-                        // Apply pre-computed metadata from VirtualDJ / Rekordbox if available (0% CPU)
-                        if let Some(cached) = software_index.lookup(path) {
-                            if let Some(bpm) = cached.bpm {
-                                track.bpm = Some(bpm);
-                            }
-                            if let Some(ref key) = cached.key {
-                                track.camelot = Some(key.clone());
-                            }
-                        }
-
-                        Some(track)
-                    })
-                    .collect();
-
-                scanned_tracks.extend(chunk_results);
-                let _ = app_handle.emit(
-                    "hera:scanner-telemetry",
-                    serde_json::json!({
-                        "fastDone": scanned_tracks.len(),
-                        "fullDone": 0,
-                        "total": total_tracks,
-                        "tracksPerSec": 120.0,
-                        "etaSec": 0,
-                        "governorActive": false
-                    }),
-                );
-
-                // 15ms cooperative sleep between chunks to keep CPU cool and prevent audio stutter
-                std::thread::sleep(std::time::Duration::from_millis(15));
-            }
-
-            let failures = track_paths.len().saturating_sub(scanned_tracks.len());
-            scan_logger.complete();
-
-            let found_playlists =
-                scan_dirs(&import_paths_for_scan, &SUPPORTED_PLAYLISTS_EXTENSIONS);
-            Ok((scanned_tracks, failures, found_playlists))
-        },
+    let scan_res = crate::libs::fast_library_scan::execute_streaming_library_scan(
+        &app_handle,
+        &db_state,
+        import_paths,
+        existing_paths,
+        refresh,
     )
-    .await
-    .map_err(|e| MuseeksError::Unknown(anyhow::anyhow!("Scan worker join error: {e}")))??;
+    .await?;
 
-    scan_result.track_count = tracks.len();
-    scan_result.track_failures = track_failures;
-    info!("{} tracks successfully scanned", tracks.len());
-    info!("{} tracks failed to be scanned", track_failures);
+    let mut scan_result = ScanResult {
+        track_count: scan_res.scanned_tracks_count,
+        track_failures: scan_res.track_failures,
+        playlist_count: 0,
+        playlist_failures: 0,
+    };
 
     let mut db = db_state.get_lock().await;
-    let db_insert_logger: TimeLogger = TimeLogger::new("Inserted tracks".into());
-
-    if refresh {
-        db.update_tracks(tracks).await?;
-    } else {
-        db.insert_tracks(tracks).await?;
-    }
-
-    db_insert_logger.complete();
-
-    let mut playlist_paths = playlist_paths;
+    let mut playlist_paths = scan_res.found_playlists;
     let existing_playlists_paths = db
         .get_all_playlists()
         .await?

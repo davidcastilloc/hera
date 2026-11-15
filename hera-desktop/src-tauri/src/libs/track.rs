@@ -526,6 +526,41 @@ pub fn get_indexed_track_fast(path: &PathBuf) -> AnyResult<Track> {
         .unwrap_or_default();
     let is_video = matches!(ext_lower.as_str(), "mp4" | "m4v" | "mov" | "webm" | "mkv");
 
+    if matches!(ext_lower.as_str(), "webm" | "mkv") {
+        let artist = stem_artist.unwrap_or_else(|| "Unknown Artist".to_string());
+        return Ok(Track {
+            id,
+            path: path.to_string_lossy().into_owned(),
+            title: stem_title,
+            album: "Single / Cabina".to_string(),
+            album_artist: artist.clone(),
+            artists: vec![artist],
+            genres: Vec::new(),
+            year: None,
+            duration: 0,
+            track_no: None,
+            track_of: None,
+            disk_no: None,
+            disk_of: None,
+            is_compilation: false,
+            bpm: stem_bpm,
+            camelot: stem_camelot,
+            energy: None,
+            hera_seal: None,
+            is_video: Some(true),
+            is_mix_over_10m: Some(false),
+            has_audio_skips: Some(false),
+            is_variable_bpm: Some(false),
+            entry_bpm: None,
+            exit_bpm: None,
+            hot_cues: None,
+            scan_level: Some(0),
+            is_transition_candidate: None,
+            is_fake_320kbps: None,
+            waveform_peaks_blob: None,
+        });
+    }
+
     let parse_opts = ParseOptions::new().read_cover_art(false);
     match Probe::open(path).and_then(|p| p.options(parse_opts).read()) {
         Ok(tagged_file) => {
@@ -551,15 +586,19 @@ pub fn get_indexed_track_fast(path: &PathBuf) -> AnyResult<Track> {
                 .filter(|s| !s.is_empty())
                 .unwrap_or_else(|| "Unknown".to_string());
             let tag_bpm = tag
-                .and_then(|t| t.get_string(&ItemKey::Bpm))
+                .and_then(|t| t.get_string(ItemKey::Bpm))
                 .and_then(|s| s.trim().parse::<f64>().ok())
                 .filter(|b| (45.0..=230.0).contains(b))
                 .or(stem_bpm);
             let tag_camelot = tag
-                .and_then(|t| t.get_string(&ItemKey::InitialKey))
+                .and_then(|t| t.get_string(ItemKey::InitialKey))
                 .map(|s| s.trim().to_string())
                 .filter(|s| !s.is_empty())
                 .or(stem_camelot);
+            let genres = tag
+                .and_then(|t| t.genre())
+                .map(|g| vec![g.into_owned()])
+                .unwrap_or_default();
 
             Ok(Track {
                 id,
@@ -568,8 +607,8 @@ pub fn get_indexed_track_fast(path: &PathBuf) -> AnyResult<Track> {
                 album,
                 album_artist: artist.clone(),
                 artists: vec![artist],
-                genres: Vec::new(),
-                year: tag.and_then(|t| t.year()).map(|y| y as u16),
+                genres,
+                year: tag.and_then(|t| t.date()).map(|d| d.year),
                 duration,
                 track_no: tag.and_then(|t| t.track()),
                 track_of: tag.and_then(|t| t.track_total()),

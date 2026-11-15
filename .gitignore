@@ -33,6 +33,8 @@ env/
 
 # External standalone binaries (downloaded via hera setup)
 bin/
+/hera-node.exe
+hera-node.exe
 
 # Testing and Type Checking
 .pytest_cache/

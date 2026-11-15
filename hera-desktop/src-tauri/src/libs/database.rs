@@ -56,6 +56,16 @@ pub fn content_type_for_extension(ext: &str) -> Option<&'static str> {
  * exposes databases for tracks and playlists
  * * -------------------------------------------------------------------------- */
 
+fn normalize_track(mut track: Track) -> Track {
+    if track.bpm.is_some_and(|b| b <= 0.0) {
+        track.bpm = None;
+    }
+    if track.camelot.as_deref() == Some("") {
+        track.camelot = None;
+    }
+    track
+}
+
 pub struct DB {
     pub connection: SqliteConnection,
 }
@@ -72,10 +82,21 @@ impl DB {
      * Get all the tracks (and their content) from the database
      */
     pub async fn get_all_tracks(&mut self) -> AnyResult<Vec<Track>> {
-        let tracks = sqlx::query_as::<_, Track>("SELECT * FROM tracks")
-            .fetch_all(&mut self.connection)
-            .await?;
-        Ok(tracks)
+        let tracks = sqlx::query_as::<_, Track>(
+            r#"
+            SELECT
+                id, path, title, album, album_artist, artists, genres, year, duration,
+                track_no, track_of, disk_no, disk_of, is_compilation, bpm, camelot,
+                energy, hera_seal, is_video, scan_level, is_transition_candidate,
+                is_fake_320kbps, NULL AS waveform_peaks_blob, is_mix_over_10m,
+                has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues
+            FROM tracks
+            "#,
+        )
+        .fetch_all(&mut self.connection)
+        .await?;
+
+        Ok(tracks.into_iter().map(normalize_track).collect())
     }
 
     /**
@@ -116,7 +137,7 @@ impl DB {
         }
 
         let tracks = query.fetch_all(&mut self.connection).await?;
-        Ok(tracks)
+        Ok(tracks.into_iter().map(normalize_track).collect())
     }
 
     /**
@@ -128,7 +149,7 @@ impl DB {
             .fetch_optional(&mut self.connection)
             .await?;
 
-        Ok(track)
+        Ok(track.map(normalize_track))
     }
 
     /**
@@ -227,15 +248,84 @@ impl DB {
                         id, path, title, album, album_artist, artists, genres, year,
                         duration, track_no, track_of, disk_no, disk_of, is_compilation,
                         bpm, camelot, energy, hera_seal, is_video, is_mix_over_10m,
-                        has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON CONFLICT(path) DO UPDATE SET
-                        title = excluded.title,
-                        bpm = excluded.bpm,
-                        camelot = excluded.camelot,
-                        scan_level = MAX(tracks.scan_level, excluded.scan_level)
+                        has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues,
+                        scan_level, is_transition_candidate, is_fake_320kbps, waveform_peaks_blob
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     "#,
                 )
+                .bind(&track.id)
+                .bind(&track.path)
+                .bind(&track.title)
+                .bind(&track.album)
+                .bind(&track.album_artist)
+                .bind(json!(&track.artists))
+                .bind(json!(&track.genres))
+                .bind(track.year)
+                .bind(track.duration)
+                .bind(track.track_no)
+                .bind(track.track_of)
+                .bind(track.disk_no)
+                .bind(track.disk_of)
+                .bind(track.is_compilation)
+                .bind(track.bpm.unwrap_or(0.0))
+                .bind(track.camelot.as_deref().unwrap_or(""))
+                .bind(track.energy.unwrap_or(0.80))
+                .bind(&track.hera_seal)
+                .bind(track.is_video.unwrap_or(false))
+                .bind(track.is_mix_over_10m.unwrap_or(false))
+                .bind(track.has_audio_skips.unwrap_or(false))
+                .bind(track.is_variable_bpm.unwrap_or(false))
+                .bind(track.entry_bpm)
+                .bind(track.exit_bpm)
+                .bind(json!(track.hot_cues.as_deref().unwrap_or(&[])))
+                .bind(track.scan_level.unwrap_or(0))
+                .bind(track.is_transition_candidate.unwrap_or(false))
+                .bind(track.is_fake_320kbps.unwrap_or(false))
+                .bind(&track.waveform_peaks_blob)
+                .execute(&mut *tx)
+                .await?;
+            }
+
+            tx.commit().await?;
+        }
+        Ok(())
+    }
+
+    pub async fn upsert_scanned_tracks_batch(
+        &mut self,
+        tracks: &[Track],
+        _refresh: bool,
+    ) -> AnyResult<()> {
+        if tracks.is_empty() {
+            return Ok(());
+        }
+        let mut tx = self.connection.begin().await?;
+        for track in tracks {
+            sqlx::query(
+                r#"
+                INSERT INTO tracks (
+                    id, path, title, album, album_artist, artists, genres, year,
+                    duration, track_no, track_of, disk_no, disk_of, is_compilation,
+                    bpm, camelot, energy, hera_seal, is_video, is_mix_over_10m,
+                    has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues,
+                    scan_level, is_transition_candidate, is_fake_320kbps
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(path) DO UPDATE SET
+                    title = excluded.title,
+                    album = excluded.album,
+                    album_artist = excluded.album_artist,
+                    artists = excluded.artists,
+                    genres = excluded.genres,
+                    year = COALESCE(excluded.year, tracks.year),
+                    duration = CASE WHEN excluded.duration > 0 THEN excluded.duration ELSE tracks.duration END,
+                    is_video = excluded.is_video,
+                    is_mix_over_10m = CASE WHEN excluded.duration > 600 THEN 1 ELSE tracks.is_mix_over_10m END,
+                    bpm = CASE WHEN excluded.bpm > 0.0 AND (tracks.user_locked_bpm_key = 0) THEN excluded.bpm ELSE tracks.bpm END,
+                    camelot = CASE WHEN excluded.camelot != '' AND (tracks.user_locked_bpm_key = 0) THEN excluded.camelot ELSE tracks.camelot END,
+                    hot_cues = CASE WHEN excluded.hot_cues != '[]' AND (tracks.user_locked_bpm_key = 0) THEN excluded.hot_cues ELSE tracks.hot_cues END,
+                    scan_level = MAX(tracks.scan_level, excluded.scan_level)
+                "#,
+            )
             .bind(&track.id)
             .bind(&track.path)
             .bind(&track.title)
@@ -250,8 +340,8 @@ impl DB {
             .bind(track.disk_no)
             .bind(track.disk_of)
             .bind(track.is_compilation)
-            .bind(track.bpm.unwrap_or(124.0))
-            .bind(track.camelot.as_deref().unwrap_or("8A"))
+            .bind(track.bpm.unwrap_or(0.0))
+            .bind(track.camelot.as_deref().unwrap_or(""))
             .bind(track.energy.unwrap_or(0.80))
             .bind(&track.hera_seal)
             .bind(track.is_video.unwrap_or(false))
@@ -261,12 +351,13 @@ impl DB {
             .bind(track.entry_bpm)
             .bind(track.exit_bpm)
             .bind(json!(track.hot_cues.as_deref().unwrap_or(&[])))
+            .bind(track.scan_level.unwrap_or(0))
+            .bind(track.is_transition_candidate.unwrap_or(false))
+            .bind(track.is_fake_320kbps.unwrap_or(false))
             .execute(&mut *tx)
             .await?;
         }
-
         tx.commit().await?;
-        }
         Ok(())
     }
 

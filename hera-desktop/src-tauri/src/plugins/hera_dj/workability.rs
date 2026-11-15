@@ -9,6 +9,11 @@ pub struct CachedDjSoftwareMetadata {
     pub bpm: Option<f64>,
     pub key: Option<String>,
     pub cues_count: usize,
+    pub author: Option<String>,
+    pub title: Option<String>,
+    pub duration_sec: Option<f64>,
+    pub bitrate_kbps: Option<u32>,
+    pub cues: Vec<super::vdj_xml_parser::LegacyCue>,
 }
 
 /// Evaluates if a file or folder path should be discarded outright:
@@ -83,6 +88,11 @@ impl ExternalDjSoftwareIndex {
                     bpm: entry.bpm,
                     key: entry.key,
                     cues_count: entry.cues_count,
+                    author: entry.author,
+                    title: entry.title,
+                    duration_sec: entry.duration_sec,
+                    bitrate_kbps: entry.bitrate_kbps,
+                    cues: entry.cues,
                 },
             );
         }
@@ -124,6 +134,11 @@ impl ExternalDjSoftwareIndex {
                             bpm,
                             key: tonality,
                             cues_count: 0,
+                            author: None,
+                            title: None,
+                            duration_sec: None,
+                            bitrate_kbps: None,
+                            cues: Vec::new(),
                         },
                     );
                 }
@@ -133,7 +148,7 @@ impl ExternalDjSoftwareIndex {
 
     /// Retrieve pre-computed metadata for a track path (VirtualDJ or Rekordbox).
     pub fn lookup(&self, path: &Path) -> Option<&CachedDjSoftwareMetadata> {
-        let norm = path.to_string_lossy().replace('\\', "/").to_lowercase();
+        let norm = super::vdj_xml_parser::normalize_lookup_path(&path.to_string_lossy());
         self.vdj_entries
             .get(&norm)
             .or_else(|| self.rekordbox_entries.get(&norm))
