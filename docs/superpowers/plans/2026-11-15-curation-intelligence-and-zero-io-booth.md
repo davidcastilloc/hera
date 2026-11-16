@@ -129,22 +129,22 @@
   - `discover_workable_roots_from_existing_dbs() -> Vec<DiscoveredMusicRoot>`
   - `query_agent_tracks_filtered(...) -> AnyResult<Vec<Track>>` (`< 1 ms` indexed SQLite query)
 
-- [ ] **Step 1: Write failing tests for Migration `08` + `< 5 ms` filtered SQL query, 8-cue VDJ import preservation, DB-First root extraction, and Shazam landmark identification**
+- [x] **Step 1: Write failing tests for Migration `08` + `< 5 ms` filtered SQL query, 8-cue VDJ import preservation, DB-First root extraction, and Shazam landmark identification**
   - Test that an untagged/UUID copy of an indexed audio signal matches the canonical track via `shazam_id::matcher` even with a `2.5s` offset, and that `query_agent_tracks_filtered` excludes `scan_level < 0`, `has_audio_skips = 1`, and `duration > 600`.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
   - Run: `cargo test -p hera-node-rs shazam_id && cargo test -p hera-desktop`
   - Expected: FAIL.
 
-- [ ] **Step 3: Implement `08_add_zero_io_and_curation_intelligence.sql` (leaving `07` untouched), concurrent WAL `SqlitePool` read path (`ADR-036` handoff), `shazam_id/`, 8-cue preservation in `fast_library_scan.rs`, `discover_workable_roots_from_existing_dbs`, and `query_agent_tracks_filtered` in `tools_library.rs`**
+- [x] **Step 3: Implement `08_add_zero_io_and_curation_intelligence.sql` (leaving `07` untouched), concurrent WAL `SqlitePool` read path (`ADR-036` handoff), `shazam_id/`, 8-cue preservation in `fast_library_scan.rs`, `discover_workable_roots_from_existing_dbs`, and `query_agent_tracks_filtered` in `tools_library.rs`**
   - Split read-only frontend/agent queries onto a WAL reader `SqlitePool` in `plugins/db.rs` so Level 0 batch upserts never stall interactive reads (`getArtistTracks`, `getAllPlaylists`, `query_agent_tracks_filtered`).
   - Annotate any new optional `i64` `ts-rs` fields on `Track` with `#[ts(optional, type = "number")]`.
 
-- [ ] **Step 4: Run verification receipts**
+- [x] **Step 4: Run verification receipts**
   - Run: `cd hera-desktop && bun run gen:types && cd .. && cargo test -p hera-node-rs && cargo test -p hera-desktop && cargo test -p hera-node-rs --test architectural_ratchets`
   - Expected: PASS (`0` errors).
 
-- [ ] **Step 5: Mark `[x]` and commit atomically**
+- [x] **Step 5: Mark `[x]` and commit atomically**
   - Commit: `feat(db,shazam): add migration 08, 8-cue VDJ preservation, DB-first discovery, fast agent SQL, and Shazam ID`
 
 ---

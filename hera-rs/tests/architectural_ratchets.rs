@@ -58,6 +58,7 @@ const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
 const SLICED_SUBMODULE_DIRS: &[(&str, usize)] = &[
     ("hera-rs/src/bpm_engine", 349),
     ("hera-rs/src/scanner", 349),
+    ("hera-rs/src/shazam_id", 349),
     ("hera-rs/src/mcp", 349),
     ("hera-rs/src/code_mode", 349),
     ("hera-rs/src/dj_brain", 349),

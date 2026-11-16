@@ -40,6 +40,8 @@ export type DetectedCliAgent = { id: string, binary_name: string, display_name: 
 
 export type DetectedLocalServer = { id: string, display_name: string, base_url: string, reachable: boolean, active_models: Array<string>, latency_ms?: number | null, };
 
+export type DiscoveredMusicRoot = { root_path: string, source_db: string, workable_tracks_count: number, mixes_over_10m_count: number, skipped_short_sfx_count: number, video_tracks_count: number, };
+
 export type DjStyleDnaProfile = { dj_handle: string, preferred_dj_software: string, golden_rules: string, total_tracks: number, dominant_bpm_zone: string, overall_average_bpm: number, dominant_camelot_keys: Array<string>, minor_key_ratio_pct: number, top_anchor_artists: Array<AnchorArtistStat>, media_mix_profile: MediaMixProfile, prompt_block: string, };
 
 export type DjStyleDnaRequest = { tracks: Array<ExportTrackItem>, dj_handle?: string | null, preferred_dj_software?: string | null, golden_rules?: string | null, };

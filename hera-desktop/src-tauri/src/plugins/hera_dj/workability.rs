@@ -2,6 +2,14 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[allow(unused_imports)]
+pub use super::workability_discovery::{
+    discover_workable_roots_from_existing_dbs, discover_workable_roots_from_index,
+};
+#[allow(unused_imports)]
+pub use hera_ipc::dj_types::DiscoveredMusicRoot;
 
 /// Cached external DJ metadata extracted in Stage 1 (< 3s, 0% CPU).
 #[derive(Debug, Clone, Default)]
@@ -13,9 +21,9 @@ pub struct CachedDjSoftwareMetadata {
     pub author: Option<String>,
     pub title: Option<String>,
     pub duration_sec: Option<f64>,
-    #[allow(dead_code)]
     pub bitrate_kbps: Option<u32>,
     pub cues: Vec<super::vdj_xml_parser::LegacyCue>,
+    pub original_path: Option<String>,
 }
 
 /// Evaluates if a file or folder path should be discarded outright:
@@ -37,6 +45,7 @@ pub fn is_junk_system_directory(path: &Path) -> bool {
 /// - `< 25.0s`: Discarded as short SFX / voice memo.
 /// - `25.0s ..= 600.0s`: Standard workable DJ track.
 /// - `> 600.0s`: Extended session / recorded live mix -> Mixes (> 10m) area.
+#[allow(dead_code)]
 pub fn classify_track_duration(duration_seconds: f64) -> DurationCategory {
     if duration_seconds < 25.0 {
         DurationCategory::ShortSfxOrDiscard
@@ -47,6 +56,7 @@ pub fn classify_track_duration(duration_seconds: f64) -> DurationCategory {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DurationCategory {
     ShortSfxOrDiscard,
@@ -55,19 +65,21 @@ pub enum DurationCategory {
 }
 
 /// Multi-software external DB index containing pre-computed BPM, Key and Cues
-/// from VirtualDJ database.xml and Rekordbox XML.
+/// from VirtualDJ `database.xml`, Rekordbox XML, and Traktor `collection.nml`.
 #[derive(Debug, Default)]
 pub struct ExternalDjSoftwareIndex {
     pub vdj_entries: HashMap<String, CachedDjSoftwareMetadata>,
     pub rekordbox_entries: HashMap<String, CachedDjSoftwareMetadata>,
+    pub traktor_entries: HashMap<String, CachedDjSoftwareMetadata>,
 }
 
 impl ExternalDjSoftwareIndex {
-    /// Loads metadata from detected VirtualDJ and Rekordbox databases in < 3s.
+    /// Loads metadata from detected VirtualDJ, Rekordbox, and Traktor databases in < 3s.
     pub fn build_fast_index() -> Self {
         let mut index = Self::default();
         index.load_virtualdj_databases();
         index.load_rekordbox_xmls();
+        index.load_traktor_nmls();
         index
     }
 
@@ -95,18 +107,25 @@ impl ExternalDjSoftwareIndex {
                     duration_sec: entry.duration_sec,
                     bitrate_kbps: entry.bitrate_kbps,
                     cues: entry.cues,
+                    original_path: entry.original_path,
                 },
             );
         }
     }
 
     fn load_rekordbox_xmls(&mut self) {
-        // Look in standard Rekordbox export or home locations
-        if let Ok(home) = std::env::var("HOME") {
-            let rb_path = PathBuf::from(home)
-                .join("PIONEER")
-                .join("rekordbox")
-                .join("rekordbox.xml");
+        for env_key in ["HERA_REKORDBOX_XML", "USERPROFILE", "HOME"] {
+            let Ok(val) = std::env::var(env_key) else {
+                continue;
+            };
+            let rb_path = if env_key == "HERA_REKORDBOX_XML" {
+                PathBuf::from(val)
+            } else {
+                PathBuf::from(val)
+                    .join("PIONEER")
+                    .join("rekordbox")
+                    .join("rekordbox.xml")
+            };
             if rb_path.is_file() {
                 self.parse_rekordbox_xml_file(&rb_path);
             }
@@ -125,12 +144,12 @@ impl ExternalDjSoftwareIndex {
                 let bpm =
                     extract_xml_attr(trimmed, "AverageBpm=\"").and_then(|b| b.parse::<f64>().ok());
                 let tonality = extract_xml_attr(trimmed, "Tonality=\"");
+                let duration_sec =
+                    extract_xml_attr(trimmed, "TotalTime=\"").and_then(|d| d.parse::<f64>().ok());
 
                 if let Some(loc) = location {
-                    let clean_path = loc
-                        .replace("file://localhost/", "")
-                        .replace('\\', "/")
-                        .to_lowercase();
+                    let orig = loc.replace("file://localhost/", "").replace('\\', "/");
+                    let clean_path = orig.to_lowercase();
                     self.rekordbox_entries.insert(
                         clean_path,
                         CachedDjSoftwareMetadata {
@@ -139,9 +158,10 @@ impl ExternalDjSoftwareIndex {
                             cues_count: 0,
                             author: None,
                             title: None,
-                            duration_sec: None,
+                            duration_sec,
                             bitrate_kbps: None,
                             cues: Vec::new(),
+                            original_path: Some(orig),
                         },
                     );
                 }
@@ -149,16 +169,21 @@ impl ExternalDjSoftwareIndex {
         }
     }
 
-    /// Retrieve pre-computed metadata for a track path (VirtualDJ or Rekordbox).
+    fn load_traktor_nmls(&mut self) {
+        super::workability_discovery::load_traktor_collections_into(&mut self.traktor_entries);
+    }
+
+    /// Retrieve pre-computed metadata for a track path (VirtualDJ, Rekordbox, or Traktor).
     pub fn lookup(&self, path: &Path) -> Option<&CachedDjSoftwareMetadata> {
         let norm = super::vdj_xml_parser::normalize_lookup_path(&path.to_string_lossy());
         self.vdj_entries
             .get(&norm)
             .or_else(|| self.rekordbox_entries.get(&norm))
+            .or_else(|| self.traktor_entries.get(&norm))
     }
 }
 
-fn extract_xml_attr(line: &str, attr_prefix: &str) -> Option<String> {
+pub(super) fn extract_xml_attr(line: &str, attr_prefix: &str) -> Option<String> {
     let pos = line.find(attr_prefix)?;
     let rest = &line[pos + attr_prefix.len()..];
     let end = rest.find('"')?;
@@ -188,7 +213,6 @@ fn candidate_virtualdj_homes() -> Vec<PathBuf> {
     homes
 }
 
-use std::sync::atomic::{AtomicBool, Ordering};
 static SCAN_CANCEL_FLAG: AtomicBool = AtomicBool::new(false);
 
 /// Signals background library scanner to halt immediately (< 100ms).

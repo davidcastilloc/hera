@@ -256,7 +256,7 @@ pub async fn download_p2p_track<R: Runtime>(
             ext
         );
 
-        let quarantine_path = quarantine_dir.join(format!("{}.part", &file_name));
+        let quarantine_path = quarantine_dir.join(format!("{}.part", file_name));
         let final_library_path = library_dir.join(&file_name);
 
         std::fs::write(&quarantine_path, &payload_to_write)

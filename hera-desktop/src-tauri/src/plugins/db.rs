@@ -47,6 +47,7 @@ fn wal_connect_options(database_path: &Path, create_if_missing: bool) -> SqliteC
         .synchronous(SqliteSynchronous::Normal)
         .busy_timeout(std::time::Duration::from_secs(5))
         .pragma("temp_store", "MEMORY")
+        .pragma("mmap_size", "268435456")
 }
 
 /**
@@ -111,7 +112,7 @@ pub struct ScanResult {
     pub playlist_failures: usize,
 }
 
-/** ----------------------------------------------------------------------------
+/* -----------------------------------------------------------------------------
  * Commands
  * -------------------------------------------------------------------------- */
 
@@ -220,8 +221,8 @@ async fn scan_library<R: Runtime>(
 
             info!(
                 r#"Creating playlist "{}" ({} tracks)"#,
-                &playlist_name,
-                &track_ids.len()
+                playlist_name,
+                track_ids.len()
             );
 
             db.create_playlist(playlist_name, track_ids, Some(playlist_path))
@@ -498,6 +499,21 @@ mod tests {
             entry_bpm: Some(124.0),
             exit_bpm: Some(124.0),
             hot_cues: Some(vec![]),
+            replay_gain_db: None,
+            loudness_lufs: None,
+            has_intro_vocals: Some(false),
+            has_outro_vocals: Some(false),
+            is_own_production: Some(false),
+            has_bpm_trust_diff: Some(false),
+            waveform_peaks_b64: None,
+            embedding_64d_b64: None,
+            inferred_genre_family: None,
+            inferred_era_year: None,
+            partial_hash_64kb: None,
+            file_size_bytes: None,
+            legacy_bpm: None,
+            bitrate_kbps: None,
+            sample_rate_hz: None,
         }
     }
 

@@ -38,9 +38,7 @@ struct StreamParams {
 /// Parse a Range header value like "bytes=0-1023" or "bytes=1024-"
 fn parse_range_header(range: &str, file_size: u64) -> Option<(u64, u64)> {
     let range = range.strip_prefix("bytes=")?;
-    let mut parts = range.splitn(2, '-');
-    let start_str = parts.next()?;
-    let end_str = parts.next()?;
+    let (start_str, end_str) = range.split_once('-')?;
 
     let start: u64 = start_str.parse().ok()?;
     let end: u64 = if end_str.is_empty() {

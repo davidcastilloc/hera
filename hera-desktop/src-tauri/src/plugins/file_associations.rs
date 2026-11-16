@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use tauri::plugin::{Builder, TauriPlugin};
 
-/**
+/*
  * Plugin in charge of handle file associations.
  * It's convoluted due to x-platform issues.
  *
@@ -33,7 +33,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
 
     println!(
         "[file_associations] Handling opened files at startup: {:?}",
-        &args
+        args
     );
 
     let tracks = get_tracks_from_args(args);
@@ -56,7 +56,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .build()
 }
 
-/** ----------------------------------------------------------------------------
+/* -----------------------------------------------------------------------------
  * Other Helpers
  * -------------------------------------------------------------------------- */
 
@@ -75,7 +75,7 @@ pub fn get_tracks_from_args(args: Vec<String>) -> Option<Vec<Track>> {
         }
 
         // handle `file://` path urls and other C:\... paths
-        if let Ok(_) = tauri::Url::parse(&maybe_file) {
+        if tauri::Url::parse(&maybe_file).is_ok() {
             // We cannot use `Url::to_file_path` here, because it will fail on
             // Windows as it does not provide UNC
             // https://github.com/servo/rust-url/issues/450
@@ -110,7 +110,7 @@ pub fn get_tracks_from_args(args: Vec<String>) -> Option<Vec<Track>> {
         }
     }
 
-    println!("[file_associations] Found those valid paths: {:?}", &paths);
+    println!("[file_associations] Found those valid paths: {:?}", paths);
 
     match paths.is_empty() {
         true => None,
@@ -145,7 +145,7 @@ pub fn get_valid_tracks_and_report_errors(tracks: Vec<AnyResult<Track>>) -> Vec<
 pub fn handle_opened_files(app_handle: &AppHandle, args: Vec<String>) {
     println!(
         "[file_associations] Handling opened files from command line arguments: {:?}",
-        &args
+        args
     );
     let tracks = get_tracks_from_args(args);
 
@@ -184,7 +184,7 @@ fn send_queue_to_ui(app_handle: &AppHandle, maybe_tracks: Option<Vec<Track>>) {
     let tracks = maybe_tracks.unwrap();
     println!(
         "[file_associations] Sending queue to UI: {:?}",
-        &tracks.iter().map(|t| t.path.clone()).collect::<Vec<_>>()
+        tracks.iter().map(|t| t.path.clone()).collect::<Vec<_>>()
     );
 
     // This is for the `asset:` protocol to work, ensuring access to the files

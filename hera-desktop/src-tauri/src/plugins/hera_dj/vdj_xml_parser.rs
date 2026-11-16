@@ -18,6 +18,7 @@ pub struct VdjParsedEntry {
     pub title: Option<String>,
     pub duration_sec: Option<f64>,
     pub bitrate_kbps: Option<u32>,
+    pub original_path: Option<String>,
 }
 
 pub fn unescape_xml(raw: &str) -> String {
@@ -45,22 +46,22 @@ pub fn unescape_xml(raw: &str) -> String {
                     "lt" => out.push('<'),
                     "gt" => out.push('>'),
                     s if s.starts_with("#x") || s.starts_with("#X") => {
-                        if let Ok(code) = u32::from_str_radix(&s[2..], 16) {
-                            if let Some(ch) = char::from_u32(code) {
-                                out.push(ch);
-                                continue;
-                            }
+                        if let Ok(code) = u32::from_str_radix(&s[2..], 16)
+                            && let Some(ch) = char::from_u32(code)
+                        {
+                            out.push(ch);
+                            continue;
                         }
                         out.push('&');
                         out.push_str(&entity);
                         out.push(';');
                     }
                     s if s.starts_with('#') => {
-                        if let Ok(code) = s[1..].parse::<u32>() {
-                            if let Some(ch) = char::from_u32(code) {
-                                out.push(ch);
-                                continue;
-                            }
+                        if let Ok(code) = s[1..].parse::<u32>()
+                            && let Some(ch) = char::from_u32(code)
+                        {
+                            out.push(ch);
+                            continue;
                         }
                         out.push('&');
                         out.push_str(&entity);
@@ -107,13 +108,12 @@ pub fn normalize_key_to_camelot(raw: &str) -> Option<String> {
         return None;
     }
     let up = t.to_ascii_uppercase();
-    if let Some(suffix) = up.strip_suffix('A').or_else(|| up.strip_suffix('B')) {
-        if let Ok(n) = suffix.parse::<u8>() {
-            if (1..=12).contains(&n) {
-                let letter = up.chars().last().unwrap();
-                return Some(format!("{n}{letter}"));
-            }
-        }
+    if let Some(suffix) = up.strip_suffix('A').or_else(|| up.strip_suffix('B'))
+        && let Ok(n) = suffix.parse::<u8>()
+        && (1..=12).contains(&n)
+    {
+        let letter = up.chars().last().unwrap();
+        return Some(format!("{n}{letter}"));
     }
     let mapped = match t.to_ascii_lowercase().as_str() {
         "abm" | "g#m" => "1A",
@@ -167,27 +167,34 @@ pub fn parse_vdj_database_reader<R: BufRead>(reader: R) -> HashMap<String, VdjPa
             }
             current = VdjParsedEntry::default();
             if let Some(fp) = extract_attr(trimmed, "FilePath=\"") {
+                let clean_orig = unescape_xml(fp).replace('\\', "/");
+                current.original_path = Some(
+                    clean_orig
+                        .strip_prefix("//?/")
+                        .unwrap_or(&clean_orig)
+                        .to_string(),
+                );
                 current_path = Some(fp.to_string());
             }
         } else if trimmed.starts_with("<Scan ") {
-            if let Some(bpm_s) = extract_attr(trimmed, "Bpm=\"") {
-                if let Some(b) = parse_virtualdj_bpm_value(bpm_s) {
-                    current.bpm = Some(b);
-                }
+            if let Some(bpm_s) = extract_attr(trimmed, "Bpm=\"")
+                && let Some(b) = parse_virtualdj_bpm_value(bpm_s)
+            {
+                current.bpm = Some(b);
             }
             if let Some(key_s) = extract_attr(trimmed, "Key=\"") {
                 current.key = normalize_key_to_camelot(key_s);
             }
         } else if trimmed.starts_with("<Tags ") {
-            if current.bpm.is_none() {
-                if let Some(bpm_s) = extract_attr(trimmed, "Bpm=\"") {
-                    current.bpm = parse_virtualdj_bpm_value(bpm_s);
-                }
+            if current.bpm.is_none()
+                && let Some(bpm_s) = extract_attr(trimmed, "Bpm=\"")
+            {
+                current.bpm = parse_virtualdj_bpm_value(bpm_s);
             }
-            if current.key.is_none() {
-                if let Some(key_s) = extract_attr(trimmed, "Key=\"") {
-                    current.key = normalize_key_to_camelot(key_s);
-                }
+            if current.key.is_none()
+                && let Some(key_s) = extract_attr(trimmed, "Key=\"")
+            {
+                current.key = normalize_key_to_camelot(key_s);
             }
             if let Some(a) = extract_attr(trimmed, "Author=\"") {
                 current.author = Some(unescape_xml(a));
@@ -209,22 +216,22 @@ pub fn parse_vdj_database_reader<R: BufRead>(reader: R) -> HashMap<String, VdjPa
             }
         } else if trimmed.starts_with("<Poi ") {
             current.cues_count += 1;
-            if current.cues.len() < 8 && extract_attr(trimmed, "Type=\"") == Some("cue") {
-                if let Some(pos_s) =
+            if current.cues.len() < 8
+                && extract_attr(trimmed, "Type=\"") == Some("cue")
+                && let Some(pos_s) =
                     extract_attr(trimmed, "Pos=\"").and_then(|s| s.parse::<f64>().ok())
-                {
-                    let num = extract_attr(trimmed, "Num=\"")
-                        .and_then(|s| s.parse::<u8>().ok())
-                        .unwrap_or((current.cues.len() + 1) as u8);
-                    let name = extract_attr(trimmed, "Name=\"")
-                        .map(unescape_xml)
-                        .unwrap_or_else(|| format!("Cue {num}"));
-                    current.cues.push(LegacyCue {
-                        num,
-                        name,
-                        seconds: pos_s,
-                    });
-                }
+            {
+                let num = extract_attr(trimmed, "Num=\"")
+                    .and_then(|s| s.parse::<u8>().ok())
+                    .unwrap_or((current.cues.len() + 1) as u8);
+                let name = extract_attr(trimmed, "Name=\"")
+                    .map(unescape_xml)
+                    .unwrap_or_else(|| format!("Cue {num}"));
+                current.cues.push(LegacyCue {
+                    num,
+                    name,
+                    seconds: pos_s,
+                });
             }
         }
     }

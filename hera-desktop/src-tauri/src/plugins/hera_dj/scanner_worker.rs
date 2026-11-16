@@ -174,6 +174,14 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                         "scan_level": outcome.update.scan_level,
                         "is_transition_candidate": outcome.update.is_transition_candidate,
                         "is_fake_320kbps": outcome.update.is_fake_320kbps,
+                        "replay_gain_db": outcome.update.replay_gain_db,
+                        "loudness_lufs": outcome.update.loudness_lufs,
+                        "waveform_peaks_b64": outcome.update.waveform_peaks_b64,
+                        "has_intro_vocals": outcome.update.has_intro_vocals,
+                        "has_outro_vocals": outcome.update.has_outro_vocals,
+                        "has_audio_skips": outcome.update.has_audio_skips,
+                        "entry_bpm": outcome.update.entry_bpm,
+                        "exit_bpm": outcome.update.exit_bpm,
                     }));
                     updates_to_apply.push(outcome.update);
                 }

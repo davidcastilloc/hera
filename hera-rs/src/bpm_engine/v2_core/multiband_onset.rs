@@ -17,10 +17,7 @@ pub struct MultibandNovelty {
     pub band_ratios: [f64; 4],
 }
 
-pub fn trim_leading_trailing_silence<'a>(
-    samples: &'a [f32],
-    sample_rate: u32,
-) -> (&'a [f32], f64, f64) {
+pub fn trim_leading_trailing_silence(samples: &[f32], sample_rate: u32) -> (&[f32], f64, f64) {
     let sr = sample_rate.max(8_000) as usize;
     let win = (sr / 50).max(64); // 20 ms exactos en cualquier sample_rate
     let thresh = 0.001_f32;
@@ -107,12 +104,12 @@ pub fn extract_multiband_novelty(
     // 1. Banda `sub_kick` (25–130 Hz) vía filtro IIR parametrizado con `sr` real
     let sub_kick_pcm = isolate_sub_kick_band_iir(trimmed_pcm, sr as f64);
     let mut sub_env = vec![0.0_f64; num_frames];
-    for f in 0..num_frames {
+    for (f, sub_slot) in sub_env.iter_mut().enumerate().take(num_frames) {
         let start = f * hop_size;
         let slice = &sub_kick_pcm[start..start + fft_size];
         let energy =
             slice.iter().map(|&x| (x as f64) * (x as f64)).sum::<f64>() / (fft_size as f64);
-        sub_env[f] = (1.0 + 4000.0 * energy.sqrt()).ln();
+        *sub_slot = (1.0 + 4000.0 * energy.sqrt()).ln();
     }
 
     let mut raw_sub = vec![0.0_f64; num_frames];

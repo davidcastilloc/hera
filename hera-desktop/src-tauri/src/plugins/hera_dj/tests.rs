@@ -243,18 +243,11 @@ async fn test_scanner_quarantine_minus_one_persists_and_isolated_job_catches_pan
 
         crate::libs::db_scanner_queries::apply_scanner_batch_updates(
             &mut writer.connection,
-            &[crate::libs::db_scanner_queries::ScannerRowUpdate {
-                track_id: "corrupt_1".to_string(),
-                bpm: None,
-                camelot: None,
-                energy: None,
-                hot_cues_json: None,
-                waveform_peaks_blob: None,
-                scan_level: -1,
-                is_transition_candidate: false,
-                is_fake_320kbps: false,
-                duration_sec: None,
-            }],
+            &[crate::libs::db_scanner_queries::ScannerRowUpdate::failure(
+                "corrupt_1".to_string(),
+                None,
+                -1,
+            )],
         )
         .await
         .unwrap();

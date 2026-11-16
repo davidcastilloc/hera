@@ -38,7 +38,17 @@ fn is_supported_playlist(path: &Path) -> bool {
         .any(|&e| e.eq_ignore_ascii_case(&ext_lower))
 }
 
-const CUE_COLORS: [&str; 4] = ["#22c55e", "#38bdf8", "#ef4444", "#f59e0b"];
+const CUE_COLORS: [&str; 8] = [
+    "#22c55e", "#38bdf8", "#ef4444", "#f59e0b", "#a855f7", "#06b6d4", "#ec4899", "#eab308",
+];
+
+#[cfg(test)]
+pub fn import_tracks_with_index(
+    paths: &[PathBuf],
+    software_index: &ExternalDjSoftwareIndex,
+) -> Vec<Track> {
+    process_batch_parallel(paths, software_index)
+}
 
 fn process_batch_parallel(
     paths: &[PathBuf],
@@ -68,6 +78,10 @@ fn process_batch_parallel(
                 }
                 if let Some(bpm) = cached.bpm {
                     track.bpm = Some(bpm);
+                    track.legacy_bpm = Some(bpm);
+                }
+                if let Some(br) = cached.bitrate_kbps {
+                    track.bitrate_kbps = Some(i64::from(br));
                 }
                 if let Some(ref key) = cached.key {
                     track.camelot = Some(key.clone());
@@ -77,26 +91,38 @@ fn process_batch_parallel(
                     let pins: Vec<HotCuePin> = cached
                         .cues
                         .iter()
-                        .take(4)
+                        .take(8)
                         .enumerate()
                         .map(|(idx, cue)| {
-                            let color = CUE_COLORS[idx];
-                            let role = match idx {
-                                0 => "intro",
-                                1 => "breakdown",
-                                2 => "drop",
+                            let num = if (1..=8).contains(&cue.num) {
+                                cue.num
+                            } else {
+                                (idx + 1) as u8
+                            };
+                            let color_idx =
+                                usize::from(num.saturating_sub(1)).min(CUE_COLORS.len() - 1);
+                            let color = CUE_COLORS[color_idx];
+                            let role = match num {
+                                1 => "intro",
+                                2 => "breakdown",
+                                3 => "drop",
+                                4 => "outro",
+                                5 => "phrase",
+                                6 => "bridge",
+                                7 => "climax",
                                 _ => "outro",
                             };
                             HotCuePin {
-                                num: (idx + 1) as u8,
+                                num,
                                 name: if cue.name.is_empty() {
-                                    format!("{}:Cue", idx + 1)
+                                    format!("{num}:Cue")
                                 } else {
                                     cue.name.clone()
                                 },
-                                seconds: ((cue.seconds * 10.0).round()) / 10.0,
+                                seconds: ((cue.seconds * 1000.0).round()) / 1000.0,
                                 color: color.to_string(),
                                 role: role.to_string(),
+                                origin: Some("dj_manual".to_string()),
                             }
                         })
                         .collect();
@@ -171,12 +197,11 @@ pub async fn execute_streaming_library_scan<R: Runtime>(
                 if entry.file_type().is_file() {
                     if is_supported_playlist(path) {
                         let _ = playlist_tx.send(path.to_path_buf());
-                    } else if is_supported_audio(path) {
-                        if refresh || !walk_existing.contains(path) {
-                            walk_discovered.fetch_add(1, Ordering::Relaxed);
-                            if path_tx.send(path.to_path_buf()).is_err() {
-                                return;
-                            }
+                    } else if is_supported_audio(path) && (refresh || !walk_existing.contains(path))
+                    {
+                        walk_discovered.fetch_add(1, Ordering::Relaxed);
+                        if path_tx.send(path.to_path_buf()).is_err() {
+                            return;
                         }
                     }
                 }

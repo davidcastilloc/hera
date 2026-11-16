@@ -189,7 +189,7 @@ pub fn detect_song_key(
                     if f_sub < 45.0 {
                         break;
                     }
-                    let decay = 0.62_f64.powi((h - 1) as i32);
+                    let decay = 0.62_f64.powi(h - 1);
                     let midi_c = 69.0 + 12.0 * (f_sub / 440.0).log2();
                     let bin_pos =
                         (midi_c * (HPCP_BINS_PER_SEMITONE as f64)).rem_euclid(HPCP_BINS as f64);
@@ -223,12 +223,12 @@ pub fn detect_song_key(
         .round() as isize;
 
     let mut pcp_12 = [0.0_f64; 12];
-    for st in 0..12 {
+    for (st, pcp_slot) in pcp_12.iter_mut().enumerate() {
         let c = (st * HPCP_BINS_PER_SEMITONE) as isize + shift_bins;
         let b0 = (c - 1).rem_euclid(HPCP_BINS as isize) as usize;
         let b1 = c.rem_euclid(HPCP_BINS as isize) as usize;
         let b2 = (c + 1).rem_euclid(HPCP_BINS as isize) as usize;
-        pcp_12[st] = 0.25 * hpcp[b0] + 0.50 * hpcp[b1] + 0.25 * hpcp[b2];
+        *pcp_slot = 0.25 * hpcp[b0] + 0.50 * hpcp[b1] + 0.25 * hpcp[b2];
     }
 
     let max_pcp = pcp_12.iter().copied().fold(0.0_f64, f64::max).max(1e-12);
@@ -246,8 +246,8 @@ pub fn detect_song_key(
         .max(1e-12);
 
     let mut scored: Vec<(PitchClass, KeyScale, f64)> = Vec::with_capacity(24);
-    for root in 0..12 {
-        let bass_bonus = 0.045 * (bass_roots_12[root] / max_bass);
+    for (root, &bass_val) in bass_roots_12.iter().enumerate() {
+        let bass_bonus = 0.045 * (bass_val / max_bass);
 
         let maj = 0.35 * corr_12(&pcp_12, &BGATE_MAJ, root)
             + 0.25 * corr_12(&pcp_12, &EDMA_MAJ, root)
@@ -277,13 +277,12 @@ pub fn detect_song_key(
         .iter()
         .find(|&&(t, s, _)| t == win_tonic && s == opp_scale)
     {
-        if (win_score - par_score) < 0.09 {
-            if (win_scale == KeyScale::Major && min3 > maj3 * 1.32)
-                || (win_scale == KeyScale::Minor && maj3 > min3 * 1.38)
-            {
-                win_scale = opp_scale;
-                win_score = par_score;
-            }
+        if (win_score - par_score) < 0.09
+            && ((win_scale == KeyScale::Major && min3 > maj3 * 1.32)
+                || (win_scale == KeyScale::Minor && maj3 > min3 * 1.38))
+        {
+            win_scale = opp_scale;
+            win_score = par_score;
         }
     }
 

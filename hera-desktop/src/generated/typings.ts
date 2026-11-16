@@ -8,7 +8,7 @@ export type DefaultView = "Library" | "Artists" | "Playlists";
  * Track
  * represent a single track, id and path should be unique
  */
-export type HotCuePin = { num: number, name: string, seconds: number, color: string, role: string, };
+export type HotCuePin = { num: number, name: string, seconds: number, color: string, role: string, origin?: string, };
 
 export type IPCEvent = { "Unknown": string } | "PlaybackPlay" | "PlaybackPause" | "PlaybackStop" | "PlaybackPlayPause" | "PlaybackPrevious" | "PlaybackNext" | "PlaybackStart" | "LibraryScanProgress" | "GoToLibrary" | "GoToPlaylists" | "GoToSettings" | "JumpToPlayingTrack";
 
@@ -35,7 +35,7 @@ export type SortOrder = "Asc" | "Dsc";
  * Track
  * represent a single track, id and path should be unique
  */
-export type Track = { id: string, path: string, title: string, album: string, album_artist: string, artists: Array<string>, genres: Array<string>, year: number | null, duration: number, track_no: number | null, track_of: number | null, disk_no: number | null, disk_of: number | null, is_compilation: boolean, bpm?: number, camelot?: string, energy?: number, hera_seal?: string, is_video?: boolean, scan_level?: number, is_transition_candidate?: boolean, is_fake_320kbps?: boolean, waveform_peaks_blob?: Array<number>, is_mix_over_10m?: boolean, has_audio_skips?: boolean, is_variable_bpm?: boolean, entry_bpm?: number, exit_bpm?: number, hot_cues?: Array<HotCuePin>, };
+export type Track = { id: string, path: string, title: string, album: string, album_artist: string, artists: Array<string>, genres: Array<string>, year: number | null, duration: number, track_no: number | null, track_of: number | null, disk_no: number | null, disk_of: number | null, is_compilation: boolean, bpm?: number, camelot?: string, energy?: number, hera_seal?: string, is_video?: boolean, scan_level?: number, is_transition_candidate?: boolean, is_fake_320kbps?: boolean, waveform_peaks_blob?: Array<number>, is_mix_over_10m?: boolean, has_audio_skips?: boolean, is_variable_bpm?: boolean, entry_bpm?: number, exit_bpm?: number, hot_cues?: Array<HotCuePin>, replay_gain_db?: number, loudness_lufs?: number, has_intro_vocals?: boolean, has_outro_vocals?: boolean, is_own_production?: boolean, has_bpm_trust_diff?: boolean, waveform_peaks_b64?: string, embedding_64d_b64?: string, inferred_genre_family?: string, inferred_era_year?: number, partial_hash_64kb?: string, file_size_bytes?: number, legacy_bpm?: number, bitrate_kbps?: number, sample_rate_hz?: number, };
 
 /**
  * Represents a group of tracks, grouped by "something", lib artist name, or

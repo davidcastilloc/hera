@@ -69,6 +69,32 @@ impl<R: Runtime> AgentRuntimeContext<R> {
         }
     }
 
+    pub(super) async fn with_read_conn<F, T>(&self, f: F) -> Result<T, String>
+    where
+        F: for<'a> FnOnce(
+            &'a mut sqlx::SqliteConnection,
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<T, String>> + Send + 'a>,
+        >,
+    {
+        match &self.host {
+            AgentHostBridge::Tauri(app) => {
+                let Some(db_state) = app.try_state::<DBState>() else {
+                    return Err("Base de datos aún inicializándose".to_string());
+                };
+                let mut conn = db_state
+                    .acquire_read_conn()
+                    .await
+                    .map_err(|e| e.to_string())?;
+                f(&mut conn).await
+            }
+            AgentHostBridge::Standalone(db_arc) => {
+                let mut guard = db_arc.lock().await;
+                f(&mut guard.connection).await
+            }
+        }
+    }
+
     pub(super) fn emit_stream(&self, evt: AgentStreamEvent) {
         if let AgentHostBridge::Tauri(app) = &self.host {
             let _ = app.emit("hera-agent:stream", evt);

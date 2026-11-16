@@ -202,8 +202,23 @@ pub fn run_full_pass_on_file(
     hint: Option<BpmHint>,
     limiter: Option<&crate::bpm_engine::v2_core::audio_ingest::ProcessLimiter>,
 ) -> Result<FullPassResult, crate::bpm_engine::v2_core::types::EngineError> {
+    run_full_pass_on_file_with_manual_cues(path, hint, &[], limiter)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run_full_pass_on_file_with_manual_cues(
+    path: &std::path::Path,
+    hint: Option<BpmHint>,
+    manual_cues: &[CueCandidate],
+    limiter: Option<&crate::bpm_engine::v2_core::audio_ingest::ProcessLimiter>,
+) -> Result<FullPassResult, crate::bpm_engine::v2_core::types::EngineError> {
     let dec = crate::bpm_engine::v2_core::audio_ingest::load_audio_mono_native_sr(path, limiter)?;
-    Ok(run_full_pass_from_pcm(&dec.samples, dec.sample_rate, hint))
+    Ok(run_full_pass_from_pcm_with_manual_cues(
+        &dec.samples,
+        dec.sample_rate,
+        hint,
+        manual_cues,
+    ))
 }
 
 #[cfg(test)]

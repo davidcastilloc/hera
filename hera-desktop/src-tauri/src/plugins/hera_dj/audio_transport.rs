@@ -91,10 +91,10 @@ pub async fn native_audio_load_track(
             known_cues,
         )?;
         let mut snap = backend.send_command(TransportCommand::SetGain(DeckId::DeckA, linear_gain));
-        if snap.duration_sec <= 0.0 {
-            if let Some(hint) = duration_hint_sec.filter(|d| d.is_finite() && *d > 0.0) {
-                snap.duration_sec = hint;
-            }
+        if snap.duration_sec <= 0.0
+            && let Some(hint) = duration_hint_sec.filter(|d| d.is_finite() && *d > 0.0)
+        {
+            snap.duration_sec = hint;
         }
         let telemetry = backend.poll_latest_telemetry();
         Ok(map_player_snapshot(snap, telemetry))

@@ -9,11 +9,11 @@ use crate::agent_types::{
 };
 use crate::audio_types::{NativeAudioTelemetryFrame, NativePlayerSnapshot};
 use crate::dj_types::{
-    BpmUiBadgeInfo, DownloadP2PTrackRequest, DownloadP2PTrackResponse, FolderWorkabilityReport,
-    HarmonicBridgeStep, ProbeAiBackendResponse, PushVirtualDjLiveCrateRequest,
-    PushVirtualDjLiveCrateResponse, ResolveHarmonicBridgeRequest, ResolveHarmonicBridgeResponse,
-    ScanPhaseProgress, SetMiniOverlayModeRequest, SetMiniOverlayModeResponse, SwarmCatalogItem,
-    VirtualDjNowPlaying,
+    BpmUiBadgeInfo, DiscoveredMusicRoot, DownloadP2PTrackRequest, DownloadP2PTrackResponse,
+    FolderWorkabilityReport, HarmonicBridgeStep, ProbeAiBackendResponse,
+    PushVirtualDjLiveCrateRequest, PushVirtualDjLiveCrateResponse, ResolveHarmonicBridgeRequest,
+    ResolveHarmonicBridgeResponse, ScanPhaseProgress, SetMiniOverlayModeRequest,
+    SetMiniOverlayModeResponse, SwarmCatalogItem, VirtualDjNowPlaying,
 };
 use hera_node_rs::cloudflare_edge::{
     CloudflareEdgeCapabilities, CloudflareServicePrimitive, SwarmMoqHarmonicEvent,
@@ -64,6 +64,7 @@ pub fn export_hera_typescript_bindings(generated_dir: &Path) -> Result<String, S
         export_decl::<CreateAgentSessionRequest>(&cfg),
         export_decl::<DetectedCliAgent>(&cfg),
         export_decl::<DetectedLocalServer>(&cfg),
+        export_decl::<DiscoveredMusicRoot>(&cfg),
         export_decl::<DjStyleDnaProfile>(&cfg),
         export_decl::<DjStyleDnaRequest>(&cfg),
         export_decl::<DownloadP2PTrackRequest>(&cfg),

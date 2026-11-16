@@ -39,17 +39,35 @@ pub(super) async fn execute_library_tool<R: Runtime>(
                     .and_then(|v| v.as_u64())
                     .unwrap_or(100)
                     .clamp(1, 500) as usize;
-                let all = ctx
-                    .with_db(|db| {
-                        Box::pin(
-                            async move { db.get_all_tracks().await.map_err(|e| e.to_string()) },
-                        )
+                let include_mixes = args
+                    .get("include_mixes_over_10m")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let filter = crate::libs::db_agent_queries::AgentTrackFilter {
+                    include_mixes_over_10m: include_mixes,
+                    limit,
+                    ..Default::default()
+                };
+                let (total, page) = ctx
+                    .with_read_conn(|conn| {
+                        Box::pin(async move {
+                            let total = crate::libs::db_agent_queries::count_agent_workable_tracks(
+                                conn,
+                                include_mixes,
+                            )
+                            .await
+                            .map_err(|e| e.to_string())?;
+                            let rows = crate::libs::db_agent_queries::query_agent_tracks_filtered(
+                                conn, &filter,
+                            )
+                            .await
+                            .map_err(|e| e.to_string())?;
+                            Ok((total, rows))
+                        })
                     })
                     .await?;
-                let total = all.len();
-                let items: Vec<Value> = all
+                let items: Vec<Value> = page
                     .into_iter()
-                    .take(limit)
                     .map(|t| {
                         json!({
                             "id": t.id,
@@ -68,61 +86,74 @@ pub(super) async fn execute_library_tool<R: Runtime>(
         ),
         "search_library_tracks" => Some(
             async {
-                let q = args
+                let query = args
                     .get("query")
                     .and_then(|v| v.as_str())
-                    .map(|s| s.trim().to_lowercase())
-                    .unwrap_or_default();
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(String::from);
                 let bpm_min = args.get("bpm_min").and_then(|v| v.as_f64());
                 let bpm_max = args.get("bpm_max").and_then(|v| v.as_f64());
-                let camelot = args
+                let mut camelots: Vec<String> = args
+                    .get("camelots")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|x| x.as_str())
+                            .map(|s| s.trim().to_ascii_uppercase())
+                            .filter(|s| !s.is_empty())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                if let Some(single_cam) = args
                     .get("camelot")
                     .and_then(|v| v.as_str())
                     .map(|s| s.trim().to_ascii_uppercase())
-                    .filter(|s| !s.is_empty());
+                    .filter(|s| !s.is_empty())
+                    && !camelots.contains(&single_cam)
+                {
+                    camelots.push(single_cam);
+                }
+                let genre_family = args
+                    .get("genre_family")
+                    .and_then(|v| v.as_str())
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(String::from);
+                let era_min = args.get("era_min").and_then(|v| v.as_i64());
+                let era_max = args.get("era_max").and_then(|v| v.as_i64());
+                let include_mixes_over_10m = args
+                    .get("include_mixes_over_10m")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let limit = args
+                    .get("limit")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(200)
+                    .clamp(1, 1000) as usize;
 
-                let all = ctx
-                    .with_db(|db| {
-                        Box::pin(
-                            async move { db.get_all_tracks().await.map_err(|e| e.to_string()) },
-                        )
+                let filter = crate::libs::db_agent_queries::AgentTrackFilter {
+                    query,
+                    bpm_min,
+                    bpm_max,
+                    camelots,
+                    genre_family,
+                    era_min,
+                    era_max,
+                    include_mixes_over_10m,
+                    limit,
+                };
+                let mut matched = ctx
+                    .with_read_conn(|conn| {
+                        Box::pin(async move {
+                            crate::libs::db_agent_queries::query_agent_tracks_filtered(
+                                conn, &filter,
+                            )
+                            .await
+                            .map_err(|e| e.to_string())
+                        })
                     })
                     .await?;
-                let mut matched: Vec<Track> = all
-                    .into_iter()
-                    .filter(|t| {
-                        if !q.is_empty() {
-                            let hay = format!(
-                                "{} {} {} {}",
-                                t.title.to_lowercase(),
-                                t.artists.join(" ").to_lowercase(),
-                                t.album.to_lowercase(),
-                                t.genres.join(" ").to_lowercase()
-                            );
-                            if !hay.contains(&q) {
-                                return false;
-                            }
-                        }
-                        let bpm = t.bpm.unwrap_or(124.0);
-                        if let Some(min_b) = bpm_min
-                            && bpm < min_b
-                        {
-                            return false;
-                        }
-                        if let Some(max_b) = bpm_max
-                            && bpm > max_b
-                        {
-                            return false;
-                        }
-                        if let Some(ref cam) = camelot {
-                            let tc = t.camelot.as_deref().unwrap_or("8A").to_ascii_uppercase();
-                            if &tc != cam {
-                                return false;
-                            }
-                        }
-                        true
-                    })
-                    .collect();
                 sort_tracks_harmonically(&mut matched);
 
                 let items: Vec<Value> = matched

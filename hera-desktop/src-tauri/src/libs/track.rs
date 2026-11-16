@@ -7,7 +7,7 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -27,6 +27,9 @@ pub struct HotCuePin {
     pub seconds: f64,
     pub color: String,
     pub role: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub origin: Option<String>,
 }
 
 /**
@@ -97,6 +100,51 @@ pub struct Track {
     #[sqlx(json, default)]
     #[ts(optional)]
     pub hot_cues: Option<Vec<HotCuePin>>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub replay_gain_db: Option<f64>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub loudness_lufs: Option<f64>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub has_intro_vocals: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub has_outro_vocals: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub is_own_production: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub has_bpm_trust_diff: Option<bool>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub waveform_peaks_b64: Option<String>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub embedding_64d_b64: Option<String>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub inferred_genre_family: Option<String>,
+    #[sqlx(default)]
+    #[ts(optional, type = "number")]
+    pub inferred_era_year: Option<i64>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub partial_hash_64kb: Option<String>,
+    #[sqlx(default)]
+    #[ts(optional, type = "number")]
+    pub file_size_bytes: Option<i64>,
+    #[sqlx(default)]
+    #[ts(optional)]
+    pub legacy_bpm: Option<f64>,
+    #[sqlx(default)]
+    #[ts(optional, type = "number")]
+    pub bitrate_kbps: Option<i64>,
+    #[sqlx(default)]
+    #[ts(optional, type = "number")]
+    pub sample_rate_hz: Option<i64>,
 }
 
 /**
@@ -123,7 +171,7 @@ fn cue_color_for_slot(num: u8) -> &'static str {
 }
 
 fn enrich_track_with_hera_dsp(
-    path: &PathBuf,
+    path: &Path,
     track_id: &str,
     title: &str,
     duration_secs: u32,
@@ -184,6 +232,7 @@ fn enrich_track_with_hera_dsp(
                 seconds: ((c.seconds as f64) * 10.0).round() / 10.0,
                 color: cue_color_for_slot(c.num).to_string(),
                 role: c.role,
+                origin: Some("hera_auto".to_string()),
             })
             .collect();
         return (final_bpm, final_camelot, final_energy, seal, pins);
@@ -192,7 +241,7 @@ fn enrich_track_with_hera_dsp(
     let hash_seed: u32 = title
         .bytes()
         .fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
-    let final_bpm = tag_bpm.unwrap_or_else(|| 120.0 + ((hash_seed % 11) as f64));
+    let final_bpm = tag_bpm.unwrap_or(120.0 + ((hash_seed % 11) as f64));
     let camelot_ring = [
         "8A", "9A", "10A", "7A", "6A", "5A", "8B", "9B", "11A", "4A", "12A", "1A",
     ];
@@ -219,6 +268,7 @@ fn enrich_track_with_hera_dsp(
             seconds: intro_sec,
             color: "#22c55e".to_string(),
             role: "intro".to_string(),
+            origin: Some("hera_auto".to_string()),
         },
         HotCuePin {
             num: 2,
@@ -226,6 +276,7 @@ fn enrich_track_with_hera_dsp(
             seconds: break_sec,
             color: "#3b82f6".to_string(),
             role: "breakdown".to_string(),
+            origin: Some("hera_auto".to_string()),
         },
         HotCuePin {
             num: 3,
@@ -233,6 +284,7 @@ fn enrich_track_with_hera_dsp(
             seconds: drop_sec,
             color: "#ef4444".to_string(),
             role: "drop".to_string(),
+            origin: Some("hera_auto".to_string()),
         },
         HotCuePin {
             num: 4,
@@ -240,14 +292,13 @@ fn enrich_track_with_hera_dsp(
             seconds: outro_sec,
             color: "#eab308".to_string(),
             role: "outro".to_string(),
+            origin: Some("hera_auto".to_string()),
         },
     ];
     (final_bpm, final_camelot, final_energy, seal, pins)
 }
 
-fn parse_filename_metadata(
-    path: &PathBuf,
-) -> (Option<String>, String, Option<f64>, Option<String>) {
+fn parse_filename_metadata(path: &Path) -> (Option<String>, String, Option<f64>, Option<String>) {
     let raw_stem = path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -260,29 +311,29 @@ fn parse_filename_metadata(
     let mut hint_camelot: Option<String> = None;
 
     // Extract optional bracketed DJ metadata suffix like `[124BPM 9A]`
-    if let (Some(open_idx), Some(close_idx)) = (raw_stem.rfind('['), raw_stem.rfind(']')) {
-        if close_idx > open_idx {
-            let inside = raw_stem[open_idx + 1..close_idx].trim();
-            for token in inside.split_whitespace() {
-                let upper = token.to_ascii_uppercase();
-                if let Some(bpm_str) = upper.strip_suffix("BPM") {
-                    if let Ok(val) = bpm_str.trim().parse::<f64>() {
-                        if (40.0..=240.0).contains(&val) {
-                            hint_bpm = Some(val);
-                        }
-                    }
-                } else if (upper.ends_with('A') || upper.ends_with('B')) && upper.len() >= 2 {
-                    if let Ok(num) = upper[..upper.len() - 1].parse::<u8>() {
-                        if (1..=12).contains(&num) {
-                            hint_camelot = Some(upper);
-                        }
-                    }
+    if let (Some(open_idx), Some(close_idx)) = (raw_stem.rfind('['), raw_stem.rfind(']'))
+        && close_idx > open_idx
+    {
+        let inside = raw_stem[open_idx + 1..close_idx].trim();
+        for token in inside.split_whitespace() {
+            let upper = token.to_ascii_uppercase();
+            if let Some(bpm_str) = upper.strip_suffix("BPM") {
+                if let Ok(val) = bpm_str.trim().parse::<f64>()
+                    && (40.0..=240.0).contains(&val)
+                {
+                    hint_bpm = Some(val);
                 }
+            } else if (upper.ends_with('A') || upper.ends_with('B'))
+                && upper.len() >= 2
+                && let Ok(num) = upper[..upper.len() - 1].parse::<u8>()
+                && (1..=12).contains(&num)
+            {
+                hint_camelot = Some(upper);
             }
-            let prefix = raw_stem[..open_idx].trim();
-            if !prefix.is_empty() {
-                clean_stem = prefix.to_string();
-            }
+        }
+        let prefix = raw_stem[..open_idx].trim();
+        if !prefix.is_empty() {
+            clean_stem = prefix.to_string();
         }
     }
 
@@ -311,7 +362,6 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
     let (stem_artist, stem_title, stem_bpm, stem_camelot) = parse_filename_metadata(path);
 
     match Probe::open(path)
-        .map_err(lofty::error::LoftyError::from)
         .and_then(|p| p.options(ParseOptions::new().read_cover_art(false)).read())
     {
         Ok(tagged_file) => {
@@ -428,14 +478,34 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                 exit_bpm: None,
                 hot_cues: Some(hot_cues),
                 scan_level: Some(1),
-                is_transition_candidate: None,
-                is_fake_320kbps: None,
+                is_transition_candidate: Some(false),
+                is_fake_320kbps: Some(false),
                 waveform_peaks_blob: None,
+                replay_gain_db: None,
+                loudness_lufs: None,
+                has_intro_vocals: Some(false),
+                has_outro_vocals: Some(false),
+                is_own_production: Some(false),
+                has_bpm_trust_diff: Some(false),
+                waveform_peaks_b64: None,
+                embedding_64d_b64: None,
+                inferred_genre_family: None,
+                inferred_era_year: None,
+                partial_hash_64kb:
+                    hera_node_rs::bpm_engine::v2_core::audio_ingest::fast_partial_file_hash(path)
+                        .ok(),
+                file_size_bytes: std::fs::metadata(path)
+                    .ok()
+                    .and_then(|m| i64::try_from(m.len()).ok()),
+                legacy_bpm: tag_bpm,
+                bitrate_kbps: tagged_file.properties().audio_bitrate().map(i64::from),
+                sample_rate_hz: tagged_file.properties().sample_rate().map(i64::from),
             })
         }
         Err(err) => {
             if let Ok(decoded) = hera_node_rs::forensics::decode_audio_file_partial(path, 45.0) {
                 let duration = decoded.duration_seconds.round().max(1.0) as u32;
+                let sr_hz = i64::from(decoded.sample_rate);
                 let artist = stem_artist.unwrap_or_else(|| "Unknown Artist".to_string());
                 let (bpm, camelot, energy, hera_seal, hot_cues) = enrich_track_with_hera_dsp(
                     path,
@@ -480,9 +550,30 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                     exit_bpm: None,
                     hot_cues: Some(hot_cues),
                     scan_level: Some(1),
-                    is_transition_candidate: None,
-                    is_fake_320kbps: None,
+                    is_transition_candidate: Some(false),
+                    is_fake_320kbps: Some(false),
                     waveform_peaks_blob: None,
+                    replay_gain_db: None,
+                    loudness_lufs: None,
+                    has_intro_vocals: Some(false),
+                    has_outro_vocals: Some(false),
+                    is_own_production: Some(false),
+                    has_bpm_trust_diff: Some(false),
+                    waveform_peaks_b64: None,
+                    embedding_64d_b64: None,
+                    inferred_genre_family: None,
+                    inferred_era_year: None,
+                    partial_hash_64kb:
+                        hera_node_rs::bpm_engine::v2_core::audio_ingest::fast_partial_file_hash(
+                            path,
+                        )
+                        .ok(),
+                    file_size_bytes: std::fs::metadata(path)
+                        .ok()
+                        .and_then(|m| i64::try_from(m.len()).ok()),
+                    legacy_bpm: stem_bpm,
+                    bitrate_kbps: None,
+                    sample_rate_hz: Some(sr_hz),
                 });
             }
             warn!("Failed to read audio file: \"{}\". File {:?}", err, path);
@@ -533,6 +624,11 @@ pub fn get_indexed_track_fast(path: &PathBuf) -> AnyResult<Track> {
         .map(|s| s.to_ascii_lowercase())
         .unwrap_or_default();
     let is_video = matches!(ext_lower.as_str(), "mp4" | "m4v" | "mov" | "webm" | "mkv");
+    let file_size_bytes = std::fs::metadata(path)
+        .ok()
+        .and_then(|m| i64::try_from(m.len()).ok());
+    let partial_hash_64kb =
+        hera_node_rs::bpm_engine::v2_core::audio_ingest::fast_partial_file_hash(path).ok();
 
     if matches!(ext_lower.as_str(), "webm" | "mkv") {
         let artist = stem_artist.unwrap_or_else(|| "Unknown Artist".to_string());
@@ -563,9 +659,24 @@ pub fn get_indexed_track_fast(path: &PathBuf) -> AnyResult<Track> {
             exit_bpm: None,
             hot_cues: None,
             scan_level: Some(0),
-            is_transition_candidate: None,
-            is_fake_320kbps: None,
+            is_transition_candidate: Some(false),
+            is_fake_320kbps: Some(false),
             waveform_peaks_blob: None,
+            replay_gain_db: None,
+            loudness_lufs: None,
+            has_intro_vocals: Some(false),
+            has_outro_vocals: Some(false),
+            is_own_production: Some(false),
+            has_bpm_trust_diff: Some(false),
+            waveform_peaks_b64: None,
+            embedding_64d_b64: None,
+            inferred_genre_family: None,
+            inferred_era_year: None,
+            partial_hash_64kb,
+            file_size_bytes,
+            legacy_bpm: stem_bpm,
+            bitrate_kbps: None,
+            sample_rate_hz: None,
         });
     }
 
@@ -577,6 +688,8 @@ pub fn get_indexed_track_fast(path: &PathBuf) -> AnyResult<Track> {
                 .or_else(|| tagged_file.first_tag());
             let properties = tagged_file.properties();
             let duration = u32::try_from(properties.duration().as_secs()).unwrap_or(0);
+            let sample_rate_hz = properties.sample_rate().map(i64::from);
+            let bitrate_kbps = properties.audio_bitrate().map(i64::from);
             let title = tag
                 .and_then(|t| t.title())
                 .map(|s| s.into_owned())
@@ -635,9 +748,24 @@ pub fn get_indexed_track_fast(path: &PathBuf) -> AnyResult<Track> {
                 exit_bpm: None,
                 hot_cues: None,
                 scan_level: Some(0),
-                is_transition_candidate: None,
-                is_fake_320kbps: None,
+                is_transition_candidate: Some(false),
+                is_fake_320kbps: Some(false),
                 waveform_peaks_blob: None,
+                replay_gain_db: None,
+                loudness_lufs: None,
+                has_intro_vocals: Some(false),
+                has_outro_vocals: Some(false),
+                is_own_production: Some(false),
+                has_bpm_trust_diff: Some(false),
+                waveform_peaks_b64: None,
+                embedding_64d_b64: None,
+                inferred_genre_family: None,
+                inferred_era_year: None,
+                partial_hash_64kb,
+                file_size_bytes,
+                legacy_bpm: tag_bpm,
+                bitrate_kbps,
+                sample_rate_hz,
             })
         }
         Err(_) => {
@@ -669,9 +797,24 @@ pub fn get_indexed_track_fast(path: &PathBuf) -> AnyResult<Track> {
                 exit_bpm: None,
                 hot_cues: None,
                 scan_level: Some(0),
-                is_transition_candidate: None,
-                is_fake_320kbps: None,
+                is_transition_candidate: Some(false),
+                is_fake_320kbps: Some(false),
                 waveform_peaks_blob: None,
+                replay_gain_db: None,
+                loudness_lufs: None,
+                has_intro_vocals: Some(false),
+                has_outro_vocals: Some(false),
+                is_own_production: Some(false),
+                has_bpm_trust_diff: Some(false),
+                waveform_peaks_b64: None,
+                embedding_64d_b64: None,
+                inferred_genre_family: None,
+                inferred_era_year: None,
+                partial_hash_64kb,
+                file_size_bytes,
+                legacy_bpm: stem_bpm,
+                bitrate_kbps: None,
+                sample_rate_hz: None,
             })
         }
     }

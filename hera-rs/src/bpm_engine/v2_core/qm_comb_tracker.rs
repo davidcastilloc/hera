@@ -5,6 +5,7 @@ use rustfft::Fft;
 /// Calcula la autocorrelación lineal exacta sum_{i=l..win_len} x[i] * x[i - l] en O(M log M)
 /// mediante el teorema de Wiener-Khinchin con zero-padding (M >= 2 * win_len).
 #[inline]
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn linear_acf_wiener_khinchin(
     slice: &[f64],
     norm_energy: f64,
@@ -95,7 +96,7 @@ pub fn analyze_qm_comb_tempogram(nov: &MultibandNovelty) -> QmTempoAnalysis {
         n_fft
     ];
 
-    for w in 0..num_wins {
+    for (w, temp_row) in tempogram.iter_mut().enumerate().take(num_wins) {
         let start = w * win_hop;
         let comp_slice = &nov.composite[start..start + win_len];
         let sub_slice = &nov.sub_kick[start..start + win_len];
@@ -163,7 +164,7 @@ pub fn analyze_qm_comb_tempogram(nov: &MultibandNovelty) -> QmTempoAnalysis {
             let mild_prior = 0.65 + 0.35 * (rayleigh / (0.6065 / beta));
 
             let weighted_c = comb_c * mild_prior;
-            tempogram[w][lag] = weighted_c;
+            temp_row[lag] = weighted_c;
             global_comp_comb[lag] += weighted_c;
             global_sub_comb[lag] += comb_s;
         }
@@ -216,9 +217,7 @@ fn decode_viterbi_tempo_path(tempogram: &[Vec<f64>], min_lag: usize, max_lag: us
     let mut dp = vec![0.0_f64; num_lags];
     let mut back = vec![vec![min_lag; num_lags]; n_wins];
 
-    for lag in min_lag..=max_lag {
-        dp[lag] = tempogram[0][lag];
-    }
+    dp[min_lag..=max_lag].copy_from_slice(&tempogram[0][min_lag..=max_lag]);
 
     let sigma_step = 2.2_f64;
     for w in 1..n_wins {
@@ -228,10 +227,10 @@ fn decode_viterbi_tempo_path(tempogram: &[Vec<f64>], min_lag: usize, max_lag: us
             let hi = (curr + 8).min(max_lag);
             let mut best_prev = curr;
             let mut best_val = -1e18_f64;
-            for prev in lo..=hi {
+            for (prev, &dp_prev) in dp.iter().enumerate().take(hi + 1).skip(lo) {
                 let diff = (curr as f64) - (prev as f64);
                 let trans_pen = -0.08 * (diff / sigma_step).powi(2);
-                let cand = dp[prev] + trans_pen;
+                let cand = dp_prev + trans_pen;
                 if cand > best_val {
                     best_val = cand;
                     best_prev = prev;

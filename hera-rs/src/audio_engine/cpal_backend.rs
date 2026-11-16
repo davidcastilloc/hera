@@ -122,7 +122,7 @@ where
     let mut stereo_scratch = vec![0.0_f32; SCRATCH_STEREO_FRAMES * 2];
     device
         .build_output_stream(
-            config.clone(),
+            *config,
             move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
                 let total_frames = data.len() / channels;
                 let mut offset_frames = 0usize;

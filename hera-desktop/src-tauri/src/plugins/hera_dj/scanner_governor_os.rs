@@ -9,7 +9,7 @@ use log::warn;
 
 use hera_node_rs::bpm_engine::v2_core::audio_ingest::ProcessLimiter;
 use hera_node_rs::scanner::fast_seek::run_fast_scan_on_file;
-use hera_node_rs::scanner::full_pass::{FullHotCue, run_full_pass_on_file};
+use hera_node_rs::scanner::full_pass::run_full_pass_on_file;
 use hera_node_rs::scanner::scheduler::ScanPriority;
 
 use crate::libs::db_scanner_queries::ScannerRowUpdate;
@@ -136,55 +136,6 @@ fn probe_duration_fast_secs(path: &Path) -> u32 {
         .unwrap_or(0)
 }
 
-fn empty_failure_update(
-    track_id: String,
-    duration_sec: Option<u32>,
-    target_level: i64,
-) -> ScannerRowUpdate {
-    ScannerRowUpdate {
-        track_id,
-        bpm: None,
-        camelot: None,
-        energy: None,
-        hot_cues_json: None,
-        waveform_peaks_blob: None,
-        scan_level: target_level,
-        is_transition_candidate: false,
-        is_fake_320kbps: false,
-        duration_sec,
-    }
-}
-
-fn map_full_cues(cues: Vec<FullHotCue>) -> Vec<HotCuePin> {
-    cues.into_iter()
-        .take(8)
-        .map(|c| {
-            let (color, default_role) = match c.num {
-                1 => ("#22c55e", "Intro"),
-                2 => ("#38bdf8", "Breakdown"),
-                3 => ("#ef4444", "Drop"),
-                4 => ("#f59e0b", "Outro"),
-                5 => ("#a855f7", "Phrase"),
-                6 => ("#06b6d4", "Breakdown"),
-                7 => ("#ec4899", "Drop"),
-                _ => ("#eab308", "Outro"),
-            };
-            let role = if c.role.is_empty() {
-                default_role.to_string()
-            } else {
-                c.role
-            };
-            HotCuePin {
-                num: c.num,
-                name: c.name,
-                seconds: ((c.seconds * 10.0).round()) / 10.0,
-                color: color.to_string(),
-                role,
-            }
-        })
-        .collect()
-}
-
 pub(super) fn execute_isolated_worker_job(
     track_id: String,
     path: String,
@@ -197,7 +148,7 @@ pub(super) fn execute_isolated_worker_job(
     if let Some(reason) = check_unreadable_or_zero_byte_file(path_obj) {
         warn!("Quarantining unreadable/zero-byte track {path}: {reason}");
         return Some(ProcessedTrackOutcome {
-            update: empty_failure_update(track_id, None, -1),
+            update: ScannerRowUpdate::failure(track_id, None, -1),
             hot_cues: None,
             corrupt_issue: Some((path, reason)),
         });
@@ -219,21 +170,9 @@ pub(super) fn execute_isolated_worker_job(
     if is_level_2 {
         match run_isolated_scan_job(|| run_full_pass_on_file(path_obj, None, Some(limiter))) {
             Ok(Ok(res)) => {
-                let pins = map_full_cues(res.hot_cues);
-                let hot_cues_json = serde_json::to_string(&pins).ok();
+                let (update, pins) = ScannerRowUpdate::from_full_pass(track_id, res, duration_opt);
                 Some(ProcessedTrackOutcome {
-                    update: ScannerRowUpdate {
-                        track_id,
-                        bpm: Some(res.bpm),
-                        camelot: Some(res.camelot_key),
-                        energy: None,
-                        hot_cues_json,
-                        waveform_peaks_blob: Some(res.waveform_peaks_blob),
-                        scan_level: 2,
-                        is_transition_candidate: false,
-                        is_fake_320kbps: false,
-                        duration_sec: duration_opt,
-                    },
+                    update,
                     hot_cues: Some(pins),
                     corrupt_issue: None,
                 })
@@ -242,7 +181,7 @@ pub(super) fn execute_isolated_worker_job(
                 warn!("Full pass failed for {path}: {e}");
                 let quarantine = current_level <= 0;
                 Some(ProcessedTrackOutcome {
-                    update: empty_failure_update(
+                    update: ScannerRowUpdate::failure(
                         track_id,
                         duration_opt,
                         if quarantine { -1 } else { 2 },
@@ -254,7 +193,7 @@ pub(super) fn execute_isolated_worker_job(
             Err(panic_err) => {
                 warn!("Full pass panicked for {path}: {panic_err}");
                 Some(ProcessedTrackOutcome {
-                    update: empty_failure_update(track_id, duration_opt, -1),
+                    update: ScannerRowUpdate::failure(track_id, duration_opt, -1),
                     hot_cues: None,
                     corrupt_issue: Some((path, panic_err)),
                 })
@@ -263,18 +202,7 @@ pub(super) fn execute_isolated_worker_job(
     } else {
         match run_isolated_scan_job(|| run_fast_scan_on_file(path_obj, None, 320, Some(limiter))) {
             Ok(Ok(res)) => Some(ProcessedTrackOutcome {
-                update: ScannerRowUpdate {
-                    track_id,
-                    bpm: Some(res.bpm),
-                    camelot: Some(res.camelot_key),
-                    energy: None,
-                    hot_cues_json: None,
-                    waveform_peaks_blob: None,
-                    scan_level: 1,
-                    is_transition_candidate: res.is_transition_candidate,
-                    is_fake_320kbps: res.is_fake_320kbps,
-                    duration_sec: duration_opt,
-                },
+                update: ScannerRowUpdate::from_fast_scan(track_id, res, duration_opt),
                 hot_cues: None,
                 corrupt_issue: None,
             }),
@@ -282,7 +210,7 @@ pub(super) fn execute_isolated_worker_job(
                 warn!("Fast scan failed for {path}: {e}");
                 let quarantine = current_level <= 0;
                 Some(ProcessedTrackOutcome {
-                    update: empty_failure_update(
+                    update: ScannerRowUpdate::failure(
                         track_id,
                         duration_opt,
                         if quarantine { -1 } else { 1 },
@@ -294,7 +222,7 @@ pub(super) fn execute_isolated_worker_job(
             Err(panic_err) => {
                 warn!("Fast scan panicked for {path}: {panic_err}");
                 Some(ProcessedTrackOutcome {
-                    update: empty_failure_update(track_id, duration_opt, -1),
+                    update: ScannerRowUpdate::failure(track_id, duration_opt, -1),
                     hot_cues: None,
                     corrupt_issue: Some((path, panic_err)),
                 })

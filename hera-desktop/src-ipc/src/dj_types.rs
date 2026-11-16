@@ -192,3 +192,17 @@ pub struct ScanPhaseProgress {
     pub is_safe_dj_paused: bool,
     pub phase_description: String,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+pub struct DiscoveredMusicRoot {
+    pub root_path: String,
+    pub source_db: String,
+    #[ts(type = "number")]
+    pub workable_tracks_count: usize,
+    #[ts(type = "number")]
+    pub mixes_over_10m_count: usize,
+    #[ts(type = "number")]
+    pub skipped_short_sfx_count: usize,
+    #[ts(type = "number")]
+    pub video_tracks_count: usize,
+}

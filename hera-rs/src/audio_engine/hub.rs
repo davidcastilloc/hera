@@ -270,14 +270,14 @@ impl AudioControllerHub {
     }
 
     pub(crate) fn set_master_volume(&self, volume: f32) -> AudioTransportSnapshot {
-        let bits = volume
-            .is_finite()
-            .then(|| volume.clamp(0.0, 2.0))
-            .unwrap_or(0.0)
-            .to_bits();
+        let clamped = if volume.is_finite() {
+            volume.clamp(0.0, 2.0)
+        } else {
+            0.0
+        };
         self.atomics
             .master_volume_bits
-            .store(bits, Ordering::Release);
+            .store(clamped.to_bits(), Ordering::Release);
         self.snapshot()
     }
 

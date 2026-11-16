@@ -51,10 +51,10 @@ pub fn content_type_for_extension(ext: &str) -> Option<&'static str> {
         .map(|(_, ct)| *ct)
 }
 
-/** ----------------------------------------------------------------------------
+/* -----------------------------------------------------------------------------
  * Databases
  * exposes databases for tracks and playlists
- * * -------------------------------------------------------------------------- */
+ * -------------------------------------------------------------------------- */
 
 fn normalize_track(mut track: Track) -> Track {
     if track.bpm.is_some_and(|b| b <= 0.0) {
@@ -93,7 +93,11 @@ impl DB {
                 track_no, track_of, disk_no, disk_of, is_compilation, bpm, camelot,
                 energy, hera_seal, is_video, scan_level, is_transition_candidate,
                 is_fake_320kbps, NULL AS waveform_peaks_blob, is_mix_over_10m,
-                has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues
+                has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues,
+                replay_gain_db, loudness_lufs, has_intro_vocals, has_outro_vocals,
+                is_own_production, has_bpm_trust_diff, waveform_peaks_b64,
+                embedding_64d_b64, inferred_genre_family, inferred_era_year,
+                partial_hash_64kb, file_size_bytes, legacy_bpm, bitrate_kbps, sample_rate_hz
             FROM tracks
             "#,
         )
@@ -324,6 +328,21 @@ impl DB {
         }
         let mut tx = self.connection.begin().await?;
         for track in tracks {
+            let healed_id = if let (Some(hash), Some(size)) =
+                (track.partial_hash_64kb.as_deref(), track.file_size_bytes)
+            {
+                super::db_scanner_queries::try_heal_moved_track_path(
+                    &mut tx,
+                    hash,
+                    size,
+                    &track.path,
+                )
+                .await?
+            } else {
+                None
+            };
+            let effective_id = healed_id.as_deref().unwrap_or(&track.id);
+
             sqlx::query(
                 r#"
                 INSERT INTO tracks (
@@ -331,8 +350,9 @@ impl DB {
                     duration, track_no, track_of, disk_no, disk_of, is_compilation,
                     bpm, camelot, energy, hera_seal, is_video, is_mix_over_10m,
                     has_audio_skips, is_variable_bpm, entry_bpm, exit_bpm, hot_cues,
-                    scan_level, is_transition_candidate, is_fake_320kbps
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    scan_level, is_transition_candidate, is_fake_320kbps,
+                    partial_hash_64kb, file_size_bytes, legacy_bpm, bitrate_kbps, sample_rate_hz
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(path) DO UPDATE SET
                     title = excluded.title,
                     album = excluded.album,
@@ -345,11 +365,16 @@ impl DB {
                     is_mix_over_10m = CASE WHEN excluded.duration > 600 THEN 1 ELSE tracks.is_mix_over_10m END,
                     bpm = CASE WHEN excluded.bpm > 0.0 AND (tracks.user_locked_bpm_key = 0) THEN excluded.bpm ELSE tracks.bpm END,
                     camelot = CASE WHEN excluded.camelot != '' AND (tracks.user_locked_bpm_key = 0) THEN excluded.camelot ELSE tracks.camelot END,
-                    hot_cues = CASE WHEN excluded.hot_cues != '[]' AND (tracks.user_locked_bpm_key = 0) THEN excluded.hot_cues ELSE tracks.hot_cues END,
-                    scan_level = MAX(tracks.scan_level, excluded.scan_level)
+                    hot_cues = CASE WHEN excluded.hot_cues != '[]' AND (tracks.user_locked_bpm_key = 0) AND (tracks.user_locked_cues = 0) THEN excluded.hot_cues ELSE tracks.hot_cues END,
+                    scan_level = MAX(tracks.scan_level, excluded.scan_level),
+                    partial_hash_64kb = COALESCE(excluded.partial_hash_64kb, tracks.partial_hash_64kb),
+                    file_size_bytes = COALESCE(excluded.file_size_bytes, tracks.file_size_bytes),
+                    legacy_bpm = COALESCE(excluded.legacy_bpm, tracks.legacy_bpm),
+                    bitrate_kbps = COALESCE(excluded.bitrate_kbps, tracks.bitrate_kbps),
+                    sample_rate_hz = COALESCE(excluded.sample_rate_hz, tracks.sample_rate_hz)
                 "#,
             )
-            .bind(&track.id)
+            .bind(effective_id)
             .bind(&track.path)
             .bind(&track.title)
             .bind(&track.album)
@@ -377,6 +402,11 @@ impl DB {
             .bind(track.scan_level.unwrap_or(0))
             .bind(track.is_transition_candidate.unwrap_or(false))
             .bind(track.is_fake_320kbps.unwrap_or(false))
+            .bind(&track.partial_hash_64kb)
+            .bind(track.file_size_bytes)
+            .bind(track.legacy_bpm)
+            .bind(track.bitrate_kbps)
+            .bind(track.sample_rate_hz)
             .execute(&mut *tx)
             .await?;
         }
@@ -515,6 +545,7 @@ impl DB {
         super::db_offline_queries::has_compilation_tracks(conn).await
     }
 
+    #[allow(dead_code)]
     pub async fn has_compilations(&mut self) -> AnyResult<bool> {
         Self::read_has_compilations(&mut self.connection).await
     }
@@ -568,7 +599,7 @@ impl DB {
             .await?;
 
         // Ensure the playlists are sorted alphabetically (case-insensitive) for better UX
-        playlists.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+        playlists.sort_by_key(|a| a.name.to_lowercase());
 
         Ok(playlists)
     }
@@ -663,7 +694,7 @@ impl DB {
     }
 
     /** Delete a playlist by ID */
-    pub async fn delete_playlist(&mut self, id: &String) -> AnyResult<()> {
+    pub async fn delete_playlist(&mut self, id: &str) -> AnyResult<()> {
         super::db_offline_queries::delete_playlist_by_id(&mut self.connection, id).await
     }
 

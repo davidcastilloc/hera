@@ -102,17 +102,17 @@ pub(crate) fn resolve_tick_telemetry_frame(
         }
         return None;
     }
-    if snap.backend_kind != "headless_clock" {
-        if let Some(last) = last_real_frame {
-            last.rms_left *= 0.96;
-            last.rms_right *= 0.96;
-            for bin in last.spectrum_bins.iter_mut() {
-                *bin *= 0.96;
-            }
-            last.current_time_sec = snap.current_time_sec;
-            last.is_playing = snap.is_playing;
-            return Some(last.clone());
+    if snap.backend_kind != "headless_clock"
+        && let Some(last) = last_real_frame
+    {
+        last.rms_left *= 0.96;
+        last.rms_right *= 0.96;
+        for bin in last.spectrum_bins.iter_mut() {
+            *bin *= 0.96;
         }
+        last.current_time_sec = snap.current_time_sec;
+        last.is_playing = snap.is_playing;
+        return Some(last.clone());
     }
     let seq = seq_counter.fetch_add(1, Ordering::Relaxed);
     Some(synthesize_telemetry_frame_from_snapshot(snap, seq))
@@ -151,10 +151,9 @@ pub async fn subscribe_audio_telemetry(
             let snap = backend.snapshot();
             if let Some(frame) =
                 resolve_tick_telemetry_frame(raw_opt, &snap, &mut last_real_frame, &SYNTH_FRAME_SEQ)
+                && on_frame.send(frame).is_err()
             {
-                if on_frame.send(frame).is_err() {
-                    break;
-                }
+                break;
             }
         }
     });

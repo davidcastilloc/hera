@@ -11,6 +11,7 @@ mod tests;
 pub mod vdj_xml_parser;
 mod virtualdj_live;
 pub mod workability;
+pub mod workability_discovery;
 
 use hera_node_rs::audio_engine::create_default_audio_backend;
 use hera_node_rs::cloudflare_edge::{CloudflareEdgeCapabilities, get_cloudflare_edge_capabilities};

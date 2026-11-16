@@ -26,6 +26,7 @@ pub fn mark_exiting_explicitly() {
     EXITING_EXPLICITLY.store(true, Ordering::SeqCst);
 }
 
+#[allow(clippy::type_complexity)]
 pub fn is_window_visible_on_monitors(
     win_pos: (i32, i32),
     monitors: &[((i32, i32), (u32, u32))],

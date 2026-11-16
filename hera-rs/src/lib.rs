@@ -15,6 +15,7 @@ pub mod p2p;
 pub mod p2p_exchange;
 pub mod router;
 pub mod scanner;
+pub mod shazam_id;
 pub mod structure;
 pub mod synergy;
 pub mod synergy_hnsw;
