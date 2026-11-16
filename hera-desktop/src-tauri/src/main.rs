@@ -5,11 +5,9 @@ mod libs;
 mod plugins;
 
 use libs::init::init;
-use libs::utils::get_theme_from_name;
 use log::{LevelFilter, info};
-use plugins::config::{ConfigManager, get_storage_dir};
+use plugins::config::get_storage_dir;
 use std::env;
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_log::fern::colors::ColoredLevelConfig;
 use tauri_plugin_log::{Target, TargetKind};
 use tauri_plugin_prevent_default::Flags;
@@ -61,13 +59,7 @@ fn main() {
         )
         // Ensure a single instance of the app is running, if needed, play opened files
         .plugin(tauri_plugin_single_instance::init(|app_handle, args, _| {
-            // Focus on the already running app in case the app is opened again
-            if let Some(window) = app_handle.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
-
+            libs::tray::restore_and_focus_main_window(app_handle);
             plugins::file_associations::handle_opened_files(app_handle, args);
         }))
         // Custom integrations
@@ -120,43 +112,10 @@ fn main() {
 
     builder
         .setup(|app| {
-            let config_manager = app.state::<ConfigManager>();
-            let conf = config_manager.get()?;
-
-            // We intentionally create the window ourselves to set the window theme to the right value
-            let window_builder =
-                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
-                    .title("HERA Desktop")
-                    .visible(true)
-                    .focused(true)
-                    .theme(get_theme_from_name(&conf.theme))
-                    .background_color(tauri::window::Color(12, 14, 18, 255))
-                    .inner_size(1180.0, 720.0)
-                    .min_inner_size(960.0, 580.0)
-                    .fullscreen(false)
-                    .resizable(true)
-                    .zoom_hotkeys_enabled(true);
-
-            // TODO: Windows drag-n-drop on windows does not work :|
-            // https://github.com/tauri-apps/wry/issues/904
-            #[cfg(target_os = "windows")]
-            window_builder.disable_drag_drop_handler().build()?;
-
-            // On macOS, we hide the native frame and use overlay controls as they're nicer
-            #[cfg(target_os = "macos")]
-            window_builder
-                .hidden_title(true)
-                .title_bar_style(tauri::TitleBarStyle::Overlay)
-                .traffic_light_position(tauri::Position::Logical(tauri::LogicalPosition {
-                    x: 10.0,
-                    // this will look meh on macOS 26 https://github.com/tauri-apps/tauri/issues/14477
-                    // but we're keeping this for not looking even worse on macOS 14 and 15
-                    y: 23.0,
-                }))
-                .build()?;
-
-            #[cfg(target_os = "linux")]
-            window_builder.build()?;
+            libs::tray::create_main_window(app.handle())?;
+            if let Err(err) = libs::tray::setup_system_tray(app.handle()) {
+                log::warn!("System tray setup warning: {err}");
+            }
 
             info!("Main window built");
 

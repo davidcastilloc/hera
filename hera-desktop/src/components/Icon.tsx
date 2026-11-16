@@ -35,6 +35,7 @@ import volumeLow from '../assets/icons/volume-low.svg?react';
 import volumeMedium from '../assets/icons/volume-medium.svg?react';
 import volumeMute from '../assets/icons/volume-mute.svg?react';
 import volumeOff from '../assets/icons/volume-off.svg?react';
+import x from '../assets/icons/x.svg?react';
 
 const icons: Record<
   string,
@@ -74,6 +75,7 @@ const icons: Record<
   volumeMedium,
   volumeMute,
   volumeOff,
+  x,
 };
 
 export type IconName = keyof typeof icons;

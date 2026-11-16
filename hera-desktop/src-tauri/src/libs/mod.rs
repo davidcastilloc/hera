@@ -5,6 +5,7 @@ pub mod error;
 pub mod events;
 pub mod fast_library_scan;
 pub mod init;
+pub mod tray;
 pub mod utils;
 
 /**

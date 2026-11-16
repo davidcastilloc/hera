@@ -12,6 +12,7 @@ import {
 } from '../lib/scanner-v3';
 import queryClient from '../lib/query-client';
 import { allTracksQuery, configQuery } from '../lib/queries';
+import { useMiniModeStore } from '../lib/mini-mode-store';
 import useLibraryStore from '../lib/store';
 
 /**
@@ -197,12 +198,22 @@ function LibraryEvents() {
       }
     });
 
+    const p6 = listen('hera:tray-toggle-mini', () => {
+      void useMiniModeStore.getState().toggleMiniMode();
+    });
+
+    const p7 = listen('hera:window-restored', () => {
+      window.dispatchEvent(new Event('resize'));
+    });
+
     return () => {
       void p1.then((unlisten) => unlisten());
       void p2.then((unlisten) => unlisten());
       void p3.then((unlisten) => unlisten());
       void p4.then((unlisten) => unlisten());
       void p5.then((unlisten) => unlisten());
+      void p6.then((unlisten) => unlisten());
+      void p7.then((unlisten) => unlisten());
       unsubscribeScanner();
     };
   }, []);

@@ -1,31 +1,29 @@
-use tauri::Runtime;
 use tauri::plugin::{Builder, TauriPlugin};
+use tauri::{Manager as _, Runtime};
 
 /**
- * Plugin in charge on making sure closing the app does not stop the audio
+ * Plugin in charge of minimizing main window to System Tray on close when tray is active
  */
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::<R>::new("app-close")
         .on_window_ready(|win| {
-            // Prevent macOS to kill the player when closing the main window. Instead,
-            // the window should be hidden and re-shown when invoking it again.
-            #[cfg(target_os = "macos")]
-            {
-                use tauri::Manager as _; // Suppress warning about unused import.
-
-                // Weird, should "win" be a reference instead maybe?
-                let window = win.clone();
-
-                win.on_window_event(move |event| {
-                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                        window.app_handle().hide().unwrap();
+            if win.label() != "main" {
+                return;
+            }
+            let window = win.clone();
+            win.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    if !crate::libs::tray::is_exiting_explicitly()
+                        && window
+                            .app_handle()
+                            .tray_by_id(crate::libs::tray::HERA_TRAY_ID)
+                            .is_some()
+                    {
+                        let _ = window.hide();
                         api.prevent_close();
                     }
-                });
-            }
-
-            #[cfg(not(target_os = "macos"))]
-            drop(win); // Suppress warning about unused variable.
+                }
+            });
         })
         .build()
 }

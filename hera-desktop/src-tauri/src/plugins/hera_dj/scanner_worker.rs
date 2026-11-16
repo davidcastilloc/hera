@@ -327,6 +327,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                         "governorActive": sched.governor.is_deck_playing(),
                     });
                     let _ = app_handle.emit("hera:scanner-telemetry", telemetry);
+                    crate::libs::tray::update_tray_scanner_status(&app_handle, fast_done, full_done, total, is_busy);
                     was_idle = !is_busy && !updates_flushed;
                 }
             }
