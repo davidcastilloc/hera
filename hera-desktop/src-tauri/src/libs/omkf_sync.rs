@@ -214,7 +214,14 @@ pub async fn flush_dirty_omkf_capsules(conn: &mut SqliteConnection) -> usize {
         .unwrap_or_default();
     let mut n = 0;
     for d in dirs {
-        if d.is_dir() && write_folder_omkf_from_db(conn, &d).await.is_ok() {
+        if d.is_dir()
+            && let Ok(cid) = write_folder_omkf_from_db(conn, &d).await
+        {
+            crate::libs::omkf_cloud_client::spawn_background_omkf_folder_cloud_sync(
+                "DaviDJ".to_string(),
+                cid,
+                d,
+            );
             n += 1;
         }
     }
