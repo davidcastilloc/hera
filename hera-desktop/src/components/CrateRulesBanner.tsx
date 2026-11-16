@@ -48,7 +48,7 @@ export function extractLedgerTxIds(
     ? ledgerEntries.join('\n')
     : (ledgerEntries ?? '');
   if (!raw) return [];
-  const matches = raw.matchAll(/tx:#([A-Za-z0-9_-]+)/g);
+  const matches = raw.matchAll(/tx:#?([A-Za-z0-9_-]+)/g);
   const seen = new Set<string>();
   const out: string[] = [];
   for (const m of matches) {

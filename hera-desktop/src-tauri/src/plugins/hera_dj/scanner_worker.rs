@@ -164,12 +164,12 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
 
         loop {
             interval.tick().await;
-            if tick_count % 12 == 0 {
+            if tick_count.is_multiple_of(12) {
                 sched
                     .governor
                     .set_on_battery_power(detect_on_battery_power());
             }
-            if tick_count % 5 == 0 {
+            if tick_count.is_multiple_of(5) {
                 let _ = crate::libs::omkf_sync::flush_dirty_omkf_capsules(&mut conn).await;
             }
             tick_count = tick_count.wrapping_add(1);

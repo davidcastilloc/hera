@@ -68,7 +68,7 @@ fn test_tauri_v2_acl_triad_parity() {
         "CARGO_MANIFEST_DIR"
     )))
     .unwrap();
-    assert_eq!(report.commands_checked, 63);
+    assert_eq!(report.commands_checked, 77);
 }
 
 #[test]

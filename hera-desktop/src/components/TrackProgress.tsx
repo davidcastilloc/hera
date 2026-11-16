@@ -39,10 +39,18 @@ export default function TrackProgress(props: Props) {
     return () => cancelAnimationFrame(rafId);
   }, [isPlaying]);
 
-  const hotCues = useMemo(() => getFourHotCuesForTrack(trackPlaying), [trackPlaying]);
-  const jumpAudioTo = useCallback((value: number) => player.setCurrentTime(value), []);
+  const hotCues = useMemo(
+    () => getFourHotCuesForTrack(trackPlaying),
+    [trackPlaying],
+  );
+  const jumpAudioTo = useCallback(
+    (value: number) => player.setCurrentTime(value),
+    [],
+  );
 
-  const [tooltipTargetTime, setTooltipTargetTime] = useState<null | number>(null);
+  const [tooltipTargetTime, setTooltipTargetTime] = useState<null | number>(
+    null,
+  );
   const [tooltipX, setTooltipX] = useState<null | number>(null);
 
   const showTooltip = useCallback(
@@ -66,14 +74,31 @@ export default function TrackProgress(props: Props) {
   const durationMax = Math.max(1, trackPlaying.duration);
 
   return (
-    <Slider.Root min={0} max={durationMax} step={0.01} value={Math.min(elapsed, durationMax)} onValueChange={jumpAudioTo}>
-      <Slider.Control {...stylex.props(styles.trackRoot)} onMouseMoveCapture={showTooltip} onMouseLeave={hideTooltip}>
+    <Slider.Root
+      min={0}
+      max={durationMax}
+      step={0.01}
+      value={Math.min(elapsed, durationMax)}
+      onValueChange={jumpAudioTo}
+    >
+      <Slider.Control
+        {...stylex.props(styles.trackRoot)}
+        onMouseMoveCapture={showTooltip}
+        onMouseLeave={hideTooltip}
+      >
         <Slider.Track {...stylex.props(styles.trackProgress)}>
-          <WaveformPeaksCanvas peaks={trackPlaying.waveform_peaks_blob} peaksB64={trackPlaying.waveform_peaks_b64} progressPct={(elapsed / durationMax) * 100} />
+          <WaveformPeaksCanvas
+            peaks={trackPlaying.waveform_peaks_blob}
+            peaksB64={trackPlaying.waveform_peaks_b64}
+            progressPct={(elapsed / durationMax) * 100}
+          />
           <LiveSpectrumCanvas />
           <Slider.Indicator {...stylex.props(styles.trackRange)} />
           {hotCues.map((cue) => {
-            const pct = Math.min(99, Math.max(0.5, (cue.seconds / durationMax) * 100));
+            const pct = Math.min(
+              99,
+              Math.max(0.5, (cue.seconds / durationMax) * 100),
+            );
             return (
               <button
                 key={cue.num}
@@ -90,7 +115,10 @@ export default function TrackProgress(props: Props) {
           })}
           <div
             {...stylex.props(styles.progressTooltip)}
-            style={{ left: `${tooltipX}%`, display: tooltipX == null ? 'none' : 'block' }}
+            style={{
+              left: `${tooltipX}%`,
+              display: tooltipX == null ? 'none' : 'block',
+            }}
           >
             {tooltipContent}
           </div>

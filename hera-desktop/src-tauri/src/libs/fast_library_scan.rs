@@ -724,9 +724,11 @@ pub(crate) fn summarize_omkf_crate_md(
     } else {
         String::new()
     };
-    let era_span = (ymin <= ymax)
-        .then(|| format!("{ymin}-{ymax}"))
-        .unwrap_or_default();
+    let era_span = if ymin <= ymax {
+        format!("{ymin}-{ymax}")
+    } else {
+        String::new()
+    };
     let lufs_avg = (lufs / items.len().max(1) as f64) as f32;
     let md = OmkfCrateMdMetadata {
         crate_id: cid.into(),
@@ -1523,6 +1525,7 @@ pub(crate) async fn build_curated_playlist_in_db(
     })
 }
 
+#[allow(clippy::type_complexity)]
 pub(crate) fn parse_crate_intent_filters(
     lower: &str,
 ) -> (

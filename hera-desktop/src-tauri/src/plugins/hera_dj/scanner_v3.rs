@@ -176,6 +176,7 @@ pub(crate) async fn compute_sonic_twins(
     let q_emb = decode_i8_fixed::<64>(emb_opt.as_deref());
     let mut allowed = HashMap::<String, String>::new();
     if let Some(ref q) = q_emb {
+        #[allow(clippy::type_complexity)]
         let fc_rows: Vec<(String, String, Option<f64>, Option<f64>, i64, Option<String>)> =
             sqlx::query_as("SELECT crate_id, folder_path, bpm_min, bpm_max, camelot_mask, centroid_64d_b64 FROM folder_crates")
                 .fetch_all(&mut *conn).await.unwrap_or_default();
@@ -254,6 +255,7 @@ pub(crate) async fn compute_sonic_twins(
             return Ok(omkf_hits);
         }
     }
+    #[allow(clippy::type_complexity)]
     let rows: Vec<(String, String, String, Option<f64>, Option<String>, Option<String>, Option<String>, Option<String>)> =
         sqlx::query_as("SELECT id, title, album_artist, bpm, camelot, embedding_64d_b64, inferred_genre_family, crate_id FROM tracks WHERE scan_level >= 0 AND id != ?1 AND bpm BETWEEN ?2 AND ?3 LIMIT 800")
             .bind(track_id).bind(src_bpm * 0.90).bind(src_bpm * 1.12).fetch_all(&mut *conn).await.unwrap_or_default();

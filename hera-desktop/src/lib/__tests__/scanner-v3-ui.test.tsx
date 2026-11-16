@@ -270,8 +270,9 @@ describe('OMKF Milestone O5 UI components & helpers', () => {
       extractLedgerTxIds([
         '- 2026-11-16T10:00Z [agent:organizer] tx:#org_01',
         '- 2026-11-16T10:05Z tx:#org_02',
+        '- tx:org_03 | applied 4 moves | 2026-11-16T10:10Z',
       ]),
-    ).toEqual(['org_01', 'org_02']);
+    ).toEqual(['org_01', 'org_02', 'org_03']);
   });
 
   it('renders CrateRulesBanner and FolderCrateTree cleanly in SSR', () => {

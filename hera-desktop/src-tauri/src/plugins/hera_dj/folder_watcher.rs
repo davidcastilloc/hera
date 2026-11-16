@@ -243,7 +243,7 @@ async fn run_producer_tick<R: Runtime>(
     let mut indexed = HashSet::new();
     for b in collect_stabilized_bounces(&dirs, seen, Instant::now(), Duration::from_millis(1500)) {
         let mut db = db_state.get_lock().await;
-        if let Some((tid, phase, risk)) = process_producer_bounce(&mut *db, &b).await
+        if let Some((tid, phase, risk)) = process_producer_bounce(&mut db, &b).await
             && indexed.insert(tid.clone())
         {
             drop(db);
