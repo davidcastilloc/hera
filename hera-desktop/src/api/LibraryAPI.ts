@@ -52,7 +52,10 @@ async function scan(
       refresh,
     );
     const allTracks = await DatabaseBridge.getAllTracks();
-    if (allTracks.length > 0 || useLibraryStore.getState().tracks.length === 0) {
+    if (
+      allTracks.length > 0 ||
+      useLibraryStore.getState().tracks.length === 0
+    ) {
       useLibraryStore.setState({ tracks: allTracks });
     }
     await queryClient.invalidateQueries();
@@ -64,7 +67,10 @@ async function scan(
 
       toastManager.add({ title: message, type: 'success', timeout: 5000 });
     } else if (scanResult.playlist_count === 0) {
-      const currentTrackCount = Math.max(allTracks.length, useLibraryStore.getState().tracks.length);
+      const currentTrackCount = Math.max(
+        allTracks.length,
+        useLibraryStore.getState().tracks.length,
+      );
       toastManager.add({
         title:
           currentTrackCount === 0

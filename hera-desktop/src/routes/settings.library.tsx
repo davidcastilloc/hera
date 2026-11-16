@@ -80,8 +80,12 @@ function ViewSettingsLibrary() {
             </div>
             {etaSec > 0 && (
               <div {...stylex.props(styles.scanMetricItem)}>
-                <span {...stylex.props(styles.scanMetricLabel)}>Tiempo restante</span>
-                <span {...stylex.props(styles.scanMetricValue)}>~{etaSec}s</span>
+                <span {...stylex.props(styles.scanMetricLabel)}>
+                  Tiempo restante
+                </span>
+                <span {...stylex.props(styles.scanMetricValue)}>
+                  ~{etaSec}s
+                </span>
               </div>
             )}
             {fullDone > 0 && (

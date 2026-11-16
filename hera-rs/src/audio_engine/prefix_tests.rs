@@ -170,8 +170,10 @@ fn test_anti_oom_reserve_cap_and_fast_prefix_latency() {
         capped <= 900 * 48_000,
         "expected reserve_frames capped at <= 900s (43.2M frames), got {capped}"
     );
-    assert!(super::prefix_loader::PREFIX_DECODE_SECS <= 3.5);
-    assert!(super::prefix_loader::MAX_FULL_IN_MEMORY_DECODE_SECS <= 900.0);
+    const {
+        assert!(super::prefix_loader::PREFIX_DECODE_SECS <= 3.5);
+        assert!(super::prefix_loader::MAX_FULL_IN_MEMORY_DECODE_SECS <= 900.0);
+    }
 
     // 2. Prefix load of a 30s 44.1kHz -> 48kHz WAV must return rapidly using fast prefix resampler
     let wav_path = std::env::temp_dir().join(format!(

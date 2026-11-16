@@ -52,6 +52,7 @@ const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
     ("hera-desktop/src/components/LiveSpectrumCanvas.tsx", 240),
     ("hera-desktop/src/components/TrackProgress.tsx", 220),
     ("hera-desktop/src/lib/player.ts", 680),
+    ("hera-desktop/src-tauri/src/libs/omkf_cloud_client.rs", 260),
     ("hera-desktop/src-tauri/src/libs/omkf_sync.rs", 349),
 ];
 

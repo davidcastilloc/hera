@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import {
-  DEFAULT_FEATURE_FLAGS,
-  useFeatureFlags,
-} from '../feature-flags';
+import { DEFAULT_FEATURE_FLAGS, useFeatureFlags } from '../feature-flags';
 
 describe('useFeatureFlags', () => {
   beforeEach(() => {

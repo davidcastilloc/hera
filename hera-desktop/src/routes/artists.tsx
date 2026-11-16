@@ -95,7 +95,10 @@ function ViewArtists() {
             <Trans>No se encontraron artistas en la biblioteca</Trans>
           </p>
           <ViewMessage.Sub>
-            <Trans>Las canciones indexadas aparecerán organizadas por artista una vez procesadas</Trans>
+            <Trans>
+              Las canciones indexadas aparecerán organizadas por artista una vez
+              procesadas
+            </Trans>
           </ViewMessage.Sub>
         </ViewMessage.Notice>
       ) : (

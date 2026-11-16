@@ -1,6 +1,7 @@
 import { expect, test } from 'vite-plus/test';
 import { page } from 'vite-plus/test/browser';
 
+import { useFeatureFlags } from '../lib/feature-flags';
 import {
   beforeEachSetup,
   getMainNavigation,
@@ -72,51 +73,61 @@ test('Agente workspace should support approval toggle, suggestion pills, and pro
 });
 
 test('Transición view should compute harmonic bridge between Actual and Destino tracks', async () => {
-  await setupScannedLibrary();
+  useFeatureFlags.getState().setFlag('enableHarmonicBridge', true);
+  try {
+    await setupScannedLibrary();
 
-  await getMainNavigation().getByRole('link', { name: 'Transición' }).click();
+    await getMainNavigation().getByRole('link', { name: 'Transición' }).click();
 
-  await expect
-    .element(page.getByRole('heading', { name: 'Transición' }))
-    .toBeVisible();
-  await expect.element(page.getByText('Actual')).toBeVisible();
-  await expect.element(page.getByText('Destino')).toBeVisible();
+    await expect
+      .element(page.getByRole('heading', { name: 'Transición' }))
+      .toBeVisible();
+    await expect.element(page.getByText('Actual')).toBeVisible();
+    await expect.element(page.getByText('Destino')).toBeVisible();
 
-  await expect
-    .element(page.getByRole('button', { name: 'Guardar playlist' }))
-    .toBeVisible();
-  await expect
-    .element(page.getByRole('button', { name: 'Abrir en Agente' }))
-    .toBeVisible();
+    await expect
+      .element(page.getByRole('button', { name: 'Guardar playlist' }))
+      .toBeVisible();
+    await expect
+      .element(page.getByRole('button', { name: 'Abrir en Agente' }))
+      .toBeVisible();
+  } finally {
+    useFeatureFlags.getState().resetAll();
+  }
 });
 
 test('Mi Estilo view should display DJ DNA metrics, toggle DJ software, and update preferences', async () => {
-  await setupScannedLibrary();
+  useFeatureFlags.getState().setFlag('enableStyleDna', true);
+  try {
+    await setupScannedLibrary();
 
-  await getMainNavigation().getByRole('link', { name: 'Mi Estilo' }).click();
+    await getMainNavigation().getByRole('link', { name: 'Mi Estilo' }).click();
 
-  await expect
-    .element(page.getByRole('heading', { name: 'Mi Estilo' }))
-    .toBeVisible();
+    await expect
+      .element(page.getByRole('heading', { name: 'Mi Estilo' }))
+      .toBeVisible();
 
-  const rekordboxBtn = page.getByRole('button', {
-    name: 'Rekordbox',
-    exact: true,
-  });
-  await rekordboxBtn.click();
-  await expect.element(rekordboxBtn).toHaveAttribute('aria-pressed', 'true');
+    const rekordboxBtn = page.getByRole('button', {
+      name: 'Rekordbox',
+      exact: true,
+    });
+    await rekordboxBtn.click();
+    await expect.element(rekordboxBtn).toHaveAttribute('aria-pressed', 'true');
 
-  const detailedTonesBtn = page.getByRole('button', {
-    name: /Tonos detallados/,
-  });
-  await detailedTonesBtn.click();
-  await expect
-    .element(page.getByRole('button', { name: 'Ocultar tonos' }))
-    .toHaveAttribute('aria-expanded', 'true');
+    const detailedTonesBtn = page.getByRole('button', {
+      name: /Tonos detallados/,
+    });
+    await detailedTonesBtn.click();
+    await expect
+      .element(page.getByRole('button', { name: 'Ocultar tonos' }))
+      .toHaveAttribute('aria-expanded', 'true');
 
-  const switches = page.getByRole('switch');
-  await expect.element(switches.nth(0)).toBeVisible();
-  await switches.nth(0).click();
+    const switches = page.getByRole('switch');
+    await expect.element(switches.nth(0)).toBeVisible();
+    await switches.nth(0).click();
+  } finally {
+    useFeatureFlags.getState().resetAll();
+  }
 });
 
 test('Modo Mini should morph between Booth Card, HUD Pill, and Full Workspace', async () => {

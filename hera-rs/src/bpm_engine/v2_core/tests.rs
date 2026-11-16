@@ -68,7 +68,7 @@ fn test_merengueton_126_with_phase_flip_cut_locks_exact_126() {
         let step = (bar_pos / step_sec).floor() as usize;
         let sp = bar_pos - (step as f64) * step_sec;
 
-        let kick = if step % 4 == 0 && sp < 0.085 {
+        let kick = if step.is_multiple_of(4) && sp < 0.085 {
             0.70 * (-sp * 40.0).exp() * (2.0 * std::f64::consts::PI * 60.0 * sp).sin()
         } else {
             0.0

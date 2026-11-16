@@ -24,8 +24,15 @@ export default function TrackListStates(props: Props) {
   const refreshing = useLibraryStore((state) => state.refreshing);
   const refresh = useLibraryStore((state) => state.refresh);
   const search = useLibraryStore((state) => state.search);
-  const { phase, indexedDone, fastDone, total, tracksPerSec, etaSec, governorActive } =
-    useScannerStore();
+  const {
+    phase,
+    indexedDone,
+    fastDone,
+    total,
+    tracksPerSec,
+    etaSec,
+    governorActive,
+  } = useScannerStore();
   const invalidate = useInvalidate();
   const navigate = useNavigate();
 
@@ -106,7 +113,12 @@ export default function TrackListStates(props: Props) {
   // Non-blocking: only show discovery card when library is completely empty and no search active
   if (refreshing && tracks.length === 0 && search === '') {
     const displayTotal = total > 0 ? total : refresh.total;
-    const displayCurrent = fastDone > 0 ? fastDone : (indexedDone && indexedDone > 0 ? indexedDone : refresh.current);
+    const displayCurrent =
+      fastDone > 0
+        ? fastDone
+        : indexedDone && indexedDone > 0
+          ? indexedDone
+          : refresh.current;
 
     return (
       <div {...stylex.props(styles.emptyViewport)}>
@@ -136,8 +148,9 @@ export default function TrackListStates(props: Props) {
           </h2>
 
           <p {...stylex.props(styles.emptyBody)}>
-            Indexando archivos y extrayendo BPM, tono armónico y 4 Hot Cues de frase.
-            Las pistas aparecerán aquí en vivo en cuanto se procesen los primeros archivos.
+            Indexando archivos y extrayendo BPM, tono armónico y 4 Hot Cues de
+            frase. Las pistas aparecerán aquí en vivo en cuanto se procesen los
+            primeros archivos.
           </p>
 
           <div {...stylex.props(styles.progressBarRail)}>
@@ -169,9 +182,10 @@ export default function TrackListStates(props: Props) {
           </h2>
 
           <p {...stylex.props(styles.emptyBody)}>
-            Añade tus carpetas o pistas sueltas de audio y video (FLAC, WAV, AIFF, MP3, MP4,
-            incluso sin etiquetas ID3) para detectar BPM, tono armónico, 4 Hot
-            Cues de frase y preparar crates para VirtualDJ, Rekordbox o Traktor.
+            Añade tus carpetas o pistas sueltas de audio y video (FLAC, WAV,
+            AIFF, MP3, MP4, incluso sin etiquetas ID3) para detectar BPM, tono
+            armónico, 4 Hot Cues de frase y preparar crates para VirtualDJ,
+            Rekordbox o Traktor.
           </p>
 
           <div {...stylex.props(styles.emptyActions)}>

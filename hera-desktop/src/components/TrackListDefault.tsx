@@ -8,7 +8,13 @@ import { useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type React from 'react';
-import { useCallback, useEffect, useId, useImperativeHandle, useRef } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useImperativeHandle,
+  useRef,
+} from 'react';
 
 import Scrollable from '../elements/Scrollable';
 import type { Track } from '../generated/typings';
@@ -149,8 +155,12 @@ export default function TrackListDefault(props: Props) {
           role="listbox"
           aria-multiselectable="true"
           aria-label={t`Track list`}
-          onMouseEnter={() => useScannerStore.getState().setPointerInsideTable(true)}
-          onMouseLeave={() => useScannerStore.getState().setPointerInsideTable(false)}
+          onMouseEnter={() =>
+            useScannerStore.getState().setPointerInsideTable(true)
+          }
+          onMouseLeave={() =>
+            useScannerStore.getState().setPointerInsideTable(false)
+          }
           {...stylex.props(styles.rows)}
           style={{
             height: `${virtualizer.getTotalSize()}px`,

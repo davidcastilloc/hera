@@ -7,6 +7,7 @@ pub mod error;
 pub mod events;
 pub mod fast_library_scan;
 pub mod init;
+pub mod omkf_cloud_client;
 pub mod omkf_sync;
 pub mod tray;
 pub mod utils;

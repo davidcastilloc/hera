@@ -3,17 +3,23 @@ import { listen } from '@tauri-apps/api/event';
 import { useEffect } from 'react';
 
 import LibraryAPI from '../api/LibraryAPI';
-import type { Config, IPCEvent, ScanProgress, SortBy, Track } from '../generated/typings';
+import type {
+  Config,
+  IPCEvent,
+  ScanProgress,
+  SortBy,
+  Track,
+} from '../generated/typings';
+import { useMiniModeStore } from '../lib/mini-mode-store';
+import player from '../lib/player';
+import { allTracksQuery, configQuery } from '../lib/queries';
+import queryClient from '../lib/query-client';
 import {
   type ScannerRowPatch,
   type ScannerTelemetry,
   markTracksRecentlyUpdated,
   useScannerStore,
 } from '../lib/scanner-v3';
-import queryClient from '../lib/query-client';
-import { allTracksQuery, configQuery } from '../lib/queries';
-import { useMiniModeStore } from '../lib/mini-mode-store';
-import player from '../lib/player';
 import useLibraryStore from '../lib/store';
 
 /**
@@ -53,7 +59,12 @@ export function removeTrackIds(
   existing: Track[],
   removedIds: string[],
 ): Track[] {
-  if (!removedIds || removedIds.length === 0 || !existing || existing.length === 0) {
+  if (
+    !removedIds ||
+    removedIds.length === 0 ||
+    !existing ||
+    existing.length === 0
+  ) {
     return existing;
   }
   const removeSet = new Set(removedIds);
@@ -83,11 +94,19 @@ export function applyRowPatchesToTracks(
     const patched: Track = {
       ...track,
       bpm: p.bpm !== undefined ? (p.bpm ?? undefined) : track.bpm,
-      camelot: p.camelot !== undefined ? (p.camelot ?? undefined) : track.camelot,
+      camelot:
+        p.camelot !== undefined ? (p.camelot ?? undefined) : track.camelot,
       energy: p.energy !== undefined ? (p.energy ?? undefined) : track.energy,
-      duration: p.duration !== undefined && p.duration !== null ? p.duration : track.duration,
-      hot_cues: p.hot_cues !== undefined ? (p.hot_cues ?? undefined) : track.hot_cues,
-      scan_level: p.scan_level !== undefined ? (p.scan_level ?? undefined) : track.scan_level,
+      duration:
+        p.duration !== undefined && p.duration !== null
+          ? p.duration
+          : track.duration,
+      hot_cues:
+        p.hot_cues !== undefined ? (p.hot_cues ?? undefined) : track.hot_cues,
+      scan_level:
+        p.scan_level !== undefined
+          ? (p.scan_level ?? undefined)
+          : track.scan_level,
       is_transition_candidate:
         p.is_transition_candidate !== undefined
           ? (p.is_transition_candidate ?? undefined)
@@ -110,7 +129,9 @@ export function shouldFreezeSortPatches(
   isPointerInsideTable: boolean,
   sortBy?: SortBy,
 ): boolean {
-  return Boolean(isPointerInsideTable && (sortBy === 'Bpm' || sortBy === 'Camelot'));
+  return Boolean(
+    isPointerInsideTable && (sortBy === 'Bpm' || sortBy === 'Camelot'),
+  );
 }
 
 export function applyPatchesToCaches(patches: ScannerRowPatch[]): void {
@@ -168,9 +189,12 @@ function LibraryEvents() {
       },
     );
 
-    const p2 = listen<ScannerTelemetry>('hera:scanner-telemetry', ({ payload }) => {
-      useScannerStore.getState().setTelemetry(payload);
-    });
+    const p2 = listen<ScannerTelemetry>(
+      'hera:scanner-telemetry',
+      ({ payload }) => {
+        useScannerStore.getState().setTelemetry(payload);
+      },
+    );
 
     const p3 = listen<Track[]>('hera:scanner-tracks-added', ({ payload }) => {
       if (Array.isArray(payload) && payload.length > 0) {
@@ -178,11 +202,14 @@ function LibraryEvents() {
       }
     });
 
-    const p4 = listen<string[]>('hera:scanner-tracks-removed', ({ payload }) => {
-      if (Array.isArray(payload) && payload.length > 0) {
-        removeTracksFromCaches(payload);
-      }
-    });
+    const p4 = listen<string[]>(
+      'hera:scanner-tracks-removed',
+      ({ payload }) => {
+        if (Array.isArray(payload) && payload.length > 0) {
+          removeTracksFromCaches(payload);
+        }
+      },
+    );
 
     let playbackCoalesceBuffer: ScannerRowPatch[] = [];
     let playbackCoalesceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -194,23 +221,29 @@ function LibraryEvents() {
       applyPatchesToCaches(batch);
     };
 
-    const p5 = listen<ScannerRowPatch[]>('hera:scanner-rows-updated', ({ payload }) => {
-      if (!Array.isArray(payload) || payload.length === 0) return;
+    const p5 = listen<ScannerRowPatch[]>(
+      'hera:scanner-rows-updated',
+      ({ payload }) => {
+        if (!Array.isArray(payload) || payload.length === 0) return;
 
-      const config = queryClient.getQueryData<Config>(configQuery.queryKey);
-      const isPointerInside = useScannerStore.getState().isPointerInsideTable;
+        const config = queryClient.getQueryData<Config>(configQuery.queryKey);
+        const isPointerInside = useScannerStore.getState().isPointerInsideTable;
 
-      if (shouldFreezeSortPatches(isPointerInside, config?.library_sort_by)) {
-        useScannerStore.getState().queueFrozenPatches(payload);
-      } else if (!player.isPaused()) {
-        playbackCoalesceBuffer.push(...payload);
-        if (!playbackCoalesceTimer) {
-          playbackCoalesceTimer = setTimeout(flushCoalescedPlaybackPatches, 500);
+        if (shouldFreezeSortPatches(isPointerInside, config?.library_sort_by)) {
+          useScannerStore.getState().queueFrozenPatches(payload);
+        } else if (!player.isPaused()) {
+          playbackCoalesceBuffer.push(...payload);
+          if (!playbackCoalesceTimer) {
+            playbackCoalesceTimer = setTimeout(
+              flushCoalescedPlaybackPatches,
+              500,
+            );
+          }
+        } else {
+          applyPatchesToCaches(payload);
         }
-      } else {
-        applyPatchesToCaches(payload);
-      }
-    });
+      },
+    );
 
     const unsubscribeScanner = useScannerStore.subscribe((state, prevState) => {
       if (prevState.isPointerInsideTable && !state.isPointerInsideTable) {

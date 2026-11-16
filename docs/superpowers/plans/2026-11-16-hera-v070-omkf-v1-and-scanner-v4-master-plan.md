@@ -45,7 +45,7 @@
 - Modificar: `hera-rs/src/scanner/mod.rs` (`pub mod omkf_capsule;`)
 - Auditar y reforzar (solo delta si falta en `HEAD`): `hera-rs/src/scanner/scheduler.rs`, `hera-rs/src/scanner/fast_seek.rs`, `hera-desktop/src-tauri/src/libs/track.rs`, `hera-rs/src/mcp/analyze.rs`
 
-- [ ] **Step O1.1: Implementar `hera-rs/src/scanner/omkf_capsule.rs` (100% Safe Rust, Cero Crates Nuevos)**
+- [x] **Step O1.1: Implementar `hera-rs/src/scanner/omkf_capsule.rs` (100% Safe Rust, Cero Crates Nuevos)**
   1. **Constantes y Sello Conmutativo `tree_seal_64`:**
      - `pub const OMKF_MAGIC: [u8; 8] = *b"OMKF\x01\x00\x00\x00";`
      - `pub const OMKF_HEADER_BYTES: usize = 64;` y `pub const OMKF_SLOT_BYTES: usize = 928;` (`29 * 32` bytes).
@@ -57,11 +57,11 @@
   3. **Escritura Atómica (`.hera/tracks.omkf.tmp` -> `rename`) y Fusión No Destructiva de `.hera/crate.md`:**
      - `write_omkf_capsule_atomic` actualiza el frontmatter YAML (`omkf: 1`, `crate_id`, `tree_seal_64`, `track_count`, `video_count`, `bpm_span`, `dominant_camelot`, `dominant_genre`, `era_span`, `lufs_avg`, `health`) **preservando intacto** todo texto del usuario/agente después del segundo `---` (`# Intención y Reglas de Cabina` y `# Ledger Reversible`).
 
-- [ ] **Step O1.2: Verificar y Aplicar Refuerzos `completed_level` (`F20`), `detect_song_key` (`F03`/`F08`) y `fast_seek` (`F07`)**
+- [x] **Step O1.2: Verificar y Aplicar Refuerzos `completed_level` (`F20`), `detect_song_key` (`F03`/`F08`) y `fast_seek` (`F07`)**
   - En `hera-rs/src/scanner/scheduler.rs`: verifica que exista `completed_level: HashMap<String, i8>` con `seed_completed_levels` y `mark_completed` para permitir re-promoción `Fast (1) -> Full (2)` en `O(1)` e ignorar `-1` o `>= target`.
   - En `libs/track.rs` y `hera-rs/src/mcp/analyze.rs`: verifica que la tonalidad Camelot provenga de `v2_core::key_engine::detect_song_key` sin alterar `hera-rs/src/structure.rs` (`0` diffs en `golden_masters`).
 
-- [ ] **Step O1.3: Recibo obligatorio de verificación O1**
+- [x] **Step O1.3: Recibo obligatorio de verificación O1**
   ```bash
   cargo test -p hera-node-rs scanner::
   cargo test -p hera-node-rs --test golden_masters
@@ -77,7 +77,7 @@
 - Crear: `hera-desktop/src-tauri/src/libs/omkf_sync.rs` (~275 líneas)
 - Modificar: `hera-desktop/src-tauri/src/libs/mod.rs`, `hera-desktop/src-tauri/src/libs/fast_library_scan.rs`, `hera-desktop/src-tauri/src/plugins/hera_dj/scanner_worker.rs`
 
-- [ ] **Step O2.1: Crear Migración Ortogonal `folder_crates` + `tracks.crate_id` y Pragmas `mmap_size`**
+- [x] **Step O2.1: Crear Migración Ortogonal `folder_crates` + `tracks.crate_id` y Pragmas `mmap_size`**
   1. En `plugins/db.rs` (tanto en el pool de escritura como en el pool de lectura creado en `529950b`), asegura `PRAGMA synchronous = NORMAL;`, `PRAGMA temp_store = MEMORY;`, `PRAGMA cache_size = -64000;` y `PRAGMA mmap_size = 268435456;`.
   2. Añade la migración SQL de `OMKF`:
      ```sql
@@ -108,12 +108,12 @@
      );
      ```
 
-- [ ] **Step O2.2: Implementar `libs/omkf_sync.rs` (Fast Seal `0.62 ms`, *Zero-Import USB* `0.0 s` y Flush Debounced)**
+- [x] **Step O2.2: Implementar `libs/omkf_sync.rs` (Fast Seal `0.62 ms`, *Zero-Import USB* `0.0 s` y Flush Debounced)**
   1. **Fast-Path Intacto (`0.002 ms`/carpeta):** compara `std::fs::metadata(dir)?.modified()` y los `64 B` de `.hera/tracks.omkf` contra `folder_crates`: si `dir_mtime_ns` y `tree_seal_64` coinciden, **salta la carpeta completa sin abrir ningún archivo hijo**.
   2. **Zero-Import USB (`actual_seal == hdr.tree_seal_64`, ausente en `hera.db`):** si el usuario conecta un USB/SSD externo ya sellado con `.hera/tracks.omkf`, hidrata directamente sus `OmkfTrackSlot` (incluyendo `scan_level = 2`, BPM, Camelot, 8 Hot Cues, ondas RGB y `64D`) hacia `tracks` y `folder_crates` en bloques de `250–500` filas (**`0.0 s` de CPU DSP**).
   3. **Delta Incremental + Atributo Oculto Windows:** solo analiza archivos nuevos/cambiados, aplica `SetFileAttributesW(..., FILE_ATTRIBUTE_HIDDEN)` (`unsafe extern "system"`) sobre `.hera` en Windows y expone `flush_dirty_omkf_capsules` invocado cada `1,000 ms` desde `scanner_worker.rs` (con hilos en `SetThreadPriority(-1)` / `nice(10)`).
 
-- [ ] **Step O2.3: Recibo obligatorio de verificación O2 (incluye test de *Zero-Import USB* borrando `hera.db`)**
+- [x] **Step O2.3: Recibo obligatorio de verificación O2 (incluye test de *Zero-Import USB* borrando `hera.db`)**
   ```bash
   cargo test -p hera-desktop omkf_sync
   ```
@@ -126,7 +126,7 @@
 - Modificar: `hera-desktop/src-tauri/src/libs/db_scanner_queries.rs` (o `scanner_intelligence.rs` si ya fue creado por el plan `2026-11-15`)
 - Modificar: `hera-desktop/src-tauri/src/plugins/hera_agent/{tools_library.rs, tools_playlist_vdj.rs}`
 
-- [ ] **Step O3.1: Implementar Búsqueda `64D` con Poda en 2 Etapas (`folder_crates` -> `.hera/tracks.omkf`)**
+- [x] **Step O3.1: Implementar Búsqueda `64D` con Poda en 2 Etapas (`folder_crates` -> `.hera/tracks.omkf`)**
   1. **Etapa 1 (Filtro de Crates en `< 0.05 ms`):** descarta carpetas cuyo `[bpm_min, bpm_max]` o `camelot_mask` no intersecten la ventana armónica/tempo solicitada y ordena las carpetas sobrevivientes por similitud coseno contra `centroid_64d_b64` (conservando el top `K = 30`).
   2. **Etapa 2 (Barrido Binario SIMD `i8` en `~0.50 ms`):** evalúa `cosine_similarity_i8` directamente sobre los slots `[96..160]` de `.hera/tracks.omkf` (con fallback a `tracks` si el volumen externo está offline) devolviendo el Top 15 exacto sin mantener `50,000` vectores en RAM.
   3. En `hera_agent`, elimina cualquier llamada residual a `db.get_all_tracks()` filtrando primero por `folder_crates` (`rules_markdown` + rango BPM/Camelot) y SQL indexado en `< 1 ms`.
@@ -139,7 +139,7 @@
 - Crear: `hera-desktop/src-tauri/src/plugins/hera_dj/omkf_ipc.rs` (~275 líneas, `<= 349` LOC)
 - Modificar: `hera-desktop/src-ipc/src/` (tipos exportados con `#[derive(TS)]` para `FolderCrateSummary`, `FolderCrateDetail`, `OrganizeFolderRequest`, `OrganizeFolderResponse`)
 
-- [ ] **Step O4.1: Implementar `omkf_list_folder_crates`, `omkf_read_folder_crate`, `omkf_save_crate_rules` y `omkf_preview_or_apply_organize`**
+- [x] **Step O4.1: Implementar `omkf_list_folder_crates`, `omkf_read_folder_crate`, `omkf_save_crate_rules` y `omkf_preview_or_apply_organize`**
   - `omkf_read_folder_crate`: lee `.hera/tracks.omkf` en `0.011 ms` hidratando pistas + ondas RGB + 8 Hot Cues + texto de `.hera/crate.md` (con respaldo offline desde SQLite si el disco externo no está montado).
   - `omkf_preview_or_apply_organize`:
     - Con `dry_run == true`: calcula `Vec<PlannedFileMove>` (`"by_tempo_zone"`, `"by_genre_era"` o `"quarantine_issues"`) **sin mover archivos**.
@@ -155,15 +155,15 @@
 - Modificar: `hera-desktop/src/routes/playlists.tsx`, `hera-desktop/src/routes/playlists.$playlistID.tsx`, `hera-desktop/src/routes/library.tsx`, `hera-desktop/src/lib/scanner-v3.ts`
 - Modificar Tríada ACL (`+4` comandos sobre el conteo vigente): `hera-desktop/src-tauri/src/plugins/hera_dj/mod.rs`, `hera-desktop/src-tauri/build.rs`, `hera-desktop/src-tauri/capabilities/main.json` y `hera-rs/tests/architectural_ratchets.rs`
 
-- [ ] **Step O5.1: Integrar Selector `Carpetas (.hera) | Playlists`, Banner Editable `.hera/crate.md` y Árbol Lateral en `/library`**
+- [x] **Step O5.1: Integrar Selector `Carpetas (.hera) | Playlists`, Banner Editable `.hera/crate.md` y Árbol Lateral en `/library`**
   1. En `routes/playlists.tsx`: pestaña por defecto **`Carpetas (.hera)`** listando cada carpeta musical (`playlistID = "folder--" + crate.crate_id`) con subtítulo `BPM · Camelot · % FULL`, manteniendo intacta la pestaña **`Playlists`** para listas `.m3u`/SQLite manuales.
   2. En `routes/playlists.$playlistID.tsx`: cuando `playlistID` inicia con `folder--`, hidrata vía `omkf_read_folder_crate`, promueve pendientes a `FULL` y muestra `CrateRulesBanner.tsx` (edición en vivo de `# Intención y Reglas de Cabina` + modal *Organizar con IA · Dry-Run / Rollback*).
   3. En `routes/library.tsx`: panel plegable `FolderCrateTree.tsx` filtrando instantáneamente por `crate_id` sin tocar `player.ts`.
 
-- [ ] **Step O5.2: Registrar los `4` Comandos `omkf_*` en la Tríada ACL (`+4` en `EXPECTED_TAURI_COMMANDS_COUNT`)**
+- [x] **Step O5.2: Registrar los `4` Comandos `omkf_*` en la Tríada ACL (`+4` en `EXPECTED_TAURI_COMMANDS_COUNT`)**
   Añade `"hera-dj:allow-omkf-list-folder-crates"`, `"hera-dj:allow-omkf-read-folder-crate"`, `"hera-dj:allow-omkf-save-crate-rules"` y `"hera-dj:allow-omkf-preview-or-apply-organize"` en `capabilities/main.json`, `build.rs` y `plugins/hera_dj/mod.rs`, y suma `+4` a `EXPECTED_TAURI_COMMANDS_COUNT` en `hera-rs/tests/architectural_ratchets.rs` (`63 -> 67` o `73 -> 77`).
 
-- [ ] **Step O5.3: Recibo Maestro de Cierre End-to-End (Pegar salida real con `exit code 0` en `beast`)**
+- [x] **Step O5.3: Recibo Maestro de Cierre End-to-End (Pegar salida real con `exit code 0` en `beast`)**
   ```bash
   cargo fmt --all -- --check
   cargo test -p hera-ipc

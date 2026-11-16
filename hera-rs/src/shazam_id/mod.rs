@@ -31,7 +31,8 @@ mod tests {
             let f1 = base_freq * r1 * (1.0 + 0.03 * ((t * 0.7).floor()));
             let f2 = base_freq * 2.1 * r2;
             let f3 = base_freq * 3.7 * r3;
-            let perc = if (i / (sample_rate as usize / 8)) % 3 == 0 && (t % 0.125) < 0.025 {
+            let perc = if (i / (sample_rate as usize / 8)).is_multiple_of(3) && (t % 0.125) < 0.025
+            {
                 let click_env = 1.0 - (t % 0.125) / 0.025;
                 0.35 * click_env * (TAU * (1850.0 + 210.0 * (step as f32)) * t).sin()
             } else {

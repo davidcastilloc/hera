@@ -1,9 +1,9 @@
 import * as stylex from '@stylexjs/stylex';
 import { useNavigate } from '@tanstack/react-router';
 
-import Icon from './Icon';
 import View from '../elements/View';
 import { useFeatureFlags, type FeatureFlags } from '../lib/feature-flags';
+import Icon from './Icon';
 
 type UnderConstructionViewProps = {
   title: string;
@@ -27,7 +27,9 @@ export default function UnderConstructionView({
             <div {...stylex.props(styles.iconFrame)}>
               <Icon name="sliders" size={20} color="#2dd4bf" />
             </div>
-            <span {...stylex.props(styles.labsBadge)}>HERA LABS · EN DESARROLLO</span>
+            <span {...stylex.props(styles.labsBadge)}>
+              HERA LABS · EN DESARROLLO
+            </span>
           </div>
 
           <h1 {...stylex.props(styles.title)}>{title}</h1>
@@ -36,7 +38,9 @@ export default function UnderConstructionView({
 
           <div {...stylex.props(styles.noticeBox)}>
             <span {...stylex.props(styles.noticeText)}>
-              ⚙️ Esta función se encuentra actualmente en calibración matemática de DSP y pruebas de laboratorio. Estará disponible en una próxima actualización de HERA.
+              ⚙️ Esta función se encuentra actualmente en calibración matemática
+              de DSP y pruebas de laboratorio. Estará disponible en una próxima
+              actualización de HERA.
             </span>
           </div>
 

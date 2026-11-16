@@ -37,9 +37,7 @@ fn test_cd_skip_with_micro_dropout_and_phase_cliff_is_detected() {
     // followed by an abrupt cliff (sample step discontinuity > 0.65)
     let drop_start = sample_rate * 2;
     let drop_len = (sample_rate as f32 * 0.035) as usize; // ~35ms
-    for idx in drop_start..(drop_start + drop_len) {
-        mono[idx] = 0.0;
-    }
+    mono[drop_start..(drop_start + drop_len)].fill(0.0);
     // Phase cliff step right after dropout
     if drop_start + drop_len < mono.len() {
         mono[drop_start + drop_len] = 0.85;

@@ -16,7 +16,10 @@ export const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
 };
 
 type FeatureFlagsState = FeatureFlags & {
-  setFlag: <K extends keyof FeatureFlags>(key: K, value: FeatureFlags[K]) => void;
+  setFlag: <K extends keyof FeatureFlags>(
+    key: K,
+    value: FeatureFlags[K],
+  ) => void;
   resetAll: () => void;
 };
 

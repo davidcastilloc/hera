@@ -25,6 +25,7 @@ fn sample_hot_cues() -> Vec<HotCuePoint> {
     ]
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_track(
     id: &str,
     title: &str,

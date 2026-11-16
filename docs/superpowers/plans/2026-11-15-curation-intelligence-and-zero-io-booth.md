@@ -173,20 +173,20 @@
   - `compute_genre_era_compatibility(a: &GenreEraProfile, b: &GenreEraProfile, allow_crossover: bool) -> f32`
   - `build_desktop_dj_curator_system_prompt(...) -> String`
 
-- [ ] **Step 1: Write failing tests proving zero Salsa-in-Perreo contamination, zero 90s Euro-Merengue + 2026 Merenguetón clash in standard mode, Golden Pair locking (`17 -> 20`), `< 10m` Mix routing, and `entry_bpm -> exit_bpm` bridge scoring**
+- [x] **Step 1: Write failing tests proving zero Salsa-in-Perreo contamination, zero 90s Euro-Merengue + 2026 Merenguetón clash in standard mode, Golden Pair locking (`17 -> 20`), `< 10m` Mix routing, and `entry_bpm -> exit_bpm` bridge scoring**
   - Construct a mixed candidate pool containing *Tony Vega* (`88 BPM 7A` Salsa Baúl), *Feid / Bad Bunny* (`90 BPM 7A` Reggaetón Actual), *Sandy & Papo* (`126 BPM 8A` 1996), *Alleh & Yorghaki* (`126 BPM 4A` 2025), a `720s` live mix, an excluded *"Clavelito"* track, and a `92 -> 126 BPM` transition edit; assert clean single-family crate selection, `routed_to_mixes_over_10m.len() == 1`, and `excluded_tracks.len() == 1`.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
   - Run: `cargo test -p hera-node-rs genre_intelligence && cargo test -p hera-desktop hera_agent`
   - Expected: FAIL.
 
-- [ ] **Step 3: Implement `genre_intelligence/`, wire `Genre × Era` + `entry_bpm`/`exit_bpm` into `synergy.rs` / `optimize_crate_with_dj_rules` (preserving `golden_masters.rs` when `genre_family` / `entry_bpm` are `None`), connect `create_playlist` & `smart_intent.rs`, add genre-cue learning tool in `tools_curation.rs`, and inject the DJ Curation Super-Prompt in `turn_agy.rs` & `prompts.rs`**
+- [x] **Step 3: Implement `genre_intelligence/`, wire `Genre × Era` + `entry_bpm`/`exit_bpm` into `synergy.rs` / `optimize_crate_with_dj_rules` (preserving `golden_masters.rs` when `genre_family` / `entry_bpm` are `None`), connect `create_playlist` & `smart_intent.rs`, add genre-cue learning tool in `tools_curation.rs`, and inject the DJ Curation Super-Prompt in `turn_agy.rs` & `prompts.rs`**
 
-- [ ] **Step 4: Run verification receipts**
+- [x] **Step 4: Run verification receipts**
   - Run: `cargo test -p hera-node-rs && cargo test -p hera-node-rs --test golden_masters && cargo test -p hera-desktop && cargo test -p hera-node-rs --test architectural_ratchets`
   - Expected: PASS (`0` snapshot diffs, all `.rs <= 349` LOC).
 
-- [ ] **Step 5: Mark `[x]` and commit atomically**
+- [x] **Step 5: Mark `[x]` and commit atomically**
   - Commit: `feat(curator): add 14-family Genre x Era intelligence, DJ super-prompt, and rules-backed create_playlist`
 
 ---
@@ -210,19 +210,19 @@
 - Produces:
   - Tauri commands registered across the 4-part ACL Triad: `scanner_promote_crate_full`, `scanner_get_telemetry`, `scanner_get_doctor_issues`, `scanner_cancel_scan`, `scanner_discover_workable_roots`, `scanner_set_external_booth_mode`, `scanner_find_sonic_twins`, `scanner_configure_producer_folders`, `scanner_audit_pre_gig_crate`, `identify_track_shazam`.
 
-- [ ] **Step 1: Write failing tests for `VirtualDJ/History` live transition auto-learning (`45s..420s` -> `dj_golden_pairs`), `PreGigAuditReport` (`denon_cd_mp3` `44.1 kHz` / video rejection), `64D` Sonic Twins ranking, and ACL Triad parity**
+- [x] **Step 1: Write failing tests for `VirtualDJ/History` live transition auto-learning (`45s..420s` -> `dj_golden_pairs`), `PreGigAuditReport` (`denon_cd_mp3` `44.1 kHz` / video rejection), `64D` Sonic Twins ranking, and ACL Triad parity**
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
   - Run: `cargo test -p hera-ipc && cargo test -p hera-desktop`
   - Expected: FAIL.
 
-- [ ] **Step 3: Implement `folder_watcher.rs` (`2.5 s` VDJ History + Battery check + `1,500 ms` Ableton Club Mono watcher), `scanner_intelligence.rs`, Now-Playing tooltip updates on `libs/tray.rs`, and full ACL Triad registration**
+- [x] **Step 3: Implement `folder_watcher.rs` (`2.5 s` VDJ History + Battery check + `1,500 ms` Ableton Club Mono watcher), `scanner_intelligence.rs`, Now-Playing tooltip updates on `libs/tray.rs`, and full ACL Triad registration**
 
-- [ ] **Step 4: Run verification receipts**
+- [x] **Step 4: Run verification receipts**
   - Run: `cd hera-desktop && bun run gen:types && cd .. && cargo test -p hera-ipc && cargo test -p hera-node-rs --test architectural_ratchets && cargo test -p hera-desktop`
   - Expected: PASS (`verify_tauri_v2_acl_triad` green).
 
-- [ ] **Step 5: Mark `[x]` and commit atomically**
+- [x] **Step 5: Mark `[x]` and commit atomically**
   - Commit: `feat(vdj,ableton): add live VDJ history golden-pair learner, Ableton mono watcher, Sonic Twins, and Pre-Gig IPC`
 
 ---
@@ -246,19 +246,19 @@
 - Consumes: Generated `hera-typings.ts` + IPC commands from `Task 5`.
 - Produces: `768 B` RGB (`Sub/Mid/Air`) canvas rendering, `replayGainDb` + `hotCuesSec` forwarding, `PreGigAuditPopover`, context-menu *Sonic Twins* + *Shazam ID*, Cancel Scan button, and search tokens (`skip`, `diff`, `propia`, `mix`).
 
-- [ ] **Step 1: Write failing Vitest unit specs in `hera-desktop/src/lib/__tests__/` for `768 B` RGB decoding fallback (`512 B` vs `768 B`), new DJ search tokens (`skip`, `diff`, `propia`, `mix`), and `PreGigAuditPopover` rendering**
+- [x] **Step 1: Write failing Vitest unit specs in `hera-desktop/src/lib/__tests__/` for `768 B` RGB decoding fallback (`512 B` vs `768 B`), new DJ search tokens (`skip`, `diff`, `propia`, `mix`), and `PreGigAuditPopover` rendering**
 
-- [ ] **Step 2: Run Vitest to verify failure**
+- [x] **Step 2: Run Vitest to verify failure**
   - Run: `cd hera-desktop && bun run test`
   - Expected: FAIL.
 
-- [ ] **Step 3: Implement `WaveformPeaksCanvas.tsx` `768 B` RGB rendering, `replayGainDb` forwarding in `native-audio-transport.ts` (touching `0` lines in `player.ts`), `PreGigAuditPopover.tsx`, `ScannerStatusPill.tsx` Cancel + External Booth controls, Vocal Clash / Glitch / Variable-BPM badges, and context-menu actions**
+- [x] **Step 3: Implement `WaveformPeaksCanvas.tsx` `768 B` RGB rendering, `replayGainDb` forwarding in `native-audio-transport.ts` (touching `0` lines in `player.ts`), `PreGigAuditPopover.tsx`, `ScannerStatusPill.tsx` Cancel + External Booth controls, Vocal Clash / Glitch / Variable-BPM badges, and context-menu actions**
 
-- [ ] **Step 4: Run verification receipts**
+- [x] **Step 4: Run verification receipts**
   - Run: `cd hera-desktop && bun run knip && bun run check && bun run test`
   - Expected: PASS (`0` lint/type/knip errors).
 
-- [ ] **Step 5: Mark `[x]` and commit atomically**
+- [x] **Step 5: Mark `[x]` and commit atomically**
   - Commit: `feat(ui): add RGB 3-band waveforms, Pre-Gig hardware audit, Vocal Clash/Glitch badges, and Sonic Twins menu`
 
 ---
@@ -276,19 +276,19 @@
 - Consumes: `scanner_discover_workable_roots`, `scanner_cancel_scan` (`Task 5`), `ConfigBridge`.
 - Produces: Interactive first-run onboarding persisting `onboarding_completed = true`, `dj_handle`, selected workable Audio/Video folders (`Don't break the user space` guarantee + `< 10m` vs `> 10m` Mixes preview), and permanent `BETA` badge in `Navigation.tsx`.
 
-- [ ] **Step 1: Write failing component test `onboarding-wizard.test.tsx` verifying 3-step configuration flow, DB-First root auto-selection, `BETA` disclosure, and completion persistence**
+- [x] **Step 1: Write failing component test `onboarding-wizard.test.tsx` verifying 3-step configuration flow, DB-First root auto-selection, `BETA` disclosure, and completion persistence**
 
-- [ ] **Step 2: Run test to verify failure**
+- [x] **Step 2: Run test to verify failure**
   - Run: `cd hera-desktop && bun run test onboarding-wizard`
   - Expected: FAIL.
 
-- [ ] **Step 3: Upgrade `OnboardingWizardModal.tsx` from static text to interactive 3-step configuration, add `onboarding_completed` to `Config`, mount in `routes/__root.tsx`, and render permanent `BETA` pill in `Navigation.tsx`**
+- [x] **Step 3: Upgrade `OnboardingWizardModal.tsx` from static text to interactive 3-step configuration, add `onboarding_completed` to `Config`, mount in `routes/__root.tsx`, and render permanent `BETA` pill in `Navigation.tsx`**
 
-- [ ] **Step 4: Run verification receipts**
+- [x] **Step 4: Run verification receipts**
   - Run: `cd hera-desktop && bun run gen:types && bun run knip && bun run check && bun run test && bun run build`
   - Expected: PASS (`0` errors).
 
-- [ ] **Step 5: Mark `[x]` and commit atomically**
+- [x] **Step 5: Mark `[x]` and commit atomically**
   - Commit: `feat(onboarding): wire interactive 3-step BETA onboarding wizard with DB-first folder discovery`
 
 ---
@@ -300,9 +300,9 @@
 - Modify: `docs/superpowers/DECISIONS.md`
 - Modify: `docs/superpowers/plans/2026-11-15-curation-intelligence-and-zero-io-booth.md`
 
-- [ ] **Step 1: Extend E2E QA coverage for `BETA` badge, Pre-Gig Audit popover, and Mixes (`< 10m` vs `> 10m`) + Audio/Video crate controls**
+- [x] **Step 1: Extend E2E QA coverage for `BETA` badge, Pre-Gig Audit popover, and Mixes (`< 10m` vs `> 10m`) + Audio/Video crate controls**
 
-- [ ] **Step 2: Run full polyglot verification suite and capture green receipts**
+- [x] **Step 2: Run full polyglot verification suite and capture green receipts**
   - Run:
     ```bash
     cargo fmt --all -- --check
@@ -316,5 +316,5 @@
     ```
   - Expected: `exit code 0` across every command with `0` warnings and `0` snapshot diffs.
 
-- [ ] **Step 3: Record final architectural notes in `docs/superpowers/DECISIONS.md`, mark all tasks `[x]`, and commit atomically**
+- [x] **Step 3: Record final architectural notes in `docs/superpowers/DECISIONS.md`, mark all tasks `[x]`, and commit atomically**
   - Commit: `test(qa): complete end-to-end curation intelligence and zero-io 50k booth verification`

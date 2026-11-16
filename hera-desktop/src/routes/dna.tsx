@@ -2,8 +2,8 @@ import * as stylex from '@stylexjs/stylex';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 
-import View from '../elements/View';
 import UnderConstructionView from '../components/UnderConstructionView';
+import View from '../elements/View';
 import DatabaseBridge from '../lib/bridge-database';
 import { computeDjStyleDna, type DjStyleDnaProfile } from '../lib/bridge-hera';
 import { useFeatureFlags } from '../lib/feature-flags';

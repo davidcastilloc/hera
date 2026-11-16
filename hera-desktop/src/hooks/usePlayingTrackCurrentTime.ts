@@ -5,7 +5,9 @@ import player from '../lib/player';
 /**
  * Returns the current track elapsed time, throttled by `minDeltaSec` to curb re-renders.
  */
-export default function usePlayingTrackCurrentTime(minDeltaSec = 0.033): number {
+export default function usePlayingTrackCurrentTime(
+  minDeltaSec = 0.033,
+): number {
   const [currentTime, setCurrentTime] = useState(player.getCurrentTime());
   const lastRef = useRef(currentTime);
 
