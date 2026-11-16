@@ -34,6 +34,7 @@ const EXPECTED_TAURI_COMMANDS_COUNT: usize = 63;
 /// pre-existing ADR-013 P2P submodules, route coordinators, and IPC bridges.
 const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
     ("hera-rs/src/p2p.rs", 349),
+    ("hera-rs/src/cue_engine.rs", 349),
     ("hera-rs/src/p2p/swarm_custody.rs", 349),
     ("hera-rs/src/synergy_hnsw.rs", 349),
     ("hera-rs/src/synergy_hnsw_cache.rs", 349),

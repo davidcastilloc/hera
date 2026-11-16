@@ -157,20 +157,29 @@ fn empty_failure_update(
 
 fn map_full_cues(cues: Vec<FullHotCue>) -> Vec<HotCuePin> {
     cues.into_iter()
-        .take(4)
+        .take(8)
         .map(|c| {
-            let (color, role) = match c.num {
+            let (color, default_role) = match c.num {
                 1 => ("#22c55e", "Intro"),
                 2 => ("#38bdf8", "Breakdown"),
                 3 => ("#ef4444", "Drop"),
-                _ => ("#f59e0b", "Outro"),
+                4 => ("#f59e0b", "Outro"),
+                5 => ("#a855f7", "Phrase"),
+                6 => ("#06b6d4", "Breakdown"),
+                7 => ("#ec4899", "Drop"),
+                _ => ("#eab308", "Outro"),
+            };
+            let role = if c.role.is_empty() {
+                default_role.to_string()
+            } else {
+                c.role
             };
             HotCuePin {
                 num: c.num,
                 name: c.name,
                 seconds: ((c.seconds * 10.0).round()) / 10.0,
                 color: color.to_string(),
-                role: role.to_string(),
+                role,
             }
         })
         .collect()

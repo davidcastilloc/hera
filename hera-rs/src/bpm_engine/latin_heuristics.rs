@@ -1,6 +1,78 @@
 //! Latin rhythm heuristics: Salsa clave/tumbao de-aliasing & Tecnomerengue fast güira retention.
 
 use super::multiband_onset::MultibandNovelty;
+use super::v2_core::hints::{BpmHint, HintSource};
+use super::v2_core::latin_heuristics::{GrooveSignature, GrooveStyle};
+
+/// Cross-audits external `VirtualDjDatabase` / `EmbeddedTag` / `FilenamePattern` hints against
+/// acoustic `GrooveSignature` candidates to transfer `4/3x` Salsa misfires (`120..=145 BPM`) to
+/// the `0.75x` `SalsaTumbao` fundamental while protecting `130..=160 BPM` `Tecnomerengue` from
+/// half-time (`65..=80 BPM`) folding.
+pub fn compute_cross_audited_hint_adjustment(
+    cand_bpm: f64,
+    cand_sig: &GrooveSignature,
+    hint: BpmHint,
+    all_evals: &[(f64, &'static str, GrooveSignature, f64, f64)],
+) -> f64 {
+    let w = hint.source.prior_weight();
+    let rel_err = (cand_bpm - hint.bpm).abs() / hint.bpm.max(1.0);
+
+    if hint.source != HintSource::UserProvided && (120.0..=145.0).contains(&hint.bpm) {
+        let salsa_fund = hint.bpm * 0.75;
+        let hint_is_club_or_merengue = all_evals.iter().any(|(b, _, s, _, _)| {
+            (*b - hint.bpm).abs() <= 2.5
+                && (s.veto_three_quarter_alias
+                    || s.style == GrooveStyle::MerengueDrive
+                    || s.guiro_sixteenth_density >= 0.75)
+        });
+        let has_salsa_fundamental = (82.0..=109.0).contains(&salsa_fund)
+            && all_evals.iter().any(|(b, _, s, _, _)| {
+                (*b - salsa_fund).abs() <= 2.2 && s.style == GrooveStyle::SalsaTumbao
+            });
+        if has_salsa_fundamental && !hint_is_club_or_merengue {
+            if (cand_bpm - salsa_fund).abs() / salsa_fund.max(1.0) <= 0.025
+                && cand_sig.style == GrooveStyle::SalsaTumbao
+            {
+                return w + 0.14;
+            }
+            if rel_err <= 0.025
+                || ((cand_bpm * 0.5 - salsa_fund).abs() / salsa_fund) <= 0.03
+                || ((cand_bpm * 0.75 - salsa_fund).abs() / salsa_fund) <= 0.03
+            {
+                return -w - 0.12;
+            }
+            return 0.0;
+        }
+    }
+
+    if hint.source != HintSource::UserProvided && (65.0..=80.0).contains(&hint.bpm) {
+        let tecno_double = hint.bpm * 2.0;
+        let has_tecnomerengue_double = (130.0..=160.0).contains(&tecno_double)
+            && all_evals.iter().any(|(b, _, s, _, _)| {
+                (*b - tecno_double).abs() <= 2.5
+                    && (s.style == GrooveStyle::MerengueDrive || s.guiro_sixteenth_density >= 0.75)
+            });
+        if has_tecnomerengue_double {
+            if (cand_bpm - tecno_double).abs() / tecno_double <= 0.025 {
+                return w;
+            }
+            if rel_err <= 0.025 {
+                return -w * 0.65;
+            }
+            return 0.0;
+        }
+    }
+
+    if rel_err <= 0.025 {
+        w
+    } else if ((cand_bpm * 2.0 - hint.bpm).abs() / hint.bpm.max(1.0)) <= 0.025
+        || ((cand_bpm * 0.5 - hint.bpm).abs() / hint.bpm.max(1.0)) <= 0.025
+    {
+        -w * 0.45
+    } else {
+        0.0
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct LatinClassification {

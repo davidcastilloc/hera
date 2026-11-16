@@ -22,6 +22,8 @@ pub struct FastScanResult {
     pub is_fake_320kbps: bool,
     pub bpm_window_a: f64,
     pub bpm_window_b: f64,
+    pub entry_bpm: Option<f64>,
+    pub exit_bpm: Option<f64>,
 }
 
 pub fn plan_fast_windows(total_duration_sec: f64) -> FastWindowPlan {
@@ -120,13 +122,16 @@ pub fn analyze_fast_windows(
     };
 
     let key = detect_song_key(&key_samples, sample_rate, &mut planner);
+    let is_trans = !samples_b.is_empty() && is_transition_candidate(res_a.bpm, bpm_b);
     FastScanResult {
         bpm: final_bpm,
         camelot_key: key.camelot,
-        is_transition_candidate: !samples_b.is_empty() && is_transition_candidate(res_a.bpm, bpm_b),
+        is_transition_candidate: is_trans,
         is_fake_320kbps: is_fake_320kbps(effective_bandwidth_hz, claimed_bitrate_kbps),
         bpm_window_a: res_a.bpm,
         bpm_window_b: bpm_b,
+        entry_bpm: is_trans.then_some(res_a.bpm),
+        exit_bpm: is_trans.then_some(bpm_b),
     }
 }
 
@@ -319,26 +324,5 @@ fn try_symphonia_fast_windows(path: &std::path::Path) -> Result<(Vec<f32>, Vec<f
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_fast_window_plan_and_forensic_flags() {
-        let short = plan_fast_windows(60.0);
-        assert!(short.use_full_file);
-
-        let long = plan_fast_windows(200.0);
-        assert!(!long.use_full_file);
-        assert!((long.win_a_start_sec - 58.0).abs() < 1e-6);
-        assert!((long.win_a_dur_sec - 24.0).abs() < 1e-6);
-        assert!((long.win_b_start_sec - 122.0).abs() < 1e-6);
-        assert!((long.win_b_dur_sec - 16.0).abs() < 1e-6);
-
-        assert!(is_transition_candidate(100.0, 126.0));
-        assert!(!is_transition_candidate(126.0, 126.5));
-        assert!(!is_transition_candidate(85.0, 170.0));
-
-        assert!(is_fake_320kbps(15_800.0, 320));
-        assert!(!is_fake_320kbps(19_500.0, 320));
-    }
-}
+#[path = "fast_seek_tests.rs"]
+mod tests;

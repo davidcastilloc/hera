@@ -1,5 +1,7 @@
 use super::consensus_ai::analyze_bpm_consensus_v2;
-use super::hints::{extract_bpm_from_filename, parse_virtualdj_bpm_value, VirtualDjDbIndex};
+use super::hints::{
+    extract_bpm_from_filename, parse_virtualdj_bpm_value, BpmHint, HintSource, VirtualDjDbIndex,
+};
 use super::key_engine::detect_song_key;
 use super::multiband_onset::extract_multiband_novelty;
 use super::*;
@@ -194,4 +196,92 @@ fn symphonia_decodes_48khz_wav_without_ffmpeg_fallback() {
     let _ = std::fs::remove_file(&wav_path);
     assert!(!decoded.used_ffmpeg_fallback);
     assert_eq!(decoded.sample_rate, 48_000);
+}
+
+#[test]
+fn test_salsa_4_3x_vdj_hint_cross_audit_vs_tecnomerengue_protection() {
+    let sr = 44_100_u32;
+    let dur = 24.0_f64;
+    let n = (dur * sr as f64) as usize;
+    let beat_salsa = 60.0 / 96.0;
+    let bar_salsa = beat_salsa * 4.0;
+    let mut salsa_pcm = vec![0.0_f32; n];
+    for (i, out) in salsa_pcm.iter_mut().enumerate() {
+        let t = i as f64 / sr as f64;
+        let beat_num = (t / bar_salsa).fract() * 4.0;
+        let d25 = (beat_num - 2.5).abs();
+        let d40 = (beat_num - 3.95).abs().min((beat_num + 0.05).abs());
+        let env_b = if d25 < 0.16 {
+            (1.0 - d25 / 0.16).powi(2)
+        } else if d40 < 0.16 {
+            (1.0 - d40 / 0.16).powi(2)
+        } else {
+            0.0
+        };
+        let bass = (0.65 * (2.0 * std::f64::consts::PI * 145.0 * t).sin()
+            + 0.35 * (2.0 * std::f64::consts::PI * 220.0 * t).sin())
+            * env_b
+            * 0.65;
+        let subpos = beat_num.fract();
+        let clave_pos = (beat_num * 4.0 / 3.0).fract();
+        let campana = if subpos < 0.14 {
+            (1.0 - subpos / 0.14).powi(3) * (2.0 * std::f64::consts::PI * 1150.0 * t).sin() * 0.26
+        } else {
+            0.0
+        };
+        let tresillo = if clave_pos < 0.14 {
+            (1.0 - clave_pos / 0.14).powi(3)
+                * (2.0 * std::f64::consts::PI * 2350.0 * t).sin()
+                * 0.44
+        } else {
+            0.0
+        };
+        *out = (bass + campana + tresillo).clamp(-0.98, 0.98) as f32;
+    }
+
+    let mut planner = FftPlanner::<f32>::new();
+    let nov_salsa = extract_multiband_novelty(&salsa_pcm, sr, 0.0, &mut planner);
+    let misfired_vdj_hint = BpmHint {
+        bpm: 128.0,
+        source: HintSource::VirtualDjDatabase,
+    };
+    let res_salsa = analyze_bpm_consensus_v2(&nov_salsa, Some(misfired_vdj_hint));
+    assert!(
+        (res_salsa.bpm - 96.0).abs() <= 1.0,
+        "Salsa 96 BPM with 128 BPM VDJ 4/3x hint must resolve to ~96 BPM, got {:.2}",
+        res_salsa.bpm
+    );
+
+    // Tecnomerengue at 142 BPM with dense 16th-note guira must stay ~142 BPM (never fold to 71)
+    let beat_tec = 60.0 / 142.0;
+    let mut tec_pcm = vec![0.0_f32; n];
+    let mut rng: u64 = 0x7EC0_1420_CAFE_u64;
+    for (i, out) in tec_pcm.iter_mut().enumerate() {
+        let t = i as f64 / sr as f64;
+        let bf = (t / beat_tec).fract();
+        let sf = (t / beat_tec * 4.0).fract();
+        rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1);
+        let white = (((rng >> 32) as u32 as f64) / (u32::MAX as f64)) * 2.0 - 1.0;
+        let guira = white
+            * (2.0 * std::f64::consts::PI * 6500.0 * t).sin()
+            * if sf < 0.40 { 1.0 - sf / 0.40 } else { 0.08 }
+            * 0.45;
+        let tambora = if bf < 0.16 {
+            (1.0 - bf / 0.16) * (2.0 * std::f64::consts::PI * 75.0 * t).sin() * 0.60
+        } else {
+            0.0
+        };
+        *out = (guira + tambora).clamp(-0.98, 0.98) as f32;
+    }
+    let nov_tec = extract_multiband_novelty(&tec_pcm, sr, 0.0, &mut planner);
+    let half_tag_hint = BpmHint {
+        bpm: 71.0,
+        source: HintSource::EmbeddedTag,
+    };
+    let res_tec = analyze_bpm_consensus_v2(&nov_tec, Some(half_tag_hint));
+    assert!(
+        (res_tec.bpm - 142.0).abs() <= 1.2,
+        "Tecnomerengue 142 BPM must stay ~142 BPM even with 71 BPM half-time tag, got {:.2}",
+        res_tec.bpm
+    );
 }

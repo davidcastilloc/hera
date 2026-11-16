@@ -34,26 +34,25 @@ pub fn analyze_bpm_consensus_v2(
     for &seed in &base_seeds {
         for &r in &ratios {
             let c = seed * r;
-            if (55.0..=210.0).contains(&c) {
-                if !candidates
+            if (55.0..=210.0).contains(&c)
+                && !candidates
                     .iter()
                     .any(|existing| (existing.0 - c).abs() < 0.85)
-                {
-                    let tag = if (r - 1.0).abs() < 1e-3 {
-                        "1.0x"
-                    } else if (r - 0.75).abs() < 1e-3 {
-                        "0.75x (3:4)"
-                    } else if (r - 4.0 / 3.0).abs() < 1e-2 {
-                        "1.33x (4:3)"
-                    } else if (r - 0.5).abs() < 1e-3 {
-                        "0.5x"
-                    } else if (r - 2.0).abs() < 1e-3 {
-                        "2.0x"
-                    } else {
-                        "3:2 metric"
-                    };
-                    candidates.push((c, tag));
-                }
+            {
+                let tag = if (r - 1.0).abs() < 1e-3 {
+                    "1.0x"
+                } else if (r - 0.75).abs() < 1e-3 {
+                    "0.75x (3:4)"
+                } else if (r - 4.0 / 3.0).abs() < 1e-2 {
+                    "1.33x (4:3)"
+                } else if (r - 0.5).abs() < 1e-3 {
+                    "0.5x"
+                } else if (r - 2.0).abs() < 1e-3 {
+                    "2.0x"
+                } else {
+                    "3:2 metric"
+                };
+                candidates.push((c, tag));
             }
         }
     }
@@ -144,26 +143,21 @@ pub fn analyze_bpm_consensus_v2(
                 }
             }
         }
-        if *bpm < 76.0 {
+        if *bpm < 82.0 {
             let double_bpm = bpm * 2.0;
             if let Some((_, _, dbl_sig, _, _)) =
-                evals.iter().find(|e| (e.0 - double_bpm).abs() <= 2.0)
+                evals.iter().find(|e| (e.0 - double_bpm).abs() <= 2.2)
             {
                 if dbl_sig.guiro_sixteenth_density >= 0.65 || dbl_sig.veto_three_quarter_alias {
-                    score -= 0.35;
+                    score -= 0.42;
                 }
             }
         }
 
         if let Some(hint) = bpm_hint {
-            let rel_err = ((bpm - hint.bpm).abs()) / hint.bpm.max(1.0);
-            if rel_err <= 0.025 {
-                score += hint.source.prior_weight();
-            } else if ((bpm * 2.0 - hint.bpm).abs() / hint.bpm.max(1.0)) <= 0.025
-                || ((bpm * 0.5 - hint.bpm).abs() / hint.bpm.max(1.0)) <= 0.025
-            {
-                score -= hint.source.prior_weight() * 0.45;
-            }
+            score += crate::bpm_engine::latin_heuristics::compute_cross_audited_hint_adjustment(
+                *bpm, sig, hint, &evals,
+            );
         }
 
         if score > best_total_score {

@@ -88,21 +88,21 @@
   - `merge_and_place_8_hot_cues(...) -> Vec<FullHotCue>` (`CueOrigin::DjManual` preserved, `Cue 1 >= first_audible_sec`, `Pads 5..8 >= 50%` anti-empty-zone)
   - Extended `FullPassResult` with `entry_bpm`, `exit_bpm`, `has_intro_vocals`, `has_outro_vocals`, `embedding_64d_q8`, `rgb_waveform_blob`, `loudness`, and `glitch_report: GlitchScanReport`
 
-- [ ] **Step 1: Write failing unit tests for `768 B` RGB waveform, `-11 LUFS` anti-clip gain + lead-in silence trim, 8-cue `>= 50%` anti-empty-zone merger, Salsa `4/3x` tag cross-audit, and `full_pass` CD-skip detection**
+- [x] **Step 1: Write failing unit tests for `768 B` RGB waveform, `-11 LUFS` anti-clip gain + lead-in silence trim, 8-cue `>= 50%` anti-empty-zone merger, Salsa `4/3x` tag cross-audit, and `full_pass` CD-skip detection**
   - Pin exact assertions: `rgb_blob.len() == 768`, `gain_lin * peak_lin <= 0.967`, `cues[0].seconds >= 2.0` on a `2.0s` silent video intro, manual `Cue 5` & `Cue 8` preserved verbatim, and synthetic `60ms` buffer stutter / `80ms` dropout flagged in `FullPassResult.glitch_report.has_audio_skips`.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
   - Run: `cargo test -p hera-node-rs scanner::`
   - Expected: FAIL on missing modules/fields.
 
-- [ ] **Step 3: Implement `audio_metrics.rs`, `cue_engine.rs`, `fast_seek.rs` (`entry_bpm`/`exit_bpm` without 3rd STFT), `full_pass.rs` (`scan_pcm_for_cd_skips` + Zero-IO fields), and parallel streaming `mcp/analyze.rs`**
+- [x] **Step 3: Implement `audio_metrics.rs`, `cue_engine.rs`, `fast_seek.rs` (`entry_bpm`/`exit_bpm` without 3rd STFT), `full_pass.rs` (`scan_pcm_for_cd_skips` + Zero-IO fields), and parallel streaming `mcp/analyze.rs`**
   - Keep `structure::analyze_structure_and_style` untouched so `golden_masters.rs` stays bit-identical.
 
-- [ ] **Step 4: Run verification receipts**
+- [x] **Step 4: Run verification receipts**
   - Run: `cargo test -p hera-node-rs && cargo test -p hera-node-rs --test golden_masters && cargo test -p hera-node-rs --test architectural_ratchets`
   - Expected: PASS (`0` snapshot diffs, all `.rs <= 349` LOC).
 
-- [ ] **Step 5: Mark `[x]` and commit atomically**
+- [x] **Step 5: Mark `[x]` and commit atomically**
   - Commit: `feat(dsp): add zero-io RGB/LUFS/64D/glitch harvest, 8-cue engine, and Salsa BPM cross-audit`
 
 ---

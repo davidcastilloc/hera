@@ -1,5 +1,7 @@
 use crate::forensics::audit_pcm_channels;
+use crate::forensics_glitch::scan_pcm_for_cd_skips;
 use crate::p2p::compute_hera_seal;
+use crate::scanner::audio_metrics::compute_loudness_and_lead_in;
 use crate::structure::analyze_structure_and_style;
 use serde_json::{json, Value};
 
@@ -92,6 +94,8 @@ pub(super) fn analyze_single_track_arg(args: &Value) -> Result<Value, String> {
                 dec.sample_rate,
             );
             structure.camelot_key = v2_key.camelot;
+            let loudness = compute_loudness_and_lead_in(&dec.samples, dec.sample_rate);
+            let glitch_report = scan_pcm_for_cd_skips(&dec.samples, dec.sample_rate, 0);
             let seal = compute_hera_seal(
                 fp,
                 structure.bpm,
@@ -103,6 +107,8 @@ pub(super) fn analyze_single_track_arg(args: &Value) -> Result<Value, String> {
                 "file_path": fp,
                 "forensics": forensics,
                 "structure": structure,
+                "loudness": loudness,
+                "glitch_report": glitch_report,
                 "hera_seal": seal
             }));
         }
@@ -149,6 +155,8 @@ pub(super) fn analyze_single_track_arg(args: &Value) -> Result<Value, String> {
         };
         let dur = (mono.len() as f32) / (sr.max(1) as f32);
         let structure = analyze_structure_and_style(&mono, sr, Some(dur), bpm_hint);
+        let loudness = compute_loudness_and_lead_in(&mono, sr);
+        let glitch_report = scan_pcm_for_cd_skips(&mono, sr, 0);
         let seal = compute_hera_seal(
             "mcp-pcm",
             structure.bpm,
@@ -159,6 +167,8 @@ pub(super) fn analyze_single_track_arg(args: &Value) -> Result<Value, String> {
         return Ok(json!({
             "forensics": forensics,
             "structure": structure,
+            "loudness": loudness,
+            "glitch_report": glitch_report,
             "hera_seal": seal
         }));
     }
