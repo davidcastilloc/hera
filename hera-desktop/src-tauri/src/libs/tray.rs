@@ -18,6 +18,43 @@ fn last_tray_tooltip_slot() -> &'static Mutex<String> {
     TOOLTIP.get_or_init(|| Mutex::new(String::new()))
 }
 
+fn now_playing_tooltip_slot() -> &'static Mutex<Option<String>> {
+    static NOW_PLAYING: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+    NOW_PLAYING.get_or_init(|| Mutex::new(None))
+}
+
+pub fn format_now_playing_tooltip(
+    artist: &str,
+    title: &str,
+    bpm: Option<f64>,
+    camelot: Option<&str>,
+) -> String {
+    let a = artist.trim();
+    let t = title.trim();
+    if a.is_empty() && t.is_empty() {
+        return "HERA BETA · Cabina lista".to_string();
+    }
+    let label = if a.is_empty() {
+        t.to_string()
+    } else if t.is_empty() {
+        a.to_string()
+    } else {
+        format!("{a} - {t}")
+    };
+    let mut tags = Vec::new();
+    if let Some(b) = bpm.filter(|v| v.is_finite() && *v > 0.0) {
+        tags.push(format!("{b:.1} BPM"));
+    }
+    if let Some(cam) = camelot.map(str::trim).filter(|c| !c.is_empty()) {
+        tags.push(cam.to_string());
+    }
+    if tags.is_empty() {
+        format!("HERA BETA · Sonando: {label}")
+    } else {
+        format!("HERA BETA · Sonando: {label} [{}]", tags.join(" · "))
+    }
+}
+
 pub fn is_exiting_explicitly() -> bool {
     EXITING_EXPLICITLY.load(Ordering::SeqCst)
 }
@@ -220,14 +257,7 @@ pub fn setup_system_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     Ok(())
 }
 
-pub fn update_tray_scanner_status<R: Runtime>(
-    app: &AppHandle<R>,
-    fast_done: usize,
-    full_done: usize,
-    total: usize,
-    is_busy: bool,
-) {
-    let next = format_scanner_tray_tooltip(fast_done, full_done, total, is_busy);
+fn apply_tray_tooltip<R: Runtime>(app: &AppHandle<R>, next: String) {
     if let Ok(mut guard) = last_tray_tooltip_slot().lock() {
         if *guard == next {
             return;
@@ -237,6 +267,47 @@ pub fn update_tray_scanner_status<R: Runtime>(
     if let Some(tray) = app.tray_by_id(HERA_TRAY_ID) {
         let _ = tray.set_tooltip(Some(next.as_str()));
     }
+}
+
+#[allow(dead_code)]
+pub fn update_tray_now_playing<R: Runtime>(
+    app: &AppHandle<R>,
+    artist: &str,
+    title: &str,
+    bpm: Option<f64>,
+    camelot: Option<&str>,
+) {
+    let next = format_now_playing_tooltip(artist, title, bpm, camelot);
+    if let Ok(mut guard) = now_playing_tooltip_slot().lock() {
+        *guard = Some(next.clone());
+    }
+    apply_tray_tooltip(app, next);
+}
+
+#[allow(dead_code)]
+pub fn clear_tray_now_playing<R: Runtime>(app: &AppHandle<R>) {
+    if let Ok(mut guard) = now_playing_tooltip_slot().lock() {
+        *guard = None;
+    }
+    apply_tray_tooltip(app, "HERA BETA · Cabina lista".to_string());
+}
+
+pub fn update_tray_scanner_status<R: Runtime>(
+    app: &AppHandle<R>,
+    fast_done: usize,
+    full_done: usize,
+    total: usize,
+    is_busy: bool,
+) {
+    if !is_busy
+        && let Ok(np_guard) = now_playing_tooltip_slot().lock()
+        && let Some(ref np_tooltip) = *np_guard
+    {
+        apply_tray_tooltip(app, np_tooltip.clone());
+        return;
+    }
+    let next = format_scanner_tray_tooltip(fast_done, full_done, total, is_busy);
+    apply_tray_tooltip(app, next);
 }
 
 #[cfg(test)]
@@ -266,5 +337,21 @@ mod tests {
             "HERA BETA · Biblioteca lista (200 pistas)"
         );
         assert!(format_scanner_tray_tooltip(0, 0, 0, false).contains("HERA BETA"));
+    }
+
+    #[test]
+    fn test_format_now_playing_tooltip_variants() {
+        assert_eq!(
+            format_now_playing_tooltip("", "", None, None),
+            "HERA BETA · Cabina lista"
+        );
+        assert_eq!(
+            format_now_playing_tooltip("Tony Vega", "Aparentemente", Some(96.5), Some("7A")),
+            "HERA BETA · Sonando: Tony Vega - Aparentemente [96.5 BPM · 7A]"
+        );
+        assert_eq!(
+            format_now_playing_tooltip("Feid", "Luna", None, None),
+            "HERA BETA · Sonando: Feid - Luna"
+        );
     }
 }

@@ -153,19 +153,42 @@ pub async fn execute_smart_intent_plan<R: Runtime>(
     let mut created_playlist_id: Option<String> = None;
 
     if wants_playlist {
-        let search_res =
-            dispatch_unified_agent_tool(ctx, Some(session_id), "search_library_tracks", json!({}))
-                .await?;
-        let matched_ids: Vec<String> = search_res
-            .get("tracks")
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|t| t.get("id").and_then(|x| x.as_str()).map(String::from))
-                    .collect()
-            })
-            .unwrap_or_default();
-
+        let (genre_fam, era_rng, bpm_rng, allow_cross) =
+            crate::libs::fast_library_scan::parse_crate_intent_filters(&lower);
+        let search_res = dispatch_unified_agent_tool(
+            ctx,
+            Some(session_id),
+            "search_library_tracks",
+            json!({
+                "genre_family": genre_fam,
+                "era_min": era_rng.map(|r| r.0),
+                "era_max": era_rng.map(|r| r.1),
+                "bpm_min": bpm_rng.map(|r| r.0),
+                "bpm_max": bpm_rng.map(|r| r.1),
+            }),
+        )
+        .await?;
+        let extract_ids = |res: &Value| -> Vec<String> {
+            res.get("tracks")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|t| t.get("id").and_then(|x| x.as_str()).map(String::from))
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let mut matched_ids = extract_ids(&search_res);
+        if matched_ids.is_empty() && genre_fam.is_none() && bpm_rng.is_none() {
+            let fb = dispatch_unified_agent_tool(
+                ctx,
+                Some(session_id),
+                "search_library_tracks",
+                json!({}),
+            )
+            .await?;
+            matched_ids = extract_ids(&fb);
+        }
         let pl_name = extract_quoted_name(trimmed).unwrap_or_else(|| "Set Cabina HERA".to_string());
         let pl = dispatch_unified_agent_tool(
             ctx,
@@ -174,7 +197,13 @@ pub async fn execute_smart_intent_plan<R: Runtime>(
             json!({
                 "name": pl_name,
                 "track_ids": matched_ids,
-                "sort_harmonic": true
+                "sort_harmonic": true,
+                "allow_genre_crossover": allow_cross,
+                "genre_family": genre_fam,
+                "era_min": era_rng.map(|r| r.0),
+                "era_max": era_rng.map(|r| r.1),
+                "bpm_min": bpm_rng.map(|r| r.0),
+                "bpm_max": bpm_rng.map(|r| r.1),
             }),
         )
         .await?;

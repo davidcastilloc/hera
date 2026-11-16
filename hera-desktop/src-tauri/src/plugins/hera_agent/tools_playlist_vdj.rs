@@ -1,5 +1,15 @@
 use super::*;
 
+fn emit_invalidate_library<R: Runtime>(ctx: &AgentRuntimeContext<R>) {
+    ctx.emit_ui_sync(AgentUiSyncEvent {
+        kind: "invalidate_library".to_string(),
+        action: None,
+        track_id: None,
+        seek_seconds: None,
+        route: None,
+    });
+}
+
 pub(super) async fn execute_playlist_vdj_tool<R: Runtime>(
     ctx: &AgentRuntimeContext<R>,
     session_id: Option<&str>,
@@ -47,62 +57,30 @@ pub(super) async fn execute_playlist_vdj_tool<R: Runtime>(
                 let explicit_ids: Vec<String> = args
                     .get("track_ids")
                     .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
+                    .map(|a| {
+                        a.iter()
                             .filter_map(|x| x.as_str().map(String::from))
                             .collect()
                     })
                     .unwrap_or_default();
-
-                let (playlist, first_track_id, key_flow) = ctx
+                let args_c = args.clone();
+                let res = ctx
                     .with_db(|db| {
                         Box::pin(async move {
-                            let mut tracks = if explicit_ids.is_empty() {
-                                db.get_all_tracks().await.map_err(|e| e.to_string())?
-                            } else {
-                                db.get_tracks(&explicit_ids)
-                                    .await
-                                    .map_err(|e| e.to_string())?
-                            };
-                            if sort_harmonic {
-                                sort_tracks_harmonically(&mut tracks);
-                            }
-                            let mut keys_dedup: Vec<String> = Vec::new();
-                            for t in &tracks {
-                                let k = t.camelot.clone().unwrap_or_else(|| "8A".to_string());
-                                if keys_dedup.last() != Some(&k) {
-                                    keys_dedup.push(k);
-                                }
-                            }
-                            let flow = if keys_dedup.is_empty() {
-                                "vacía".to_string()
-                            } else {
-                                keys_dedup
-                                    .into_iter()
-                                    .take(4)
-                                    .collect::<Vec<_>>()
-                                    .join(" → ")
-                            };
-                            let first_id = tracks.first().map(|t| t.id.clone());
-                            let final_ids: Vec<String> = tracks.into_iter().map(|t| t.id).collect();
-                            let created = db
-                                .create_playlist(name, final_ids, None)
-                                .await
-                                .map_err(|e| e.to_string())?;
-                            Ok((created, first_id, flow))
+                            crate::libs::fast_library_scan::build_curated_playlist_in_db(
+                                db,
+                                name,
+                                explicit_ids,
+                                sort_harmonic,
+                                &args_c,
+                            )
+                            .await
                         })
                     })
                     .await?;
+                emit_invalidate_library(ctx);
 
-                ctx.emit_ui_sync(AgentUiSyncEvent {
-                    kind: "invalidate_library".to_string(),
-                    action: None,
-                    track_id: None,
-                    seek_seconds: None,
-                    route: None,
-                });
-
-                if let Some(fid) = first_track_id {
+                if let Some(fid) = res.first_track_id {
                     record_followup_action(
                         ctx,
                         session_id,
@@ -120,17 +98,20 @@ pub(super) async fn execute_playlist_vdj_tool<R: Runtime>(
                     AgentFollowupAction {
                         kind: "open_playlist".to_string(),
                         label: "Abrir playlist".to_string(),
-                        target_id: playlist.id.clone(),
+                        target_id: res.playlist.id.clone(),
                     },
                 )
                 .await;
 
                 Ok(json!({
-                    "playlist_id": playlist.id,
-                    "name": playlist.name,
-                    "track_count": playlist.tracks.len(),
-                    "track_ids": playlist.tracks,
-                    "key_flow": key_flow,
+                    "playlist_id": res.playlist.id,
+                    "name": res.playlist.name,
+                    "track_count": res.playlist.tracks.len(),
+                    "track_ids": res.playlist.tracks,
+                    "key_flow": res.key_flow,
+                    "routed_to_mixes": res.routed_to_mixes,
+                    "isolated_out_of_genre": res.isolated_out_of_genre,
+                    "excluded_tracks": res.excluded_tracks,
                 }))
             }
             .await,
@@ -160,13 +141,7 @@ pub(super) async fn execute_playlist_vdj_tool<R: Runtime>(
                         })
                     })
                     .await?;
-                ctx.emit_ui_sync(AgentUiSyncEvent {
-                    kind: "invalidate_library".to_string(),
-                    action: None,
-                    track_id: None,
-                    seek_seconds: None,
-                    route: None,
-                });
+                emit_invalidate_library(ctx);
                 Ok(json!({ "playlist_id": updated.id, "track_count": updated.tracks.len() }))
             }
             .await,
@@ -192,13 +167,7 @@ pub(super) async fn execute_playlist_vdj_tool<R: Runtime>(
                         })
                     })
                     .await?;
-                ctx.emit_ui_sync(AgentUiSyncEvent {
-                    kind: "invalidate_library".to_string(),
-                    action: None,
-                    track_id: None,
-                    seek_seconds: None,
-                    route: None,
-                });
+                emit_invalidate_library(ctx);
                 Ok(json!({ "playlist_id": updated.id, "name": updated.name }))
             }
             .await,
@@ -216,13 +185,7 @@ pub(super) async fn execute_playlist_vdj_tool<R: Runtime>(
                     )
                 })
                 .await?;
-                ctx.emit_ui_sync(AgentUiSyncEvent {
-                    kind: "invalidate_library".to_string(),
-                    action: None,
-                    track_id: None,
-                    seek_seconds: None,
-                    route: None,
-                });
+                emit_invalidate_library(ctx);
                 Ok(json!({ "deleted": true }))
             }
             .await,
@@ -267,7 +230,17 @@ pub(super) async fn execute_playlist_vdj_tool<R: Runtime>(
                                     .await
                                     .map_err(|e| e.to_string());
                             }
-                            let mut all = db.get_all_tracks().await.map_err(|e| e.to_string())?;
+                            let filter = crate::libs::db_agent_queries::AgentTrackFilter {
+                                limit: 60,
+                                ..Default::default()
+                            };
+                            let mut all =
+                                crate::libs::db_agent_queries::query_agent_tracks_filtered(
+                                    &mut db.connection,
+                                    &filter,
+                                )
+                                .await
+                                .map_err(|e| e.to_string())?;
                             sort_tracks_harmonically(&mut all);
                             Ok(all)
                         })

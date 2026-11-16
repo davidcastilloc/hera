@@ -26,10 +26,51 @@ pub(super) async fn run_agy_streaming_turn<R: Runtime>(
     })
     .to_string();
 
-    let system_hint = "Eres el Agente integrado de HERA Desktop. Responde en español conciso, directo y sin rodeos. Usa las tools del servidor MCP `hera_desktop` para operar la biblioteca SQLite, playlists, reproductor, VirtualDJ en vivo y herramientas del sistema.";
     let full_prompt = if session.agy_conversation_id.is_some() {
         format_user_prompt_with_context(user_message, attachments)
     } else {
+        let dj_handle = match &ctx.host {
+            AgentHostBridge::Tauri(app) => app
+                .try_state::<crate::plugins::config::ConfigManager>()
+                .and_then(|c| c.get().ok())
+                .map(|cfg| cfg.dj_handle)
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| "DaviDJ".to_string()),
+            AgentHostBridge::Standalone(_) => "DaviDJ".to_string(),
+        };
+        let (golden_hints, excluded_hints) = ctx
+            .with_read_conn(|conn| {
+                Box::pin(async move {
+                    let g: Vec<String> = sqlx::query_scalar(
+                        "SELECT COALESCE(NULLIF(note, ''), from_title || ' -> ' || to_title) FROM dj_golden_pairs ORDER BY created_at DESC LIMIT 10",
+                    )
+                    .fetch_all(&mut *conn)
+                    .await
+                    .unwrap_or_default();
+                    let ex: Vec<String> = sqlx::query_scalar(
+                        "SELECT COALESCE(NULLIF(title_pattern, ''), track_id, '') FROM dj_excluded_tracks ORDER BY created_at DESC LIMIT 10",
+                    )
+                    .fetch_all(&mut *conn)
+                    .await
+                    .unwrap_or_default();
+                    Ok((g, ex))
+                })
+            })
+            .await
+            .unwrap_or_default();
+        let mode = if session.execution_policy == "auto" {
+            Some("autonomous_operator")
+        } else {
+            Some("executive_boss")
+        };
+        let system_hint = hera_node_rs::dj_brain::prompts::build_desktop_dj_curator_system_prompt(
+            &dj_handle,
+            "VirtualDJ",
+            None,
+            &golden_hints,
+            &excluded_hints,
+            mode,
+        );
         format!(
             "{system_hint}\n\n{}",
             format_user_prompt_with_context(user_message, attachments)

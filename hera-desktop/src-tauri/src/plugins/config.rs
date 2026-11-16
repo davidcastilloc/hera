@@ -81,6 +81,12 @@ pub struct Config {
     pub wayland_compat: bool,
     #[serde(default)]
     pub menu_bar_visible: bool,
+    #[serde(default)]
+    #[ts(optional, as = "Option<_>")]
+    pub onboarding_completed: bool,
+    #[serde(default)]
+    #[ts(optional, as = "Option<_>")]
+    pub dj_handle: String,
 }
 
 pub const SYSTEM_THEME: &str = "__system";
@@ -112,6 +118,8 @@ impl Default for Config {
             track_view_density: TrackViewDensity::Normal,
             wayland_compat: false,
             menu_bar_visible: false,
+            onboarding_completed: false,
+            dj_handle: String::new(),
         }
     }
 }
@@ -222,4 +230,22 @@ pub fn init<R: Runtime>(config: ConfigManager) -> TauriPlugin<R> {
             Ok(())
         })
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_onboarding_and_dj_handle_serde_defaults() {
+        let legacy_json = r#"{"theme":"dark","language":"es"}"#;
+        let parsed: Config = serde_json::from_str(legacy_json).expect("legacy config");
+        assert!(!parsed.onboarding_completed);
+        assert!(parsed.dj_handle.is_empty());
+
+        let updated_json = r#"{"onboarding_completed":true,"dj_handle":"DaviDJ"}"#;
+        let updated: Config = serde_json::from_str(updated_json).expect("updated config");
+        assert!(updated.onboarding_completed);
+        assert_eq!(updated.dj_handle, "DaviDJ");
+    }
 }

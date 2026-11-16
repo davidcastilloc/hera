@@ -47,6 +47,7 @@ fn wal_connect_options(database_path: &Path, create_if_missing: bool) -> SqliteC
         .synchronous(SqliteSynchronous::Normal)
         .busy_timeout(std::time::Duration::from_secs(5))
         .pragma("temp_store", "MEMORY")
+        .pragma("cache_size", "-64000")
         .pragma("mmap_size", "268435456")
 }
 
@@ -573,7 +574,22 @@ mod tests {
         assert_eq!(artist_groups.len(), 1);
         assert_eq!(playlists.len(), 1);
 
-        // Read pool enforces `PRAGMA query_only = ON` so mutations must fail.
+        // Read pool enforces `PRAGMA query_only = ON`, `cache_size = -64000`, and `mmap_size`.
+        let (cache_size,): (i64,) = sqlx::query_as("PRAGMA cache_size;")
+            .fetch_one(&mut *read_conn)
+            .await
+            .unwrap();
+        assert_eq!(cache_size, -64_000);
+        let (mmap_size,): (i64,) = sqlx::query_as("PRAGMA mmap_size;")
+            .fetch_one(&mut *read_conn)
+            .await
+            .unwrap();
+        assert_eq!(mmap_size, 268_435_456);
+        let (crate_tbl_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM folder_crates")
+            .fetch_one(&mut *read_conn)
+            .await
+            .unwrap();
+        assert_eq!(crate_tbl_count, 0);
         assert!(
             sqlx::query("DELETE FROM playlists")
                 .execute(&mut *read_conn)

@@ -21,6 +21,31 @@ use crate::libs::db_scanner_queries::{
 
 static DAEMON_STARTED: AtomicBool = AtomicBool::new(false);
 
+#[cfg(windows)]
+unsafe extern "system" {
+    fn GetSystemPowerStatus(lp: *mut [u32; 3]) -> i32;
+}
+
+fn detect_on_battery_power() -> bool {
+    #[cfg(windows)]
+    {
+        let mut s = [0_u32; 3];
+        // SAFETY: `[u32; 3]` matches Win32 `SYSTEM_POWER_STATUS` size (12 B) and 4-byte align.
+        unsafe { GetSystemPowerStatus(&mut s) != 0 && s[0].to_ne_bytes()[0] == 0 }
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::read_dir("/sys/class/power_supply")
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| {
+                std::fs::read_to_string(e.path().join("status"))
+                    .is_ok_and(|x| x.trim() == "Discharging")
+            })
+    }
+}
+
 struct InFlightGuard<'a>(&'a ScanScheduler, String);
 impl Drop for InFlightGuard<'_> {
     fn drop(&mut self) {
@@ -77,6 +102,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
             }
             sched.seed_completed_levels(seeded);
         }
+        let _ = crate::libs::omkf_sync::boot_verify_folder_crates(&mut conn).await;
 
         for idx in 0..num_workers {
             let (sched_w, cache_w, limiter_w, tx_w, missing_tx_w) = (
@@ -134,9 +160,19 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
         let mut last_completed_count = 0_usize;
         let mut ema_tracks_per_sec = 0.0_f64;
         let mut was_idle = false;
+        let mut tick_count = 0_u64;
 
         loop {
             interval.tick().await;
+            if tick_count % 12 == 0 {
+                sched
+                    .governor
+                    .set_on_battery_power(detect_on_battery_power());
+            }
+            if tick_count % 5 == 0 {
+                let _ = crate::libs::omkf_sync::flush_dirty_omkf_capsules(&mut conn).await;
+            }
+            tick_count = tick_count.wrapping_add(1);
             if super::workability::is_scan_cancelled() && sched.pending_count() > 0 {
                 let _ = sched.cancel_and_drain_background();
             }
@@ -153,37 +189,31 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
             let mut patches_to_emit = Vec::new();
 
             for outcome in batch {
-                if let Some((bad_path, details)) = outcome.corrupt_issue {
+                let u = outcome.update;
+                if let Some((bp, d)) = outcome.corrupt_issue {
                     let _ = record_doctor_issue(
                         &mut conn,
-                        &outcome.update.track_id,
-                        &bad_path,
+                        &u.track_id,
+                        &bp,
                         "CORRUPT_FILE",
                         "error",
-                        &details,
+                        &d,
                     )
                     .await;
                 }
-                if outcome.update.duration_sec.is_some_and(|d| d > 0 && d < 25) {
-                    short_sfx_ids.push(outcome.update.track_id);
+                if u.duration_sec.is_some_and(|d| d > 0 && d < 25) {
+                    short_sfx_ids.push(u.track_id);
                 } else {
                     patches_to_emit.push(serde_json::json!({
-                        "track_id": outcome.update.track_id, "bpm": outcome.update.bpm,
-                        "camelot": outcome.update.camelot, "energy": outcome.update.energy,
-                        "duration": outcome.update.duration_sec, "hot_cues": outcome.hot_cues,
-                        "scan_level": outcome.update.scan_level,
-                        "is_transition_candidate": outcome.update.is_transition_candidate,
-                        "is_fake_320kbps": outcome.update.is_fake_320kbps,
-                        "replay_gain_db": outcome.update.replay_gain_db,
-                        "loudness_lufs": outcome.update.loudness_lufs,
-                        "waveform_peaks_b64": outcome.update.waveform_peaks_b64,
-                        "has_intro_vocals": outcome.update.has_intro_vocals,
-                        "has_outro_vocals": outcome.update.has_outro_vocals,
-                        "has_audio_skips": outcome.update.has_audio_skips,
-                        "entry_bpm": outcome.update.entry_bpm,
-                        "exit_bpm": outcome.update.exit_bpm,
+                        "track_id": u.track_id, "bpm": u.bpm, "camelot": u.camelot, "energy": u.energy,
+                        "duration": u.duration_sec, "hot_cues": outcome.hot_cues, "scan_level": u.scan_level,
+                        "is_transition_candidate": u.is_transition_candidate, "is_fake_320kbps": u.is_fake_320kbps,
+                        "replay_gain_db": u.replay_gain_db, "loudness_lufs": u.loudness_lufs,
+                        "waveform_peaks_b64": u.waveform_peaks_b64, "has_intro_vocals": u.has_intro_vocals,
+                        "has_outro_vocals": u.has_outro_vocals, "has_audio_skips": u.has_audio_skips,
+                        "entry_bpm": u.entry_bpm, "exit_bpm": u.exit_bpm,
                     }));
-                    updates_to_apply.push(outcome.update);
+                    updates_to_apply.push(u);
                 }
             }
 
@@ -208,6 +238,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                         if let Some(d) = u.duration_sec {
                             entry.2 = d;
                         }
+                        crate::libs::omkf_sync::mark_crate_dirty_for_track_path(&entry.0);
                     }
                 }
                 drop(g);
@@ -239,13 +270,10 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                 if !pending_fast.is_empty() {
                     let mut ids = Vec::with_capacity(pending_fast.len());
                     let mut g = cache.lock().unwrap();
-                    for (id, path, lvl) in pending_fast {
+                    for (id, p, l) in pending_fast {
                         g.entry(id.clone())
-                            .and_modify(|e| {
-                                e.0 = path.clone();
-                                e.1 = lvl;
-                            })
-                            .or_insert((path, lvl, 0));
+                            .and_modify(|e| (e.0, e.1) = (p.clone(), l))
+                            .or_insert((p, l, 0));
                         ids.push(id);
                     }
                     drop(g);
@@ -256,13 +284,10 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                 {
                     let mut ids = Vec::with_capacity(pending_full.len());
                     let mut g = cache.lock().unwrap();
-                    for (id, path) in pending_full {
+                    for (id, p) in pending_full {
                         g.entry(id.clone())
-                            .and_modify(|e| {
-                                e.0 = path.clone();
-                                e.1 = e.1.max(1);
-                            })
-                            .or_insert((path, 1, 0));
+                            .and_modify(|e| (e.0, e.1) = (p.clone(), e.1.max(1)))
+                            .or_insert((p, 1, 0));
                         ids.push(id);
                     }
                     drop(g);
@@ -296,16 +321,14 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                     } else {
                         0
                     };
-                    let _ = app_handle.emit(
-                        "hera:scanner-telemetry",
-                        serde_json::json!({
-                            "phase": if is_busy { "analyzing" } else { "idle" },
-                            "fastDone": fast_done, "fullDone": full_done, "total": total,
-                            "tracksPerSec": (ema_tracks_per_sec * 10.0).round() / 10.0,
-                            "etaSec": eta_sec,
-                            "governorActive": sched.governor.is_throttled_booth_mode(),
-                        }),
-                    );
+                    let tps = (ema_tracks_per_sec * 10.0).round() / 10.0;
+                    let phase = if is_busy { "analyzing" } else { "idle" };
+                    let gov = sched.governor.is_throttled_booth_mode();
+                    let ev = serde_json::json!({
+                        "phase": phase, "fastDone": fast_done, "fullDone": full_done,
+                        "total": total, "tracksPerSec": tps, "etaSec": eta_sec, "governorActive": gov,
+                    });
+                    let _ = app_handle.emit("hera:scanner-telemetry", ev);
                     crate::libs::tray::update_tray_scanner_status(
                         &app_handle,
                         fast_done,
