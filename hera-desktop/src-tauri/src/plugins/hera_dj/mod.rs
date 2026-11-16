@@ -3,12 +3,13 @@ mod audio_transport;
 mod bridge_p2p;
 mod mini_overlay;
 mod p2p_download;
+pub mod scanner_governor_os;
 pub mod scanner_v3;
 mod scanner_worker;
 #[cfg(test)]
 mod tests;
-mod virtualdj_live;
 pub mod vdj_xml_parser;
+mod virtualdj_live;
 pub mod workability;
 
 use hera_node_rs::audio_engine::create_default_audio_backend;
@@ -210,7 +211,7 @@ pub async fn scan_ai_connectivity(
 #[tauri::command]
 pub async fn cancel_library_scan() -> Result<bool, String> {
     workability::cancel_scan_flag();
-    scanner_v3::global_scheduler().clear_background_queues();
+    let _ = scanner_v3::global_scheduler().cancel_and_drain_background();
     Ok(true)
 }
 

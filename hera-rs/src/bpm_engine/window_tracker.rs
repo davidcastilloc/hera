@@ -15,10 +15,7 @@ pub struct WindowTrackingResult {
     pub anchors: Vec<TempoAnchorPoint>,
 }
 
-pub fn track_windows_continuity(
-    combined_novelty: &[f32],
-    frame_dt: f32,
-) -> WindowTrackingResult {
+pub fn track_windows_continuity(combined_novelty: &[f32], frame_dt: f32) -> WindowTrackingResult {
     let n = combined_novelty.len();
     if n < 64 || frame_dt <= 0.0 {
         return WindowTrackingResult {
@@ -164,7 +161,11 @@ fn estimate_window_bpm(
         return None;
     }
 
-    let norm: f64 = slice.iter().map(|&x| (x as f64) * (x as f64)).sum::<f64>().max(1e-9);
+    let norm: f64 = slice
+        .iter()
+        .map(|&x| (x as f64) * (x as f64))
+        .sum::<f64>()
+        .max(1e-9);
     let mut best_lag = min_lag;
     let mut best_val = -1.0_f32;
     let mut acf = vec![0.0_f32; max_lag + 2];

@@ -414,7 +414,11 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                 energy: Some(energy),
                 hera_seal: Some(hera_seal),
                 is_video: Some({
-                    let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                    let ext = path
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
                     matches!(ext.as_str(), "mp4" | "mov" | "mkv" | "webm" | "m4v")
                 }),
                 is_mix_over_10m: Some(duration > 600),
@@ -462,7 +466,11 @@ pub fn get_track_from_file(path: &PathBuf) -> AnyResult<Track> {
                     energy: Some(energy),
                     hera_seal: Some(hera_seal),
                     is_video: Some({
-                        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+                        let ext = path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .unwrap_or("")
+                            .to_lowercase();
                         matches!(ext.as_str(), "mp4" | "mov" | "mkv" | "webm" | "m4v")
                     }),
                     is_mix_over_10m: Some(duration > 600),

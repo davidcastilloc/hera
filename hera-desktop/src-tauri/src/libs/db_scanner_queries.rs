@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use sqlx::{Connection, SqliteConnection};
 
@@ -21,6 +22,7 @@ pub struct ScannerRowUpdate {
 /// If a track with the same `(partial_hash_64kb, file_size_bytes)` exists in `tracks`
 /// whose old `path` no longer exists on disk, update `tracks.path = new_path`
 /// and return the existing `tracks.id` so playlists remain intact.
+#[allow(dead_code)]
 pub async fn try_heal_moved_track_path(
     conn: &mut SqliteConnection,
     partial_hash_64kb: &str,
@@ -52,6 +54,34 @@ pub async fn try_heal_moved_track_path(
     Ok(None)
 }
 
+pub async fn record_doctor_issue(
+    conn: &mut SqliteConnection,
+    track_id: &str,
+    file_path: &str,
+    issue_kind: &str,
+    severity: &str,
+    details: &str,
+) -> AnyResult<()> {
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+    sqlx::query(
+        "INSERT INTO library_doctor_issues (
+            track_id, file_path, issue_kind, severity, details, resolved, detected_at_unix_ms
+         ) VALUES (?, ?, ?, ?, ?, 0, ?)",
+    )
+    .bind(track_id)
+    .bind(file_path)
+    .bind(issue_kind)
+    .bind(severity)
+    .bind(details)
+    .bind(now_ms)
+    .execute(conn)
+    .await?;
+    Ok(())
+}
+
 pub async fn apply_scanner_batch_updates(
     conn: &mut SqliteConnection,
     updates: &[ScannerRowUpdate],
@@ -69,7 +99,7 @@ pub async fn apply_scanner_batch_updates(
                 energy = COALESCE(?, energy),
                 hot_cues = COALESCE(?, hot_cues),
                 waveform_peaks_blob = COALESCE(?, waveform_peaks_blob),
-                scan_level = MAX(scan_level, ?),
+                scan_level = CASE WHEN ? < 0 THEN -1 ELSE MAX(scan_level, ?) END,
                 is_transition_candidate = ?,
                 is_fake_320kbps = ?,
                 duration = CASE WHEN ? IS NOT NULL AND ? > 0 THEN ? ELSE duration END,
@@ -81,6 +111,7 @@ pub async fn apply_scanner_batch_updates(
         .bind(u.energy)
         .bind(&u.hot_cues_json)
         .bind(&u.waveform_peaks_blob)
+        .bind(u.scan_level)
         .bind(u.scan_level)
         .bind(if u.is_transition_candidate { 1_i64 } else { 0_i64 })
         .bind(if u.is_fake_320kbps { 1_i64 } else { 0_i64 })
@@ -101,12 +132,11 @@ pub async fn load_pending_scanner_jobs(
     conn: &mut SqliteConnection,
     limit: i64,
 ) -> AnyResult<Vec<(String, String, i64)>> {
-    let rows: Vec<(String, String, i64)> = sqlx::query_as(
-        "SELECT id, path, scan_level FROM tracks WHERE scan_level < 1 LIMIT ?",
-    )
-    .bind(limit)
-    .fetch_all(conn)
-    .await?;
+    let rows: Vec<(String, String, i64)> =
+        sqlx::query_as("SELECT id, path, scan_level FROM tracks WHERE scan_level = 0 LIMIT ?")
+            .bind(limit)
+            .fetch_all(conn)
+            .await?;
     Ok(rows)
 }
 
@@ -114,12 +144,11 @@ pub async fn load_pending_full_pass_jobs(
     conn: &mut SqliteConnection,
     limit: i64,
 ) -> AnyResult<Vec<(String, String)>> {
-    let rows: Vec<(String, String)> = sqlx::query_as(
-        "SELECT id, path FROM tracks WHERE scan_level = 1 LIMIT ?",
-    )
-    .bind(limit)
-    .fetch_all(conn)
-    .await?;
+    let rows: Vec<(String, String)> =
+        sqlx::query_as("SELECT id, path FROM tracks WHERE scan_level = 1 LIMIT ?")
+            .bind(limit)
+            .fetch_all(conn)
+            .await?;
     Ok(rows)
 }
 
@@ -127,30 +156,28 @@ pub async fn fetch_track_path_and_level(
     conn: &mut SqliteConnection,
     track_id: &str,
 ) -> AnyResult<Option<(String, i64)>> {
-    let row: Option<(String, i64)> = sqlx::query_as(
-        "SELECT path, scan_level FROM tracks WHERE id = ?",
-    )
-    .bind(track_id)
-    .fetch_optional(conn)
-    .await?;
+    let row: Option<(String, i64)> =
+        sqlx::query_as("SELECT path, scan_level FROM tracks WHERE id = ?")
+            .bind(track_id)
+            .fetch_optional(conn)
+            .await?;
     Ok(row)
 }
 
-pub async fn count_scanner_levels(
-    conn: &mut SqliteConnection,
-) -> AnyResult<(usize, usize, usize)> {
+pub async fn count_scanner_levels(conn: &mut SqliteConnection) -> AnyResult<(usize, usize, usize)> {
     let row: (i64, i64, i64) = sqlx::query_as(
-        "SELECT COUNT(*), COALESCE(SUM(CASE WHEN scan_level >= 1 THEN 1 ELSE 0 END), 0), COALESCE(SUM(CASE WHEN scan_level >= 2 THEN 1 ELSE 0 END), 0) FROM tracks",
+        "SELECT COUNT(*), COALESCE(SUM(CASE WHEN scan_level >= 1 THEN 1 ELSE 0 END), 0), COALESCE(SUM(CASE WHEN scan_level >= 2 THEN 1 ELSE 0 END), 0) FROM tracks WHERE scan_level >= 0",
     )
     .fetch_one(conn)
     .await?;
-    Ok((row.0.max(0) as usize, row.1.max(0) as usize, row.2.max(0) as usize))
+    Ok((
+        row.0.max(0) as usize,
+        row.1.max(0) as usize,
+        row.2.max(0) as usize,
+    ))
 }
 
-pub async fn delete_short_sfx_tracks(
-    conn: &mut SqliteConnection,
-    ids: &[String],
-) -> AnyResult<()> {
+pub async fn delete_short_sfx_tracks(conn: &mut SqliteConnection, ids: &[String]) -> AnyResult<()> {
     if ids.is_empty() {
         return Ok(());
     }

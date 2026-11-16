@@ -1,7 +1,5 @@
 use crate::bpm_engine::v2_core::{
-    consensus_ai::analyze_bpm_consensus_v2,
-    hints::BpmHint,
-    key_engine::detect_song_key,
+    consensus_ai::analyze_bpm_consensus_v2, hints::BpmHint, key_engine::detect_song_key,
     multiband_onset::extract_multiband_novelty,
 };
 use rustfft::FftPlanner;
@@ -31,7 +29,9 @@ pub fn build_waveform_peaks_blob(samples: &[f32], bins: usize) -> Vec<u8> {
     let step = (samples.len() as f64) / (bins as f64);
     for b in 0..bins {
         let start = (b as f64 * step) as usize;
-        let end = (((b + 1) as f64 * step) as usize).min(samples.len()).max(start + 1);
+        let end = (((b + 1) as f64 * step) as usize)
+            .min(samples.len())
+            .max(start + 1);
         let mut min_v = 1.0_f32;
         let mut max_v = -1.0_f32;
         for &s in &samples[start..end] {

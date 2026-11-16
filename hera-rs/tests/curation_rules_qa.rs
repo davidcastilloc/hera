@@ -57,30 +57,113 @@ fn build_track(
 #[test]
 fn test_curation_rules_routes_over_10m_mixes_without_disk_moves() {
     let candidates = vec![
-        build_track("trk_01", "Perdóname mi vida", "Grupo Niche", "music/niche.mp3", 245.0, 100.0, "8A", 0.65),
-        build_track("trk_02", "Conquístame", "Los Titanes", "music/titanes.mp3", 280.0, 100.0, "8A", 0.70),
+        build_track(
+            "trk_01",
+            "Perdóname mi vida",
+            "Grupo Niche",
+            "music/niche.mp3",
+            245.0,
+            100.0,
+            "8A",
+            0.65,
+        ),
+        build_track(
+            "trk_02",
+            "Conquístame",
+            "Los Titanes",
+            "music/titanes.mp3",
+            280.0,
+            100.0,
+            "8A",
+            0.70,
+        ),
         // Live set / session: 15 minutes = 900 seconds > 600s
-        build_track("mix_01", "Live Salsa Festival 2026 Session", "DJ Live", "mixes/fest_session.mp3", 900.0, 100.0, "8A", 0.80),
-        build_track("trk_03", "Cali Pachanguero", "Grupo Niche", "music/cali.mp3", 310.0, 102.0, "9A", 0.85),
+        build_track(
+            "mix_01",
+            "Live Salsa Festival 2026 Session",
+            "DJ Live",
+            "mixes/fest_session.mp3",
+            900.0,
+            100.0,
+            "8A",
+            0.80,
+        ),
+        build_track(
+            "trk_03",
+            "Cali Pachanguero",
+            "Grupo Niche",
+            "music/cali.mp3",
+            310.0,
+            102.0,
+            "9A",
+            0.85,
+        ),
     ];
 
     let rules = DjCurationRuleSet::default();
     let spine = SetSpineConfig::default();
 
-    let result = optimize_crate_with_dj_rules("Latin Crate", "steady_climb", candidates, None, &spine, &rules);
+    let result = optimize_crate_with_dj_rules(
+        "Latin Crate",
+        "steady_climb",
+        candidates,
+        None,
+        &spine,
+        &rules,
+    );
 
     assert_eq!(result.routed_to_mixes_over_10m, vec!["mix_01"]);
     assert_eq!(result.base_result.total_tracks, 3);
-    assert!(!result.base_result.sequence.iter().any(|t| t.track_id == "mix_01"));
+    assert!(!result
+        .base_result
+        .sequence
+        .iter()
+        .any(|t| t.track_id == "mix_01"));
 }
 
 #[test]
 fn test_curation_rules_excludes_blacklisted_and_title_patterns() {
     let candidates = vec![
-        build_track("trk_01", "Perdóname mi vida", "Grupo Niche", "music/niche.mp3", 245.0, 100.0, "8A", 0.65),
-        build_track("trk_02", "Clavelito ya no", "Orquesta Sonora", "music/clavelito.mp3", 210.0, 98.0, "7A", 0.60),
-        build_track("trk_03", "Conquístame", "Los Titanes", "music/titanes.mp3", 280.0, 100.0, "8A", 0.70),
-        build_track("trk_04", "Blacklisted ID Track", "Artist X", "music/x.mp3", 220.0, 100.0, "8A", 0.65),
+        build_track(
+            "trk_01",
+            "Perdóname mi vida",
+            "Grupo Niche",
+            "music/niche.mp3",
+            245.0,
+            100.0,
+            "8A",
+            0.65,
+        ),
+        build_track(
+            "trk_02",
+            "Clavelito ya no",
+            "Orquesta Sonora",
+            "music/clavelito.mp3",
+            210.0,
+            98.0,
+            "7A",
+            0.60,
+        ),
+        build_track(
+            "trk_03",
+            "Conquístame",
+            "Los Titanes",
+            "music/titanes.mp3",
+            280.0,
+            100.0,
+            "8A",
+            0.70,
+        ),
+        build_track(
+            "trk_04",
+            "Blacklisted ID Track",
+            "Artist X",
+            "music/x.mp3",
+            220.0,
+            100.0,
+            "8A",
+            0.65,
+        ),
     ];
 
     let rules = DjCurationRuleSet {
@@ -90,7 +173,14 @@ fn test_curation_rules_excludes_blacklisted_and_title_patterns() {
     };
     let spine = SetSpineConfig::default();
 
-    let result = optimize_crate_with_dj_rules("Latin Crate", "steady_climb", candidates, None, &spine, &rules);
+    let result = optimize_crate_with_dj_rules(
+        "Latin Crate",
+        "steady_climb",
+        candidates,
+        None,
+        &spine,
+        &rules,
+    );
 
     assert_eq!(result.excluded_tracks.len(), 2);
     assert!(result.excluded_tracks.contains(&"trk_02".to_string()));
@@ -103,9 +193,36 @@ fn test_curation_rules_excludes_blacklisted_and_title_patterns() {
 #[test]
 fn test_curation_rules_locks_golden_transition_pair() {
     let candidates = vec![
-        build_track("trk_01", "Perdóname mi vida", "Grupo Niche", "music/niche.mp3", 245.0, 100.0, "8A", 0.65),
-        build_track("trk_02", "Conquístame", "Los Titanes", "music/titanes.mp3", 280.0, 100.0, "8A", 0.70),
-        build_track("trk_03", "Una Aventura", "Grupo Niche", "music/aventura.mp3", 290.0, 101.0, "8A", 0.75),
+        build_track(
+            "trk_01",
+            "Perdóname mi vida",
+            "Grupo Niche",
+            "music/niche.mp3",
+            245.0,
+            100.0,
+            "8A",
+            0.65,
+        ),
+        build_track(
+            "trk_02",
+            "Conquístame",
+            "Los Titanes",
+            "music/titanes.mp3",
+            280.0,
+            100.0,
+            "8A",
+            0.70,
+        ),
+        build_track(
+            "trk_03",
+            "Una Aventura",
+            "Grupo Niche",
+            "music/aventura.mp3",
+            290.0,
+            101.0,
+            "8A",
+            0.75,
+        ),
     ];
 
     let golden_pair = GoldenTransitionPair {
@@ -130,7 +247,14 @@ fn test_curation_rules_locks_golden_transition_pair() {
         custom_energy_curve: vec![],
     };
 
-    let result = optimize_crate_with_dj_rules("Romantic Set", "steady_climb", candidates, None, &spine, &rules);
+    let result = optimize_crate_with_dj_rules(
+        "Romantic Set",
+        "steady_climb",
+        candidates,
+        None,
+        &spine,
+        &rules,
+    );
 
     assert_eq!(result.base_result.sequence[0].track_id, "trk_01");
     assert_eq!(result.base_result.sequence[1].track_id, "trk_02");
@@ -140,15 +264,49 @@ fn test_curation_rules_locks_golden_transition_pair() {
 #[test]
 fn test_curation_rules_supports_mixed_audio_and_video() {
     let candidates = vec![
-        build_track("trk_01", "Perdóname mi vida", "Grupo Niche", "videos/niche_official.mp4", 245.0, 100.0, "8A", 0.65),
-        build_track("trk_02", "Conquístame", "Los Titanes", "music/titanes_master.flac", 280.0, 100.0, "8A", 0.70),
-        build_track("trk_03", "Rebellion Live HD", "Joe Arroyo", "videos/rebellion.mkv", 320.0, 105.0, "9A", 0.85),
+        build_track(
+            "trk_01",
+            "Perdóname mi vida",
+            "Grupo Niche",
+            "videos/niche_official.mp4",
+            245.0,
+            100.0,
+            "8A",
+            0.65,
+        ),
+        build_track(
+            "trk_02",
+            "Conquístame",
+            "Los Titanes",
+            "music/titanes_master.flac",
+            280.0,
+            100.0,
+            "8A",
+            0.70,
+        ),
+        build_track(
+            "trk_03",
+            "Rebellion Live HD",
+            "Joe Arroyo",
+            "videos/rebellion.mkv",
+            320.0,
+            105.0,
+            "9A",
+            0.85,
+        ),
     ];
 
     let rules = DjCurationRuleSet::default();
     let spine = SetSpineConfig::default();
 
-    let result = optimize_crate_with_dj_rules("Mixed Video Crate", "steady_climb", candidates, None, &spine, &rules);
+    let result = optimize_crate_with_dj_rules(
+        "Mixed Video Crate",
+        "steady_climb",
+        candidates,
+        None,
+        &spine,
+        &rules,
+    );
 
     assert_eq!(result.base_result.total_tracks, 3);
     assert_eq!(result.video_tracks_count, 2); // .mp4 and .mkv

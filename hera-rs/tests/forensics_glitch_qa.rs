@@ -46,7 +46,10 @@ fn test_cd_skip_with_micro_dropout_and_phase_cliff_is_detected() {
     }
 
     let report = scan_pcm_for_cd_skips(&mono, sample_rate as u32, 0);
-    assert!(report.has_audio_skips, "Scratched-CD dropout must trigger has_audio_skips");
+    assert!(
+        report.has_audio_skips,
+        "Scratched-CD dropout must trigger has_audio_skips"
+    );
     assert!(report.micro_dropout_count >= 1);
     assert!(!report.skip_timestamps_seconds.is_empty());
     let detected_time = report.skip_timestamps_seconds[0];
@@ -81,7 +84,10 @@ fn test_cd_skip_with_repeated_buffer_stutter_is_detected() {
     }
 
     let report = scan_pcm_for_cd_skips(&mono, sample_rate as u32, 0);
-    assert!(report.has_audio_skips, "Repeated buffer stutter must trigger has_audio_skips");
+    assert!(
+        report.has_audio_skips,
+        "Repeated buffer stutter must trigger has_audio_skips"
+    );
     assert!(report.buffer_repeat_stutter_count >= 1);
     assert!(!report.skip_timestamps_seconds.is_empty());
 }

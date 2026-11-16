@@ -18,7 +18,10 @@ pub(super) fn analyze_batch_args(args: &Value) -> Result<Value, String> {
 
     #[cfg(not(target_arch = "wasm32"))]
     let results: Vec<Value> = {
-        use std::sync::{atomic::{AtomicUsize, Ordering}, Mutex};
+        use std::sync::{
+            atomic::{AtomicUsize, Ordering},
+            Mutex,
+        };
         let workers = std::thread::available_parallelism()
             .map(|n| n.get().saturating_sub(1).max(1))
             .unwrap_or(2)
@@ -27,21 +30,19 @@ pub(super) fn analyze_batch_args(args: &Value) -> Result<Value, String> {
         let out = Mutex::new(vec![Value::Null; paths.len()]);
         std::thread::scope(|s| {
             for _ in 0..workers {
-                s.spawn(|| {
-                    loop {
-                        let i = next_idx.fetch_add(1, Ordering::Relaxed);
-                        if i >= paths.len() {
-                            break;
-                        }
-                        let p_str = &paths[i];
-                        let sub_arg = json!({ "file_path": p_str, "bpm_hint": bpm_hint });
-                        let val = match analyze_single_track_arg(&sub_arg) {
-                            Ok(r) => r,
-                            Err(e) => json!({ "file_path": p_str, "error": e }),
-                        };
-                        if let Ok(mut guard) = out.lock() {
-                            guard[i] = val;
-                        }
+                s.spawn(|| loop {
+                    let i = next_idx.fetch_add(1, Ordering::Relaxed);
+                    if i >= paths.len() {
+                        break;
+                    }
+                    let p_str = &paths[i];
+                    let sub_arg = json!({ "file_path": p_str, "bpm_hint": bpm_hint });
+                    let val = match analyze_single_track_arg(&sub_arg) {
+                        Ok(r) => r,
+                        Err(e) => json!({ "file_path": p_str, "error": e }),
+                    };
+                    if let Ok(mut guard) = out.lock() {
+                        guard[i] = val;
                     }
                 });
             }
@@ -75,12 +76,10 @@ pub(super) fn analyze_single_track_arg(args: &Value) -> Result<Value, String> {
         #[cfg(not(target_arch = "wasm32"))]
         {
             let path = std::path::Path::new(fp);
-            let ext = path
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("wav");
-            let dec = crate::bpm_engine::v2_core::audio_ingest::load_audio_mono_native_sr(path, None)
-                .map_err(|e| format!("Failed to decode `{fp}`: {e:?}"))?;
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("wav");
+            let dec =
+                crate::bpm_engine::v2_core::audio_ingest::load_audio_mono_native_sr(path, None)
+                    .map_err(|e| format!("Failed to decode `{fp}`: {e:?}"))?;
             let forensics = audit_pcm_channels(&dec.samples, None, dec.sample_rate, ext);
             let mut structure = analyze_structure_and_style(
                 &dec.samples,

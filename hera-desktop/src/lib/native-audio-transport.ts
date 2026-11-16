@@ -123,6 +123,7 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
     filePath: string,
     durationHintSec?: number,
     hotCuesSec?: number[],
+    replayGainDb?: number,
   ): Promise<void> {
     const seq = ++this.loadSeq;
     this.stopTicker();
@@ -147,7 +148,13 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
         filePath,
         durationHintSec: this.durationSec,
         hotCuesSec:
-          hotCuesSec && hotCuesSec.length === 4 ? hotCuesSec : undefined,
+          hotCuesSec && hotCuesSec.length >= 4
+            ? hotCuesSec.slice(0, 4)
+            : undefined,
+        replayGainDb:
+          replayGainDb != null && Number.isFinite(replayGainDb)
+            ? replayGainDb
+            : undefined,
       });
       if (seq !== this.loadSeq) return;
       if (snap !== null) {

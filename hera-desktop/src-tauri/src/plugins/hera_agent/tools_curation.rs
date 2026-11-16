@@ -23,10 +23,7 @@ pub(super) async fn execute_curation_feedback_tool<R: Runtime>(
                     .get("custom_bonus")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.38);
-                let note = args
-                    .get("note")
-                    .and_then(|v| v.as_str())
-                    .map(String::from);
+                let note = args.get("note").and_then(|v| v.as_str()).map(String::from);
 
                 let id = format!("gp-{}", uuid::Uuid::new_v4());
                 let now = SystemTime::now()
@@ -42,9 +39,11 @@ pub(super) async fn execute_curation_feedback_tool<R: Runtime>(
                         Box::pin(async move {
                             let f = db.get_track(&f_id).await.ok().flatten();
                             let t = db.get_track(&t_id).await.ok().flatten();
-                            let f_art = f.as_ref().map(|x| x.artists.join(", ")).unwrap_or_default();
+                            let f_art =
+                                f.as_ref().map(|x| x.artists.join(", ")).unwrap_or_default();
                             let f_tit = f.as_ref().map(|x| x.title.clone()).unwrap_or_default();
-                            let t_art = t.as_ref().map(|x| x.artists.join(", ")).unwrap_or_default();
+                            let t_art =
+                                t.as_ref().map(|x| x.artists.join(", ")).unwrap_or_default();
                             let t_tit = t.as_ref().map(|x| x.title.clone()).unwrap_or_default();
                             Ok((f_art, f_tit, t_art, t_tit))
                         })
@@ -100,9 +99,18 @@ pub(super) async fn execute_curation_feedback_tool<R: Runtime>(
         ),
         "exclude_track_curation" => Some(
             async {
-                let track_id = args.get("track_id").and_then(|v| v.as_str()).map(String::from);
-                let title_pattern = args.get("title_pattern").and_then(|v| v.as_str()).map(String::from);
-                let reason = args.get("reason").and_then(|v| v.as_str()).map(String::from);
+                let track_id = args
+                    .get("track_id")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let title_pattern = args
+                    .get("title_pattern")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                let reason = args
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
 
                 if track_id.is_none() && title_pattern.is_none() {
                     return Err("Debes proporcionar 'track_id' o 'title_pattern'".to_string());

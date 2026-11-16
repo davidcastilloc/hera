@@ -216,4 +216,3 @@ pub fn format_now_playing_tray_tooltip(now_playing: Option<&VirtualDjNowPlaying>
         _ => "HERA BETA · Cabina lista".to_string(),
     }
 }
-

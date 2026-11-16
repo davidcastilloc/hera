@@ -71,12 +71,13 @@ pub(crate) fn create_controller_and_worker(
         master_volume_bits: AtomicU32::new(1.0_f32.to_bits()),
         tempo_ratio_bits: AtomicU32::new(1.0_f32.to_bits()),
     });
+    let (deck_a_meta, active_cancel) = (Mutex::new(LoadedDeckMeta::default()), Mutex::new(None));
     let hub = AudioControllerHub {
         kind,
         atomics: Arc::clone(&atomics),
         deck_load_tx: Mutex::new(deck_load_tx),
-        deck_a_meta: Mutex::new(LoadedDeckMeta::default()),
-        active_cancel: Mutex::new(None),
+        deck_a_meta,
+        active_cancel,
         telemetry_rx: Mutex::new(TelemetryReaderState {
             consumer: telemetry_rx,
             unread_latest: None,
@@ -115,27 +116,34 @@ impl AudioControllerHub {
     ) -> (AudioTransportSnapshot, u64) {
         self.swap_active_cancel(cancel);
         let complete = logical_total_frames.is_none();
-        let total = logical_total_frames
-            .unwrap_or_else(|| buffer.total_frames())
-            .max(buffer.total_frames());
+        let buf_frames = buffer.total_frames();
+        let total = logical_total_frames.unwrap_or(buf_frames).max(buf_frames);
         let generation = {
-            let mut meta_guard = (deck == DeckId::DeckA).then(|| self.deck_a_meta.lock().ok()).flatten();
+            let mut meta_guard = (deck == DeckId::DeckA)
+                .then(|| self.deck_a_meta.lock().ok())
+                .flatten();
             let next_gen = self.atomics.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
             if let Some(ref mut meta) = meta_guard {
                 meta.path = source_path;
                 meta.buffer = Some(Arc::clone(&buffer));
             }
             if deck == DeckId::DeckA {
-                self.atomics.command_epoch.fetch_add(1, Ordering::AcqRel);
-                self.atomics.stream_complete.store(complete, Ordering::Release);
-                self.atomics.total_frames.store(total, Ordering::Release);
-                self.atomics.playhead_frame.store(0, Ordering::Release);
-                self.atomics.is_playing.store(false, Ordering::Release);
-                self.atomics.ended.store(false, Ordering::Release);
+                let a = &self.atomics;
+                a.command_epoch.fetch_add(1, Ordering::AcqRel);
+                a.stream_complete.store(complete, Ordering::Release);
+                a.total_frames.store(total, Ordering::Release);
+                a.playhead_frame.store(0, Ordering::Release);
+                a.is_playing.store(false, Ordering::Release);
+                a.ended.store(false, Ordering::Release);
             }
-            let swap = match logical_total_frames {
-                Some(_) => DeckLoadSwap::Prefix { deck, buffer, logical_total_frames: total },
-                None => DeckLoadSwap::Reset { deck, buffer },
+            let swap = if logical_total_frames.is_some() {
+                DeckLoadSwap::Prefix {
+                    deck,
+                    buffer,
+                    logical_total_frames: total,
+                }
+            } else {
+                DeckLoadSwap::Reset { deck, buffer }
             };
             if let Ok(mut tx) = self.deck_load_tx.lock() {
                 let _ = tx.push(swap);
@@ -151,7 +159,10 @@ impl AudioControllerHub {
         raw: PreallocatedDeckBuffer,
         source_path: Option<String>,
     ) -> Result<AudioTransportSnapshot, String> {
-        let resampled = Arc::new(resample_deck_buffer_to_rate(&raw, self.atomics.sample_rate)?);
+        let resampled = Arc::new(resample_deck_buffer_to_rate(
+            &raw,
+            self.atomics.sample_rate,
+        )?);
         Ok(self.install_resampled_buffer(deck, resampled, source_path))
     }
 
@@ -172,7 +183,13 @@ impl AudioControllerHub {
         source_path: Option<String>,
         cancel: Arc<AtomicBool>,
     ) -> (AudioTransportSnapshot, u64) {
-        self.commit_load(deck, prefix, Some(logical_total_frames), source_path, Some(cancel))
+        self.commit_load(
+            deck,
+            prefix,
+            Some(logical_total_frames),
+            source_path,
+            Some(cancel),
+        )
     }
 
     pub(crate) fn upgrade_buffer_if_generation(
@@ -182,24 +199,31 @@ impl AudioControllerHub {
         full_resampled: Arc<PreallocatedDeckBuffer>,
         cancel: &AtomicBool,
     ) -> bool {
-        if cancel.load(Ordering::Acquire)
-            || self.atomics.load_generation.load(Ordering::Acquire) != expected_gen
-        {
+        let stale = || {
+            cancel.load(Ordering::Acquire)
+                || self.atomics.load_generation.load(Ordering::Acquire) != expected_gen
+        };
+        if stale() {
             return false;
         }
-        let mut meta_guard = (deck == DeckId::DeckA).then(|| self.deck_a_meta.lock().ok()).flatten();
-        if cancel.load(Ordering::Acquire)
-            || self.atomics.load_generation.load(Ordering::Acquire) != expected_gen
-        {
+        let mut meta_guard = (deck == DeckId::DeckA)
+            .then(|| self.deck_a_meta.lock().ok())
+            .flatten();
+        if stale() {
             return false;
         }
         if let Some(ref mut meta) = meta_guard {
+            let n = full_resampled.total_frames();
             meta.buffer = Some(Arc::clone(&full_resampled));
-            self.atomics.total_frames.store(full_resampled.total_frames(), Ordering::Release);
+            self.atomics.total_frames.store(n, Ordering::Release);
             self.atomics.stream_complete.store(true, Ordering::Release);
         }
         if let Ok(mut tx) = self.deck_load_tx.lock() {
-            let _ = tx.push(DeckLoadSwap::SeamlessUpgrade { deck, buffer: full_resampled });
+            let swap = DeckLoadSwap::SeamlessUpgrade {
+                deck,
+                buffer: full_resampled,
+            };
+            let _ = tx.push(swap);
         }
         true
     }
@@ -211,10 +235,8 @@ impl AudioControllerHub {
             TransportCommand::Play(DeckId::DeckA) if total > 0 => {
                 if self.atomics.playhead_frame.load(Ordering::Acquire) >= total {
                     self.atomics.playhead_frame.store(0, Ordering::Release);
-                    let _ = self
-                        .atomics
-                        .command_queue
-                        .try_push(TransportCommand::SeekToSample(DeckId::DeckA, 0));
+                    let reset = TransportCommand::SeekToSample(DeckId::DeckA, 0);
+                    let _ = self.atomics.command_queue.try_push(reset);
                 }
                 self.atomics.ended.store(false, Ordering::Release);
                 self.atomics.is_playing.store(true, Ordering::Release);
@@ -223,28 +245,23 @@ impl AudioControllerHub {
                 self.atomics.is_playing.store(false, Ordering::Release);
             }
             TransportCommand::SeekToSample(DeckId::DeckA, frame) => {
-                let clamped = frame.min(total);
-                self.atomics
-                    .playhead_frame
-                    .store(clamped, Ordering::Release);
-                if clamped < total {
+                let c = frame.min(total);
+                self.atomics.playhead_frame.store(c, Ordering::Release);
+                if c < total {
                     self.atomics.ended.store(false, Ordering::Release);
                 }
             }
             TransportCommand::JumpToHotCue(DeckId::DeckA, cue) if (1..=4).contains(&cue) => {
-                if let Ok(meta) = self.deck_a_meta.lock() {
-                    if let Some(buf) = meta.buffer.as_deref() {
-                        let target = buf.hot_cues[(cue - 1) as usize].frame_index.min(total);
-                        self.atomics.playhead_frame.store(target, Ordering::Release);
-                        self.atomics.ended.store(false, Ordering::Release);
-                    }
+                let buf = self.deck_a_meta.lock().ok().and_then(|m| m.buffer.clone());
+                if let Some(b) = buf {
+                    let target = b.hot_cues[(cue - 1) as usize].frame_index.min(total);
+                    self.atomics.playhead_frame.store(target, Ordering::Release);
+                    self.atomics.ended.store(false, Ordering::Release);
                 }
             }
             TransportCommand::SetTempoRatio(DeckId::DeckA, ratio) if ratio.is_finite() => {
-                let clamped = ratio.clamp(0.5, 2.0);
-                self.atomics
-                    .tempo_ratio_bits
-                    .store(clamped.to_bits(), Ordering::Release);
+                let bits = ratio.clamp(0.5, 2.0).to_bits();
+                self.atomics.tempo_ratio_bits.store(bits, Ordering::Release);
             }
             _ => {}
         }
@@ -253,24 +270,22 @@ impl AudioControllerHub {
     }
 
     pub(crate) fn set_master_volume(&self, volume: f32) -> AudioTransportSnapshot {
-        let clamped = if volume.is_finite() {
-            volume.clamp(0.0, 2.0)
-        } else {
-            0.0
-        };
+        let bits = volume
+            .is_finite()
+            .then(|| volume.clamp(0.0, 2.0))
+            .unwrap_or(0.0)
+            .to_bits();
         self.atomics
             .master_volume_bits
-            .store(clamped.to_bits(), Ordering::Release);
+            .store(bits, Ordering::Release);
         self.snapshot()
     }
 
     #[cfg(test)]
     pub(crate) fn deck_buffer(&self, deck: DeckId) -> Option<Arc<PreallocatedDeckBuffer>> {
-        if deck == DeckId::DeckA {
-            self.deck_a_meta.lock().ok().and_then(|m| m.buffer.clone())
-        } else {
-            None
-        }
+        (deck == DeckId::DeckA)
+            .then(|| self.deck_a_meta.lock().ok()?.buffer.clone())
+            .flatten()
     }
 
     pub(crate) fn drain_retired_buffers(&self) -> usize {
@@ -280,25 +295,23 @@ impl AudioControllerHub {
     pub(crate) fn snapshot(&self) -> AudioTransportSnapshot {
         let _ = self.drain_retired_buffers();
         self.drain_telemetry_into_slot();
-        let sr = self.atomics.sample_rate;
+        let a = &self.atomics;
+        let sr = a.sample_rate;
         let sr_f64 = f64::from(sr.max(1));
-        let total_frames = self.atomics.total_frames.load(Ordering::Acquire);
-        let playhead_frame = self
-            .atomics
-            .playhead_frame
-            .load(Ordering::Acquire)
-            .min(total_frames);
-        let (loaded_path, hot_cue_frames) = match self.deck_a_meta.lock() {
-            Ok(meta) => {
-                let cues = meta
+        let total_frames = a.total_frames.load(Ordering::Acquire);
+        let playhead_frame = a.playhead_frame.load(Ordering::Acquire).min(total_frames);
+        let (loaded_path, hot_cue_frames) = self
+            .deck_a_meta
+            .lock()
+            .ok()
+            .map(|m| {
+                let cues = m
                     .buffer
                     .as_deref()
-                    .map(|b| b.hot_cues.map(|c| c.frame_index))
-                    .unwrap_or([0; 4]);
-                (meta.path.clone(), cues)
-            }
-            Err(_) => (None, [0; 4]),
-        };
+                    .map_or([0; 4], |b| b.hot_cues.map(|c| c.frame_index));
+                (m.path.clone(), cues)
+            })
+            .unwrap_or((None, [0; 4]));
         AudioTransportSnapshot {
             backend_kind: self.kind.as_str().to_string(),
             sample_rate: sr,

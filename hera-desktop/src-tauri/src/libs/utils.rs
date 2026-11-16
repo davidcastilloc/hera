@@ -12,11 +12,13 @@ use crate::plugins::config::SYSTEM_THEME;
 /**
  * Small helper to compute the execution time of some code
  */
+#[allow(dead_code)]
 pub struct TimeLogger {
     start_time: Instant,
     message: String,
 }
 
+#[allow(dead_code)]
 impl TimeLogger {
     pub fn new(message: String) -> Self {
         TimeLogger {

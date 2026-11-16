@@ -21,7 +21,17 @@ pub fn run_ffmpeg_f32le_pipe_bounded(
         cmd.args(["-t", "420"]);
     }
     cmd.args([
-        "-vn", "-sn", "-dn", "-ac", "1", "-ar", "44100", "-f", "f32le", "-acodec", "pcm_f32le",
+        "-vn",
+        "-sn",
+        "-dn",
+        "-ac",
+        "1",
+        "-ar",
+        "44100",
+        "-f",
+        "f32le",
+        "-acodec",
+        "pcm_f32le",
         "pipe:1",
     ])
     .stdin(Stdio::null())
@@ -108,7 +118,10 @@ pub fn fast_partial_file_hash(path: &Path) -> Result<String, EngineError> {
     use std::io::{Seek, SeekFrom};
 
     let mut file = File::open(path).map_err(|e| EngineError::Io(e.to_string()))?;
-    let len = file.metadata().map_err(|e| EngineError::Io(e.to_string()))?.len();
+    let len = file
+        .metadata()
+        .map_err(|e| EngineError::Io(e.to_string()))?
+        .len();
     let block_size = 65_536_usize;
     let mut buf = vec![0_u8; block_size];
 

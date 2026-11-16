@@ -716,10 +716,18 @@ pub fn optimize_crate_with_dj_rules(
         let mut modified_spine = spine.clone();
         // If a golden pair from_track is pinned, and to_track is not, pin to_track next to it if free
         for pair in &rules.golden_pairs {
-            if let Some(anchor_pos) = modified_spine.anchors.iter().position(|a| a.track_id == pair.from_track_id) {
+            if let Some(anchor_pos) = modified_spine
+                .anchors
+                .iter()
+                .position(|a| a.track_id == pair.from_track_id)
+            {
                 let from_slot = modified_spine.anchors[anchor_pos].slot;
                 if let Some(slot) = from_slot {
-                    if !modified_spine.anchors.iter().any(|a| a.track_id == pair.to_track_id) {
+                    if !modified_spine
+                        .anchors
+                        .iter()
+                        .any(|a| a.track_id == pair.to_track_id)
+                    {
                         modified_spine.anchors.push(SpineAnchor {
                             track_id: pair.to_track_id.clone(),
                             role: None,
@@ -730,14 +738,23 @@ pub fn optimize_crate_with_dj_rules(
                 }
             }
         }
-        optimize_crate_with_spine(brief, energy_arc, workable_candidates, max_tracks, &modified_spine)
+        optimize_crate_with_spine(
+            brief,
+            energy_arc,
+            workable_candidates,
+            max_tracks,
+            &modified_spine,
+        )
     };
 
     // Calculate how many golden pairs ended up adjacent in the sequence
     let mut golden_pairs_locked = 0usize;
     if base_res.sequence.len() >= 2 {
         for w in base_res.sequence.windows(2) {
-            if rules.get_golden_pair_bonus(&w[0].track_id, &w[1].track_id).is_some() {
+            if rules
+                .get_golden_pair_bonus(&w[0].track_id, &w[1].track_id)
+                .is_some()
+            {
                 golden_pairs_locked += 1;
             }
         }

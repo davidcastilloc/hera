@@ -1,7 +1,5 @@
 use crate::bpm_engine::v2_core::{
-    consensus_ai::analyze_bpm_consensus_v2,
-    hints::BpmHint,
-    key_engine::detect_song_key,
+    consensus_ai::analyze_bpm_consensus_v2, hints::BpmHint, key_engine::detect_song_key,
     multiband_onset::extract_multiband_novelty,
 };
 use rustfft::FftPlanner;
@@ -92,7 +90,8 @@ pub fn analyze_fast_windows(
             let mut low_body = Vec::with_capacity(nov_a.low_body.len() + nov_b.low_body.len());
             low_body.extend_from_slice(&nov_a.low_body);
             low_body.extend_from_slice(&nov_b.low_body);
-            let mut perc_clave = Vec::with_capacity(nov_a.perc_clave.len() + nov_b.perc_clave.len());
+            let mut perc_clave =
+                Vec::with_capacity(nov_a.perc_clave.len() + nov_b.perc_clave.len());
             perc_clave.extend_from_slice(&nov_a.perc_clave);
             perc_clave.extend_from_slice(&nov_b.perc_clave);
             let mut hi_guiro = Vec::with_capacity(nov_a.hi_guiro.len() + nov_b.hi_guiro.len());
@@ -124,8 +123,7 @@ pub fn analyze_fast_windows(
     FastScanResult {
         bpm: final_bpm,
         camelot_key: key.camelot,
-        is_transition_candidate: !samples_b.is_empty()
-            && is_transition_candidate(res_a.bpm, bpm_b),
+        is_transition_candidate: !samples_b.is_empty() && is_transition_candidate(res_a.bpm, bpm_b),
         is_fake_320kbps: is_fake_320kbps(effective_bandwidth_hz, claimed_bitrate_kbps),
         bpm_window_a: res_a.bpm,
         bpm_window_b: bpm_b,
@@ -202,7 +200,11 @@ pub fn run_fast_scan_on_file(
                 let a1 = (a0 + (plan.win_a_dur_sec * sr as f64) as usize).min(dec.samples.len());
                 let b0 = ((plan.win_b_start_sec * sr as f64) as usize).min(dec.samples.len());
                 let b1 = (b0 + (plan.win_b_dur_sec * sr as f64) as usize).min(dec.samples.len());
-                (dec.samples[a0..a1].to_vec(), dec.samples[b0..b1].to_vec(), sr)
+                (
+                    dec.samples[a0..a1].to_vec(),
+                    dec.samples[b0..b1].to_vec(),
+                    sr,
+                )
             }
         }
     } else {
@@ -214,7 +216,14 @@ pub fn run_fast_scan_on_file(
 
     let mut planner = FftPlanner::<f32>::new();
     let bw = estimate_effective_bandwidth_hz(&samples_a, sample_rate, &mut planner);
-    Ok(analyze_fast_windows(&samples_a, &samples_b, sample_rate, hint, bw, claimed_bitrate_kbps))
+    Ok(analyze_fast_windows(
+        &samples_a,
+        &samples_b,
+        sample_rate,
+        hint,
+        bw,
+        claimed_bitrate_kbps,
+    ))
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -234,15 +243,25 @@ fn try_symphonia_fast_windows(path: &std::path::Path) -> Result<(Vec<f32>, Vec<f
     }
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
     let mut probed = symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+        .format(
+            &hint,
+            mss,
+            &FormatOptions::default(),
+            &MetadataOptions::default(),
+        )
         .map_err(|_| ())?;
-    let track = probed.format.tracks().iter()
+    let track = probed
+        .format
+        .tracks()
+        .iter()
         .find(|t| t.codec_params.codec != CODEC_TYPE_NULL && t.codec_params.sample_rate.is_some())
         .or_else(|| probed.format.default_track())
         .ok_or(())?;
     let track_id = track.id;
     let mut sr = track.codec_params.sample_rate.unwrap_or(44_100);
-    let total_dur = track.codec_params.n_frames
+    let total_dur = track
+        .codec_params
+        .n_frames
         .map(|n| n as f64 / sr.max(1) as f64)
         .unwrap_or(0.0);
     if total_dur <= 75.0 {
@@ -256,24 +275,35 @@ fn try_symphonia_fast_windows(path: &std::path::Path) -> Result<(Vec<f32>, Vec<f
     let mut read_window = |start_sec: f64, dur_sec: f64| -> Vec<f32> {
         let _ = probed.format.seek(
             SeekMode::Coarse,
-            SeekTo::Time { time: Time::from(start_sec), track_id: Some(track_id) },
+            SeekTo::Time {
+                time: Time::from(start_sec),
+                track_id: Some(track_id),
+            },
         );
         decoder.reset();
         let max_samples = (dur_sec * sr as f64) as usize;
         let mut out = Vec::with_capacity(max_samples);
         while out.len() < max_samples {
-            let Ok(pkt) = probed.format.next_packet() else { break };
-            if pkt.track_id() != track_id { continue; }
+            let Ok(pkt) = probed.format.next_packet() else {
+                break;
+            };
+            if pkt.track_id() != track_id {
+                continue;
+            }
             if let Ok(abuf) = decoder.decode(&pkt) {
                 let spec = *abuf.spec();
-                if spec.rate > 0 { sr = spec.rate; }
+                if spec.rate > 0 {
+                    sr = spec.rate;
+                }
                 let ch = spec.channels.count().max(1);
                 let mut sb = SampleBuffer::<f32>::new(abuf.capacity() as u64, spec);
                 sb.copy_interleaved_ref(abuf);
                 for frame in sb.samples().chunks_exact(ch) {
                     let sum: f32 = frame.iter().sum();
                     out.push(sum / ch as f32);
-                    if out.len() >= max_samples { break; }
+                    if out.len() >= max_samples {
+                        break;
+                    }
                 }
             }
         }
@@ -282,7 +312,9 @@ fn try_symphonia_fast_windows(path: &std::path::Path) -> Result<(Vec<f32>, Vec<f
 
     let a = read_window(plan.win_a_start_sec, plan.win_a_dur_sec);
     let b = read_window(plan.win_b_start_sec, plan.win_b_dur_sec);
-    if a.is_empty() { return Err(()); }
+    if a.is_empty() {
+        return Err(());
+    }
     Ok((a, b, sr))
 }
 

@@ -87,9 +87,8 @@ fn generate_synthetic_salsa_pcm(bpm: f32, duration_sec: f32, sample_rate: u32) -
         } else {
             0.0
         };
-        let campana_signal = (0.5 * phase_sin(980.0, t) + 0.5 * phase_sin(1420.0, t))
-            * campana_env
-            * 0.45;
+        let campana_signal =
+            (0.5 * phase_sin(980.0, t) + 0.5 * phase_sin(1420.0, t)) * campana_env * 0.45;
 
         // Guiro / Maraca 16th-note rhythm in 4-10 kHz band
         let sixteenth_pos = (beat_num * 4.0).fract();
@@ -112,11 +111,7 @@ fn generate_synthetic_salsa_pcm(bpm: f32, duration_sec: f32, sample_rate: u32) -
 /// - High-speed 16th-note güira pattern (4.5–11 kHz)
 /// - Binary tambora pattern with kick-like low hits and syncopated slap
 /// - Brass synth stabs on offbeats
-fn generate_synthetic_tecnomerengue_pcm(
-    bpm: f32,
-    duration_sec: f32,
-    sample_rate: u32,
-) -> Vec<f32> {
+fn generate_synthetic_tecnomerengue_pcm(bpm: f32, duration_sec: f32, sample_rate: u32) -> Vec<f32> {
     let total_frames = (duration_sec * sample_rate as f32) as usize;
     let mut mono = Vec::with_capacity(total_frames);
     let mut lcg = DeterministicLcg::new(0x7EC0_9E2E_0001_1337);

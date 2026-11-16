@@ -52,28 +52,45 @@ pub(crate) fn map_player_snapshot(
     }
 }
 
+/// Converts per-track LUFS ReplayGain in dB (clamped to `-12.0..=6.0 dB`) into linear deck gain,
+/// defaulting to `1.0` unity when absent or non-finite so prior track gains never leak across loads.
+pub(crate) fn replay_gain_db_to_linear(replay_gain_db: Option<f32>) -> f32 {
+    match replay_gain_db {
+        Some(db) if db.is_finite() => 10.0_f32.powf(db.clamp(-12.0, 6.0) / 20.0),
+        _ => 1.0_f32,
+    }
+}
+
+/// Maps the first 4 finite non-negative cues onto the 4 hardware deck pads when `cues.len() >= 4`.
+pub(crate) fn extract_deck_pad_cues(hot_cues_sec: Option<Vec<f64>>) -> Option<[f64; 4]> {
+    hot_cues_sec.and_then(|cues| {
+        if cues.len() >= 4 && cues[..4].iter().all(|v| v.is_finite() && *v >= 0.0) {
+            Some([cues[0], cues[1], cues[2], cues[3]])
+        } else {
+            None
+        }
+    })
+}
+
 #[tauri::command]
 pub async fn native_audio_load_track(
     state: tauri::State<'_, NativeAudioState>,
     file_path: String,
     duration_hint_sec: Option<f64>,
     hot_cues_sec: Option<Vec<f64>>,
+    replay_gain_db: Option<f32>,
 ) -> Result<NativePlayerSnapshot, String> {
     let backend = Arc::clone(&state.0);
     tauri::async_runtime::spawn_blocking(move || {
-        let known_cues = hot_cues_sec.and_then(|cues| {
-            if cues.len() == 4 && cues.iter().all(|v| v.is_finite() && *v >= 0.0) {
-                Some([cues[0], cues[1], cues[2], cues[3]])
-            } else {
-                None
-            }
-        });
-        let mut snap = backend.load_file_fast(
+        let known_cues = extract_deck_pad_cues(hot_cues_sec);
+        let linear_gain = replay_gain_db_to_linear(replay_gain_db);
+        let _ = backend.load_file_fast(
             DeckId::DeckA,
             &PathBuf::from(&file_path),
             duration_hint_sec,
             known_cues,
         )?;
+        let mut snap = backend.send_command(TransportCommand::SetGain(DeckId::DeckA, linear_gain));
         if snap.duration_sec <= 0.0 {
             if let Some(hint) = duration_hint_sec.filter(|d| d.is_finite() && *d > 0.0) {
                 snap.duration_sec = hint;

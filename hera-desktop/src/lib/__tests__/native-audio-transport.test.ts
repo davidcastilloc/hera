@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { NativeAudioTelemetryFrame } from '../../generated/typings';
+import type {
+  NativeAudioTelemetryFrame,
+  NativePlayerSnapshot,
+} from '../../generated/typings';
+import * as nativeIpc from '../native-audio-ipc';
 import { NativeRustAudioTransport } from '../native-audio-transport';
 import {
   type SpectrumBackendMode,
@@ -98,5 +102,61 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
     expect(smoothed[0]).toBeGreaterThan(smoothed[31]);
 
     renderer.dispose();
+  });
+
+  it('forwards >= 4 hot cues (sliced to 4 deck pads) and finite replayGainDb to native_audio_load_track', async () => {
+    const mockSnap: NativePlayerSnapshot = {
+      backend_kind: 'headless_clock',
+      sample_rate: 48_000,
+      track_loaded: true,
+      loaded_path: '/music/eight-cues.flac',
+      is_playing: false,
+      ended: false,
+      current_time_sec: 0,
+      duration_sec: 210,
+      playhead_frame: 0,
+      total_frames: 10_080_000,
+      volume: 0.8,
+      playback_rate: 1,
+      hot_cue_frames: [48_000, 768_000, 1_536_000, 3_072_000],
+      hot_cue_seconds: [1.0, 16.0, 32.0, 64.0],
+      latest_telemetry: null,
+    };
+    const spy = vi
+      .spyOn(nativeIpc, 'invokeNativeAudio')
+      .mockResolvedValue(mockSnap);
+
+    const transport = new NativeRustAudioTransport({
+      playbackRate: 1,
+      volume: 0.8,
+      muted: false,
+    });
+
+    await transport.loadTrack(
+      '/music/eight-cues.flac',
+      210,
+      [1.0, 16.0, 32.0, 64.0, 96.0, 128.0, 160.0, 192.0],
+      -3.5,
+    );
+
+    expect(spy).toHaveBeenCalledWith('native_audio_load_track', {
+      filePath: '/music/eight-cues.flac',
+      durationHintSec: 210,
+      hotCuesSec: [1.0, 16.0, 32.0, 64.0],
+      replayGainDb: -3.5,
+    });
+
+    await transport.loadTrack(
+      '/music/no-gain.flac',
+      180,
+      [1.0, 2.0],
+      Number.NaN,
+    );
+    expect(spy).toHaveBeenCalledWith('native_audio_load_track', {
+      filePath: '/music/no-gain.flac',
+      durationHintSec: 180,
+      hotCuesSec: undefined,
+      replayGainDb: undefined,
+    });
   });
 });

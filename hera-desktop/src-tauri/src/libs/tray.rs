@@ -65,7 +65,9 @@ pub fn format_scanner_tray_tooltip(
     }
 }
 
-pub fn create_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::WebviewWindow<R>> {
+pub fn create_main_window<R: Runtime>(
+    app: &AppHandle<R>,
+) -> tauri::Result<tauri::WebviewWindow<R>> {
     let config_manager = app.state::<ConfigManager>();
     let theme_name = config_manager
         .get()

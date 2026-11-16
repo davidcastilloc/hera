@@ -202,8 +202,14 @@ pub async fn execute_streaming_library_scan<R: Runtime>(
         total_raw_candidates += 1;
 
         if current_batch.len() >= target_batch_size {
-            let (count, fast_c, full_c) =
-                commit_batch(&current_batch, &software_index, db_state, refresh, app_handle).await?;
+            let (count, fast_c, full_c) = commit_batch(
+                &current_batch,
+                &software_index,
+                db_state,
+                refresh,
+                app_handle,
+            )
+            .await?;
             total_scanned += count;
             total_cached_fast += fast_c;
             total_cached_full += full_c;
@@ -238,8 +244,14 @@ pub async fn execute_streaming_library_scan<R: Runtime>(
     }
 
     if !current_batch.is_empty() && !is_scan_cancelled() {
-        let (count, fast_c, full_c) =
-            commit_batch(&current_batch, &software_index, db_state, refresh, app_handle).await?;
+        let (count, fast_c, full_c) = commit_batch(
+            &current_batch,
+            &software_index,
+            db_state,
+            refresh,
+            app_handle,
+        )
+        .await?;
         total_scanned += count;
         total_cached_fast += fast_c;
         total_cached_full += full_c;
@@ -302,8 +314,14 @@ async fn commit_batch<R: Runtime>(
     }
     let batch = process_batch_parallel(batch_paths, index);
     let batch_len = batch.len();
-    let fast_cached = batch.iter().filter(|t| t.scan_level.unwrap_or(0) >= 1).count();
-    let full_cached = batch.iter().filter(|t| t.scan_level.unwrap_or(0) >= 2).count();
+    let fast_cached = batch
+        .iter()
+        .filter(|t| t.scan_level.unwrap_or(0) >= 1)
+        .count();
+    let full_cached = batch
+        .iter()
+        .filter(|t| t.scan_level.unwrap_or(0) >= 2)
+        .count();
     if !batch.is_empty() {
         let mut guard = db.get_lock().await;
         guard.upsert_scanned_tracks_batch(&batch, refresh).await?;

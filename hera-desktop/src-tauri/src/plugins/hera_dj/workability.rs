@@ -8,10 +8,12 @@ use std::path::{Path, PathBuf};
 pub struct CachedDjSoftwareMetadata {
     pub bpm: Option<f64>,
     pub key: Option<String>,
+    #[allow(dead_code)]
     pub cues_count: usize,
     pub author: Option<String>,
     pub title: Option<String>,
     pub duration_sec: Option<f64>,
+    #[allow(dead_code)]
     pub bitrate_kbps: Option<u32>,
     pub cues: Vec<super::vdj_xml_parser::LegacyCue>,
 }
@@ -120,7 +122,8 @@ impl ExternalDjSoftwareIndex {
             let trimmed = line.trim();
             if trimmed.starts_with("<TRACK ") && trimmed.contains("Location=\"") {
                 let location = extract_xml_attr(trimmed, "Location=\"");
-                let bpm = extract_xml_attr(trimmed, "AverageBpm=\"").and_then(|b| b.parse::<f64>().ok());
+                let bpm =
+                    extract_xml_attr(trimmed, "AverageBpm=\"").and_then(|b| b.parse::<f64>().ok());
                 let tonality = extract_xml_attr(trimmed, "Tonality=\"");
 
                 if let Some(loc) = location {
@@ -170,7 +173,11 @@ fn candidate_virtualdj_homes() -> Vec<PathBuf> {
         homes.push(PathBuf::from(override_dir));
     }
     if let Ok(user_profile) = std::env::var("USERPROFILE") {
-        homes.push(PathBuf::from(&user_profile).join("Documents").join("VirtualDJ"));
+        homes.push(
+            PathBuf::from(&user_profile)
+                .join("Documents")
+                .join("VirtualDJ"),
+        );
     }
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
         homes.push(PathBuf::from(local_app_data).join("VirtualDJ"));
@@ -198,4 +205,3 @@ pub fn reset_scan_flag() {
 pub fn is_scan_cancelled() -> bool {
     SCAN_CANCEL_FLAG.load(Ordering::Relaxed)
 }
-

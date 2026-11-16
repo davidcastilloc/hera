@@ -1,97 +1,38 @@
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
-use lofty::file::AudioFile;
-use log::warn;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode};
 use sqlx::{Connection, SqliteConnection};
 use tauri::{AppHandle, Emitter, Runtime};
 
 use hera_node_rs::bpm_engine::v2_core::audio_ingest::ProcessLimiter;
-use hera_node_rs::scanner::fast_seek::run_fast_scan_on_file;
-use hera_node_rs::scanner::full_pass::run_full_pass_on_file;
-use hera_node_rs::scanner::scheduler::ScanPriority;
+use hera_node_rs::scanner::scheduler::{ScanPriority, ScanScheduler};
 
+use super::scanner_governor_os::{
+    ProcessedTrackOutcome, execute_isolated_worker_job, lower_current_worker_thread_priority,
+};
 use crate::libs::db_scanner_queries::{
     apply_scanner_batch_updates, count_scanner_levels, delete_short_sfx_tracks,
     fetch_track_path_and_level, load_pending_full_pass_jobs, load_pending_scanner_jobs,
-    ScannerRowUpdate,
+    record_doctor_issue,
 };
-use crate::libs::track::HotCuePin;
 
 static DAEMON_STARTED: AtomicBool = AtomicBool::new(false);
 
-fn probe_duration_fast_secs(path: &Path) -> u32 {
-    let is_video = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "webm" | "mkv" | "mp4" | "mov" | "avi" | "flv" | "m4v"));
-
-    if !is_video {
-        return lofty::probe::Probe::open(path)
-            .ok()
-            .and_then(|p| {
-                p.options(lofty::config::ParseOptions::new().read_cover_art(false))
-                    .read()
-                    .ok()
-            })
-            .map(|tf| tf.properties().duration().as_secs() as u32)
-            .unwrap_or(0);
-    }
-
-    let mut cmd = std::process::Command::new("ffprobe");
-    cmd.args(["-v", "quiet", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1"])
-        .arg(path)
-        .stdin(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000);
-    }
-    cmd.output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<f64>().ok())
-        .filter(|d| d.is_finite() && *d > 0.0)
-        .map(|d| d.round() as u32)
-        .unwrap_or(0)
-}
-
-struct ProcessedTrackOutcome {
-    update: ScannerRowUpdate,
-    hot_cues: Option<Vec<HotCuePin>>,
-}
-
-fn empty_failure_update(
-    track_id: String,
-    duration_sec: Option<u32>,
-    target_level: i64,
-) -> ScannerRowUpdate {
-    ScannerRowUpdate {
-        track_id,
-        bpm: None,
-        camelot: None,
-        energy: None,
-        hot_cues_json: None,
-        waveform_peaks_blob: None,
-        scan_level: target_level,
-        is_transition_candidate: false,
-        is_fake_320kbps: false,
-        duration_sec,
-    }
-}
-
-struct InFlightGuard<'a>(&'a hera_node_rs::scanner::scheduler::ScanScheduler, String);
+struct InFlightGuard<'a>(&'a ScanScheduler, String);
 impl Drop for InFlightGuard<'_> {
-    fn drop(&mut self) { self.0.complete(&self.1); }
+    fn drop(&mut self) {
+        self.0.complete(&self.1);
+    }
 }
 
 pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
-    if DAEMON_STARTED.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
+    if DAEMON_STARTED
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
         return;
     }
 
@@ -118,82 +59,74 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
         let limiter = Arc::new(ProcessLimiter::new(2));
         let sched = super::scanner_v3::global_scheduler().clone();
 
-        // Seed initial cache from SQLite
         if let Ok(rows) = sqlx::query_as::<_, (String, String, i64, i64)>(
-            "SELECT id, path, scan_level, duration FROM tracks WHERE scan_level < 2 LIMIT 50000",
-        ).fetch_all(&mut conn).await {
+            "SELECT id, path, scan_level, duration FROM tracks LIMIT 50000",
+        )
+        .fetch_all(&mut conn)
+        .await
+        {
             let mut g = cache.lock().unwrap();
-            for (id, path, lvl, dur) in rows { g.insert(id, (path, lvl, dur.max(0) as u32)); }
+            let mut seeded = Vec::new();
+            for (id, path, lvl, dur) in rows {
+                if lvl != 0 {
+                    seeded.push((id.clone(), lvl.clamp(-1, 2) as i8));
+                }
+                if (0..2).contains(&lvl) {
+                    g.insert(id, (path, lvl, dur.max(0) as u32));
+                }
+            }
+            sched.seed_completed_levels(seeded);
         }
 
         for idx in 0..num_workers {
             let (sched_w, cache_w, limiter_w, tx_w, missing_tx_w) = (
-                Arc::clone(&sched), Arc::clone(&cache), Arc::clone(&limiter), tx.clone(), missing_tx.clone(),
+                Arc::clone(&sched),
+                Arc::clone(&cache),
+                Arc::clone(&limiter),
+                tx.clone(),
+                missing_tx.clone(),
             );
-            std::thread::Builder::new().name(format!("hera-dsp-worker-{idx}")).spawn(move || loop {
-                if idx >= sched_w.governor.effective_workers() {
-                    std::thread::sleep(Duration::from_millis(250));
-                    continue;
-                }
-                let Some((track_id, prio)) = sched_w.wait_next(Duration::from_millis(250)) else { continue; };
-                let _in_flight_guard = InFlightGuard(&sched_w, track_id.clone());
-                if super::workability::is_scan_cancelled() && prio >= ScanPriority::P2FastBackground { continue; }
-                let cached = { cache_w.lock().unwrap().get(&track_id).cloned() };
-                let Some((path, current_level, cached_dur)) = cached else {
-                    let _ = missing_tx_w.send((track_id, prio));
-                    continue;
-                };
-
-                let path_obj = Path::new(&path);
-                let is_level_2 = prio == ScanPriority::P0Immediate || prio == ScanPriority::P3FullElastic;
-                let measured_dur = if cached_dur > 0 { 0 } else { probe_duration_fast_secs(path_obj) };
-                let duration_opt = if measured_dur > 0 { Some(measured_dur) } else { None };
-
-                if is_level_2 {
-                    if current_level >= 2 { continue; }
-                    match run_full_pass_on_file(path_obj, None, Some(&limiter_w)) {
-                        Ok(res) => {
-                            let pins: Vec<HotCuePin> = res.hot_cues.into_iter().take(4).map(|c| {
-                                let (color, role) = match c.num {
-                                    1 => ("#22c55e", "Intro"),
-                                    2 => ("#38bdf8", "Breakdown"),
-                                    3 => ("#ef4444", "Drop"),
-                                    _ => ("#f59e0b", "Outro"),
-                                };
-                                HotCuePin { num: c.num, name: c.name, seconds: ((c.seconds * 10.0).round()) / 10.0, color: color.to_string(), role: role.to_string() }
-                            }).collect();
-                            let hot_cues_json = serde_json::to_string(&pins).ok();
-                            let update = ScannerRowUpdate {
-                                track_id, bpm: Some(res.bpm), camelot: Some(res.camelot_key), energy: None,
-                                hot_cues_json, waveform_peaks_blob: Some(res.waveform_peaks_blob), scan_level: 2,
-                                is_transition_candidate: false, is_fake_320kbps: false, duration_sec: duration_opt,
-                            };
-                            let _ = tx_w.send(ProcessedTrackOutcome { update, hot_cues: Some(pins) });
+            std::thread::Builder::new()
+                .name(format!("hera-dsp-worker-{idx}"))
+                .spawn(move || {
+                    lower_current_worker_thread_priority();
+                    loop {
+                        if idx >= sched_w.governor.effective_workers() {
+                            std::thread::sleep(Duration::from_millis(250));
+                            continue;
                         }
-                        Err(e) => {
-                            warn!("Full pass failed for {path}: {e}");
-                            let _ = tx_w.send(ProcessedTrackOutcome { update: empty_failure_update(track_id, duration_opt, 2), hot_cues: None });
+                        let Some((track_id, prio)) = sched_w.wait_next(Duration::from_millis(250))
+                        else {
+                            continue;
+                        };
+                        let _in_flight_guard = InFlightGuard(&sched_w, track_id.clone());
+                        if super::workability::is_scan_cancelled()
+                            && prio >= ScanPriority::P2FastBackground
+                        {
+                            continue;
+                        }
+                        let cached = { cache_w.lock().unwrap().get(&track_id).cloned() };
+                        let Some((path, current_level, cached_dur)) = cached else {
+                            let _ = missing_tx_w.send((track_id, prio));
+                            continue;
+                        };
+                        if let Some(outcome) = execute_isolated_worker_job(
+                            track_id.clone(),
+                            path,
+                            current_level,
+                            cached_dur,
+                            prio,
+                            &limiter_w,
+                        ) {
+                            sched_w.mark_completed(
+                                &track_id,
+                                outcome.update.scan_level.clamp(-1, 2) as i8,
+                            );
+                            let _ = tx_w.send(outcome);
                         }
                     }
-                } else {
-                    if current_level >= 1 { continue; }
-                    match run_fast_scan_on_file(path_obj, None, 320, Some(&limiter_w)) {
-                        Ok(res) => {
-                            let update = ScannerRowUpdate {
-                                track_id, bpm: Some(res.bpm), camelot: Some(res.camelot_key), energy: None,
-                                hot_cues_json: None, waveform_peaks_blob: None, scan_level: 1,
-                                is_transition_candidate: res.is_transition_candidate, is_fake_320kbps: res.is_fake_320kbps,
-                                duration_sec: duration_opt,
-                            };
-                            let _ = tx_w.send(ProcessedTrackOutcome { update, hot_cues: None });
-                        }
-                        Err(e) => {
-                            warn!("Fast scan failed for {path}: {e}");
-                            let _ = tx_w.send(ProcessedTrackOutcome { update: empty_failure_update(track_id, duration_opt, 1), hot_cues: None });
-                        }
-                    }
-                }
-            }).expect("Failed to spawn scanner worker");
+                })
+                .expect("Failed to spawn scanner worker");
         }
 
         let mut interval = tokio::time::interval(Duration::from_millis(200));
@@ -204,14 +137,15 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
 
         loop {
             interval.tick().await;
+            if super::workability::is_scan_cancelled() && sched.pending_count() > 0 {
+                let _ = sched.cancel_and_drain_background();
+            }
 
-            // 1. Drain up to 128 outcomes from workers
             let mut batch = Vec::new();
-            while batch.len() < 128 {
-                match rx.try_recv() {
-                    Ok(outcome) => batch.push(outcome),
-                    Err(_) => break,
-                }
+            while batch.len() < 128
+                && let Ok(outcome) = rx.try_recv()
+            {
+                batch.push(outcome);
             }
 
             let mut updates_to_apply = Vec::new();
@@ -219,16 +153,24 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
             let mut patches_to_emit = Vec::new();
 
             for outcome in batch {
+                if let Some((bad_path, details)) = outcome.corrupt_issue {
+                    let _ = record_doctor_issue(
+                        &mut conn,
+                        &outcome.update.track_id,
+                        &bad_path,
+                        "CORRUPT_FILE",
+                        "error",
+                        &details,
+                    )
+                    .await;
+                }
                 if outcome.update.duration_sec.is_some_and(|d| d > 0 && d < 25) {
                     short_sfx_ids.push(outcome.update.track_id);
                 } else {
                     patches_to_emit.push(serde_json::json!({
-                        "track_id": outcome.update.track_id,
-                        "bpm": outcome.update.bpm,
-                        "camelot": outcome.update.camelot,
-                        "energy": outcome.update.energy,
-                        "duration": outcome.update.duration_sec,
-                        "hot_cues": outcome.hot_cues,
+                        "track_id": outcome.update.track_id, "bpm": outcome.update.bpm,
+                        "camelot": outcome.update.camelot, "energy": outcome.update.energy,
+                        "duration": outcome.update.duration_sec, "hot_cues": outcome.hot_cues,
                         "scan_level": outcome.update.scan_level,
                         "is_transition_candidate": outcome.update.is_transition_candidate,
                         "is_fake_320kbps": outcome.update.is_fake_320kbps,
@@ -239,101 +181,130 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
 
             if !short_sfx_ids.is_empty() {
                 let _ = delete_short_sfx_tracks(&mut conn, &short_sfx_ids).await;
-                {
-                    let mut g = cache.lock().unwrap();
-                    for id in &short_sfx_ids { g.remove(id); }
+                let mut g = cache.lock().unwrap();
+                for id in &short_sfx_ids {
+                    g.remove(id);
                 }
+                drop(g);
                 let _ = app_handle.emit("hera:scanner-tracks-removed", &short_sfx_ids);
             }
 
             if !updates_to_apply.is_empty() {
                 let _ = apply_scanner_batch_updates(&mut conn, &updates_to_apply).await;
-                {
-                    let mut g = cache.lock().unwrap();
-                    for u in &updates_to_apply {
-                        if let Some(entry) = g.get_mut(&u.track_id) {
-                            entry.1 = entry.1.max(u.scan_level);
-                            if let Some(d) = u.duration_sec { entry.2 = d; }
+                let mut g = cache.lock().unwrap();
+                for u in &updates_to_apply {
+                    if u.scan_level < 0 {
+                        g.remove(&u.track_id);
+                    } else if let Some(entry) = g.get_mut(&u.track_id) {
+                        entry.1 = entry.1.max(u.scan_level);
+                        if let Some(d) = u.duration_sec {
+                            entry.2 = d;
                         }
                     }
                 }
+                drop(g);
                 let _ = app_handle.emit("hera:scanner-rows-updated", &patches_to_emit);
             }
 
-            // Resolve scrolled/hovered track_ids that missed in-memory cache
             while let Ok((miss_id, miss_prio)) = missing_rx.try_recv() {
-                if let Ok(Some((path, lvl))) = fetch_track_path_and_level(&mut conn, &miss_id).await {
-                    cache.lock().unwrap().entry(miss_id.clone()).or_insert((path, lvl, 0));
-                    let needs_work = if miss_prio == ScanPriority::P0Immediate || miss_prio == ScanPriority::P3FullElastic { lvl < 2 } else { lvl < 1 };
-                    if needs_work { sched.enqueue_or_promote(miss_id, miss_prio); }
-                }
-            }
-
-            // 2. Refill scheduler when low
-            if sched.pending_count() < 64 && !super::workability::is_scan_cancelled() {
-                if let Ok(pending_fast) = load_pending_scanner_jobs(&mut conn, 256).await {
-                    if !pending_fast.is_empty() {
-                        let mut ids = Vec::with_capacity(pending_fast.len());
-                        let mut g = cache.lock().unwrap();
-                        for (id, path, lvl) in pending_fast {
-                            g.entry(id.clone()).and_modify(|e| { e.0 = path.clone(); e.1 = lvl; }).or_insert((path, lvl, 0));
-                            ids.push(id);
-                        }
-                        drop(g);
-                        sched.enqueue_batch(ids, ScanPriority::P2FastBackground);
-                    } else if !sched.governor.is_deck_playing() {
-                        if let Ok(pending_full) = load_pending_full_pass_jobs(&mut conn, 64).await {
-                            if !pending_full.is_empty() {
-                                let mut ids = Vec::with_capacity(pending_full.len());
-                                let mut g = cache.lock().unwrap();
-                                for (id, path) in pending_full {
-                                    g.entry(id.clone()).and_modify(|e| { e.0 = path.clone(); e.1 = e.1.max(1); }).or_insert((path, 1, 0));
-                                    ids.push(id);
-                                }
-                                drop(g);
-                                sched.enqueue_batch(ids, ScanPriority::P3FullElastic);
-                            }
-                        }
+                if let Ok(Some((path, lvl))) = fetch_track_path_and_level(&mut conn, &miss_id).await
+                {
+                    if lvl < 0 {
+                        sched.mark_completed(&miss_id, -1);
+                        continue;
+                    }
+                    cache
+                        .lock()
+                        .unwrap()
+                        .entry(miss_id.clone())
+                        .or_insert((path, lvl, 0));
+                    if lvl < i64::from(miss_prio.target_scan_level()) {
+                        sched.enqueue_or_promote(miss_id, miss_prio);
                     }
                 }
             }
 
-            // 3. Telemetry calculation & emission
-            if let Ok((total, fast_done, full_done)) = count_scanner_levels(&mut conn).await {
-                let is_busy = (fast_done < total || full_done < total) && !super::workability::is_scan_cancelled();
-                let updates_flushed = !updates_to_apply.is_empty() || !short_sfx_ids.is_empty();
+            if sched.pending_count() < 64
+                && !super::workability::is_scan_cancelled()
+                && let Ok(pending_fast) = load_pending_scanner_jobs(&mut conn, 256).await
+            {
+                if !pending_fast.is_empty() {
+                    let mut ids = Vec::with_capacity(pending_fast.len());
+                    let mut g = cache.lock().unwrap();
+                    for (id, path, lvl) in pending_fast {
+                        g.entry(id.clone())
+                            .and_modify(|e| {
+                                e.0 = path.clone();
+                                e.1 = lvl;
+                            })
+                            .or_insert((path, lvl, 0));
+                        ids.push(id);
+                    }
+                    drop(g);
+                    sched.enqueue_batch(ids, ScanPriority::P2FastBackground);
+                } else if !sched.governor.is_throttled_booth_mode()
+                    && let Ok(pending_full) = load_pending_full_pass_jobs(&mut conn, 64).await
+                    && !pending_full.is_empty()
+                {
+                    let mut ids = Vec::with_capacity(pending_full.len());
+                    let mut g = cache.lock().unwrap();
+                    for (id, path) in pending_full {
+                        g.entry(id.clone())
+                            .and_modify(|e| {
+                                e.0 = path.clone();
+                                e.1 = e.1.max(1);
+                            })
+                            .or_insert((path, 1, 0));
+                        ids.push(id);
+                    }
+                    drop(g);
+                    sched.enqueue_batch(ids, ScanPriority::P3FullElastic);
+                }
+            }
 
+            if let Ok((total, fast_done, full_done)) = count_scanner_levels(&mut conn).await {
+                let is_busy = (fast_done < total || full_done < total)
+                    && !super::workability::is_scan_cancelled();
+                let updates_flushed = !updates_to_apply.is_empty() || !short_sfx_ids.is_empty();
                 if is_busy || updates_flushed || !was_idle {
                     let now = Instant::now();
                     let elapsed_sec = now.duration_since(last_calc_time).as_secs_f64();
                     let completed_now = fast_done + full_done;
-                    let delta_tracks = completed_now.saturating_sub(last_completed_count);
-
                     if elapsed_sec >= 1.0 {
-                        let inst_tps = (delta_tracks as f64) / elapsed_sec;
-                        ema_tracks_per_sec = if ema_tracks_per_sec == 0.0 { inst_tps } else { 0.7 * ema_tracks_per_sec + 0.3 * inst_tps };
+                        let inst_tps = (completed_now.saturating_sub(last_completed_count) as f64)
+                            / elapsed_sec;
+                        ema_tracks_per_sec = if ema_tracks_per_sec == 0.0 {
+                            inst_tps
+                        } else {
+                            0.7 * ema_tracks_per_sec + 0.3 * inst_tps
+                        };
                         last_completed_count = completed_now;
                         last_calc_time = now;
                     }
-
-                    let pending_tasks = (total.saturating_sub(fast_done)) + (total.saturating_sub(full_done));
+                    let pending_tasks =
+                        total.saturating_sub(fast_done) + total.saturating_sub(full_done);
                     let eta_sec = if ema_tracks_per_sec > 0.1 {
                         (pending_tasks as f64 / ema_tracks_per_sec).round() as u64
                     } else {
                         0
                     };
-
-                    let telemetry = serde_json::json!({
-                        "phase": if is_busy { "analyzing" } else { "idle" },
-                        "fastDone": fast_done,
-                        "fullDone": full_done,
-                        "total": total,
-                        "tracksPerSec": (ema_tracks_per_sec * 10.0).round() / 10.0,
-                        "etaSec": eta_sec,
-                        "governorActive": sched.governor.is_deck_playing(),
-                    });
-                    let _ = app_handle.emit("hera:scanner-telemetry", telemetry);
-                    crate::libs::tray::update_tray_scanner_status(&app_handle, fast_done, full_done, total, is_busy);
+                    let _ = app_handle.emit(
+                        "hera:scanner-telemetry",
+                        serde_json::json!({
+                            "phase": if is_busy { "analyzing" } else { "idle" },
+                            "fastDone": fast_done, "fullDone": full_done, "total": total,
+                            "tracksPerSec": (ema_tracks_per_sec * 10.0).round() / 10.0,
+                            "etaSec": eta_sec,
+                            "governorActive": sched.governor.is_throttled_booth_mode(),
+                        }),
+                    );
+                    crate::libs::tray::update_tray_scanner_status(
+                        &app_handle,
+                        fast_done,
+                        full_done,
+                        total,
+                        is_busy,
+                    );
                     was_idle = !is_busy && !updates_flushed;
                 }
             }

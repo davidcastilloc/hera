@@ -45,25 +45,25 @@
   - `native_audio_load_track(..., hot_cues_sec: Option<Vec<f64>>, replay_gain_db: Option<f32>) -> Result<NativePlayerSnapshot, String>`
   - `ScanScheduler::{seed_completed_levels, mark_completed, cancel_and_drain_background}` and `AutoGigGovernor::{set_external_booth_mode, set_on_battery_power, is_throttled_booth_mode}`
 
-- [ ] **Step 1: Write failing unit tests for bounded cover LRU (`256`), `load_file_with_cues` + `SetGain`, and `completed_level` (`-1`, `1 -> 2`) scheduler state**
+- [x] **Step 1: Write failing unit tests for bounded cover LRU (`256`), `load_file_with_cues` + `SetGain`, and `completed_level` (`-1`, `1 -> 2`) scheduler state**
   - Add `test_cover_lru_evicts_past_256_and_handles_root_path_without_panic` in `plugins/cover.rs`.
   - Add `test_load_file_with_known_cues_skips_recompute_and_applies_gain` in `hera-rs/src/audio_engine/`.
   - Add `test_fast_completed_repromotes_to_full_and_skips_quarantined_minus_one` + `test_external_booth_and_battery_governor_freezes_p3` in `hera-rs/src/scanner/scheduler.rs`.
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
   - Run: `cargo test -p hera-node-rs scanner::scheduler && cargo test -p hera-node-rs audio_engine::`
   - Expected: FAIL on missing methods/assertions.
 
-- [ ] **Step 3: Implement bounded cover LRU, safe stereo `decoder_ffmpeg.rs` (`#![forbid(unsafe_code)]`), `hot_cues_sec` + `SetGain` wiring, and `BELOW_NORMAL` / `-1` quarantine worker hardening**
+- [x] **Step 3: Implement bounded cover LRU, safe stereo `decoder_ffmpeg.rs` (`#![forbid(unsafe_code)]`), `hot_cues_sec` + `SetGain` wiring, and `BELOW_NORMAL` / `-1` quarantine worker hardening**
   - Replace `#[memoize::memoize]` in `cover.rs` with `OnceLock<Mutex<IndexMap<String, Option<String>>>>` capped at `256`, skip `.webm`/`.mkv` in `lofty`, remove all `.unwrap()`, and run inside `spawn_blocking`.
   - Wire `known_cues_sec` and `TransportCommand::SetGain(DeckId::DeckA, 10f32.powf(db.clamp(-12.0, 6.0) / 20.0))` in `audio_transport.rs`.
   - Add `THREAD_PRIORITY_BELOW_NORMAL` / `nice(10)` (`unsafe extern` for Rust 2024 in `src-tauri`), `catch_unwind` -> `scan_level = -1`, and `< 100 ms` queue drain on cancel in `scanner_worker.rs`.
 
-- [ ] **Step 4: Run verification receipts**
+- [x] **Step 4: Run verification receipts**
   - Run: `cargo test -p hera-node-rs --lib && cargo test -p hera-desktop cover && cargo test -p hera-node-rs --test architectural_ratchets`
   - Expected: PASS (`0` errors, all modules `<= 349` LOC).
 
-- [ ] **Step 5: Mark `[x]` and commit atomically**
+- [x] **Step 5: Mark `[x]` and commit atomically**
   - Commit: `feat(engine): bound cover LRU, wire instant cue+LUFS deck load, and harden scanner governor`
 
 ---

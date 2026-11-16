@@ -192,4 +192,3 @@ pub struct ScanPhaseProgress {
     pub is_safe_dj_paused: bool,
     pub phase_description: String,
 }
-

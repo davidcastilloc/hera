@@ -9,10 +9,7 @@ pub struct LatinClassification {
     pub confidence: f32,
 }
 
-pub fn evaluate_latin_heuristics(
-    novelty: &MultibandNovelty,
-    raw_bpm: f32,
-) -> LatinClassification {
+pub fn evaluate_latin_heuristics(novelty: &MultibandNovelty, raw_bpm: f32) -> LatinClassification {
     let sub_sum: f32 = novelty.sub_kick.iter().sum();
     let low_sum: f32 = novelty.low_body.iter().sum();
     let clave_sum: f32 = novelty.perc_clave.iter().sum();

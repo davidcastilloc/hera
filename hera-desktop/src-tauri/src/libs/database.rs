@@ -387,6 +387,7 @@ impl DB {
     /**
      * Update a list of tracks in the database by just overriding everything
      */
+    #[allow(dead_code)]
     pub async fn update_tracks(&mut self, tracks: Vec<Track>) -> AnyResult<()> {
         let mut tx = self.connection.begin().await?;
 

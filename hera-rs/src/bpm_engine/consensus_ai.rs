@@ -17,14 +17,9 @@ pub fn arbitrate_bpm_consensus(
     }
 
     // Genre-specific priors
-    let genre_lower = hint
-        .genre
-        .as_deref()
-        .unwrap_or("")
-        .to_ascii_lowercase();
+    let genre_lower = hint.genre.as_deref().unwrap_or("").to_ascii_lowercase();
 
-    let is_salsa = rhythm_family.eq_ignore_ascii_case("salsa")
-        || genre_lower.contains("salsa");
+    let is_salsa = rhythm_family.eq_ignore_ascii_case("salsa") || genre_lower.contains("salsa");
 
     let is_tecnomerengue = rhythm_family.eq_ignore_ascii_case("tecnomerengue")
         || genre_lower.contains("tecnomerengue")

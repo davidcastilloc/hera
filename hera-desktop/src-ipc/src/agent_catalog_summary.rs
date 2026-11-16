@@ -182,8 +182,14 @@ pub fn summarize_tool_execution(
                 )
             }
             "record_golden_pair" => {
-                let from = val.get("from_track").and_then(|v| v.as_str()).unwrap_or("Pista A");
-                let to = val.get("to_track").and_then(|v| v.as_str()).unwrap_or("Pista B");
+                let from = val
+                    .get("from_track")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Pista A");
+                let to = val
+                    .get("to_track")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Pista B");
                 let bonus = val.get("bonus").and_then(|v| v.as_f64()).unwrap_or(0.38);
                 (
                     title,
@@ -197,7 +203,10 @@ pub fn summarize_tool_execution(
                     .and_then(|v| v.as_str())
                     .or_else(|| val.get("track_id").and_then(|v| v.as_str()))
                     .unwrap_or("Pista");
-                let reason = val.get("reason").and_then(|v| v.as_str()).unwrap_or("Exclusión DJ");
+                let reason = val
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Exclusión DJ");
                 (
                     title,
                     format!("Excluida: {pat}"),
@@ -205,7 +214,10 @@ pub fn summarize_tool_execution(
                 )
             }
             "record_dj_feedback" => {
-                let cat = val.get("category").and_then(|v| v.as_str()).unwrap_or("general");
+                let cat = val
+                    .get("category")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("general");
                 let rule = val.get("rule_text").and_then(|v| v.as_str()).unwrap_or("");
                 (
                     title,

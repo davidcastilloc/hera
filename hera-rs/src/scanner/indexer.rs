@@ -21,7 +21,11 @@ impl LibraryIndex {
     }
 
     /// Nivel 0 INDEXED con auto-curación de rutas movidas/renombradas por `(partial_hash_64kb, file_size_bytes)`.
-    pub fn index_or_heal_file(&mut self, path: &Path, now_unix_ms: i64) -> Result<TrackScanState, String> {
+    pub fn index_or_heal_file(
+        &mut self,
+        path: &Path,
+        now_unix_ms: i64,
+    ) -> Result<TrackScanState, String> {
         let path_str = path.to_string_lossy().to_string();
         let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
         let size = meta.len();

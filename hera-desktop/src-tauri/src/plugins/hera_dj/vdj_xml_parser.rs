@@ -116,18 +116,30 @@ pub fn normalize_key_to_camelot(raw: &str) -> Option<String> {
         }
     }
     let mapped = match t.to_ascii_lowercase().as_str() {
-        "abm" | "g#m" => "1A", "b" | "cb" => "1B",
-        "ebm" | "d#m" => "2A", "f#" | "gb" => "2B",
-        "bbm" | "a#m" => "3A", "db" | "c#" => "3B",
-        "fm" => "4A", "ab" | "g#" => "4B",
-        "cm" => "5A", "eb" | "d#" => "5B",
-        "gm" => "6A", "bb" | "a#" => "6B",
-        "dm" => "7A", "f" => "7B",
-        "am" => "8A", "c" => "8B",
-        "em" => "9A", "g" => "9B",
-        "bm" => "10A", "d" => "10B",
-        "f#m" | "gbm" => "11A", "a" => "11B",
-        "c#m" | "dbm" => "12A", "e" => "12B",
+        "abm" | "g#m" => "1A",
+        "b" | "cb" => "1B",
+        "ebm" | "d#m" => "2A",
+        "f#" | "gb" => "2B",
+        "bbm" | "a#m" => "3A",
+        "db" | "c#" => "3B",
+        "fm" => "4A",
+        "ab" | "g#" => "4B",
+        "cm" => "5A",
+        "eb" | "d#" => "5B",
+        "gm" => "6A",
+        "bb" | "a#" => "6B",
+        "dm" => "7A",
+        "f" => "7B",
+        "am" => "8A",
+        "c" => "8B",
+        "em" => "9A",
+        "g" => "9B",
+        "bm" => "10A",
+        "d" => "10B",
+        "f#m" | "gbm" => "11A",
+        "a" => "11B",
+        "c#m" | "dbm" => "12A",
+        "e" => "12B",
         _ => return Some(t.to_string()),
     };
     Some(mapped.to_string())
@@ -184,7 +196,8 @@ pub fn parse_vdj_database_reader<R: BufRead>(reader: R) -> HashMap<String, VdjPa
                 current.title = Some(unescape_xml(t));
             }
         } else if trimmed.starts_with("<Infos ") {
-            current.duration_sec = extract_attr(trimmed, "SongLength=\"").and_then(|s| s.parse().ok());
+            current.duration_sec =
+                extract_attr(trimmed, "SongLength=\"").and_then(|s| s.parse().ok());
             current.bitrate_kbps = extract_attr(trimmed, "Bitrate=\"").and_then(|s| s.parse().ok());
         } else if trimmed.starts_with("<Bpm ") && current.bpm.is_none() {
             if let Some(v) = extract_attr(trimmed, "Value=\"") {
@@ -197,14 +210,20 @@ pub fn parse_vdj_database_reader<R: BufRead>(reader: R) -> HashMap<String, VdjPa
         } else if trimmed.starts_with("<Poi ") {
             current.cues_count += 1;
             if current.cues.len() < 8 && extract_attr(trimmed, "Type=\"") == Some("cue") {
-                if let Some(pos_s) = extract_attr(trimmed, "Pos=\"").and_then(|s| s.parse::<f64>().ok()) {
+                if let Some(pos_s) =
+                    extract_attr(trimmed, "Pos=\"").and_then(|s| s.parse::<f64>().ok())
+                {
                     let num = extract_attr(trimmed, "Num=\"")
                         .and_then(|s| s.parse::<u8>().ok())
                         .unwrap_or((current.cues.len() + 1) as u8);
                     let name = extract_attr(trimmed, "Name=\"")
                         .map(unescape_xml)
                         .unwrap_or_else(|| format!("Cue {num}"));
-                    current.cues.push(LegacyCue { num, name, seconds: pos_s });
+                    current.cues.push(LegacyCue {
+                        num,
+                        name,
+                        seconds: pos_s,
+                    });
                 }
             }
         }
@@ -235,7 +254,9 @@ mod tests {
 </VirtualDJ_Database>"#;
         let map = parse_vdj_database_reader(Cursor::new(xml));
         let lookup = normalize_lookup_path(r"\\?\C:\Music\Alleh & Yorghaki - Único.webm");
-        let entry = map.get(&lookup).expect("should find entry with \\\\?\\ prefix");
+        let entry = map
+            .get(&lookup)
+            .expect("should find entry with \\\\?\\ prefix");
         assert_eq!(entry.bpm, Some(127.0));
         assert_eq!(entry.key.as_deref(), Some("11A"));
         assert_eq!(entry.cues.len(), 4);
