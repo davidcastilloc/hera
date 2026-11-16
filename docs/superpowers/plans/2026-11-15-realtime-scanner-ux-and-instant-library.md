@@ -40,7 +40,7 @@
   - Remove fake `'8A'` fallback in `hera-desktop/src/components/TrackRow.tsx`, show `···` pending states + `--:--` duration + animated Hot Cue dot illumination + `#14b8a6` fresh-update highlight.
   - Update `hera-desktop/src/components/ScannerStatusPill.tsx`, trigger immediate scan after `Importar` in `hera-desktop/src/components/HeraDjToolbar.tsx`, and add live scan banner + library link in `hera-desktop/src/routes/settings.library.tsx`.
   - Add unit tests in `hera-desktop/src/components/__tests__/scanner-realtime-ux.test.tsx`.
-- [ ] **Integration, Full QA & Native `.exe` Release Launch (`qa-verifier`):**
+- [x] **Integration, Full QA & Native `.exe` Release Launch (`qa-verifier`):**
   - Merge all worker commits to `main`, record decision in `docs/superpowers/DECISIONS.md`, regenerate TS typings if needed.
   - Run `cargo test -p hera-node-rs` (including `architectural_ratchets` and `golden_masters`), `cargo test -p hera-ipc`, `cargo test -p hera-desktop`, WASM check, `bun run test`, `bun run build`.
   - Stop any locked `hera-desktop.exe`, run `bun run tauri build`, and launch `hera-desktop.exe` live.
