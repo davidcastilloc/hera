@@ -27,7 +27,7 @@ This repository contains the canonical **100% Pure-Rust + Tauri v2** implementat
   - `hera-desktop/src-tauri/src/plugins/hera_dj/` & `hera-desktop/src/components/MiniOverlay.tsx` (`src/components/mini-overlay/`): Single-window morphing VirtualDJ `Modo Mini` (`360x408` booth card & `560x52` HUD pill, `Ctrl+Shift+M`), live `HERA En Vivo.vdjfolder` push, and P2P UDP seeder daemon.
   - `hera-desktop/src/routes/bridge.tsx` (`src/components/transition/`) & `hera-desktop/src/routes/dna.tsx`: Unified Dark Booth Studio (`#0c0e12` + `#14b8a6`) `Transición` and `Mi Estilo` views.
   - `hera-desktop/src/components/TrackProgress.tsx`, `TrackListHeader.tsx`, `TrackRow.tsx`, & `HeraDjToolbar.tsx`: 4 clickable Hot Cue pins, virtualized library table (`BPM`, `Camelot Key`, `Puntos`), and deterministic crate curation/export.
-- `.agent/skills/` & `.claude/skills/`: Multi-OS vendored `superpowers-odd` + `hera` skills (zero OS symlinks).
+- `.agents/skills/` & `.claude/skills/`: Multi-OS vendored `superpowers-odd` + `hera` skills (zero OS symlinks).
 - `docs/superpowers/`: Multi-instance Git state (`specs/`, `plans/`, and `DECISIONS.md`).
 
 ---
@@ -74,7 +74,7 @@ Every AI agent working across **Windows**, **macOS**, or **Linux / Antigravity**
      - **Core Maintainer (`@davidcastilloc`):** Uses `git config user.name "David Castillo"` and `git config user.email "vikruzdavid@gmail.com"`.
      - **Community Contributors:** Preserve your own GitHub `user.name` and `user.email`. Work on a feature branch (`feat/*` or `fix/*`) in your fork and submit a Pull Request against `main` using `.github/PULL_REQUEST_TEMPLATE.md`.
      - **Atomic Checkpoints:** Upon finishing each subtask in `docs/superpowers/plans/`, mark `[x]`, update `docs/superpowers/DECISIONS.md` only if there was a critical technical finding, and create an atomic Semantic Release / Conventional Commit (`feat:`, `fix:`, `refactor:`, `docs:`, `test:`, `chore:`).
-   - **Zero OS-Specific Absolute Paths & Zero Symlinks:** Never commit OS-specific absolute host, user-home, or drive-letter paths. Always use repository-relative paths. Keep skills as physical files in `.agent/skills/` and `.claude/skills/`.
+   - **Zero OS-Specific Absolute Paths & Zero Symlinks:** Never commit OS-specific absolute host, user-home, or drive-letter paths. Always use repository-relative paths. Keep skills as physical files in `.agents/skills/` and `.claude/skills/`.
 3. **ODD (Organic-Driven Development) Ceremony Scaling:**
    - **Micro-changes / Bugfixes (`< 30` LOC):** Go straight to failing test + minimal code fix + terminal verification receipt + atomic commit.
    - **Features / Architectural Changes (`>= 30` LOC):** Follow `brainstorming` (`docs/superpowers/specs/`) -> `writing-plans` (`docs/superpowers/plans/`) -> `subagent-driven-development` -> `verification-before-completion`.

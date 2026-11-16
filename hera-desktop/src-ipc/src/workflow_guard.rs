@@ -236,13 +236,13 @@ pub fn verify_documentation_assets_and_v060_alignment(repo_root: &Path) -> Resul
 }
 
 /// Verifies locally (`< 50ms`) that:
-/// 1. `.agent/skills` and `.claude/skills` contain zero OS symlinks.
+/// 1. `.agents/skills` and `.claude/skills` contain zero OS symlinks.
 /// 2. Public `hera-rs/src` and `hera-desktop/src` contain zero private `hera-cloud` SaaS leaks.
 /// 3. `.github/workflows/ci.yml` stays lean (no Playwright `test:e2e` and no heavy `libwebkit2gtk-4.1-dev` apt installs).
 pub fn verify_open_core_and_lean_ci(repo_root: &Path) -> Result<(), String> {
     let mut errs = Vec::new();
 
-    for skills_dir in [".agent/skills", ".claude/skills"] {
+    for skills_dir in [".agents/skills", ".claude/skills"] {
         let root = repo_root.join(skills_dir);
         if root.exists() {
             check_no_symlinks_recursive(&root, &mut errs);
