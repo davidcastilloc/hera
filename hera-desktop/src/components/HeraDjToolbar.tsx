@@ -1,5 +1,4 @@
 import * as stylex from '@stylexjs/stylex';
-import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -10,9 +9,10 @@ import {
   exportCrateToDjSoftware,
   type DjExportFormat,
 } from '../lib/bridge-hera';
-import { useScannerStore } from '../lib/scanner-v3';
+import { cancelBackgroundScan, useScannerStore } from '../lib/scanner-v3';
 import useLibraryStore from '../lib/store';
 import Icon from './Icon';
+import PreGigAuditPopover from './PreGigAuditPopover';
 import { ScannerStatusPill } from './ScannerStatusPill';
 
 type Props = {
@@ -51,7 +51,12 @@ export default function HeraDjToolbar({
     'spine' | 'export' | 'cancel' | null
   >(null);
   const refreshing = useLibraryStore((state) => state.refreshing);
-  const { total: scannerTotal, fastDone } = useScannerStore();
+  const {
+    total: scannerTotal,
+    fastDone,
+    sonicTwins,
+    setSonicTwins,
+  } = useScannerStore();
   const isScanActive =
     refreshing || (scannerTotal > 0 && fastDone < scannerTotal);
   const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -118,7 +123,7 @@ export default function HeraDjToolbar({
   const handleCancelScan = async () => {
     setBusyAction('cancel');
     try {
-      await invoke('plugin:hera-dj|cancel_library_scan');
+      await cancelBackgroundScan();
       flashDone('cancel');
     } finally {
       setBusyAction(null);
@@ -139,6 +144,16 @@ export default function HeraDjToolbar({
         <h1 {...stylex.props(styles.crateTitle)}>{title}</h1>
         <span {...stylex.props(styles.budgetPill)}>{trackCountLabel}</span>
         <ScannerStatusPill />
+        {sonicTwins ? (
+          <button
+            type="button"
+            onClick={() => setSonicTwins(null)}
+            title="Quitar filtro de gemelos sónicos"
+            {...stylex.props(styles.filterPill, styles.filterPillActive)}
+          >
+            Gemelos: {sonicTwins.sourceTitle} ({sonicTwins.matches.length}) ×
+          </button>
+        ) : null}
 
         {onMixesFilterChange ? (
           <div
@@ -229,6 +244,8 @@ export default function HeraDjToolbar({
                 : 'Ordenar mezcla'}
           </span>
         </button>
+
+        <PreGigAuditPopover tracks={tracks} crateName={crateName} />
 
         <select
           value={selectedFormat}

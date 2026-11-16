@@ -182,4 +182,27 @@ test('BETA Onboarding Wizard modal and mixes filter toggle should be operable', 
   await over10mBtn.click();
   await allBtn.click();
   await under10mBtn.click();
+
+  // 4. Pre-Gig Audit popover & External Booth toggle
+  const preGigBtn = page.getByRole('button', { name: 'Check Pre-Toque' });
+  await expect.element(preGigBtn).toBeVisible();
+  await preGigBtn.click();
+  await expect
+    .element(page.getByRole('dialog', { name: 'Check Pre-Toque' }))
+    .toBeVisible();
+  await expect
+    .element(page.getByRole('tab', { name: 'Denon CD/MP3' }))
+    .toBeVisible();
+  await page
+    .getByRole('button', { name: 'Cerrar auditoría pre-toque' })
+    .click();
+
+  // 5. Playlists view defaults to Carpetas (.hera) alongside Playlists tab
+  await getMainNavigation().getByRole('link', { name: 'Playlists' }).click();
+  await expect
+    .element(page.getByRole('tab', { name: 'Carpetas (.hera)' }))
+    .toBeVisible();
+  await expect
+    .element(page.getByRole('tab', { name: 'Playlists' }))
+    .toBeVisible();
 });

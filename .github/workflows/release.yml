@@ -70,13 +70,18 @@ jobs:
 
       - name: Install Frontend Dependencies (Bun)
         working-directory: hera-desktop
-        run: bun install --ignore-scripts
+        run: bun install
+
+      - name: Pre-Check Frontend Production Build (Vite+ / StyleX)
+        working-directory: hera-desktop
+        run: bun run build
 
       - name: Build & Publish HERA Desktop Native Installers
-        uses: tauri-apps/tauri-action@v0
+        uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NO_STRIP: "1"
+          APPLE_SIGNING_IDENTITY: "-"
         with:
           projectPath: hera-desktop
           tagName: v__VERSION__
@@ -85,4 +90,4 @@ jobs:
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.platform == 'macos-latest' && secrets.APPLE_CERTIFICATE == '' && format('{0} --no-sign', matrix.args) || matrix.args }}

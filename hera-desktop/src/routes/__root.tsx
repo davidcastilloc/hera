@@ -1,5 +1,6 @@
 import { useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import {
   createRootRoute,
   Outlet,
@@ -8,7 +9,7 @@ import {
 } from '@tanstack/react-router';
 import { isTauri } from '@tauri-apps/api/core';
 import { info } from '@tauri-apps/plugin-log';
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import SettingsAPI from '../api/SettingsAPI';
 import AppEvents from '../components/AppEvents';
@@ -20,11 +21,17 @@ import IPCNavigationEvents from '../components/IPCNavigationEvents';
 import IPCPlayerEvents from '../components/IPCPlayerEvents';
 import LibraryEvents from '../components/LibraryEvents';
 import Navigation from '../components/Navigation';
+import OnboardingWizardModal, {
+  type ConfigWithBoothFields,
+} from '../components/OnboardingWizardModal';
 import PlayerEvents from '../components/PlayerEvents';
 import Toasts from '../components/Toasts';
+import type { Track } from '../generated/typings';
 import useInvalidate from '../hooks/useInvalidate';
 import { bindAgentGlobalBridge } from '../lib/agent-store';
 import { useMiniModeStore } from '../lib/mini-mode-store';
+import { registerTrackLoadMetadata } from '../lib/native-audio-transport';
+import player from '../lib/player';
 import { allTracksQuery, configQuery } from '../lib/queries';
 import queryClient from '../lib/query-client';
 import useLibraryStore from '../lib/store';
@@ -58,6 +65,28 @@ function ViewRoot() {
   const invalidate = useInvalidate();
   const navigate = useNavigate();
   const { t } = useLingui();
+  const config = useSuspenseQuery(configQuery).data as ConfigWithBoothFields;
+  const shouldAutoPromptOnboarding =
+    config.onboarding_completed === false ||
+    (config.onboarding_completed === undefined &&
+      config.library_folders.length === 0);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+
+  useEffect(() => {
+    const onTrackChange = (track: Track | null) => {
+      if (track) {
+        registerTrackLoadMetadata(
+          track.path,
+          track.replay_gain_db,
+          track.hot_cues?.map((c) => c.seconds),
+        );
+      }
+    };
+    player.on('trackChange', onTrackChange);
+    return () => {
+      player.off('trackChange', onTrackChange);
+    };
+  }, []);
 
   useEffect(() => {
     SettingsAPI.init(() => {}).catch(logAndNotifyError);
@@ -149,6 +178,11 @@ function ViewRoot() {
       )}
 
       <Toasts />
+      <OnboardingWizardModal
+        isOpen={shouldAutoPromptOnboarding && !onboardingDismissed}
+        onClose={() => setOnboardingDismissed(true)}
+        onCompleted={() => setOnboardingDismissed(true)}
+      />
     </div>
   );
 }

@@ -10,7 +10,7 @@ function getTrackSearchBlob(track: Track): string {
   const cached = SEARCH_BLOB_CACHE.get(track);
   if (cached !== undefined) return cached;
   const blob = stripAccents(
-    `${track.title} ${track.artists.join(' ')} ${track.album} ${track.genres.join(' ')}`,
+    `${track.title} ${track.artists.join(' ')} ${track.album} ${track.genres.join(' ')} ${track.inferred_genre_family ?? ''}`,
   );
   SEARCH_BLOB_CACHE.set(track, blob);
   return blob;
@@ -39,15 +39,26 @@ export function filterTracks(tracks: Track[], search: string): Track[] {
       } else if (BPM_EXACT_RE.test(token)) {
         const target = Number(token);
         const bpmMatch = Math.abs((track.bpm ?? 0) - target) <= 0.9;
-        if (!bpmMatch && !getTrackSearchBlob(track).includes(token)) return false;
+        if (!bpmMatch && !getTrackSearchBlob(track).includes(token))
+          return false;
       } else if (token === 'video') {
         if (track.is_video !== true) return false;
       } else if (token === 'transicion') {
         if (track.is_transition_candidate !== true) return false;
       } else if (token === 'fake320') {
         if (track.is_fake_320kbps !== true) return false;
+      } else if (token === 'skip') {
+        if (track.has_audio_skips !== true) return false;
+      } else if (token === 'diff') {
+        if (track.has_bpm_trust_diff !== true) return false;
+      } else if (token === 'propia') {
+        if (track.is_own_production !== true) return false;
+      } else if (token === 'mix') {
+        const isMix = track.is_mix_over_10m === true || track.duration > 600;
+        if (!isMix) return false;
       } else {
-        if (!getTrackSearchBlob(track).includes(stripAccents(token))) return false;
+        if (!getTrackSearchBlob(track).includes(stripAccents(token)))
+          return false;
       }
     }
     return true;

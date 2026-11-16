@@ -23,6 +23,11 @@ import usePlayingTrackID from '../hooks/usePlayingTrackID';
 import BridgeDatabase from '../lib/bridge-database';
 import player from '../lib/player';
 import {
+  findSonicTwins,
+  identifyTrackShazam,
+  useScannerStore,
+} from '../lib/scanner-v3';
+import {
   getScrollPosition,
   saveScrollPosition,
 } from '../lib/scroll-restoration';
@@ -364,6 +369,66 @@ export default function TrackList(props: Props) {
       }
 
       menuItemsBuilder.push(
+        PredefinedMenuItem.new({ item: 'Separator' }),
+        MenuItem.new({
+          text: 'Buscar gemelos sónicos',
+          async action() {
+            try {
+              const twins = await findSonicTwins(track.id, 15);
+              if (twins.length === 0) {
+                toastManager.add({
+                  title: `Sin gemelos sónicos cercanos para "${track.title}".`,
+                  type: 'info',
+                  timeout: 4500,
+                });
+                return;
+              }
+              useScannerStore.getState().setSonicTwins({
+                sourceTrackId: track.id,
+                sourceTitle: track.title,
+                matches: twins,
+              });
+              const preview = twins
+                .slice(0, 3)
+                .map(
+                  (m) =>
+                    `${m.artist} — ${m.title} (${Math.round(m.similarity * 100)}%)`,
+                )
+                .join(' · ');
+              toastManager.add({
+                title: `${twins.length} gemelos sónicos: ${preview}`,
+                type: 'success',
+                timeout: 6500,
+              });
+            } catch (err) {
+              logAndNotifyError(err);
+            }
+          },
+        }),
+        MenuItem.new({
+          text: 'Identificar con Shazam',
+          async action() {
+            try {
+              const res = await identifyTrackShazam(track.id, track.path);
+              if (res?.matched && (res.title || res.artist)) {
+                toastManager.add({
+                  title: `Shazam ID (${Math.round(res.confidence * 100)}%): ${res.artist ?? 'Artista'} — ${res.title ?? track.title}`,
+                  type: 'success',
+                  timeout: 6000,
+                });
+                await invalidate();
+              } else {
+                toastManager.add({
+                  title: `No se encontró coincidencia Shazam para "${track.title}".`,
+                  type: 'warning',
+                  timeout: 4500,
+                });
+              }
+            } catch (err) {
+              logAndNotifyError(err);
+            }
+          },
+        }),
         PredefinedMenuItem.new({ item: 'Separator' }),
         MenuItem.new({
           text: t`Edit track`,

@@ -5,7 +5,10 @@ import type {
   NativePlayerSnapshot,
 } from '../../generated/typings';
 import * as nativeIpc from '../native-audio-ipc';
-import { NativeRustAudioTransport } from '../native-audio-transport';
+import {
+  NativeRustAudioTransport,
+  registerTrackLoadMetadata,
+} from '../native-audio-transport';
 import {
   type SpectrumBackendMode,
   SpectrumCanvasRenderer,
@@ -157,6 +160,31 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
       durationHintSec: 180,
       hotCuesSec: undefined,
       replayGainDb: undefined,
+    });
+  });
+
+  it('forwards registered replayGainDb and 8-cue fallback when loadTrack omits optional args', async () => {
+    const spy = vi
+      .spyOn(nativeIpc, 'invokeNativeAudio')
+      .mockResolvedValue(null);
+    const transport = new NativeRustAudioTransport({
+      playbackRate: 1,
+      volume: 0.9,
+      muted: false,
+    });
+    registerTrackLoadMetadata(
+      '/music/registered.mp3',
+      -4.2,
+      [2.5, 32, 64, 128, 160, 180, 195, 210],
+    );
+
+    await transport.loadTrack('/music/registered.mp3', 240);
+
+    expect(spy).toHaveBeenCalledWith('native_audio_load_track', {
+      filePath: '/music/registered.mp3',
+      durationHintSec: 240,
+      hotCuesSec: [2.5, 32, 64, 128],
+      replayGainDb: -4.2,
     });
   });
 });
