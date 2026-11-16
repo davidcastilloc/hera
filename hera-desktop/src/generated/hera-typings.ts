@@ -46,6 +46,8 @@ export type DjStyleDnaProfile = { dj_handle: string, preferred_dj_software: stri
 
 export type DjStyleDnaRequest = { tracks: Array<ExportTrackItem>, dj_handle?: string | null, preferred_dj_software?: string | null, golden_rules?: string | null, };
 
+export type DoctorIssueItem = { id?: number, track_id: string, file_path: string, issue_kind: string, severity: string, details: string, detected_at_unix_ms?: number, resolved: boolean, };
+
 export type DownloadP2PTrackRequest = { track_id: string, artist: string, title: string, bpm: number, camelot: string, hera_seal: string, peer_endpoint?: string | null, turn_relay_endpoint?: string | null, chunk_count?: number | null, };
 
 export type DownloadP2PTrackResponse = { track_id: string, saved_path: string, quarantine_verified: boolean, bytes_written: number, chunks_verified: number, stage_used: string, sha256_hex: string, r2_bytes_used: number, };
@@ -55,6 +57,10 @@ export type ExportCrateRequest = { crate_name: string, brief?: string, tracks: A
 export type ExportCrateResponse = { crate_name: string, track_count: number, m3u8_content?: string | null, rekordbox_xml_content?: string | null, virtualdj_folder_xml?: string | null, virtualdj_database_xml?: string | null, traktor_nml_content?: string | null, written_files: Array<string>, };
 
 export type ExportTrackItem = { track_id: string, artist: string, title: string, version?: string | null, file_path: string, bpm: number, camelot: string, duration_seconds: number, bitrate_kbps?: number, energy?: number, file_size_bytes?: number, is_video?: boolean, is_own_production?: boolean, hot_cues?: Array<HotCuePoint>, };
+
+export type FolderCrateDetail = { summary: FolderCrateSummary, rules_markdown: string, ledger_entries: Array<string>, track_ids: Array<string>, hydrated_from_omkf: boolean, disk_online: boolean, };
+
+export type FolderCrateSummary = { crate_id: string, folder_path: string, display_name: string, tree_seal_64: string, track_count: number, video_count: number, full_count: number, bpm_min?: number | null, bpm_max?: number | null, dominant_camelot?: string | null, dominant_genre?: string | null, era_span?: string | null, lufs_avg?: number | null, has_custom_rules: boolean, updated_at_unix_ms?: number, };
 
 export type FolderWorkabilityReport = { total_files_scanned: number, workable_tracks_under_10m: number, mixes_over_10m: number, short_sfx_discarded: number, ignored_junk_folders: number, vdj_cached_tracks: number, rekordbox_cached_tracks: number, };
 
@@ -70,7 +76,19 @@ export type NativeAudioTelemetryFrame = { sequence: number, sample_rate: number,
 
 export type NativePlayerSnapshot = { backend_kind: string, sample_rate: number, track_loaded: boolean, loaded_path?: string | null, is_playing: boolean, ended: boolean, current_time_sec: number, duration_sec: number, playhead_frame: number, total_frames: number, volume: number, playback_rate: number, hot_cue_frames: Array<number>, hot_cue_seconds: Array<number>, latest_telemetry?: NativeAudioTelemetryFrame | null, };
 
+export type OrganizeFolderRequest = { crate_id: string, strategy: string, dry_run: boolean, rollback_tx_id?: string | null, };
+
+export type OrganizeFolderResponse = { crate_id: string, dry_run: boolean, tx_id: string, moves: Array<PlannedFileMove>, applied_count: number, rolled_back: boolean, };
+
+export type PlannedFileMove = { track_id: string, source_path: string, target_path: string, reason: string, bucket_label: string, };
+
+export type PreGigAuditReport = { target_hardware: string, total_tracks: number, ready_count: number, warning_count: number, blocker_count: number, passed: boolean, issues: Array<PreGigTrackIssue>, };
+
+export type PreGigTrackIssue = { track_id: string, title: string, file_path: string, issue_code: string, severity: string, detail: string, };
+
 export type ProbeAiBackendResponse = { reachable: boolean, backend: string, base_url: string, models: Array<string>, };
+
+export type ProducerWatchFolder = { id: string, folder_path: string, enabled: boolean, created_at?: number, };
 
 export type PushVirtualDjLiveCrateRequest = { tracks: Array<ExportTrackItem>, append?: boolean, crate_name?: string | null, };
 
@@ -85,6 +103,8 @@ export type ScanPhaseProgress = { phase: number, current: number, total: number,
 export type SetMiniOverlayModeRequest = { mode: "full" | "card" | "pill", pinned?: boolean, };
 
 export type SetMiniOverlayModeResponse = { mode: "full" | "card" | "pill", pinned: boolean, width: number, height: number, };
+
+export type SonicTwinMatch = { track_id: string, title: string, artist: string, bpm: number, camelot: string, similarity_pct: number, genre_family?: string | null, };
 
 export type StartAgentTurnRequest = { session_id?: string | null, message: string, attachments?: Array<AgentAttachment>, backend_id?: string | null, execution_policy?: string | null, base_url?: string | null, model?: string | null, api_key?: string | null, };
 

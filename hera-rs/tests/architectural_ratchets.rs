@@ -27,8 +27,8 @@ const ZERO_COMMAND_PLUGIN_FILES: &[&str] = &[
     "stream_server.rs",
 ];
 
-/// Exact count of `#[tauri::command]` functions across the 8 internal plugins in `v0.6.0`.
-const EXPECTED_TAURI_COMMANDS_COUNT: usize = 63;
+/// Exact count of `#[tauri::command]` functions across the 8 internal plugins in `v0.7.0`.
+const EXPECTED_TAURI_COMMANDS_COUNT: usize = 77;
 
 /// Strict line-count ceilings (`content.lines().count()`) for module facades,
 /// pre-existing ADR-013 P2P submodules, route coordinators, and IPC bridges.
@@ -46,11 +46,13 @@ const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
     ("hera-desktop/src/components/MiniOverlay.tsx", 450),
     ("hera-desktop/src/lib/bridge-hera.ts", 300),
     ("hera-desktop/src/lib/bridge-agent.ts", 300),
+    ("hera-desktop/src/lib/omkf-bridge.ts", 300),
     ("hera-desktop/src/lib/native-audio-transport.ts", 320),
     ("hera-desktop/src/lib/spectrum-renderer.ts", 260),
     ("hera-desktop/src/components/LiveSpectrumCanvas.tsx", 240),
     ("hera-desktop/src/components/TrackProgress.tsx", 220),
     ("hera-desktop/src/lib/player.ts", 680),
+    ("hera-desktop/src-tauri/src/libs/omkf_sync.rs", 349),
 ];
 
 /// Recursive line-count ceilings (`<= 349` lines) enforced on every `.rs` file inside
@@ -58,6 +60,7 @@ const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
 const SLICED_SUBMODULE_DIRS: &[(&str, usize)] = &[
     ("hera-rs/src/bpm_engine", 349),
     ("hera-rs/src/scanner", 349),
+    ("hera-rs/src/genre_intelligence", 349),
     ("hera-rs/src/shazam_id", 349),
     ("hera-rs/src/mcp", 349),
     ("hera-rs/src/code_mode", 349),

@@ -1,9 +1,12 @@
 mod audio_telemetry;
 mod audio_transport;
 mod bridge_p2p;
+pub mod folder_watcher;
 mod mini_overlay;
+pub mod omkf_ipc;
 mod p2p_download;
 pub mod scanner_governor_os;
+pub mod scanner_intelligence;
 pub mod scanner_v3;
 mod scanner_worker;
 #[cfg(test)]
@@ -222,6 +225,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .setup(|app, _api| {
             app.manage(NativeAudioState(create_default_audio_backend()));
             scanner_worker::spawn_scanner_daemon(app.clone());
+            folder_watcher::spawn_folder_watchers(app.clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -229,6 +233,20 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             scanner_v3::scanner_prewarm_track,
             scanner_v3::scanner_notify_deck_track,
             scanner_v3::scanner_set_deck_playing,
+            scanner_v3::scanner_promote_crate_full,
+            scanner_v3::scanner_get_telemetry,
+            scanner_v3::scanner_cancel_scan,
+            scanner_v3::scanner_discover_workable_roots,
+            scanner_v3::scanner_set_external_booth_mode,
+            scanner_intelligence::scanner_get_doctor_issues,
+            scanner_intelligence::scanner_configure_producer_folders,
+            scanner_intelligence::scanner_find_sonic_twins,
+            scanner_intelligence::scanner_audit_pre_gig_crate,
+            scanner_intelligence::identify_track_shazam,
+            omkf_ipc::omkf_list_folder_crates,
+            omkf_ipc::omkf_read_folder_crate,
+            omkf_ipc::omkf_save_crate_rules,
+            omkf_ipc::omkf_preview_or_apply_organize,
             compute_style_dna,
             export_crate,
             build_dj_set_spine,

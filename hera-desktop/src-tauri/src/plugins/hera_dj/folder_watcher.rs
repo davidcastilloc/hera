@@ -184,7 +184,7 @@ async fn run_vdj_tick<R: Runtime>(
             .fetch_all(&mut *conn)
             .await
             .unwrap_or_default();
-        let nbrs = cands
+        let nbrs: Vec<String> = cands
             .into_iter()
             .filter(|(_, c)| {
                 cam.is_empty()
