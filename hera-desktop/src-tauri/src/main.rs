@@ -53,6 +53,10 @@ fn main() {
                 .level(LevelFilter::Info)
                 // Prevent noisy logs from logging
                 .level_for("lofty", LevelFilter::Error)
+                .level_for("symphonia_bundle_mp3", LevelFilter::Error)
+                .level_for("symphonia_format_isomp4", LevelFilter::Error)
+                .level_for("symphonia_core", LevelFilter::Error)
+                .level_for("sqlx::query", LevelFilter::Error)
                 .with_colors(ColoredLevelConfig::default())
                 .max_file_size(50_000)
                 .build(),

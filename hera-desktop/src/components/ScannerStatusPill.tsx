@@ -1,4 +1,5 @@
 import * as stylex from '@stylexjs/stylex';
+
 import { useScannerStore } from '../lib/scanner-v3';
 import { flushFrozenPatches } from './LibraryEvents';
 
@@ -6,12 +7,14 @@ const styles = stylex.create({
   container: {
     display: 'inline-flex',
     alignItems: 'center',
+    flexShrink: 0,
     columnGap: 8,
     rowGap: 8,
   },
   pill: {
     display: 'inline-flex',
     alignItems: 'center',
+    flexShrink: 0,
     columnGap: 8,
     rowGap: 8,
     fontSize: 12,
@@ -24,17 +27,20 @@ const styles = stylex.create({
     borderColor: 'rgba(20, 184, 166, 0.28)',
     color: '#2dd4bf',
     fontWeight: 500,
+    fontVariantNumeric: 'tabular-nums',
     whiteSpace: 'nowrap',
   },
   pulseDot: {
     width: 6,
     height: 6,
+    flexShrink: 0,
     borderRadius: 999,
     backgroundColor: '#2dd4bf',
   },
   applyBtn: {
     display: 'inline-flex',
     alignItems: 'center',
+    flexShrink: 0,
     columnGap: 4,
     rowGap: 4,
     fontSize: 11,
@@ -52,6 +58,45 @@ const styles = stylex.create({
     transition: 'background-color 0.15s ease, border-color 0.15s ease',
   },
 });
+
+export type ScannerPillMetrics = {
+  phase?: string;
+  indexedDone?: number;
+  fastDone: number;
+  fullDone: number;
+  total: number;
+  tracksPerSec: number;
+  etaSec: number;
+  governorActive: boolean;
+};
+
+function formatCompactEta(etaSec: number, tracksPerSec: number): string {
+  if (etaSec <= 0 || tracksPerSec < 0.1) return '';
+  if (etaSec < 60) return ` · ~${Math.max(1, Math.round(etaSec))}s`;
+  if (etaSec < 3600) return ` · ~${Math.round(etaSec / 60)}m`;
+  return ` · ~${(etaSec / 3600).toFixed(1)}h`;
+}
+
+export function formatScannerPillStatus(m: ScannerPillMetrics): string {
+  if (m.phase === 'indexing' && (m.indexedDone ?? 0) < m.total) {
+    return `Indexando · ${m.indexedDone ?? 0}/${m.total}`;
+  }
+  if (m.fastDone < m.total) {
+    const mode = m.governorActive ? 'Modo Cabina' : 'Analizando';
+    const speed =
+      m.tracksPerSec >= 10
+        ? ` · ${m.tracksPerSec.toFixed(0)}/s`
+        : m.tracksPerSec >= 0.1
+          ? ` · ${m.tracksPerSec.toFixed(1)}/s`
+          : '';
+    const eta = formatCompactEta(m.etaSec, m.tracksPerSec);
+    return `${mode} · ${m.fastDone}/${m.total}${speed}${eta}`;
+  }
+  if (m.fullDone < m.total) {
+    return `Hot Cues · ${m.fullDone}/${m.total}`;
+  }
+  return 'Completado';
+}
 
 export function ScannerStatusPill() {
   const {
@@ -73,19 +118,16 @@ export function ScannerStatusPill() {
     return null;
   }
 
-  let statusText = '';
-  if (phase === 'indexing' && (indexedDone ?? 0) < total) {
-    statusText = `Indexando · ${indexedDone ?? 0}/${total}`;
-  } else if (fastDone < total) {
-    const mode = governorActive ? 'Modo Cabina (1 hilo)' : 'Analizando';
-    const speed = `${tracksPerSec.toFixed(0)}/s`;
-    const eta = etaSec > 0 ? ` · ~${etaSec}s` : '';
-    statusText = `${mode} · ${fastDone}/${total} · ${speed}${eta}`;
-  } else if (fullDone < total) {
-    statusText = `Hot Cues · ${fullDone}/${total}`;
-  } else {
-    statusText = 'Completado';
-  }
+  const statusText = formatScannerPillStatus({
+    phase,
+    indexedDone,
+    fastDone,
+    fullDone,
+    total,
+    tracksPerSec,
+    etaSec,
+    governorActive,
+  });
 
   return (
     <div {...stylex.props(styles.container)}>

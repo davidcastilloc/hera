@@ -24,9 +24,8 @@ import PlayerEvents from '../components/PlayerEvents';
 import Toasts from '../components/Toasts';
 import useInvalidate from '../hooks/useInvalidate';
 import { bindAgentGlobalBridge } from '../lib/agent-store';
-import DatabaseBridge from '../lib/bridge-database';
 import { useMiniModeStore } from '../lib/mini-mode-store';
-import { configQuery } from '../lib/queries';
+import { allTracksQuery, configQuery } from '../lib/queries';
 import queryClient from '../lib/query-client';
 import useLibraryStore from '../lib/store';
 import { logAndNotifyError } from '../lib/utils';
@@ -61,8 +60,9 @@ function ViewRoot() {
   const { t } = useLingui();
 
   useEffect(() => {
-    SettingsAPI.init(invalidate).catch(logAndNotifyError);
-    void DatabaseBridge.getAllTracks()
+    SettingsAPI.init(() => {}).catch(logAndNotifyError);
+    void queryClient
+      .ensureQueryData(allTracksQuery)
       .then((tracks) => {
         useLibraryStore.setState({ tracks });
       })

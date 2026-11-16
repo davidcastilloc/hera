@@ -4,7 +4,6 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import LibraryAPI from '../api/LibraryAPI';
-import { ScannerStatusPill } from './ScannerStatusPill';
 import type { Track } from '../generated/typings';
 import {
   buildSetSpineForLibrary,
@@ -14,6 +13,7 @@ import {
 import { useScannerStore } from '../lib/scanner-v3';
 import useLibraryStore from '../lib/store';
 import Icon from './Icon';
+import { ScannerStatusPill } from './ScannerStatusPill';
 
 type Props = {
   title?: string;
@@ -52,7 +52,8 @@ export default function HeraDjToolbar({
   >(null);
   const refreshing = useLibraryStore((state) => state.refreshing);
   const { total: scannerTotal, fastDone } = useScannerStore();
-  const isScanActive = refreshing || (scannerTotal > 0 && fastDone < scannerTotal);
+  const isScanActive =
+    refreshing || (scannerTotal > 0 && fastDone < scannerTotal);
   const doneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -269,16 +270,17 @@ export default function HeraDjToolbar({
 
 const styles = stylex.create({
   crateBar: {
-    height: '46px',
+    minHeight: '46px',
     flexGrow: 0,
     flexShrink: 0,
-    flexBasis: '46px',
     display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    columnGap: '12px',
-    paddingBlock: 0,
-    paddingInline: '18px',
+    columnGap: '10px',
+    rowGap: '6px',
+    paddingBlock: '7px',
+    paddingInline: '14px',
     backgroundColor: '#12161d',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -286,20 +288,22 @@ const styles = stylex.create({
   },
   leftMeta: {
     display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    columnGap: '10px',
+    columnGap: '8px',
+    rowGap: '6px',
     minWidth: 0,
-    overflow: 'hidden',
   },
   crateTitle: {
     margin: 0,
+    flexShrink: 0,
     fontSize: '14px',
     fontWeight: 600,
     color: '#edeff3',
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    maxWidth: '280px',
+    maxWidth: '220px',
   },
   budgetPill: {
     flexShrink: 0,
@@ -318,13 +322,17 @@ const styles = stylex.create({
   },
   rightActions: {
     display: 'flex',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    columnGap: '8px',
+    columnGap: '6px',
+    rowGap: '6px',
     flexShrink: 0,
   },
   secondaryBtn: {
     display: 'inline-flex',
     alignItems: 'center',
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
     columnGap: '6px',
     paddingBlock: '6px',
     paddingInline: '11px',
@@ -345,6 +353,7 @@ const styles = stylex.create({
     color: '#2dd4bf',
   },
   selectFormat: {
+    flexShrink: 0,
     paddingBlock: '6px',
     paddingInline: '9px',
     fontSize: '12px',
@@ -361,6 +370,8 @@ const styles = stylex.create({
   primaryExportBtn: {
     display: 'inline-flex',
     alignItems: 'center',
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
     columnGap: '6px',
     paddingBlock: '6px',
     paddingInline: '13px',
@@ -379,6 +390,8 @@ const styles = stylex.create({
   cancelScanBtn: {
     display: 'inline-flex',
     alignItems: 'center',
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
     columnGap: '5px',
     paddingBlock: '6px',
     paddingInline: '10px',
@@ -396,6 +409,7 @@ const styles = stylex.create({
   filterGroup: {
     display: 'flex',
     alignItems: 'center',
+    flexShrink: 0,
     columnGap: '4px',
     backgroundColor: '#171c24',
     padding: '2px',
@@ -405,6 +419,8 @@ const styles = stylex.create({
     borderColor: '#232a36',
   },
   filterPill: {
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
     backgroundColor: 'transparent',
     borderStyle: 'none',
     color: '#8e98a8',

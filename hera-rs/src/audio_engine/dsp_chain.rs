@@ -95,6 +95,41 @@ pub fn resample_deck_buffer_to_rate(
     PreallocatedDeckBuffer::from_stereo_frames(stereo, target_sample_rate, scaled_cues)
 }
 
+/// Ultra-fast `< 2 ms` linear stereo resampler used exclusively for Stage-1 prefix buffers while
+/// Stage-2 upgrades seamlessly in the background using [`resample_deck_buffer_to_rate`] (`rubato`).
+pub fn resample_deck_buffer_fast_prefix(
+    buf: &PreallocatedDeckBuffer,
+    target_sample_rate: u32,
+) -> Result<PreallocatedDeckBuffer, String> {
+    if target_sample_rate == 0 {
+        return Err("target_sample_rate must be greater than zero".to_string());
+    }
+    if buf.sample_rate == target_sample_rate {
+        return Ok(buf.clone());
+    }
+    let in_frames = buf.total_frames() as usize;
+    let ratio = f64::from(target_sample_rate) / f64::from(buf.sample_rate.max(1));
+    let out_frames = ((in_frames as f64) * ratio).round().max(1.0) as usize;
+    let step = f64::from(buf.sample_rate.max(1)) / f64::from(target_sample_rate);
+    let src = buf.interleaved_stereo();
+    let mut stereo = Vec::with_capacity(out_frames * 2);
+    let last = in_frames.saturating_sub(1);
+    for o in 0..out_frames {
+        let pos = (o as f64) * step;
+        let idx = (pos as usize).min(last);
+        let next = (idx + 1).min(last);
+        let frac = (pos - (idx as f64)) as f32;
+        let l = (src[idx * 2] + (src[next * 2] - src[idx * 2]) * frac).clamp(-1.0, 1.0);
+        let r = (src[idx * 2 + 1] + (src[next * 2 + 1] - src[idx * 2 + 1]) * frac).clamp(-1.0, 1.0);
+        stereo.push(if l.is_finite() { l } else { 0.0 });
+        stereo.push(if r.is_finite() { r } else { 0.0 });
+    }
+    let scaled_cues = buf
+        .hot_cues
+        .map(|cue| ((cue.frame_index as f64) * ratio).round().max(0.0) as u64);
+    PreallocatedDeckBuffer::from_stereo_frames(stereo, target_sample_rate, scaled_cues)
+}
+
 /// Zero-allocation stereo master bus (`fundsp::prelude32`): 12 Hz DC-blocker, subtle club
 /// low/high shelves, and analog-style `Tanh` soft-clipping safety stage.
 pub struct MasterDspBus {

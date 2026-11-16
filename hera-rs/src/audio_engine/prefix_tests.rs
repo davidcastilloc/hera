@@ -61,11 +61,15 @@ fn test_prefix_loader_starts_fast_and_seamlessly_upgrades_past_prefix_to_eof() {
         );
     }
 
-    assert!(backend.send_command(TransportCommand::Play(DeckId::DeckA)).is_playing);
+    assert!(
+        backend
+            .send_command(TransportCommand::Play(DeckId::DeckA))
+            .is_playing
+    );
 
-    // Render 11.5s inside the prefix window.
+    // Render ~2.05s inside the 2.5s prefix window.
     let mut rendered_prefix = Vec::new();
-    for _ in 0..539 {
+    for _ in 0..96 {
         rendered_prefix.extend(backend.render_deterministic_frames(1024));
     }
     assert!(rendered_prefix.iter().any(|s| s.abs() > 0.01));
@@ -76,10 +80,13 @@ fn test_prefix_loader_starts_fast_and_seamlessly_upgrades_past_prefix_to_eof() {
     while !backend.is_stream_complete() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(2));
     }
-    assert!(backend.is_stream_complete(), "background full upgrade did not finish");
+    assert!(
+        backend.is_stream_complete(),
+        "background full upgrade did not finish"
+    );
     assert!(backend.deck_buffer_frames(DeckId::DeckA).unwrap() >= 1_439_000);
 
-    // Cross the 12.0s prefix boundary smoothly and confirm prefix Arc is retired off-thread.
+    // Cross the 2.5s prefix boundary smoothly and confirm prefix Arc is retired off-thread.
     let mut across_boundary = Vec::new();
     for _ in 0..96 {
         across_boundary.extend(backend.render_deterministic_frames(1024));
@@ -89,10 +96,13 @@ fn test_prefix_loader_starts_fast_and_seamlessly_upgrades_past_prefix_to_eof() {
     let mid_snap = backend.snapshot();
     assert!(mid_snap.is_playing);
     assert!(!mid_snap.ended);
-    assert!(mid_snap.current_time_sec > 13.0);
+    assert!(mid_snap.current_time_sec > 4.0);
 
     // Render to 30.0s EOF in blocks.
-    let rem_frames = (mid_snap.total_frames.saturating_sub(mid_snap.playhead_frame) + 2048) as usize;
+    let rem_frames = (mid_snap
+        .total_frames
+        .saturating_sub(mid_snap.playhead_frame)
+        + 2048) as usize;
     let tail = backend.render_deterministic_frames(rem_frames);
     assert!(tail.iter().any(|s| s.abs() > 0.01));
     let eof_snap = backend.snapshot();
@@ -114,12 +124,25 @@ fn test_prefix_loader_cancels_stale_generation_on_rapid_track_switch() {
 
     let backend = HeadlessClockAudioBackend::new_deterministic(48_000);
     let _ = backend
-        .load_file_fast(DeckId::DeckA, &track_a, Some(30.0), Some([1.0, 8.0, 16.0, 24.0]))
+        .load_file_fast(
+            DeckId::DeckA,
+            &track_a,
+            Some(30.0),
+            Some([1.0, 8.0, 16.0, 24.0]),
+        )
         .expect("load track A");
     let snap_b = backend
-        .load_file_fast(DeckId::DeckA, &track_b, Some(30.0), Some([2.0, 9.0, 17.0, 25.0]))
+        .load_file_fast(
+            DeckId::DeckA,
+            &track_b,
+            Some(30.0),
+            Some([2.0, 9.0, 17.0, 25.0]),
+        )
         .expect("switch rapidly to track B");
-    assert!(snap_b.loaded_path.as_deref().is_some_and(|p| p.contains("hera_switch_b_")));
+    assert!(snap_b
+        .loaded_path
+        .as_deref()
+        .is_some_and(|p| p.contains("hera_switch_b_")));
 
     let deadline = Instant::now() + Duration::from_secs(15);
     while !backend.is_stream_complete() && Instant::now() < deadline {
@@ -128,10 +151,52 @@ fn test_prefix_loader_cancels_stale_generation_on_rapid_track_switch() {
     std::thread::sleep(Duration::from_millis(25));
 
     let final_snap = backend.snapshot();
-    assert!(final_snap.loaded_path.as_deref().is_some_and(|p| p.contains("hera_switch_b_")));
+    assert!(final_snap
+        .loaded_path
+        .as_deref()
+        .is_some_and(|p| p.contains("hera_switch_b_")));
     assert!((final_snap.hot_cue_seconds[0] - 2.0).abs() < 0.01);
     assert!((final_snap.hot_cue_seconds[3] - 25.0).abs() < 0.01);
 
     let _ = fs::remove_file(&track_a);
     let _ = fs::remove_file(&track_b);
+}
+
+#[test]
+fn test_anti_oom_reserve_cap_and_fast_prefix_latency() {
+    // 1. Corrupt or multi-hour header (`10,101s` = 2h48m or `u64::MAX / 2`) must never reserve > 900s
+    let capped = super::prefix_loader::clamp_reserve_frames(None, Some(u64::MAX / 2), 48_000);
+    assert!(
+        capped <= 900 * 48_000,
+        "expected reserve_frames capped at <= 900s (43.2M frames), got {capped}"
+    );
+    assert!(super::prefix_loader::PREFIX_DECODE_SECS <= 3.5);
+    assert!(super::prefix_loader::MAX_FULL_IN_MEMORY_DECODE_SECS <= 900.0);
+
+    // 2. Prefix load of a 30s 44.1kHz -> 48kHz WAV must return rapidly using fast prefix resampler
+    let wav_path = std::env::temp_dir().join(format!(
+        "hera_fast_prefix_lat_{}_{:?}.wav",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    write_test_pcm16_wav(&wav_path, 44_100, 30.0, 330.0);
+
+    let backend = HeadlessClockAudioBackend::new_deterministic(48_000);
+    let t0 = Instant::now();
+    let snap = backend
+        .load_file_fast(
+            DeckId::DeckA,
+            &wav_path,
+            Some(30.0),
+            Some([1.0, 8.0, 16.0, 24.0]),
+        )
+        .expect("fast prefix load");
+    let elapsed_ms = t0.elapsed().as_secs_f64() * 1000.0;
+    assert!(snap.track_loaded);
+    assert!(
+        elapsed_ms < 120.0,
+        "expected fast prefix load < 120ms even in test profile, took {elapsed_ms:.2}ms"
+    );
+
+    let _ = fs::remove_file(&wav_path);
 }

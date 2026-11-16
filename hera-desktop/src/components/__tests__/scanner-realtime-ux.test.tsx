@@ -1,14 +1,18 @@
 // Ensure window is defined before importing any modules that touch window (like player.ts)
-if (typeof (globalThis as unknown as Record<string, unknown>).window === 'undefined') {
+if (
+  typeof (globalThis as unknown as Record<string, unknown>).window ===
+  'undefined'
+) {
   (globalThis as unknown as Record<string, unknown>).window = globalThis;
 }
 
-import { describe, expect, it, vi } from 'vitest';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-router')>();
+  const actual =
+    await importOriginal<typeof import('@tanstack/react-router')>();
   return {
     ...actual,
     useNavigate: () => () => {},
@@ -229,5 +233,35 @@ describe('scanner-realtime-ux UI components', () => {
     expect(html).toContain('126.4');
     expect(html).toContain('11B');
     expect(html).not.toContain('--:--');
+  });
+
+  it('formatScannerPillStatus formats sub-1/s speeds cleanly and humanizes large ETAs instead of 0/s ~30197s', async () => {
+    const { formatScannerPillStatus } = await import('../ScannerStatusPill');
+
+    const slowStatus = formatScannerPillStatus({
+      phase: 'analyzing',
+      indexedDone: 11487,
+      fastDone: 9857,
+      fullDone: 8806,
+      total: 11487,
+      tracksPerSec: 0.04,
+      etaSec: 30197,
+      governorActive: false,
+    });
+    expect(slowStatus).not.toContain('0/s');
+    expect(slowStatus).not.toContain('30197s');
+
+    const steadyStatus = formatScannerPillStatus({
+      phase: 'analyzing',
+      indexedDone: 1000,
+      fastDone: 400,
+      fullDone: 100,
+      total: 1000,
+      tracksPerSec: 0.5,
+      etaSec: 720,
+      governorActive: false,
+    });
+    expect(steadyStatus).toContain('0.5/s');
+    expect(steadyStatus).toContain('~12m');
   });
 });

@@ -22,6 +22,8 @@ mod dsp_tests;
 mod hub;
 mod mixer;
 #[cfg(feature = "native")]
+mod prefix_decode;
+#[cfg(feature = "native")]
 mod prefix_loader;
 #[cfg(all(test, feature = "native"))]
 mod prefix_tests;
