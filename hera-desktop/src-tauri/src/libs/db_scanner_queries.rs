@@ -138,7 +138,7 @@ pub async fn apply_scanner_batch_updates(
                 has_bpm_trust_diff = CASE WHEN ? = 1 THEN 1 ELSE has_bpm_trust_diff END,
                 scan_level = CASE WHEN ? < 0 THEN -1 ELSE MAX(scan_level, ?) END,
                 is_transition_candidate = ?,
-                is_fake_320kbps = ?,
+                is_fake_320kbps = CASE WHEN ? = 1 THEN 1 ELSE is_fake_320kbps END,
                 duration = CASE WHEN ? IS NOT NULL AND ? > 0 THEN ? ELSE duration END,
                 is_mix_over_10m = CASE WHEN ? IS NOT NULL AND ? > 600 THEN 1 ELSE is_mix_over_10m END
              WHERE id = ?",

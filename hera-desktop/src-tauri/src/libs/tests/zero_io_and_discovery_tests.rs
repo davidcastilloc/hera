@@ -191,7 +191,28 @@ async fn test_vdj_8_cue_import_preservation_zero_io_metrics_and_moved_path_heal(
             .await
             .unwrap();
 
-        let mut upd = ScannerRowUpdate::failure(orig_id.clone(), Some(242), 2);
+        // Level-1 FastScan flags `is_fake_320kbps = true`
+        let mut lvl1_upd = ScannerRowUpdate::failure(orig_id.clone(), Some(242), 1);
+        lvl1_upd.is_fake_320kbps = true;
+        apply_scanner_batch_updates(&mut writer.connection, &[lvl1_upd])
+            .await
+            .unwrap();
+        assert_eq!(
+            writer
+                .get_track(&orig_id)
+                .await
+                .unwrap()
+                .unwrap()
+                .is_fake_320kbps,
+            Some(true)
+        );
+
+        let full_res = hera_node_rs::scanner::full_pass::run_full_pass_from_pcm(
+            &vec![0.25_f32; 8_000 * 10],
+            8_000,
+            None,
+        );
+        let (mut upd, _) = ScannerRowUpdate::from_full_pass(orig_id.clone(), full_res, Some(242));
         upd.bpm = Some(94.5);
         upd.camelot = Some("7A".to_string());
         upd.replay_gain_db = Some(-3.4);
@@ -220,6 +241,11 @@ async fn test_vdj_8_cue_import_preservation_zero_io_metrics_and_moved_path_heal(
             .unwrap();
 
         let reloaded = writer.get_track(&orig_id).await.unwrap().unwrap();
+        assert_eq!(
+            reloaded.is_fake_320kbps,
+            Some(true),
+            "sticky is_fake_320kbps flag from Level-1 must survive Level-2 FullPass update"
+        );
         let reloaded_cues = reloaded.hot_cues.unwrap();
         assert_eq!(reloaded_cues.len(), 8);
         let reloaded_c5 = reloaded_cues.iter().find(|c| c.num == 5).unwrap();
@@ -298,4 +324,24 @@ fn test_discover_workable_roots_from_index_groups_counts_and_ignores_junk() {
     assert_eq!(r.mixes_over_10m_count, 1);
     assert_eq!(r.skipped_short_sfx_count, 1);
     assert_eq!(r.video_tracks_count, 1);
+
+    // 2-segment external USB root paths (`/Volumes/USB_STICK/track.mp3` vs `/Volumes/BACKUP_USB/track.mp3`)
+    // must anchor at `/Volumes/<Volume>` instead of collapsing two distinct drives into `/Volumes`!
+    let mut usb_index = ExternalDjSoftwareIndex::default();
+    for (p, dur) in [
+        ("/Volumes/USB_STICK/club_opener.mp3", Some(210.0)),
+        ("/Volumes/BACKUP_USB/other_drive.mp3", Some(225.0)),
+    ] {
+        usb_index.vdj_entries.insert(
+            p.to_lowercase(),
+            CachedDjSoftwareMetadata {
+                duration_sec: dur,
+                original_path: Some(p.to_string()),
+                ..Default::default()
+            },
+        );
+    }
+    let usb_roots = discover_workable_roots_from_index(&usb_index, false);
+    let usb_paths: Vec<&str> = usb_roots.iter().map(|x| x.root_path.as_str()).collect();
+    assert_eq!(usb_paths, vec!["/Volumes/BACKUP_USB", "/Volumes/USB_STICK"]);
 }

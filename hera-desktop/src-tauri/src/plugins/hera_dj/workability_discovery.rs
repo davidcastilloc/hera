@@ -73,10 +73,10 @@ fn split_parent_anchor(file_path: &str) -> Option<(String, Vec<String>, usize)> 
         } else {
             3
         }
-    } else if (first_low == "volumes" || first_low == "mnt") && segs.len() >= 3 {
-        3
-    } else if first_low == "media" && segs.len() >= 4 {
-        4
+    } else if (first_low == "volumes" || first_low == "mnt") && segs.len() >= 2 {
+        segs.len().min(3)
+    } else if first_low == "media" && segs.len() >= 2 {
+        segs.len().min(4)
     } else {
         1
     };
