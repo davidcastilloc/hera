@@ -100,10 +100,15 @@ async fn stream_handler<R: Runtime>(
 ) -> Response {
     let db_state = app_handle.state::<DBState>();
 
-    let track = match db_state.get_lock().await.get_track(&params.track_id).await {
-        Ok(Some(track)) => track,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    let track = {
+        let Ok(mut conn) = db_state.acquire_read_conn().await else {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        };
+        match crate::libs::database::DB::read_track(&mut conn, &params.track_id).await {
+            Ok(Some(track)) => track,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        }
     };
 
     let path = Path::new(&track.path);

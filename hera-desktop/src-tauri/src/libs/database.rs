@@ -74,14 +74,18 @@ impl DB {
     /**
      * Get only the file paths of all tracks in the database (cheaper than get_all_tracks)
      */
+    pub async fn read_all_track_paths(conn: &mut SqliteConnection) -> AnyResult<Vec<String>> {
+        super::db_offline_queries::fetch_all_track_paths(conn).await
+    }
+
     pub async fn get_all_track_paths(&mut self) -> AnyResult<Vec<String>> {
-        super::db_offline_queries::fetch_all_track_paths(&mut self.connection).await
+        Self::read_all_track_paths(&mut self.connection).await
     }
 
     /**
      * Get all the tracks (and their content) from the database
      */
-    pub async fn get_all_tracks(&mut self) -> AnyResult<Vec<Track>> {
+    pub async fn read_all_tracks(conn: &mut SqliteConnection) -> AnyResult<Vec<Track>> {
         let tracks = sqlx::query_as::<_, Track>(
             r#"
             SELECT
@@ -93,16 +97,23 @@ impl DB {
             FROM tracks
             "#,
         )
-        .fetch_all(&mut self.connection)
+        .fetch_all(conn)
         .await?;
 
         Ok(tracks.into_iter().map(normalize_track).collect())
     }
 
+    pub async fn get_all_tracks(&mut self) -> AnyResult<Vec<Track>> {
+        Self::read_all_tracks(&mut self.connection).await
+    }
+
     /**
      * Get tracks (and their content) given a set of document IDs
      */
-    pub async fn get_tracks(&mut self, track_ids: &Vec<String>) -> AnyResult<Vec<Track>> {
+    pub async fn read_tracks(
+        conn: &mut SqliteConnection,
+        track_ids: &[String],
+    ) -> AnyResult<Vec<Track>> {
         if track_ids.is_empty() {
             return Ok(vec![]);
         }
@@ -136,20 +147,32 @@ impl DB {
             query = query.bind(id); // for ORDER BY CASE
         }
 
-        let tracks = query.fetch_all(&mut self.connection).await?;
+        let tracks = query.fetch_all(conn).await?;
         Ok(tracks.into_iter().map(normalize_track).collect())
+    }
+
+    #[allow(clippy::ptr_arg)]
+    pub async fn get_tracks(&mut self, track_ids: &Vec<String>) -> AnyResult<Vec<Track>> {
+        Self::read_tracks(&mut self.connection, track_ids).await
     }
 
     /**
      * Get a single track by ID
      */
-    pub async fn get_track(&mut self, track_id: &str) -> AnyResult<Option<Track>> {
+    pub async fn read_track(
+        conn: &mut SqliteConnection,
+        track_id: &str,
+    ) -> AnyResult<Option<Track>> {
         let track = sqlx::query_as::<_, Track>("SELECT * FROM tracks WHERE id = ?")
             .bind(track_id)
-            .fetch_optional(&mut self.connection)
+            .fetch_optional(conn)
             .await?;
 
         Ok(track.map(normalize_track))
+    }
+
+    pub async fn get_track(&mut self, track_id: &str) -> AnyResult<Option<Track>> {
+        Self::read_track(&mut self.connection, track_id).await
     }
 
     /**
@@ -431,10 +454,40 @@ impl DB {
         Ok(())
     }
 
+    fn group_tracks_by_album(tracks: Vec<Track>) -> Vec<TrackGroup> {
+        let mut groups: IndexMap<String, Vec<Track>> = IndexMap::new();
+        for item in tracks {
+            groups
+                .entry(item.album.clone())
+                .or_default()
+                .push(normalize_track(item));
+        }
+
+        let mut track_groups = groups
+            .into_iter()
+            .map(|(album, tracks)| TrackGroup {
+                label: album,
+                genres: tracks
+                    .iter()
+                    .flat_map(|s| &s.genres)
+                    .cloned()
+                    .unique()
+                    .collect(),
+                duration: tracks.iter().map(|t| t.duration).sum(),
+                year: tracks.first().and_then(|t| t.year),
+                tracks,
+            })
+            .collect::<Vec<TrackGroup>>();
+
+        // Sort by first track's year (missing year placed last to keep discography clean).
+        track_groups.sort_by_key(|group| group.year.unwrap_or(u16::MAX));
+        track_groups
+    }
+
     /**
      * Get the list of artists registered in the database, excluding compilation tracks.
      */
-    pub async fn get_artists(&mut self) -> AnyResult<Vec<String>> {
+    pub async fn read_artists(conn: &mut SqliteConnection) -> AnyResult<Vec<String>> {
         let result: Vec<String> = sqlx::query_scalar(
             "SELECT DISTINCT album_artist
              FROM tracks
@@ -443,102 +496,74 @@ impl DB {
                CASE WHEN upper(substr(album_artist, 1, 1)) BETWEEN 'A' AND 'Z' THEN 0 ELSE 1 END,
                album_artist COLLATE NOCASE;",
         )
-        .fetch_all(&mut self.connection)
+        .fetch_all(conn)
         .await?;
 
         Ok(result)
     }
 
+    #[allow(dead_code)]
+    pub async fn get_artists(&mut self) -> AnyResult<Vec<String>> {
+        Self::read_artists(&mut self.connection).await
+    }
+
     /**
      * Returns true if any tracks are flagged as compilations.
      */
+    pub async fn read_has_compilations(conn: &mut SqliteConnection) -> AnyResult<bool> {
+        super::db_offline_queries::has_compilation_tracks(conn).await
+    }
+
     pub async fn has_compilations(&mut self) -> AnyResult<bool> {
-        super::db_offline_queries::has_compilation_tracks(&mut self.connection).await
+        Self::read_has_compilations(&mut self.connection).await
     }
 
     /**
      * Get all tracks for a given artist, excluding compilation tracks.
      */
-    pub async fn get_artist_tracks(&mut self, artist: String) -> AnyResult<Vec<TrackGroup>> {
+    pub async fn read_artist_tracks(
+        conn: &mut SqliteConnection,
+        artist: String,
+    ) -> AnyResult<Vec<TrackGroup>> {
         let tracks = sqlx::query_as::<_, Track>(
             "SELECT * FROM tracks WHERE album_artist = ? AND is_compilation = 0 ORDER BY album, disk_no, track_no",
         )
         .bind(&artist)
-        .fetch_all(&mut self.connection)
+        .fetch_all(conn)
         .await?;
 
-        let mut groups: IndexMap<String, Vec<Track>> = IndexMap::new();
+        Ok(Self::group_tracks_by_album(tracks))
+    }
 
-        for item in tracks {
-            groups.entry(item.album.clone()).or_default().push(item);
-        }
-
-        let mut track_groups = groups
-            .into_iter()
-            .map(|(album, tracks)| TrackGroup {
-                label: album,
-                genres: tracks
-                    .iter()
-                    .flat_map(|s| &s.genres)
-                    .cloned()
-                    .unique()
-                    .collect(),
-                duration: tracks.iter().map(|t| t.duration).sum(),
-                year: tracks.first().and_then(|t| t.year),
-                tracks,
-            })
-            .collect::<Vec<TrackGroup>>();
-
-        // Sort by group year, we only use the first track's year and different
-        // tracks can have different years. If no year is provided, put the group
-        // at the end, as it's probably a library management issue, and we want
-        // clean lists!
-        track_groups.sort_by_key(|group| group.year.unwrap_or(u16::MAX));
-
-        Ok(track_groups)
+    #[allow(dead_code)]
+    pub async fn get_artist_tracks(&mut self, artist: String) -> AnyResult<Vec<TrackGroup>> {
+        Self::read_artist_tracks(&mut self.connection, artist).await
     }
 
     /**
      * Get all compilation albums, grouped by album name, sorted by year.
      */
-    pub async fn get_compilation_albums(&mut self) -> AnyResult<Vec<TrackGroup>> {
+    pub async fn read_compilation_albums(
+        conn: &mut SqliteConnection,
+    ) -> AnyResult<Vec<TrackGroup>> {
         let tracks = sqlx::query_as::<_, Track>(
             "SELECT * FROM tracks WHERE is_compilation = 1 ORDER BY album, disk_no, track_no",
         )
-        .fetch_all(&mut self.connection)
+        .fetch_all(conn)
         .await?;
 
-        let mut groups: IndexMap<String, Vec<Track>> = IndexMap::new();
+        Ok(Self::group_tracks_by_album(tracks))
+    }
 
-        for item in tracks {
-            groups.entry(item.album.clone()).or_default().push(item);
-        }
-
-        let mut track_groups = groups
-            .into_iter()
-            .map(|(album, tracks)| TrackGroup {
-                label: album,
-                genres: tracks
-                    .iter()
-                    .flat_map(|s| &s.genres)
-                    .cloned()
-                    .unique()
-                    .collect(),
-                duration: tracks.iter().map(|t| t.duration).sum(),
-                year: tracks.first().and_then(|t| t.year),
-                tracks,
-            })
-            .collect::<Vec<TrackGroup>>();
-
-        track_groups.sort_by_key(|group| group.year.unwrap_or(u16::MAX));
-
-        Ok(track_groups)
+    #[allow(dead_code)]
+    pub async fn get_compilation_albums(&mut self) -> AnyResult<Vec<TrackGroup>> {
+        Self::read_compilation_albums(&mut self.connection).await
     }
 
     /** Get all the playlists (and their content) from the database */
-    pub async fn get_all_playlists(&mut self) -> AnyResult<Vec<Playlist>> {
+    pub async fn read_all_playlists(conn: &mut SqliteConnection) -> AnyResult<Vec<Playlist>> {
         let mut playlists = sqlx::query_as::<_, Playlist>("SELECT * FROM playlists ORDER BY name")
-            .fetch_all(&mut self.connection)
+            .fetch_all(conn)
             .await?;
 
         // Ensure the playlists are sorted alphabetically (case-insensitive) for better UX
@@ -547,14 +572,26 @@ impl DB {
         Ok(playlists)
     }
 
+    pub async fn get_all_playlists(&mut self) -> AnyResult<Vec<Playlist>> {
+        Self::read_all_playlists(&mut self.connection).await
+    }
+
     /** Get a single playlist by ID */
-    pub async fn get_playlist(&mut self, playlist_id: &String) -> AnyResult<Option<Playlist>> {
+    pub async fn read_playlist(
+        conn: &mut SqliteConnection,
+        playlist_id: &str,
+    ) -> AnyResult<Option<Playlist>> {
         let playlist = sqlx::query_as::<_, Playlist>("SELECT * FROM playlists WHERE id = ?")
             .bind(playlist_id)
-            .fetch_optional(&mut self.connection)
+            .fetch_optional(conn)
             .await?;
 
         Ok(playlist)
+    }
+
+    #[allow(clippy::ptr_arg)]
+    pub async fn get_playlist(&mut self, playlist_id: &String) -> AnyResult<Option<Playlist>> {
+        Self::read_playlist(&mut self.connection, playlist_id).await
     }
 
     /** Create a playlist given a name and a set of track IDs */

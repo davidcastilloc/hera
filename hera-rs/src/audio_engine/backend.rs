@@ -52,6 +52,15 @@ pub trait AudioBackend: Send + Sync {
     fn backend_kind(&self) -> AudioBackendKind;
     fn output_sample_rate(&self) -> u32;
     fn load_file(&self, deck: DeckId, path: &Path) -> Result<AudioTransportSnapshot, String>;
+    fn load_file_fast(
+        &self,
+        deck: DeckId,
+        path: &Path,
+        _duration_hint_sec: Option<f64>,
+        _known_cues_sec: Option<[f64; 4]>,
+    ) -> Result<AudioTransportSnapshot, String> {
+        self.load_file(deck, path)
+    }
     fn load_bytes(
         &self,
         deck: DeckId,
@@ -111,6 +120,22 @@ impl HeadlessClockAudioBackend {
         }
     }
 
+    /// Poll whether all pending background stream chunks have completed for tests.
+    #[cfg(test)]
+    pub(crate) fn is_stream_complete(&self) -> bool {
+        self.hub.atomics.stream_complete.load(Ordering::Acquire)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn deck_buffer_frames(&self, deck: DeckId) -> Option<u64> {
+        self.hub.deck_buffer(deck).map(|b| b.total_frames())
+    }
+
+    #[cfg(test)]
+    pub(crate) fn drain_retired_buffers(&self) -> usize {
+        self.hub.drain_retired_buffers()
+    }
+
     /// Deterministically render exactly `frames` stereo frames (for manual test instances).
     pub fn render_deterministic_frames(&self, frames: usize) -> Vec<f32> {
         let mut out = vec![0.0_f32; frames * 2];
@@ -149,6 +174,21 @@ impl AudioBackend for HeadlessClockAudioBackend {
         let raw = load_deck_buffer_from_file(path)?;
         self.hub
             .install_buffer(deck, raw, Some(path.to_string_lossy().to_string()))
+    }
+    fn load_file_fast(
+        &self,
+        deck: DeckId,
+        path: &Path,
+        duration_hint_sec: Option<f64>,
+        known_cues_sec: Option<[f64; 4]>,
+    ) -> Result<AudioTransportSnapshot, String> {
+        super::prefix_loader::load_file_prefix_then_full(
+            &self.hub,
+            deck,
+            path,
+            duration_hint_sec,
+            known_cues_sec,
+        )
     }
     fn load_bytes(
         &self,

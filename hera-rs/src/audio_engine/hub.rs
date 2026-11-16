@@ -11,6 +11,7 @@ use super::dsp_chain::{
     create_telemetry_ring, resample_deck_buffer_to_rate, AudioTelemetryFrame, MasterDspBus,
     RealTimeSpectrumAnalyzer, TELEMETRY_RING_CAPACITY,
 };
+pub(crate) use super::render_worker::{DeckLoadSwap, RealtimeRenderWorker};
 use super::{CommandQueue, DeckId, DualDeckEngine, PreallocatedDeckBuffer, TransportCommand};
 
 #[derive(Default)]
@@ -28,6 +29,8 @@ pub(crate) struct SharedAudioAtomics {
     pub sample_rate: u32,
     pub command_queue: CommandQueue,
     pub command_epoch: AtomicU64,
+    pub load_generation: AtomicU64,
+    pub stream_complete: AtomicBool,
     pub playhead_frame: AtomicU64,
     pub total_frames: AtomicU64,
     pub is_playing: AtomicBool,
@@ -40,21 +43,11 @@ pub(crate) struct SharedAudioAtomics {
 pub(crate) struct AudioControllerHub {
     kind: AudioBackendKind,
     pub(crate) atomics: Arc<SharedAudioAtomics>,
-    deck_load_tx: Mutex<Producer<(DeckId, Arc<PreallocatedDeckBuffer>)>>,
+    deck_load_tx: Mutex<Producer<DeckLoadSwap>>,
     deck_a_meta: Mutex<LoadedDeckMeta>,
+    active_cancel: Mutex<Option<Arc<AtomicBool>>>,
     telemetry_rx: Mutex<TelemetryReaderState>,
     retired_buf_rx: Mutex<Consumer<Arc<PreallocatedDeckBuffer>>>,
-}
-
-/// Real-time render worker owned exclusively by the `cpal` callback or headless clock thread.
-pub(crate) struct RealtimeRenderWorker {
-    atomics: Arc<SharedAudioAtomics>,
-    deck_load_rx: Consumer<(DeckId, Arc<PreallocatedDeckBuffer>)>,
-    engine: DualDeckEngine,
-    master_bus: MasterDspBus,
-    analyzer: RealTimeSpectrumAnalyzer,
-    telemetry_tx: Producer<AudioTelemetryFrame>,
-    retired_buf_tx: Producer<Arc<PreallocatedDeckBuffer>>,
 }
 
 pub(crate) fn create_controller_and_worker(
@@ -62,13 +55,15 @@ pub(crate) fn create_controller_and_worker(
     sample_rate: u32,
 ) -> (AudioControllerHub, RealtimeRenderWorker) {
     let sr = sample_rate.max(8_000);
-    let (deck_load_tx, deck_load_rx) = RingBuffer::new(8);
+    let (deck_load_tx, deck_load_rx) = RingBuffer::new(16);
     let (telemetry_tx, telemetry_rx) = create_telemetry_ring(TELEMETRY_RING_CAPACITY);
     let (retired_buf_tx, retired_buf_rx) = create_retired_buffer_channel();
     let atomics = Arc::new(SharedAudioAtomics {
         sample_rate: sr,
         command_queue: CommandQueue::new(),
         command_epoch: AtomicU64::new(0),
+        load_generation: AtomicU64::new(0),
+        stream_complete: AtomicBool::new(true),
         playhead_frame: AtomicU64::new(0),
         total_frames: AtomicU64::new(0),
         is_playing: AtomicBool::new(false),
@@ -81,6 +76,7 @@ pub(crate) fn create_controller_and_worker(
         atomics: Arc::clone(&atomics),
         deck_load_tx: Mutex::new(deck_load_tx),
         deck_a_meta: Mutex::new(LoadedDeckMeta::default()),
+        active_cancel: Mutex::new(None),
         telemetry_rx: Mutex::new(TelemetryReaderState {
             consumer: telemetry_rx,
             unread_latest: None,
@@ -100,32 +96,112 @@ pub(crate) fn create_controller_and_worker(
 }
 
 impl AudioControllerHub {
+    fn swap_active_cancel(&self, next: Option<Arc<AtomicBool>>) {
+        if let Ok(mut slot) = self.active_cancel.lock() {
+            if let Some(prev) = slot.take() {
+                prev.store(true, Ordering::Release);
+            }
+            *slot = next;
+        }
+    }
+
+    fn commit_load(
+        &self,
+        deck: DeckId,
+        buffer: Arc<PreallocatedDeckBuffer>,
+        logical_total_frames: Option<u64>,
+        source_path: Option<String>,
+        cancel: Option<Arc<AtomicBool>>,
+    ) -> (AudioTransportSnapshot, u64) {
+        self.swap_active_cancel(cancel);
+        let complete = logical_total_frames.is_none();
+        let total = logical_total_frames
+            .unwrap_or_else(|| buffer.total_frames())
+            .max(buffer.total_frames());
+        let generation = {
+            let mut meta_guard = (deck == DeckId::DeckA).then(|| self.deck_a_meta.lock().ok()).flatten();
+            let next_gen = self.atomics.load_generation.fetch_add(1, Ordering::AcqRel) + 1;
+            if let Some(ref mut meta) = meta_guard {
+                meta.path = source_path;
+                meta.buffer = Some(Arc::clone(&buffer));
+            }
+            if deck == DeckId::DeckA {
+                self.atomics.command_epoch.fetch_add(1, Ordering::AcqRel);
+                self.atomics.stream_complete.store(complete, Ordering::Release);
+                self.atomics.total_frames.store(total, Ordering::Release);
+                self.atomics.playhead_frame.store(0, Ordering::Release);
+                self.atomics.is_playing.store(false, Ordering::Release);
+                self.atomics.ended.store(false, Ordering::Release);
+            }
+            let swap = match logical_total_frames {
+                Some(_) => DeckLoadSwap::Prefix { deck, buffer, logical_total_frames: total },
+                None => DeckLoadSwap::Reset { deck, buffer },
+            };
+            if let Ok(mut tx) = self.deck_load_tx.lock() {
+                let _ = tx.push(swap);
+            }
+            next_gen
+        };
+        (self.snapshot(), generation)
+    }
+
     pub(crate) fn install_buffer(
         &self,
         deck: DeckId,
         raw: PreallocatedDeckBuffer,
         source_path: Option<String>,
     ) -> Result<AudioTransportSnapshot, String> {
-        let resampled = Arc::new(resample_deck_buffer_to_rate(
-            &raw,
-            self.atomics.sample_rate,
-        )?);
-        if deck == DeckId::DeckA {
-            let total = resampled.total_frames();
-            if let Ok(mut meta) = self.deck_a_meta.lock() {
-                meta.path = source_path;
-                meta.buffer = Some(Arc::clone(&resampled));
-            }
-            self.atomics.command_epoch.fetch_add(1, Ordering::AcqRel);
-            self.atomics.total_frames.store(total, Ordering::Release);
-            self.atomics.playhead_frame.store(0, Ordering::Release);
-            self.atomics.is_playing.store(false, Ordering::Release);
-            self.atomics.ended.store(false, Ordering::Release);
+        let resampled = Arc::new(resample_deck_buffer_to_rate(&raw, self.atomics.sample_rate)?);
+        Ok(self.install_resampled_buffer(deck, resampled, source_path))
+    }
+
+    pub(crate) fn install_resampled_buffer(
+        &self,
+        deck: DeckId,
+        resampled: Arc<PreallocatedDeckBuffer>,
+        source_path: Option<String>,
+    ) -> AudioTransportSnapshot {
+        self.commit_load(deck, resampled, None, source_path, None).0
+    }
+
+    pub(crate) fn install_prefix_buffer(
+        &self,
+        deck: DeckId,
+        prefix: Arc<PreallocatedDeckBuffer>,
+        logical_total_frames: u64,
+        source_path: Option<String>,
+        cancel: Arc<AtomicBool>,
+    ) -> (AudioTransportSnapshot, u64) {
+        self.commit_load(deck, prefix, Some(logical_total_frames), source_path, Some(cancel))
+    }
+
+    pub(crate) fn upgrade_buffer_if_generation(
+        &self,
+        deck: DeckId,
+        expected_gen: u64,
+        full_resampled: Arc<PreallocatedDeckBuffer>,
+        cancel: &AtomicBool,
+    ) -> bool {
+        if cancel.load(Ordering::Acquire)
+            || self.atomics.load_generation.load(Ordering::Acquire) != expected_gen
+        {
+            return false;
+        }
+        let mut meta_guard = (deck == DeckId::DeckA).then(|| self.deck_a_meta.lock().ok()).flatten();
+        if cancel.load(Ordering::Acquire)
+            || self.atomics.load_generation.load(Ordering::Acquire) != expected_gen
+        {
+            return false;
+        }
+        if let Some(ref mut meta) = meta_guard {
+            meta.buffer = Some(Arc::clone(&full_resampled));
+            self.atomics.total_frames.store(full_resampled.total_frames(), Ordering::Release);
+            self.atomics.stream_complete.store(true, Ordering::Release);
         }
         if let Ok(mut tx) = self.deck_load_tx.lock() {
-            let _ = tx.push((deck, resampled));
+            let _ = tx.push(DeckLoadSwap::SeamlessUpgrade { deck, buffer: full_resampled });
         }
-        Ok(self.snapshot())
+        true
     }
 
     pub(crate) fn send_command(&self, cmd: TransportCommand) -> AudioTransportSnapshot {
@@ -254,53 +330,6 @@ impl AudioControllerHub {
         if let Ok(mut rx) = self.telemetry_rx.lock() {
             while let Ok(frame) = rx.consumer.pop() {
                 rx.unread_latest = Some(frame);
-            }
-        }
-    }
-}
-
-impl RealtimeRenderWorker {
-    /// Lock-free real-time stereo block renderer (`DualDeckEngine` + `fundsp` + `realfft` + `rtrb`).
-    pub(crate) fn render_stereo_block(&mut self, out_stereo: &mut [f32]) {
-        let epoch_before = self.atomics.command_epoch.load(Ordering::Acquire);
-        while let Ok((deck, buf)) = self.deck_load_rx.pop() {
-            if let Some(old) = self.engine.replace_deck(deck, buf) {
-                let _ = self.retired_buf_tx.push(old);
-            }
-        }
-        let any_deck_started_or_playing = self.engine.is_deck_playing(DeckId::DeckA)
-            || self.engine.is_deck_playing(DeckId::DeckB)
-            || self.atomics.is_playing.load(Ordering::Acquire);
-        self.engine
-            .render_interleaved_stereo(&self.atomics.command_queue, out_stereo);
-        let is_playing_a = self.engine.is_deck_playing(DeckId::DeckA);
-        let is_playing_any = is_playing_a || self.engine.is_deck_playing(DeckId::DeckB);
-        let playhead = self.engine.deck_playhead_frame(DeckId::DeckA);
-        let total = self.atomics.total_frames.load(Ordering::Acquire);
-        let master_vol = f32::from_bits(self.atomics.master_volume_bits.load(Ordering::Acquire));
-
-        if any_deck_started_or_playing || is_playing_any {
-            self.master_bus
-                .process_interleaved_in_place(out_stereo, master_vol);
-            let sr_f64 = f64::from(self.atomics.sample_rate.max(1));
-            let frame = self.analyzer.analyze_block(
-                out_stereo,
-                (playhead as f64) / sr_f64,
-                (total as f64) / sr_f64,
-                is_playing_any,
-            );
-            let _ = self.telemetry_tx.push(frame);
-        }
-
-        if self.atomics.command_epoch.load(Ordering::Acquire) == epoch_before {
-            self.atomics
-                .playhead_frame
-                .store(playhead, Ordering::Release);
-            self.atomics
-                .is_playing
-                .store(is_playing_a, Ordering::Release);
-            if any_deck_started_or_playing && !is_playing_a && total > 0 && playhead >= total {
-                self.atomics.ended.store(true, Ordering::Release);
             }
         }
     }

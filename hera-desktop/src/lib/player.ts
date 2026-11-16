@@ -256,10 +256,13 @@ class Player extends EventEmitter<PlayerEvents> {
 
   // Playback controls
   async play() {
-    if (!this.transport.hasTrack()) throw new Error('Trying to play a track but no track is loaded');
+    if (!this.transport.hasTrack())
+      throw new Error('Trying to play a track but no track is loaded');
     await this.transport.play();
   }
-  pause() { this.transport.pause(); }
+  pause() {
+    this.transport.pause();
+  }
   stop() {
     this.transport.pause();
     this.queue = [];
@@ -559,7 +562,11 @@ class Player extends EventEmitter<PlayerEvents> {
     notifyDeckTrack(track.id, []);
     this.emit('trackChange', track);
     this.emitStateChange();
-    await this.transport.loadTrack(track.path, track.duration);
+    const hotCuesSec =
+      track.hot_cues && track.hot_cues.length === 4
+        ? track.hot_cues.map((c) => c.seconds)
+        : undefined;
+    await this.transport.loadTrack(track.path, track.duration, hotCuesSec);
     if (seq !== this.trackLoadSeq) return;
     this.emitStateChange();
   }

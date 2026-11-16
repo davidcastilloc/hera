@@ -1,9 +1,13 @@
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use sqlx::sqlite::{SqliteAutoVacuum, SqliteConnectOptions, SqliteJournalMode};
-use sqlx::{Connection, SqliteConnection};
+use sqlx::pool::PoolConnection;
+use sqlx::sqlite::{
+    SqliteAutoVacuum, SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions,
+    SqliteSynchronous,
+};
+use sqlx::{Connection, Sqlite, SqliteConnection};
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tauri::plugin::{Builder, TauriPlugin};
 use tauri::{Manager, Runtime, State};
 use tauri_plugin_dialog::{DialogExt, FilePath};
@@ -18,33 +22,41 @@ use crate::libs::track::{Track, TrackGroup, get_track_id_for_path};
 use super::config::get_storage_dir;
 use hera_ipc::format_m3u_entry_path;
 
-// Connection is mutable, so we must wrap the state in a mutex to make sure there
-// are no concurrency issues
-pub struct DBState(Mutex<DB>);
+/// Exclusive SQLite writer serialized by `Mutex<DB>` plus concurrent WAL `SqlitePool` readers.
+pub struct DBState {
+    writer: Mutex<DB>,
+    read_pool: SqlitePool,
+}
 
 impl DBState {
     pub async fn get_lock(&self) -> MutexGuard<'_, DB> {
-        self.0.lock().await
+        self.writer.lock().await
     }
+
+    pub async fn acquire_read_conn(&self) -> AnyResult<PoolConnection<Sqlite>> {
+        self.read_pool.acquire().await.map_err(Into::into)
+    }
+}
+
+fn wal_connect_options(database_path: &Path, create_if_missing: bool) -> SqliteConnectOptions {
+    SqliteConnectOptions::new()
+        .filename(database_path)
+        .create_if_missing(create_if_missing)
+        .auto_vacuum(SqliteAutoVacuum::Incremental)
+        .journal_mode(SqliteJournalMode::Wal)
+        .synchronous(SqliteSynchronous::Normal)
+        .busy_timeout(std::time::Duration::from_secs(5))
+        .pragma("temp_store", "MEMORY")
 }
 
 /**
  * Database setup
  */
-async fn setup() -> AnyResult<DB> {
-    let database_path = get_storage_dir().join("hera.db");
-
+pub(crate) async fn setup_at_path(database_path: &Path) -> AnyResult<DBState> {
     info!("Opening connection to database: {:?}", database_path);
 
-    let options = SqliteConnectOptions::new()
-        .filename(&database_path)
-        .create_if_missing(true)
-        .optimize_on_close(true, None)
-        .auto_vacuum(SqliteAutoVacuum::Incremental)
-        .journal_mode(SqliteJournalMode::Wal)
-        .busy_timeout(std::time::Duration::from_secs(5));
-
-    let mut connection = SqliteConnection::connect_with(&options).await?;
+    let writer_options = wal_connect_options(database_path, true).optimize_on_close(true, None);
+    let mut connection = SqliteConnection::connect_with(&writer_options).await?;
 
     // Clear Journal
     sqlx::query("PRAGMA  wal_checkpoint(TRUNCATE)")
@@ -57,7 +69,27 @@ async fn setup() -> AnyResult<DB> {
         .run_direct(&mut connection)
         .await?;
 
-    Ok(DB { connection })
+    let read_options = wal_connect_options(database_path, false);
+    let read_pool = SqlitePoolOptions::new()
+        .max_connections(6)
+        .after_connect(|conn, _meta| {
+            Box::pin(async move {
+                sqlx::query("PRAGMA query_only = ON;").execute(conn).await?;
+                Ok(())
+            })
+        })
+        .connect_with(read_options)
+        .await?;
+
+    Ok(DBState {
+        writer: Mutex::new(DB { connection }),
+        read_pool,
+    })
+}
+
+async fn setup() -> AnyResult<DBState> {
+    let database_path = get_storage_dir().join("hera.db");
+    setup_at_path(&database_path).await
 }
 
 /**
@@ -103,8 +135,8 @@ async fn scan_library<R: Runtime>(
     }
 
     let existing_paths = if !refresh {
-        let mut db = db_state.get_lock().await;
-        db.get_all_track_paths()
+        let mut conn = db_state.acquire_read_conn().await?;
+        DB::read_all_track_paths(&mut conn)
             .await?
             .into_iter()
             .map(PathBuf::from)
@@ -213,17 +245,20 @@ async fn scan_library<R: Runtime>(
 
 #[tauri::command]
 async fn get_all_tracks(db_state: State<'_, DBState>) -> AnyResult<Vec<Track>> {
-    db_state.get_lock().await.get_all_tracks().await
+    let mut conn = db_state.acquire_read_conn().await?;
+    DB::read_all_tracks(&mut conn).await
 }
 
 #[tauri::command]
 async fn get_tracks(db_state: State<'_, DBState>, ids: Vec<String>) -> AnyResult<Vec<Track>> {
-    db_state.get_lock().await.get_tracks(&ids).await
+    let mut conn = db_state.acquire_read_conn().await?;
+    DB::read_tracks(&mut conn, &ids).await
 }
 
 #[tauri::command]
 async fn get_track(db_state: State<'_, DBState>, id: String) -> AnyResult<Option<Track>> {
-    db_state.get_lock().await.get_track(&id).await
+    let mut conn = db_state.acquire_read_conn().await?;
+    DB::read_track(&mut conn, &id).await
 }
 
 #[tauri::command]
@@ -238,7 +273,8 @@ async fn remove_tracks(db_state: State<'_, DBState>, ids: Vec<String>) -> AnyRes
 
 #[tauri::command]
 async fn get_artists(db_state: State<'_, DBState>) -> AnyResult<Vec<String>> {
-    db_state.get_lock().await.get_artists().await
+    let mut conn = db_state.acquire_read_conn().await?;
+    DB::read_artists(&mut conn).await
 }
 
 #[tauri::command]
@@ -246,27 +282,32 @@ async fn get_artist_tracks(
     db_state: State<'_, DBState>,
     artist: String,
 ) -> AnyResult<Vec<TrackGroup>> {
-    db_state.get_lock().await.get_artist_tracks(artist).await
+    let mut conn = db_state.acquire_read_conn().await?;
+    DB::read_artist_tracks(&mut conn, artist).await
 }
 
 #[tauri::command]
 async fn get_compilation_albums(db_state: State<'_, DBState>) -> AnyResult<Vec<TrackGroup>> {
-    db_state.get_lock().await.get_compilation_albums().await
+    let mut conn = db_state.acquire_read_conn().await?;
+    DB::read_compilation_albums(&mut conn).await
 }
 
 #[tauri::command]
 async fn has_compilations(db_state: State<'_, DBState>) -> AnyResult<bool> {
-    db_state.get_lock().await.has_compilations().await
+    let mut conn = db_state.acquire_read_conn().await?;
+    DB::read_has_compilations(&mut conn).await
 }
 
 #[tauri::command]
 async fn get_all_playlists(db_state: State<'_, DBState>) -> AnyResult<Vec<Playlist>> {
-    db_state.get_lock().await.get_all_playlists().await
+    let mut conn = db_state.acquire_read_conn().await?;
+    DB::read_all_playlists(&mut conn).await
 }
 
 #[tauri::command]
 async fn get_playlist(db_state: State<'_, DBState>, id: String) -> AnyResult<Playlist> {
-    match db_state.get_lock().await.get_playlist(&id).await {
+    let mut conn = db_state.acquire_read_conn().await?;
+    match DB::read_playlist(&mut conn, &id).await {
         Ok(Some(playlist)) => Ok(playlist),
         Ok(None) => Err(MuseeksError::PlaylistNotFound),
         Err(err) => Err(err),
@@ -315,13 +356,13 @@ async fn export_playlist<R: Runtime>(
     db_state: State<'_, DBState>,
     id: String,
 ) -> AnyResult<()> {
-    let mut db = db_state.get_lock().await;
-
-    let Some(playlist) = db.get_playlist(&id).await? else {
-        return Ok(());
+    let tracks = {
+        let mut conn = db_state.acquire_read_conn().await?;
+        let Some(playlist) = DB::read_playlist(&mut conn, &id).await? else {
+            return Ok(());
+        };
+        DB::read_tracks(&mut conn, &playlist.tracks).await?
     };
-
-    let tracks = db.get_tracks(&playlist.tracks).await?;
 
     window
         .dialog()
@@ -408,8 +449,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             let app_handle = app_handle.clone();
 
             match tauri::async_runtime::block_on(setup()) {
-                Ok(db) => {
-                    app_handle.manage(DBState(Mutex::new(db)));
+                Ok(db_state) => {
+                    app_handle.manage(db_state);
                     Ok(())
                 }
                 Err(err) => {
@@ -419,4 +460,120 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             }
         })
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    fn test_track(id: &str, path: &str, title: &str, artist: &str) -> Track {
+        Track {
+            id: id.to_string(),
+            path: path.to_string(),
+            title: title.to_string(),
+            album: "Club Session".to_string(),
+            album_artist: artist.to_string(),
+            artists: vec![artist.to_string()],
+            genres: vec!["House".to_string()],
+            year: Some(2026),
+            duration: 240,
+            track_no: Some(1),
+            track_of: None,
+            disk_no: None,
+            disk_of: None,
+            is_compilation: false,
+            bpm: Some(124.0),
+            camelot: Some("8A".to_string()),
+            energy: Some(0.85),
+            hera_seal: None,
+            is_video: Some(false),
+            scan_level: Some(2),
+            is_transition_candidate: Some(true),
+            is_fake_320kbps: Some(false),
+            waveform_peaks_blob: None,
+            is_mix_over_10m: Some(false),
+            has_audio_skips: Some(false),
+            is_variable_bpm: Some(false),
+            entry_bpm: Some(124.0),
+            exit_bpm: Some(124.0),
+            hot_cues: Some(vec![]),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_wal_read_pool_serves_queries_concurrently_while_writer_transaction_is_open() {
+        let dir = std::env::temp_dir().join(format!(
+            "hera_wal_pool_{}_{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let db_path = dir.join("hera.db");
+
+        let state = setup_at_path(&db_path).await.expect("setup_at_path");
+        {
+            let mut writer = state.get_lock().await;
+            writer
+                .insert_tracks(vec![test_track(
+                    "t-1",
+                    "/music/warm-up.flac",
+                    "Warm Up",
+                    "DaviDJ",
+                )])
+                .await
+                .unwrap();
+            writer
+                .create_playlist("Main Stage".to_string(), vec!["t-1".to_string()], None)
+                .await
+                .unwrap();
+        }
+
+        // Hold both `Mutex<DB>` AND an active uncommitted SQLite WAL write transaction.
+        let mut writer = state.get_lock().await;
+        let mut tx = writer.connection.begin().await.unwrap();
+        sqlx::query(
+            "INSERT INTO tracks (id, path, title, album, album_artist, artists, genres, duration, is_compilation) VALUES ('t-2', '/music/peak.flac', 'Peak', 'Club Session', 'DaviDJ', '[\"DaviDJ\"]', '[\"House\"]', 210, 0)",
+        )
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+        let started = Instant::now();
+        let mut read_conn = state.acquire_read_conn().await.expect("acquire read conn");
+        let tracks = DB::read_all_tracks(&mut read_conn).await.unwrap();
+        let artist_groups = DB::read_artist_tracks(&mut read_conn, "DaviDJ".to_string())
+            .await
+            .unwrap();
+        let playlists = DB::read_all_playlists(&mut read_conn).await.unwrap();
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "WAL reader pool should not block on writer lock ({elapsed:?})"
+        );
+        assert_eq!(tracks.len(), 1);
+        assert_eq!(artist_groups.len(), 1);
+        assert_eq!(playlists.len(), 1);
+
+        // Read pool enforces `PRAGMA query_only = ON` so mutations must fail.
+        assert!(
+            sqlx::query("DELETE FROM playlists")
+                .execute(&mut *read_conn)
+                .await
+                .is_err()
+        );
+        drop(read_conn);
+
+        tx.commit().await.unwrap();
+        drop(writer);
+
+        let mut read_after = state.acquire_read_conn().await.unwrap();
+        assert_eq!(DB::read_all_tracks(&mut read_after).await.unwrap().len(), 2);
+        drop(read_after);
+
+        state.read_pool.close().await;
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

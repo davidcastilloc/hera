@@ -61,8 +61,19 @@ pub async fn native_audio_load_track(
 ) -> Result<NativePlayerSnapshot, String> {
     let backend = Arc::clone(&state.0);
     tauri::async_runtime::spawn_blocking(move || {
-        let _ = hot_cues_sec;
-        let mut snap = backend.load_file(DeckId::DeckA, &PathBuf::from(&file_path))?;
+        let known_cues = hot_cues_sec.and_then(|cues| {
+            if cues.len() == 4 && cues.iter().all(|v| v.is_finite() && *v >= 0.0) {
+                Some([cues[0], cues[1], cues[2], cues[3]])
+            } else {
+                None
+            }
+        });
+        let mut snap = backend.load_file_fast(
+            DeckId::DeckA,
+            &PathBuf::from(&file_path),
+            duration_hint_sec,
+            known_cues,
+        )?;
         if snap.duration_sec <= 0.0 {
             if let Some(hint) = duration_hint_sec.filter(|d| d.is_finite() && *d > 0.0) {
                 snap.duration_sec = hint;

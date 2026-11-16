@@ -176,6 +176,21 @@ impl AudioBackend for CpalSharedAudioBackend {
         self.hub
             .install_buffer(deck, raw, Some(path.to_string_lossy().to_string()))
     }
+    fn load_file_fast(
+        &self,
+        deck: DeckId,
+        path: &Path,
+        duration_hint_sec: Option<f64>,
+        known_cues_sec: Option<[f64; 4]>,
+    ) -> Result<AudioTransportSnapshot, String> {
+        super::prefix_loader::load_file_prefix_then_full(
+            &self.hub,
+            deck,
+            path,
+            duration_hint_sec,
+            known_cues_sec,
+        )
+    }
     fn load_bytes(
         &self,
         deck: DeckId,

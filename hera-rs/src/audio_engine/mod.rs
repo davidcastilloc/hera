@@ -21,6 +21,12 @@ mod dsp_tests;
 #[cfg(feature = "native")]
 mod hub;
 mod mixer;
+#[cfg(feature = "native")]
+mod prefix_loader;
+#[cfg(all(test, feature = "native"))]
+mod prefix_tests;
+#[cfg(feature = "native")]
+mod render_worker;
 #[cfg(test)]
 mod tests;
 
@@ -59,6 +65,8 @@ pub struct DeckState {
     playhead_frames: f64,
     tempo_ratio: f32,
     gain: f32,
+    stream_complete: bool,
+    logical_total_frames: u64,
     pub cue_monitor_enabled: bool,
 }
 
@@ -70,6 +78,8 @@ impl Default for DeckState {
             playhead_frames: 0.0,
             tempo_ratio: 1.0,
             gain: 1.0,
+            stream_complete: true,
+            logical_total_frames: 0,
             cue_monitor_enabled: false,
         }
     }
@@ -98,10 +108,45 @@ impl DualDeckEngine {
         deck: DeckId,
         buffer: Arc<PreallocatedDeckBuffer>,
     ) -> Option<Arc<PreallocatedDeckBuffer>> {
+        let logical = buffer.total_frames();
         let state = &mut self.decks[deck as usize];
         let old = state.buffer.replace(buffer);
         state.playhead_frames = 0.0;
         state.playing = false;
+        state.stream_complete = true;
+        state.logical_total_frames = logical;
+        old
+    }
+
+    /// Install a fast decoded prefix buffer while full-track decoding continues off-thread.
+    pub fn replace_deck_prefix(
+        &mut self,
+        deck: DeckId,
+        buffer: Arc<PreallocatedDeckBuffer>,
+        logical_total_frames: u64,
+    ) -> Option<Arc<PreallocatedDeckBuffer>> {
+        let logical = logical_total_frames.max(buffer.total_frames());
+        let state = &mut self.decks[deck as usize];
+        let old = state.buffer.replace(buffer);
+        state.playhead_frames = 0.0;
+        state.playing = false;
+        state.stream_complete = false;
+        state.logical_total_frames = logical;
+        old
+    }
+
+    /// Seamlessly upgrade a deck from its prefix buffer to the full decoded buffer,
+    /// preserving `playhead_frames`, `playing`, `tempo_ratio`, and `gain`.
+    pub fn upgrade_deck_seamless(
+        &mut self,
+        deck: DeckId,
+        buffer: Arc<PreallocatedDeckBuffer>,
+    ) -> Option<Arc<PreallocatedDeckBuffer>> {
+        let logical = buffer.total_frames();
+        let state = &mut self.decks[deck as usize];
+        let old = state.buffer.replace(buffer);
+        state.stream_complete = true;
+        state.logical_total_frames = logical;
         old
     }
 
@@ -176,9 +221,14 @@ impl DualDeckEngine {
             TransportCommand::SeekToSample(deck, target_frame) => {
                 let d = &mut self.decks[deck as usize];
                 if let Some(buf) = d.buffer.as_deref() {
-                    let clamped = target_frame.min(buf.total_frames());
+                    let max_valid = if d.stream_complete {
+                        buf.total_frames()
+                    } else {
+                        d.logical_total_frames.max(buf.total_frames())
+                    };
+                    let clamped = target_frame.min(max_valid);
                     d.playhead_frames = clamped as f64;
-                    if clamped >= buf.total_frames() {
+                    if d.stream_complete && clamped >= buf.total_frames() {
                         d.playing = false;
                     }
                 } else {
@@ -188,9 +238,14 @@ impl DualDeckEngine {
             TransportCommand::JumpToHotCue(deck, cue_num) if (1..=4).contains(&cue_num) => {
                 let d = &mut self.decks[deck as usize];
                 if let Some(buf) = d.buffer.as_deref() {
+                    let max_valid = if d.stream_complete {
+                        buf.total_frames()
+                    } else {
+                        d.logical_total_frames.max(buf.total_frames())
+                    };
                     let target = buf.hot_cues[(cue_num - 1) as usize]
                         .frame_index
-                        .min(buf.total_frames());
+                        .min(max_valid);
                     d.playhead_frames = target as f64;
                 }
             }

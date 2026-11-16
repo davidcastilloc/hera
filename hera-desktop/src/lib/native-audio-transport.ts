@@ -1,31 +1,16 @@
-import { Channel, invoke } from '@tauri-apps/api/core';
 import EventEmitter from 'eventemitter3';
-import type { NativeAudioTelemetryFrame, NativePlayerSnapshot } from '../generated/typings';
-import { buildFallbackTelemetryFrame } from './spectrum-renderer';
 
-interface NativeTransportOptions {
-  playbackRate: number;
-  volume: number;
-  muted: boolean;
-}
-interface NativeTransportEvents {
-  play: () => void;
-  pause: () => void;
-  ended: () => void;
-  error: (error: MediaError) => void;
-  timeupdate: (currentTime: number) => void;
-  telemetry: (frame: NativeAudioTelemetryFrame) => void;
-  loadstart: () => void;
-  volumechange: () => void;
-}
-async function invokeNativeAudio(
-  cmd: string,
-  args?: Record<string, unknown>,
-): Promise<NativePlayerSnapshot | null> {
-  if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return null;
-  const res = await invoke<NativePlayerSnapshot | undefined>(`plugin:hera-dj|${cmd}`, args);
-  return res != null && typeof res === 'object' && 'is_playing' in res ? res : null;
-}
+import type {
+  NativeAudioTelemetryFrame,
+  NativePlayerSnapshot,
+} from '../generated/typings';
+import {
+  type NativeTransportEvents,
+  type NativeTransportOptions,
+  invokeNativeAudio,
+  subscribeNativeTelemetryChannel,
+} from './native-audio-ipc';
+import { buildFallbackTelemetryFrame } from './spectrum-renderer';
 
 export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents> {
   private trackPath: string | null = null;
@@ -61,10 +46,16 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
     return this.pausedState;
   }
   get currentTime(): number {
-    if (this.usingBackendState && !this.pausedState && this.lastFramePerfMs > 0) {
+    if (
+      this.usingBackendState &&
+      !this.pausedState &&
+      this.lastFramePerfMs > 0
+    ) {
       const extra =
-        Math.min(0.05, Math.max(0, (performance.now() - this.lastFramePerfMs) / 1000)) *
-        this.playbackRateValue;
+        Math.min(
+          0.05,
+          Math.max(0, (performance.now() - this.lastFramePerfMs) / 1000),
+        ) * this.playbackRateValue;
       const est = this.currentTimeSec + extra;
       return this.durationSec > 0 ? Math.min(est, this.durationSec) : est;
     }
@@ -111,21 +102,12 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
   }
   private ensureTelemetryChannelSubscribed(): void {
     if (this.channelSubscribed || !this.usingBackendState) return;
-    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) return;
-    try {
-      const channel = new Channel<NativeAudioTelemetryFrame>();
-      channel.onmessage = (frame) => {
-        if (frame && Array.isArray(frame.spectrum_bins)) this.ingestTelemetryFrame(frame);
-      };
-      this.channelSubscribed = true;
-      void invoke<NativePlayerSnapshot | undefined>('plugin:hera-dj|subscribe_audio_telemetry', {
-        onFrame: channel,
-      }).catch(() => {
+    this.channelSubscribed = subscribeNativeTelemetryChannel(
+      (frame) => this.ingestTelemetryFrame(frame),
+      () => {
         this.channelSubscribed = false;
-      });
-    } catch {
-      this.channelSubscribed = false;
-    }
+      },
+    );
   }
   private applySnapshotDuration(snap: NativePlayerSnapshot): void {
     this.usingBackendState = true;
@@ -133,10 +115,15 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
     this.lastEmittedTimeSec = snap.current_time_sec;
     this.lastFramePerfMs = performance.now();
     if (snap.duration_sec > 0) this.durationSec = snap.duration_sec;
-    if (snap.latest_telemetry != null) this.ingestTelemetryFrame(snap.latest_telemetry);
+    if (snap.latest_telemetry != null)
+      this.ingestTelemetryFrame(snap.latest_telemetry);
     this.ensureTelemetryChannelSubscribed();
   }
-  async loadTrack(filePath: string, durationHintSec?: number): Promise<void> {
+  async loadTrack(
+    filePath: string,
+    durationHintSec?: number,
+    hotCuesSec?: number[],
+  ): Promise<void> {
     const seq = ++this.loadSeq;
     this.stopTicker();
     if (!this.pausedState) {
@@ -149,7 +136,9 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
     this.lastEmittedTimeSec = 0;
     this.lastFramePerfMs = 0;
     this.durationSec =
-      durationHintSec != null && Number.isFinite(durationHintSec) && durationHintSec > 0
+      durationHintSec != null &&
+      Number.isFinite(durationHintSec) &&
+      durationHintSec > 0
         ? durationHintSec
         : 0;
     this.emit('loadstart');
@@ -157,13 +146,19 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
       const snap = await invokeNativeAudio('native_audio_load_track', {
         filePath,
         durationHintSec: this.durationSec,
+        hotCuesSec:
+          hotCuesSec && hotCuesSec.length === 4 ? hotCuesSec : undefined,
       });
       if (seq !== this.loadSeq) return;
       if (snap !== null) {
         this.applySnapshotDuration(snap);
-        void invokeNativeAudio('native_audio_set_volume', { volume: this.effectiveGain() }).catch(() => {});
+        void invokeNativeAudio('native_audio_set_volume', {
+          volume: this.effectiveGain(),
+        }).catch(() => {});
         if (this.playbackRateValue !== 1) {
-          void invokeNativeAudio('native_audio_set_playback_rate', { rate: this.playbackRateValue }).catch(() => {});
+          void invokeNativeAudio('native_audio_set_playback_rate', {
+            rate: this.playbackRateValue,
+          }).catch(() => {});
         }
       } else {
         this.usingBackendState = false;
@@ -171,14 +166,17 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
     } catch (err) {
       if (seq !== this.loadSeq) return;
       const message = err instanceof Error ? err.message : String(err);
-      const code = /corrupt|unsupported|codec|zero samples/i.test(message) ? 3 : 4;
+      const code = /corrupt|unsupported|codec|zero samples/i.test(message)
+        ? 3
+        : 4;
       this.trackPath = null;
       this.emit('error', { code, message } as MediaError);
       throw err;
     }
   }
   async play(): Promise<void> {
-    if (!this.hasTrack()) throw new Error('Trying to play a track but no track is loaded');
+    if (!this.hasTrack())
+      throw new Error('Trying to play a track but no track is loaded');
     if (this.endedState) {
       this.currentTimeSec = 0;
       this.lastEmittedTimeSec = 0;
@@ -203,28 +201,39 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
   }
   seek(seconds: number): void {
     const safe = Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
-    this.currentTimeSec = this.durationSec > 0 ? Math.min(safe, this.durationSec) : safe;
+    this.currentTimeSec =
+      this.durationSec > 0 ? Math.min(safe, this.durationSec) : safe;
     this.lastEmittedTimeSec = this.currentTimeSec;
     this.endedState = false;
     const now = performance.now();
     this.lastClockMs = now;
     this.lastFramePerfMs = now;
     this.emit('timeupdate', this.currentTimeSec);
-    void invokeNativeAudio('native_audio_seek', { positionSec: this.currentTimeSec }).catch(() => {});
+    void invokeNativeAudio('native_audio_seek', {
+      positionSec: this.currentTimeSec,
+    }).catch(() => {});
   }
   setVolume(volume: number): void {
-    this.volumeLevel = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1;
-    void invokeNativeAudio('native_audio_set_volume', { volume: this.effectiveGain() }).catch(() => {});
+    this.volumeLevel = Number.isFinite(volume)
+      ? Math.min(1, Math.max(0, volume))
+      : 1;
+    void invokeNativeAudio('native_audio_set_volume', {
+      volume: this.effectiveGain(),
+    }).catch(() => {});
     this.emit('volumechange');
   }
   setMuted(muted: boolean): void {
     this.mutedState = muted;
-    void invokeNativeAudio('native_audio_set_volume', { volume: this.effectiveGain() }).catch(() => {});
+    void invokeNativeAudio('native_audio_set_volume', {
+      volume: this.effectiveGain(),
+    }).catch(() => {});
     this.emit('volumechange');
   }
   setPlaybackRate(rate: number): void {
     this.playbackRateValue = rate;
-    void invokeNativeAudio('native_audio_set_playback_rate', { rate }).catch(() => {});
+    void invokeNativeAudio('native_audio_set_playback_rate', { rate }).catch(
+      () => {},
+    );
   }
   private startTicker(): void {
     this.stopTicker();
@@ -249,7 +258,8 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
         if (this.pausedState || snap === null) return;
         if (snap.duration_sec > 0) this.durationSec = snap.duration_sec;
         if (!this.channelSubscribed) {
-          if (snap.latest_telemetry != null) this.ingestTelemetryFrame(snap.latest_telemetry);
+          if (snap.latest_telemetry != null)
+            this.ingestTelemetryFrame(snap.latest_telemetry);
           if (Math.abs(snap.current_time_sec - this.currentTimeSec) >= 0.032) {
             this.currentTimeSec = snap.current_time_sec;
             this.lastFramePerfMs = performance.now();

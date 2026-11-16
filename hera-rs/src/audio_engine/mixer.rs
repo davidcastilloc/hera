@@ -30,6 +30,12 @@ pub(super) fn mix_deck_into_output(deck: &mut DeckState, out_stereo: &mut [f32],
         let mut idx = deck.playhead_frames.max(0.0) as u64;
         for out_frame in 0..frames {
             if idx >= total_frames {
+                if !deck.stream_complete {
+                    let rem = (frames - out_frame) as u64;
+                    deck.playhead_frames =
+                        (idx + rem).min(deck.logical_total_frames.max(total_frames)) as f64;
+                    return;
+                }
                 deck.playhead_frames = total_frames as f64;
                 deck.playing = false;
                 return;
@@ -40,7 +46,7 @@ pub(super) fn mix_deck_into_output(deck: &mut DeckState, out_stereo: &mut [f32],
             idx += 1;
         }
         deck.playhead_frames = idx as f64;
-        deck.playing = idx < total_frames;
+        deck.playing = !deck.stream_complete || idx < total_frames;
         return;
     }
 
@@ -53,6 +59,12 @@ pub(super) fn mix_deck_into_output(deck: &mut DeckState, out_stereo: &mut [f32],
             total_frames
         };
         if idx0 >= total_frames {
+            if !deck.stream_complete {
+                let logical_cap = deck.logical_total_frames.max(total_frames) as f64;
+                let rem = (frames - out_frame) as f64;
+                deck.playhead_frames = (deck.playhead_frames + rem * step).min(logical_cap);
+                return;
+            }
             deck.playhead_frames = total_f64;
             deck.playing = false;
             return;
@@ -66,7 +78,7 @@ pub(super) fn mix_deck_into_output(deck: &mut DeckState, out_stereo: &mut [f32],
         deck.playhead_frames += step;
     }
 
-    if deck.playhead_frames >= total_f64 {
+    if deck.stream_complete && deck.playhead_frames >= total_f64 {
         deck.playhead_frames = total_f64;
         deck.playing = false;
     }
