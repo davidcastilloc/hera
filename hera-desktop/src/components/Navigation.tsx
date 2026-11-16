@@ -91,7 +91,8 @@ export default function Navigation() {
           <button
             type="button"
             onClick={() => setShowOnboarding(true)}
-            title="Aviso y guía del Release BETA"
+            title="HERA Studio BETA · Abrir asistente de configuración inicial"
+            data-testid="hera-beta-badge"
             {...stylex.props(styles.betaBadgeBtn)}
           >
             BETA

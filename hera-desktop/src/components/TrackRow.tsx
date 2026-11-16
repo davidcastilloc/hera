@@ -2,14 +2,14 @@ import { useSortable } from '@dnd-kit/sortable';
 import * as stylex from '@stylexjs/stylex';
 import type React from 'react';
 
+import type { Track } from '../generated/typings';
+import useFormattedDuration from '../hooks/useFormattedDuration';
 import {
   cancelHoverPrewarm,
   scheduleHoverPrewarm,
   type TrackWithScanMeta,
   useScannerStore,
 } from '../lib/scanner-v3';
-import type { Track } from '../generated/typings';
-import useFormattedDuration from '../hooks/useFormattedDuration';
 import PlayingIndicator from './PlayingIndicator';
 
 export type TrackRowEvents = {
@@ -65,7 +65,9 @@ export default function TrackRow(props: Props) {
   const hasFullCues =
     (tMeta.scan_level ?? 0) >= 2 ||
     (track.hot_cues != null && track.hot_cues.length >= 4);
-  const isFreshGlow = useScannerStore((s) => Boolean(s.recentlyUpdatedIds[track.id]));
+  const isFreshGlow = useScannerStore((s) =>
+    Boolean(s.recentlyUpdatedIds[track.id]),
+  );
 
   const {
     attributes,
@@ -154,6 +156,45 @@ export default function TrackRow(props: Props) {
             BPM~
           </span>
         )}
+        {(track.has_intro_vocals === true ||
+          track.has_outro_vocals === true) && (
+          <span
+            {...stylex.props(cellStyles.badgeVocalClash)}
+            title={
+              track.has_intro_vocals && track.has_outro_vocals
+                ? 'Riesgo de choque vocal: voz en intro y outro'
+                : track.has_intro_vocals
+                  ? 'Riesgo de choque vocal: voz en intro'
+                  : 'Riesgo de choque vocal: voz en outro'
+            }
+          >
+            {track.has_intro_vocals && track.has_outro_vocals
+              ? 'Voz I/O'
+              : track.has_intro_vocals
+                ? 'Voz Intro'
+                : 'Voz Outro'}
+          </span>
+        )}
+        {track.is_own_production === true && (
+          <span
+            {...stylex.props(cellStyles.badgeOwnProd)}
+            title="Producción propia / Studio Bounce"
+          >
+            Propia
+          </span>
+        )}
+        {track.has_bpm_trust_diff === true && (
+          <span
+            {...stylex.props(cellStyles.badgeBpmDiff)}
+            title={
+              track.legacy_bpm != null
+                ? `Diferencia BPM vs etiqueta externa (${track.legacy_bpm.toFixed(1)} BPM)`
+                : 'Diferencia BPM detectada respecto a etiqueta externa'
+            }
+          >
+            Diff BPM
+          </span>
+        )}
         {props.showArtistInTitle === true && track.artists.length > 0 && (
           <span {...stylex.props(cellStyles.artistInTitle)}>
             {'— '}
@@ -167,7 +208,10 @@ export default function TrackRow(props: Props) {
             {hasBpm ? (
               track.bpm!.toFixed(1)
             ) : isPendingDsp ? (
-              <span {...stylex.props(cellStyles.bpmPending)} title="Detectando BPM…">
+              <span
+                {...stylex.props(cellStyles.bpmPending)}
+                title="Detectando BPM…"
+              >
                 ···
               </span>
             ) : (
@@ -377,6 +421,48 @@ const cellStyles = stylex.create({
     borderWidth: '1px',
     borderStyle: 'solid',
     borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderRadius: '4px',
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    flexShrink: 0,
+  },
+  badgeVocalClash: {
+    fontSize: '9.5px',
+    fontWeight: 700,
+    letterSpacing: '0.03em',
+    color: '#fb7185',
+    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(244, 63, 94, 0.35)',
+    borderRadius: '4px',
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    flexShrink: 0,
+  },
+  badgeOwnProd: {
+    fontSize: '9.5px',
+    fontWeight: 700,
+    letterSpacing: '0.03em',
+    color: '#2dd4bf',
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(20, 184, 166, 0.35)',
+    borderRadius: '4px',
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    flexShrink: 0,
+  },
+  badgeBpmDiff: {
+    fontSize: '9.5px',
+    fontWeight: 700,
+    letterSpacing: '0.03em',
+    color: '#a78bfa',
+    backgroundColor: 'rgba(167, 139, 250, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(167, 139, 250, 0.35)',
     borderRadius: '4px',
     paddingBlock: '1px',
     paddingInline: '5px',

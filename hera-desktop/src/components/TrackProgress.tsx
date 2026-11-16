@@ -69,7 +69,7 @@ export default function TrackProgress(props: Props) {
     <Slider.Root min={0} max={durationMax} step={0.01} value={Math.min(elapsed, durationMax)} onValueChange={jumpAudioTo}>
       <Slider.Control {...stylex.props(styles.trackRoot)} onMouseMoveCapture={showTooltip} onMouseLeave={hideTooltip}>
         <Slider.Track {...stylex.props(styles.trackProgress)}>
-          <WaveformPeaksCanvas peaks={trackPlaying.waveform_peaks_blob} progressPct={(elapsed / durationMax) * 100} />
+          <WaveformPeaksCanvas peaks={trackPlaying.waveform_peaks_blob} peaksB64={trackPlaying.waveform_peaks_b64} progressPct={(elapsed / durationMax) * 100} />
           <LiveSpectrumCanvas />
           <Slider.Indicator {...stylex.props(styles.trackRange)} />
           {hotCues.map((cue) => {

@@ -1,17 +1,186 @@
 import * as stylex from '@stylexjs/stylex';
-import { useState } from 'react';
+import { open } from '@tauri-apps/plugin-dialog';
+import { useEffect, useState } from 'react';
 
+import LibraryAPI from '../api/LibraryAPI';
+import type { Config, DiscoveredMusicRoot } from '../generated/typings';
+import ConfigBridge from '../lib/bridge-config';
+import { configQuery } from '../lib/queries';
+import queryClient from '../lib/query-client';
+import { discoverWorkableRoots } from '../lib/scanner-v3';
+import { removeRedundantFolders } from '../lib/utils-library';
 import Icon from './Icon';
+
+export type ConfigWithBoothFields = Config & {
+  onboarding_completed?: boolean;
+  dj_handle?: string;
+};
 
 type Props = {
   isOpen: boolean;
   onClose: () => void;
+  onCompleted?: () => void;
 };
 
-export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
+export async function loadOnboardingDiscoverySafe(): Promise<{
+  djHandle: string;
+  roots: DiscoveredMusicRoot[];
+  existingFolders: string[];
+}> {
+  let djHandle = 'DaviDJ';
+  let existingFolders: string[] = [];
+  try {
+    const cfg = (await ConfigBridge.getAll()) as ConfigWithBoothFields;
+    if (cfg.dj_handle && cfg.dj_handle.trim().length > 0) {
+      djHandle = cfg.dj_handle.trim();
+    }
+    if (Array.isArray(cfg.library_folders)) {
+      existingFolders = cfg.library_folders;
+    }
+  } catch {
+    // Default config values
+  }
+  const roots = await discoverWorkableRoots();
+  return { djHandle, roots, existingFolders };
+}
+
+async function pickMusicFoldersSafe(): Promise<string[]> {
+  try {
+    const selected = await open({
+      directory: true,
+      multiple: true,
+      title: 'Seleccionar carpetas de música para cabina',
+    });
+    if (selected == null) return [];
+    return Array.isArray(selected) ? selected : [selected];
+  } catch {
+    return [];
+  }
+}
+
+export async function completeOnboardingSetup(params: {
+  djHandle: string;
+  selectedFolders: string[];
+  startScan: boolean;
+}): Promise<{
+  djHandle: string;
+  libraryFolders: string[];
+  onboardingCompleted: true;
+}> {
+  const cleanHandle = params.djHandle.trim() || 'DaviDJ';
+  let existingFolders: string[] = [];
+  try {
+    existingFolders = await ConfigBridge.get('library_folders');
+  } catch {
+    existingFolders = [];
+  }
+
+  const mergedFolders = removeRedundantFolders([
+    ...existingFolders,
+    ...params.selectedFolders.filter((p) => p.trim().length > 0),
+  ]).sort();
+
+  const updates = {
+    library_folders: mergedFolders,
+    dj_handle: cleanHandle,
+    onboarding_completed: true,
+  } as Partial<ConfigWithBoothFields>;
+
+  const bridgeAny = ConfigBridge as unknown as {
+    multiSet?: (u: Partial<ConfigWithBoothFields>) => Promise<void>;
+    set: (k: string, v: unknown) => Promise<void>;
+  };
+
+  if (typeof bridgeAny.multiSet === 'function') {
+    await bridgeAny.multiSet(updates);
+  } else {
+    await bridgeAny.set('library_folders', mergedFolders);
+    await bridgeAny.set('dj_handle', cleanHandle);
+    await bridgeAny.set('onboarding_completed', true);
+  }
+
+  await queryClient.invalidateQueries({ queryKey: configQuery.queryKey });
+
+  if (params.startScan && mergedFolders.length > 0) {
+    void LibraryAPI.scan().catch(() => {});
+  }
+
+  return {
+    djHandle: cleanHandle,
+    libraryFolders: mergedFolders,
+    onboardingCompleted: true,
+  };
+}
+
+export default function OnboardingWizardModal({
+  isOpen,
+  onClose,
+  onCompleted,
+}: Props) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
+  const [djHandle, setDjHandle] = useState('DaviDJ');
+  const [discoveredRoots, setDiscoveredRoots] = useState<DiscoveredMusicRoot[]>(
+    [],
+  );
+  const [selectedRoots, setSelectedRoots] = useState<string[]>([]);
+  const [manualRoots, setManualRoots] = useState<string[]>([]);
+  const [discovering, setDiscovering] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [startScan, setStartScan] = useState(true);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    setDiscovering(true);
+    void loadOnboardingDiscoverySafe().then(
+      ({ djHandle: loadedHandle, roots, existingFolders }) => {
+        if (cancelled) return;
+        setDjHandle(loadedHandle);
+        setDiscoveredRoots(roots);
+        const preselected = removeRedundantFolders([
+          ...existingFolders,
+          ...roots.map((r) => r.root_path),
+        ]);
+        setSelectedRoots(preselected);
+        setDiscovering(false);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const toggleRoot = (rootPath: string) => {
+    setSelectedRoots((prev) =>
+      prev.includes(rootPath)
+        ? prev.filter((p) => p !== rootPath)
+        : [...prev, rootPath],
+    );
+  };
+
+  const handleAddManualFolders = async () => {
+    const picked = await pickMusicFoldersSafe();
+    if (picked.length === 0) return;
+    setManualRoots((prev) => removeRedundantFolders([...prev, ...picked]));
+    setSelectedRoots((prev) => removeRedundantFolders([...prev, ...picked]));
+  };
+
+  const handleFinish = async () => {
+    setSaving(true);
+    await completeOnboardingSetup({
+      djHandle,
+      selectedFolders: selectedRoots,
+      startScan,
+    });
+    setSaving(false);
+    onCompleted?.();
+    onClose();
+  };
+
+  const discoveredPathSet = new Set(discoveredRoots.map((r) => r.root_path));
+  const extraManualRoots = manualRoots.filter((p) => !discoveredPathSet.has(p));
 
   return (
     <div
@@ -21,10 +190,9 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
       aria-labelledby="onboarding-title"
     >
       <div {...stylex.props(styles.card)}>
-        {/* Header */}
         <div {...stylex.props(styles.header)}>
           <div {...stylex.props(styles.badgeRow)}>
-            <span {...stylex.props(styles.betaBadge)}>HERA v0.6.0 · BETA</span>
+            <span {...stylex.props(styles.betaBadge)}>HERA v0.7.0 · BETA</span>
             <span {...stylex.props(styles.stepCounter)}>Paso {step} de 3</span>
           </div>
           <button
@@ -37,7 +205,6 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
           </button>
         </div>
 
-        {/* Content per Step */}
         <div {...stylex.props(styles.body)}>
           {step === 1 && (
             <div {...stylex.props(styles.stepContent)}>
@@ -48,18 +215,31 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
                 Bienvenido a HERA Studio BETA
               </h2>
               <p {...stylex.props(styles.description)}>
-                HERA es tu motor de curación y DJ Copilot 100% en Rust nativo
-                (sin Python). Diseñado para operar en cabina con baja latencia y
-                alta fidelidad sonora.
+                Motor de curación armónica y DJ Copilot 100% en Rust nativo
+                (cero Python). Configura tu alias de cabina antes de indexar tu
+                colección.
               </p>
+
+              <label {...stylex.props(styles.fieldLabel)}>
+                <span>Nombre / Handle de DJ</span>
+                <input
+                  type="text"
+                  value={djHandle}
+                  onChange={(e) => setDjHandle(e.target.value)}
+                  placeholder="DaviDJ"
+                  aria-label="Nombre de DJ"
+                  {...stylex.props(styles.input)}
+                />
+              </label>
+
               <div {...stylex.props(styles.alertBox)}>
                 <strong {...stylex.props(styles.alertHeading)}>
-                  Nota del Release BETA:
+                  Garantía «Don&apos;t break the user space» (Release BETA):
                 </strong>
                 <p {...stylex.props(styles.alertText)}>
-                  Estamos calibrando el motor con DJs en vivo. Tu música física
-                  nunca se altera, no se renombra ni se borra del disco. Todas
-                  las clasificaciones son puramente lógicas.
+                  Tu música y videos físicos nunca se alteran, renombran ni
+                  borran del disco. Todas las clasificaciones, Mixes (&gt; 10m)
+                  y etiquetas Shazam son puramente lógicas.
                 </p>
               </div>
             </div>
@@ -71,33 +251,92 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
                 <Icon name="disc" size={28} color="#38bdf8" />
               </div>
               <h2 id="onboarding-title" {...stylex.props(styles.title)}>
-                Escaneo Inteligente & Criterio de Cabina
+                Escaneo Inteligente &amp; Criterio de Cabina
               </h2>
               <p {...stylex.props(styles.description)}>
-                El nuevo escáner térmico procesa tu música con total respeto por
-                tu CPU:
+                Detectamos tus bibliotecas de VirtualDJ, Rekordbox y Traktor en
+                menos de 1 segundo separando pistas (&lt; 10m) de mixes (&gt;
+                10m).
               </p>
-              <ul {...stylex.props(styles.featureList)}>
-                <li {...stylex.props(styles.featureItem)}>
-                  <strong>Caché Ultrarrápido:</strong> Si usas VirtualDJ o
-                  Rekordbox, lee sus bases de datos en &lt; 3 segundos sin
-                  gastar procesador.
-                </li>
-                <li {...stylex.props(styles.featureItem)}>
-                  <strong>Protección Térmica:</strong> Escaneo en lotes de 8
-                  pistas con pausas cooperativas para evitar que tu laptop se
-                  caliente.
-                </li>
-                <li {...stylex.props(styles.featureItem)}>
-                  <strong>Filtro de Mixes (&gt; 10 min):</strong> Las sesiones
-                  largas y sets se aíslan en la pestaña de mixes sin saturar tus
-                  crates rápidos.
-                </li>
-                <li {...stylex.props(styles.featureItem)}>
-                  <strong>Detección de Saltos de CD:</strong> Identifica pistas
-                  dañadas o rayadas antes de que suenen en vivo.
-                </li>
-              </ul>
+
+              <div {...stylex.props(styles.rootsBox)}>
+                {discovering ? (
+                  <div {...stylex.props(styles.discoveryMsg)}>
+                    Buscando carpetas musicales en bases DJ locales…
+                  </div>
+                ) : discoveredRoots.length === 0 &&
+                  extraManualRoots.length === 0 ? (
+                  <div {...stylex.props(styles.discoveryMsg)}>
+                    No detectamos bases automáticas aún. Añade una carpeta
+                    manualmente o continúa a cabina.
+                  </div>
+                ) : (
+                  <div {...stylex.props(styles.rootsList)}>
+                    {discoveredRoots.map((root) => {
+                      const checked = selectedRoots.includes(root.root_path);
+                      return (
+                        <label
+                          key={`${root.source_db}-${root.root_path}`}
+                          {...stylex.props(styles.rootRow)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleRoot(root.root_path)}
+                          />
+                          <div {...stylex.props(styles.rootMeta)}>
+                            <div {...stylex.props(styles.rootTop)}>
+                              <span {...stylex.props(styles.rootPath)}>
+                                {root.root_path}
+                              </span>
+                              <span {...stylex.props(styles.sourcePill)}>
+                                {root.source_db}
+                              </span>
+                            </div>
+                            <span {...stylex.props(styles.rootStats)}>
+                              {root.workable_tracks_count} pistas ·{' '}
+                              {root.video_tracks_count} video ·{' '}
+                              {root.mixes_over_10m_count} mixes (&gt; 10m) ·{' '}
+                              {root.skipped_short_sfx_count} SFX omitidos
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                    {extraManualRoots.map((folder) => {
+                      const checked = selectedRoots.includes(folder);
+                      return (
+                        <label key={folder} {...stylex.props(styles.rootRow)}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleRoot(folder)}
+                          />
+                          <div {...stylex.props(styles.rootMeta)}>
+                            <div {...stylex.props(styles.rootTop)}>
+                              <span {...stylex.props(styles.rootPath)}>
+                                {folder}
+                              </span>
+                              <span {...stylex.props(styles.sourcePill)}>
+                                Manual
+                              </span>
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleAddManualFolders()}
+                {...stylex.props(styles.addFolderBtn)}
+              >
+                <Icon name="folderPlus" size={14} />
+                <span>Añadir otra carpeta…</span>
+              </button>
             </div>
           )}
 
@@ -110,7 +349,9 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
                 Integración de Cabina en Vivo
               </h2>
               <p {...stylex.props(styles.description)}>
-                Conecta tu sesión en directo con tus herramientas favoritas:
+                Listo para {djHandle.trim() || 'DaviDJ'} ·{' '}
+                {selectedRoots.length} carpeta(s) seleccionada(s) bajo garantía{' '}
+                Don&apos;t break the user space.
               </p>
               <div {...stylex.props(styles.cardsGrid)}>
                 <div {...stylex.props(styles.miniCard)}>
@@ -119,8 +360,8 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
                     VirtualDJ Live
                   </h4>
                   <p {...stylex.props(styles.miniCardText)}>
-                    Envía crates directamente a tu carpeta VirtualDJ con 4 Hot
-                    Cues acústicos listos.
+                    Envía crates directamente a tu carpeta VirtualDJ con 8 Hot
+                    Cues acústicos listos y Check Pre-Toque.
                   </p>
                 </div>
                 <div {...stylex.props(styles.miniCard)}>
@@ -132,11 +373,22 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
                   </p>
                 </div>
               </div>
+
+              <label {...stylex.props(styles.scanCheckRow)}>
+                <input
+                  type="checkbox"
+                  checked={startScan}
+                  onChange={(e) => setStartScan(e.target.checked)}
+                />
+                <span>
+                  Iniciar escaneo térmico al cerrar ({selectedRoots.length}{' '}
+                  carpeta(s))
+                </span>
+              </label>
             </div>
           )}
         </div>
 
-        {/* Footer Buttons */}
         <div {...stylex.props(styles.footer)}>
           {step > 1 ? (
             <button
@@ -161,10 +413,11 @@ export default function OnboardingWizardModal({ isOpen, onClose }: Props) {
           ) : (
             <button
               type="button"
-              onClick={onClose}
+              disabled={saving}
+              onClick={() => void handleFinish()}
               {...stylex.props(styles.primaryBtn)}
             >
-              ¡Comenzar a Mezclar!
+              {saving ? 'Guardando…' : '¡Comenzar a Mezclar!'}
             </button>
           )}
         </div>
@@ -187,7 +440,7 @@ const styles = stylex.create({
   },
   card: {
     width: '100%',
-    maxWidth: '540px',
+    maxWidth: '560px',
     backgroundColor: '#0c0e12',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -202,7 +455,7 @@ const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBlock: '16px',
+    paddingBlock: '14px',
     paddingInline: '20px',
     borderBottomWidth: '1px',
     borderBottomStyle: 'solid',
@@ -217,7 +470,7 @@ const styles = stylex.create({
     fontSize: '11px',
     fontWeight: 700,
     letterSpacing: '0.06em',
-    color: '#0d9488',
+    color: '#2dd4bf',
     backgroundColor: 'rgba(20, 184, 166, 0.12)',
     borderWidth: '1px',
     borderStyle: 'solid',
@@ -229,6 +482,7 @@ const styles = stylex.create({
   stepCounter: {
     fontSize: '12px',
     color: '#8b949e',
+    fontVariantNumeric: 'tabular-nums',
   },
   closeBtn: {
     backgroundColor: 'transparent',
@@ -242,9 +496,9 @@ const styles = stylex.create({
     justifyContent: 'center',
   },
   body: {
-    paddingBlock: '24px',
+    paddingBlock: '20px',
     paddingInline: '20px',
-    minHeight: '260px',
+    minHeight: '280px',
   },
   stepContent: {
     display: 'flex',
@@ -253,8 +507,8 @@ const styles = stylex.create({
     textAlign: 'center',
   },
   iconWrapper: {
-    width: '52px',
-    height: '52px',
+    width: '48px',
+    height: '48px',
     borderRadius: '50%',
     backgroundColor: 'rgba(255, 255, 255, 0.04)',
     borderWidth: '1px',
@@ -263,26 +517,50 @@ const styles = stylex.create({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: '14px',
+    marginBottom: '12px',
   },
   title: {
     fontSize: '17px',
     fontWeight: 700,
     color: '#f0f3f6',
-    marginTop: '0',
-    marginRight: '0',
+    marginTop: 0,
+    marginRight: 0,
     marginBottom: '8px',
-    marginLeft: '0',
+    marginLeft: 0,
   },
   description: {
     fontSize: '13px',
     color: '#9ba3af',
     lineHeight: 1.5,
-    marginTop: '0',
-    marginRight: '0',
-    marginBottom: '16px',
-    marginLeft: '0',
-    maxWidth: '460px',
+    marginTop: 0,
+    marginRight: 0,
+    marginBottom: '14px',
+    marginLeft: 0,
+    maxWidth: '470px',
+  },
+  fieldLabel: {
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    rowGap: '6px',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#c9d1d9',
+    marginBottom: '14px',
+  },
+  input: {
+    width: '100%',
+    boxSizing: 'border-box',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    fontSize: '13px',
+    color: '#edeff3',
+    backgroundColor: '#12161d',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '6px',
   },
   alertBox: {
     backgroundColor: 'rgba(20, 184, 166, 0.06)',
@@ -290,10 +568,11 @@ const styles = stylex.create({
     borderStyle: 'solid',
     borderColor: 'rgba(20, 184, 166, 0.2)',
     borderRadius: '8px',
-    paddingBlock: '12px',
+    paddingBlock: '11px',
     paddingInline: '14px',
     textAlign: 'left',
     width: '100%',
+    boxSizing: 'border-box',
   },
   alertHeading: {
     fontSize: '12px',
@@ -307,20 +586,93 @@ const styles = stylex.create({
     lineHeight: 1.4,
     margin: 0,
   },
-  featureList: {
+  rootsBox: {
+    width: '100%',
+    backgroundColor: '#10141b',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '8px',
+    paddingBlock: '8px',
+    paddingInline: '10px',
+    maxHeight: '170px',
+    overflowY: 'auto',
     textAlign: 'left',
-    fontSize: '12.5px',
-    color: '#9ba3af',
-    lineHeight: 1.5,
-    margin: 0,
-    paddingLeft: '20px',
+    boxSizing: 'border-box',
+  },
+  discoveryMsg: {
+    fontSize: '12px',
+    color: '#8b949e',
+    paddingBlock: '10px',
+    textAlign: 'center',
+  },
+  rootsList: {
     display: 'flex',
     flexDirection: 'column',
-    rowGap: '8px',
-    width: '100%',
+    rowGap: '6px',
   },
-  featureItem: {
-    color: '#c9d1d9',
+  rootRow: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    columnGap: '8px',
+    paddingBlock: '6px',
+    paddingInline: '8px',
+    borderRadius: '6px',
+    backgroundColor: '#151a23',
+    cursor: 'pointer',
+  },
+  rootMeta: {
+    display: 'flex',
+    flexDirection: 'column',
+    rowGap: '2px',
+    minWidth: 0,
+    flexGrow: 1,
+  },
+  rootTop: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: '8px',
+  },
+  rootPath: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#edeff3',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  sourcePill: {
+    fontSize: '10px',
+    fontWeight: 600,
+    color: '#2dd4bf',
+    backgroundColor: 'rgba(20, 184, 166, 0.12)',
+    borderRadius: '999px',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    flexShrink: 0,
+  },
+  rootStats: {
+    fontSize: '11px',
+    color: '#8b949e',
+    fontVariantNumeric: 'tabular-nums',
+  },
+  addFolderBtn: {
+    marginTop: '10px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '6px',
+    paddingBlock: '6px',
+    paddingInline: '12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: '#edeff3',
+    backgroundColor: '#171c24',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '6px',
+    cursor: 'pointer',
   },
   cardsGrid: {
     display: 'grid',
@@ -328,7 +680,7 @@ const styles = stylex.create({
     rowGap: '12px',
     columnGap: '12px',
     width: '100%',
-    marginTop: '6px',
+    marginTop: '4px',
     textAlign: 'left',
   },
   miniCard: {
@@ -344,15 +696,24 @@ const styles = stylex.create({
     fontWeight: 600,
     color: '#f0f3f6',
     marginTop: '8px',
-    marginRight: '0',
+    marginRight: 0,
     marginBottom: '4px',
-    marginLeft: '0',
+    marginLeft: 0,
   },
   miniCardText: {
     fontSize: '11.5px',
     color: '#8b949e',
     margin: 0,
     lineHeight: 1.35,
+  },
+  scanCheckRow: {
+    marginTop: '12px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    columnGap: '8px',
+    fontSize: '12px',
+    color: '#c9d1d9',
+    cursor: 'pointer',
   },
   footer: {
     display: 'flex',

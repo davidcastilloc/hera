@@ -60,6 +60,22 @@ export default function TransitionBridgeStepsCard({
             step.title,
             step.track_id,
           );
+          const prevStep = index > 0 ? steps[index - 1] : undefined;
+          const prevTrack = prevStep
+            ? findMatchingLocalTrack(
+                prevStep.artist,
+                prevStep.title,
+                prevStep.track_id,
+              )
+            : undefined;
+          const hasVocalClash = Boolean(
+            localTrack?.has_intro_vocals ||
+            localTrack?.has_outro_vocals ||
+            (prevTrack?.has_outro_vocals && localTrack?.has_intro_vocals) ||
+            /vocal|voz/i.test(step.transition_tip),
+          );
+          const hasAudioGlitch = Boolean(localTrack?.has_audio_skips);
+          const isVariableBpm = Boolean(localTrack?.is_variable_bpm);
           const rowIndex = String(index + 1).padStart(2, '0');
 
           return (
@@ -74,6 +90,35 @@ export default function TransitionBridgeStepsCard({
               <span {...stylex.props(styles.stepTitle)}>
                 {step.artist} — {step.title}
               </span>
+              {hasVocalClash && (
+                <span
+                  {...stylex.props(styles.badgeVocalClash)}
+                  title="Riesgo de choque vocal en mezcla (voz en intro/outro)"
+                >
+                  Choque vocal
+                </span>
+              )}
+              {hasAudioGlitch && (
+                <span
+                  {...stylex.props(styles.badgeGlitch)}
+                  title="Posible salto o glitch de CD detectado"
+                >
+                  Salto CD
+                </span>
+              )}
+              {isVariableBpm && (
+                <span
+                  {...stylex.props(styles.badgeVariableBpm)}
+                  title={
+                    localTrack?.entry_bpm != null &&
+                    localTrack?.exit_bpm != null
+                      ? `BPM variable: ${localTrack.entry_bpm.toFixed(1)} -> ${localTrack.exit_bpm.toFixed(1)}`
+                      : 'BPM variable en vivo'
+                  }
+                >
+                  BPM~
+                </span>
+              )}
               <span {...stylex.props(styles.stepMeta)}>
                 {Math.round(step.bpm)} BPM · {step.camelot}
               </span>
@@ -212,5 +257,47 @@ const styles = stylex.create({
   listenBtnActive: {
     borderColor: '#14b8a6',
     color: '#2dd4bf',
+  },
+  badgeVocalClash: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: '#fb7185',
+    backgroundColor: 'rgba(244, 63, 94, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(244, 63, 94, 0.35)',
+    borderRadius: '4px',
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
+  badgeGlitch: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: '#f87171',
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderRadius: '4px',
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
+  badgeVariableBpm: {
+    fontSize: '10px',
+    fontWeight: 700,
+    color: '#f59e0b',
+    backgroundColor: 'rgba(245, 158, 11, 0.12)',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderRadius: '4px',
+    paddingBlock: '2px',
+    paddingInline: '6px',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
   },
 });

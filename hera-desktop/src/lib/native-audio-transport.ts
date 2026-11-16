@@ -10,7 +10,10 @@ import {
   invokeNativeAudio,
   subscribeNativeTelemetryChannel,
 } from './native-audio-ipc';
+import { getTrackLoadMetadata, registerTrackLoadMetadata } from './scanner-v3';
 import { buildFallbackTelemetryFrame } from './spectrum-renderer';
+
+export { registerTrackLoadMetadata };
 
 export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents> {
   private trackPath: string | null = null;
@@ -144,17 +147,15 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
         : 0;
     this.emit('loadstart');
     try {
+      const meta = getTrackLoadMetadata(filePath);
+      const cues = hotCuesSec ?? meta?.hotCuesSec;
+      const gain =
+        replayGainDb !== undefined ? replayGainDb : meta?.replayGainDb;
       const snap = await invokeNativeAudio('native_audio_load_track', {
         filePath,
         durationHintSec: this.durationSec,
-        hotCuesSec:
-          hotCuesSec && hotCuesSec.length >= 4
-            ? hotCuesSec.slice(0, 4)
-            : undefined,
-        replayGainDb:
-          replayGainDb != null && Number.isFinite(replayGainDb)
-            ? replayGainDb
-            : undefined,
+        hotCuesSec: cues && cues.length >= 4 ? cues.slice(0, 4) : undefined,
+        replayGainDb: gain != null && Number.isFinite(gain) ? gain : undefined,
       });
       if (seq !== this.loadSeq) return;
       if (snap !== null) {
