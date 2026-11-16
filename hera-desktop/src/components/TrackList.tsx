@@ -392,7 +392,7 @@ export default function TrackList(props: Props) {
                 .slice(0, 3)
                 .map(
                   (m) =>
-                    `${m.artist} — ${m.title} (${Math.round(m.similarity * 100)}%)`,
+                    `${m.artist} — ${m.title} (${Math.round(m.similarity_pct)}%)`,
                 )
                 .join(' · ');
               toastManager.add({

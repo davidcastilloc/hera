@@ -14,7 +14,7 @@ import Icon from './Icon';
 export type CrateRulesBannerProps = {
   crate: FolderCrateSummary;
   rulesMarkdown: string;
-  ledgerMarkdown?: string;
+  ledgerEntries?: string[];
   onRulesSaved?: (rules: string) => void;
   onOrganized?: () => Promise<unknown> | void;
 };
@@ -41,9 +41,14 @@ const STRATEGIES: Array<{
   },
 ];
 
-export function extractLedgerTxIds(ledgerMarkdown?: string): string[] {
-  if (!ledgerMarkdown) return [];
-  const matches = ledgerMarkdown.matchAll(/tx:#([A-Za-z0-9_-]+)/g);
+export function extractLedgerTxIds(
+  ledgerEntries?: string[] | string,
+): string[] {
+  const raw = Array.isArray(ledgerEntries)
+    ? ledgerEntries.join('\n')
+    : (ledgerEntries ?? '');
+  if (!raw) return [];
+  const matches = raw.matchAll(/tx:#([A-Za-z0-9_-]+)/g);
   const seen = new Set<string>();
   const out: string[] = [];
   for (const m of matches) {
@@ -83,11 +88,11 @@ async function runOrganizeSafe(
 export default function CrateRulesBanner({
   crate,
   rulesMarkdown,
-  ledgerMarkdown,
+  ledgerEntries,
   onRulesSaved,
   onOrganized,
 }: CrateRulesBannerProps) {
-  const initialRules = rulesMarkdown || crate.rules_markdown || '';
+  const initialRules = rulesMarkdown || '';
   const [editorOpen, setEditorOpen] = useState(false);
   const [rulesDraft, setRulesDraft] = useState(initialRules);
   const [savingRules, setSavingRules] = useState(false);
@@ -104,16 +109,16 @@ export default function CrateRulesBanner({
   const [lastTxId, setLastTxId] = useState<string | null>(null);
 
   useEffect(() => {
-    setRulesDraft(rulesMarkdown || crate.rules_markdown || '');
-  }, [crate.crate_id, rulesMarkdown, crate.rules_markdown]);
+    setRulesDraft(rulesMarkdown || '');
+  }, [crate.crate_id, rulesMarkdown]);
 
   const txIds = useMemo(() => {
-    const fromLedger = extractLedgerTxIds(ledgerMarkdown);
+    const fromLedger = extractLedgerTxIds(ledgerEntries);
     if (lastTxId && !fromLedger.includes(lastTxId)) {
       return [lastTxId, ...fromLedger];
     }
     return fromLedger;
-  }, [ledgerMarkdown, lastTxId]);
+  }, [ledgerEntries, lastTxId]);
 
   const handleSaveRules = async () => {
     setSavingRules(true);
@@ -149,7 +154,7 @@ export default function CrateRulesBanner({
     });
     setOrganizeRes(res);
     setOrganizeErr(error);
-    if (res?.applied && res.tx_id) {
+    if (res?.applied_count && res.applied_count > 0 && res.tx_id) {
       setLastTxId(res.tx_id);
       await onOrganized?.();
     }
@@ -167,7 +172,7 @@ export default function CrateRulesBanner({
     });
     setOrganizeRes(res);
     setOrganizeErr(error);
-    if (res?.applied) {
+    if (res?.rolled_back) {
       await onOrganized?.();
     }
     setOrganizing(false);
@@ -317,26 +322,32 @@ export default function CrateRulesBanner({
               ) : organizeRes ? (
                 <>
                   <div {...stylex.props(styles.resultSummary)}>
-                    <span>{organizeRes.message}</span>
+                    <span>
+                      {organizeRes.rolled_back
+                        ? `Rollback completado (${organizeRes.applied_count} archivo(s) restaurado(s)).`
+                        : organizeRes.dry_run
+                          ? `Vista previa: ${organizeRes.moves.length} movimiento(s) sugerido(s).`
+                          : `Aplicados ${organizeRes.applied_count} movimiento(s) preservando UUID.`}
+                    </span>
                     {organizeRes.tx_id ? (
                       <span {...stylex.props(styles.txBadge)}>
                         tx:#{organizeRes.tx_id}
                       </span>
                     ) : null}
                   </div>
-                  {organizeRes.planned_moves.length === 0 ? (
+                  {organizeRes.moves.length === 0 ? (
                     <div {...stylex.props(styles.emptyPreview)}>
                       Sin movimientos necesarios para esta estrategia.
                     </div>
                   ) : (
                     <ul {...stylex.props(styles.moveList)}>
-                      {organizeRes.planned_moves.slice(0, 40).map((mv) => (
+                      {organizeRes.moves.slice(0, 40).map((mv) => (
                         <li
                           key={`${mv.track_id}-${mv.target_path}`}
                           {...stylex.props(styles.moveItem)}
                         >
                           <span {...stylex.props(styles.moveReason)}>
-                            {mv.reason}
+                            [{mv.bucket_label}] {mv.reason}
                           </span>
                           <span {...stylex.props(styles.movePath)}>
                             {mv.source_path} → {mv.target_path}
@@ -382,8 +393,8 @@ export default function CrateRulesBanner({
                 disabled={
                   organizing ||
                   !organizeRes ||
-                  organizeRes.planned_moves.length === 0 ||
-                  organizeRes.applied
+                  organizeRes.moves.length === 0 ||
+                  (!organizeRes.dry_run && organizeRes.applied_count > 0)
                 }
                 onClick={() => void handleApplyOrganize()}
                 {...stylex.props(styles.saveBtn)}

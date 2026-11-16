@@ -126,9 +126,10 @@ describe('PreGigAuditPopover, ScannerStatusPill & Track/Transition badges', () =
     ];
 
     const denonReport = buildLocalPreGigAuditFallback('denon_cd_mp3', tracks);
-    expect(denonReport.total_tracks_checked).toBe(3);
+    expect(denonReport.total_tracks).toBe(3);
     expect(denonReport.ready_count).toBe(1);
-    expect(denonReport.blocking_count).toBe(3);
+    expect(denonReport.blocker_count).toBe(3);
+    expect(denonReport.passed).toBe(false);
     expect(formatPreGigIssueKind('sample_rate_incompatible')).toBe('44.1 kHz');
 
     invokeMock.mockResolvedValueOnce(denonReport);
@@ -137,7 +138,7 @@ describe('PreGigAuditPopover, ScannerStatusPill & Track/Transition badges', () =
       'plugin:hera-dj|scanner_audit_pre_gig_crate',
       { targetProfile: 'denon_cd_mp3', trackIds: ['ok', 'vid'] },
     );
-    expect(viaIpc.total_tracks_checked).toBe(3);
+    expect(viaIpc.total_tracks).toBe(3);
 
     const popoverHtml = renderToStaticMarkup(
       <PreGigAuditPopover tracks={tracks} crateName="Salsa_VIP" />,
@@ -245,7 +246,6 @@ describe('OMKF Milestone O5 UI components & helpers', () => {
     folder_path: '/music/Salsa Baul',
     display_name: 'Salsa Baul',
     tree_seal_64: '9a8b7c6d',
-    dir_mtime_ns: 1700000000,
     track_count: 42,
     video_count: 6,
     full_count: 42,
@@ -255,7 +255,7 @@ describe('OMKF Milestone O5 UI components & helpers', () => {
     dominant_genre: 'SalsaBaulRomantica',
     era_span: '1992-1998',
     lufs_avg: -11.2,
-    rules_markdown: 'Mantener flujo romántico sin mezclar con perreo actual.',
+    has_custom_rules: true,
     updated_at_unix_ms: 1700000000000,
   };
 
@@ -267,9 +267,10 @@ describe('OMKF Milestone O5 UI components & helpers', () => {
       '86–98 BPM · 8A · 100% FULL',
     );
     expect(
-      extractLedgerTxIds(
-        '- 2026-11-16T10:00Z [agent:organizer] tx:#org_01\n- 2026-11-16T10:05Z tx:#org_02',
-      ),
+      extractLedgerTxIds([
+        '- 2026-11-16T10:00Z [agent:organizer] tx:#org_01',
+        '- 2026-11-16T10:05Z tx:#org_02',
+      ]),
     ).toEqual(['org_01', 'org_02']);
   });
 
@@ -277,8 +278,8 @@ describe('OMKF Milestone O5 UI components & helpers', () => {
     const bannerHtml = renderToStaticMarkup(
       <CrateRulesBanner
         crate={sampleCrate}
-        rulesMarkdown={sampleCrate.rules_markdown}
-        ledgerMarkdown="- 2026-11-16T10:00Z [agent:organizer] tx:#tx_99"
+        rulesMarkdown="Mantener flujo romántico sin mezclar con perreo actual."
+        ledgerEntries={['- 2026-11-16T10:00Z [agent:organizer] tx:#tx_99']}
       />,
     );
     expect(bannerHtml).toContain('OMKF .hera');

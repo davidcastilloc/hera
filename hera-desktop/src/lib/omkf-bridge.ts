@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
 import type { Track } from '../generated/typings';
+import DatabaseBridge from './bridge-database';
 import type { TrackWithScanMeta } from './scanner-v3';
 import useLibraryStore from './store';
 
@@ -27,7 +28,6 @@ export interface FolderCrateSummary {
   folder_path: string;
   display_name: string;
   tree_seal_64: string;
-  dir_mtime_ns: number;
   track_count: number;
   video_count: number;
   full_count: number;
@@ -37,25 +37,30 @@ export interface FolderCrateSummary {
   dominant_genre?: string | null;
   era_span?: string | null;
   lufs_avg?: number | null;
-  rules_markdown: string;
-  updated_at_unix_ms: number;
+  has_custom_rules: boolean;
+  updated_at_unix_ms?: number;
 }
 
 export interface FolderCrateDetail {
   summary: FolderCrateSummary;
-  tracks: Track[];
-  crate_markdown: string;
   rules_markdown: string;
-  ledger_markdown: string;
-  offline_fallback: boolean;
+  ledger_entries: string[];
+  track_ids: string[];
+  hydrated_from_omkf: boolean;
+  disk_online: boolean;
+}
+
+export interface HydratedFolderCrate {
+  detail: FolderCrateDetail;
+  tracks: Track[];
 }
 
 export interface PlannedFileMove {
   track_id: string;
   source_path: string;
   target_path: string;
-  target_folder: string;
   reason: string;
+  bucket_label: string;
 }
 
 export interface OrganizeFolderRequest {
@@ -67,12 +72,11 @@ export interface OrganizeFolderRequest {
 
 export interface OrganizeFolderResponse {
   crate_id: string;
-  tx_id: string;
   dry_run: boolean;
-  applied: boolean;
-  planned_moves: PlannedFileMove[];
-  ledger_entry?: string | null;
-  message: string;
+  tx_id: string;
+  moves: PlannedFileMove[];
+  applied_count: number;
+  rolled_back: boolean;
 }
 
 export function formatFolderCrateSubtitle(crate: FolderCrateSummary): string {
@@ -102,47 +106,63 @@ export async function listFolderCrates(): Promise<FolderCrateSummary[]> {
 
 export async function readFolderCrate(
   crateId: string,
-): Promise<FolderCrateDetail | null> {
+): Promise<HydratedFolderCrate | null> {
   try {
-    const res = await invoke<FolderCrateDetail | null>(
+    const detail = await invoke<FolderCrateDetail | null>(
       'plugin:hera-dj|omkf_read_folder_crate',
       { crateId },
     );
-    if (res && res.summary) return res;
+    if (detail && detail.summary) {
+      let tracks: Track[] = [];
+      if (detail.track_ids.length > 0) {
+        try {
+          tracks = await DatabaseBridge.getTracks(detail.track_ids);
+        } catch {
+          const idSet = new Set(detail.track_ids);
+          tracks = useLibraryStore
+            .getState()
+            .tracks.filter((t) => idSet.has(t.id));
+        }
+      }
+      return { detail, tracks };
+    }
   } catch {
     // Fallback outside native Tauri IPC
   }
+
   const allTracks = useLibraryStore.getState().tracks;
   const matching = allTracks.filter(
     (t) => (t as TrackWithScanMeta).crate_id === crateId,
   );
   if (matching.length === 0) return null;
   return {
-    summary: {
-      crate_id: crateId,
-      folder_path: '',
-      display_name: crateId,
-      tree_seal_64: '0',
-      dir_mtime_ns: 0,
-      track_count: matching.length,
-      video_count: matching.filter((t) => t.is_video).length,
-      full_count: matching.filter(
-        (t) => ((t as TrackWithScanMeta).scan_level ?? 0) >= 2,
-      ).length,
-      bpm_min: null,
-      bpm_max: null,
-      dominant_camelot: null,
-      dominant_genre: null,
-      era_span: null,
-      lufs_avg: null,
+    detail: {
+      summary: {
+        crate_id: crateId,
+        folder_path: '',
+        display_name: crateId,
+        tree_seal_64: '0',
+        track_count: matching.length,
+        video_count: matching.filter((t) => t.is_video).length,
+        full_count: matching.filter(
+          (t) => ((t as TrackWithScanMeta).scan_level ?? 0) >= 2,
+        ).length,
+        bpm_min: null,
+        bpm_max: null,
+        dominant_camelot: null,
+        dominant_genre: null,
+        era_span: null,
+        lufs_avg: null,
+        has_custom_rules: false,
+        updated_at_unix_ms: Date.now(),
+      },
       rules_markdown: '',
-      updated_at_unix_ms: Date.now(),
+      ledger_entries: [],
+      track_ids: matching.map((t) => t.id),
+      hydrated_from_omkf: false,
+      disk_online: false,
     },
     tracks: matching,
-    crate_markdown: '',
-    rules_markdown: '',
-    ledger_markdown: '',
-    offline_fallback: true,
   };
 }
 
@@ -175,11 +195,10 @@ export async function previewOrApplyOrganize(
   }
   return {
     crate_id: request.crate_id,
-    tx_id: `tx-preview-${Date.now()}`,
     dry_run: request.dry_run,
-    applied: false,
-    planned_moves: [],
-    ledger_entry: null,
-    message: 'Vista previa sin motor Tauri activo.',
+    tx_id: `tx-preview-${Date.now()}`,
+    moves: [],
+    applied_count: 0,
+    rolled_back: false,
   };
 }

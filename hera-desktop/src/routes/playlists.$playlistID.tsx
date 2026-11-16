@@ -49,19 +49,19 @@ export const Route = createFileRoute('/playlists/$playlistID')({
   loader: async ({ params }): Promise<LoaderPayload> => {
     if (isFolderPlaylistId(params.playlistID)) {
       const crateId = fromFolderPlaylistId(params.playlistID);
-      const crateDetail = await readFolderCrate(crateId);
-      if (!crateDetail) {
+      const hydrated = await readFolderCrate(crateId);
+      if (!hydrated) {
         throw redirect({ to: '/playlists' });
       }
       void promoteCrateFull(
         crateId,
-        crateDetail.tracks.map((t) => t.id),
+        hydrated.tracks.map((t) => t.id),
       );
       return {
         kind: 'folder',
-        crateDetail,
+        crateDetail: hydrated.detail,
         playlist: null,
-        playlistTracks: crateDetail.tracks,
+        playlistTracks: hydrated.tracks,
       };
     }
 
@@ -159,7 +159,7 @@ function ViewPlaylistDetails() {
         <CrateRulesBanner
           crate={loaderData.crateDetail.summary}
           rulesMarkdown={loaderData.crateDetail.rules_markdown}
-          ledgerMarkdown={loaderData.crateDetail.ledger_markdown}
+          ledgerEntries={loaderData.crateDetail.ledger_entries}
           onOrganized={invalidate}
         />
       )}

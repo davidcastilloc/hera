@@ -184,21 +184,21 @@ export default function PreGigAuditPopover({
                   <div {...stylex.props(styles.metricPill)}>
                     <span {...stylex.props(styles.metricLabel)}>Bloqueos</span>
                     <span {...stylex.props(styles.metricBlock)}>
-                      {report.blocking_count}
+                      {report.blocker_count}
                     </span>
                   </div>
                 </div>
 
                 {report.issues.length === 0 ? (
                   <div {...stylex.props(styles.cleanBox)}>
-                    Cabina lista: {report.total_tracks_checked} pistas sin
-                    incidencias para este equipo.
+                    Cabina lista: {report.total_tracks} pistas sin incidencias
+                    para este equipo.
                   </div>
                 ) : (
                   <ul {...stylex.props(styles.issueList)}>
                     {report.issues.slice(0, 30).map((issue) => (
                       <li
-                        key={`${issue.track_id}-${issue.issue_kind}`}
+                        key={`${issue.track_id}-${issue.issue_code}`}
                         {...stylex.props(styles.issueItem)}
                       >
                         <div {...stylex.props(styles.issueHead)}>
@@ -210,14 +210,14 @@ export default function PreGigAuditPopover({
                                 : styles.issueBadgeWarn,
                             )}
                           >
-                            {formatPreGigIssueKind(issue.issue_kind)}
+                            {formatPreGigIssueKind(issue.issue_code)}
                           </span>
                           <span {...stylex.props(styles.issueTrack)}>
-                            {issue.artist} — {issue.title}
+                            {issue.title}
                           </span>
                         </div>
                         <span {...stylex.props(styles.issueMessage)}>
-                          {issue.message}
+                          {issue.detail}
                         </span>
                       </li>
                     ))}
@@ -230,7 +230,7 @@ export default function PreGigAuditPopover({
           <div {...stylex.props(styles.footer)}>
             <span {...stylex.props(styles.footerHint)}>
               {report
-                ? `${report.total_tracks_checked} pistas verificadas`
+                ? `${report.total_tracks} pistas verificadas`
                 : 'Cero cambios en disco'}
             </span>
             <button

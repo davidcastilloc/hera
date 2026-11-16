@@ -46,19 +46,19 @@ export type PreGigTargetProfile = 'virtualdj' | 'usb_cdj' | 'denon_cd_mp3';
 export interface PreGigTrackIssue {
   track_id: string;
   title: string;
-  artist: string;
-  path: string;
-  issue_kind: string;
+  file_path: string;
+  issue_code: string;
   severity: string;
-  message: string;
+  detail: string;
 }
 
 export interface PreGigAuditReport {
-  target_profile: string;
-  total_tracks_checked: number;
+  target_hardware: string;
+  total_tracks: number;
   ready_count: number;
   warning_count: number;
-  blocking_count: number;
+  blocker_count: number;
+  passed: boolean;
   issues: PreGigTrackIssue[];
 }
 
@@ -68,9 +68,8 @@ export interface SonicTwinMatch {
   artist: string;
   bpm: number;
   camelot: string;
-  similarity: number;
-  inferred_genre_family?: string | null;
-  inferred_era_year?: number | null;
+  similarity_pct: number;
+  genre_family?: string | null;
 }
 
 export interface SonicTwinSession {
@@ -346,49 +345,45 @@ export function buildLocalPreGigAuditFallback(
 ): PreGigAuditReport {
   const issues: PreGigTrackIssue[] = [];
   let warningCount = 0;
-  let blockingCount = 0;
+  let blockerCount = 0;
 
   for (const t of tracks) {
-    const artist = t.artists.join(', ') || t.album_artist || 'Artista';
     const meta = t as TrackWithScanMeta;
     if ((meta.scan_level ?? 0) < 0) {
-      blockingCount++;
+      blockerCount++;
       issues.push({
         track_id: t.id,
         title: t.title,
-        artist,
-        path: t.path,
-        issue_kind: 'corrupt_file',
+        file_path: t.path,
+        issue_code: 'corrupt_file',
         severity: 'error',
-        message: 'Archivo en cuarentena (corrupto o ilegible).',
+        detail: 'Archivo en cuarentena (corrupto o ilegible).',
       });
       continue;
     }
     if (t.has_audio_skips) {
-      blockingCount++;
+      blockerCount++;
       issues.push({
         track_id: t.id,
         title: t.title,
-        artist,
-        path: t.path,
-        issue_kind: 'cd_skip_glitch',
+        file_path: t.path,
+        issue_code: 'cd_skip_glitch',
         severity: 'error',
-        message: 'Posible salto de audio / CD rayado detectado.',
+        detail: 'Posible salto de audio / CD rayado detectado.',
       });
     }
     if (
       (targetProfile === 'usb_cdj' || targetProfile === 'denon_cd_mp3') &&
       t.is_video
     ) {
-      blockingCount++;
+      blockerCount++;
       issues.push({
         track_id: t.id,
         title: t.title,
-        artist,
-        path: t.path,
-        issue_kind: 'video_on_cdj',
+        file_path: t.path,
+        issue_code: 'video_on_cdj',
         severity: 'error',
-        message: 'Pista de video incompatible con reproductores CDJ/Denon.',
+        detail: 'Pista de video incompatible con reproductores CDJ/Denon.',
       });
     }
     if (
@@ -396,15 +391,14 @@ export function buildLocalPreGigAuditFallback(
       t.sample_rate_hz != null &&
       t.sample_rate_hz !== 44100
     ) {
-      blockingCount++;
+      blockerCount++;
       issues.push({
         track_id: t.id,
         title: t.title,
-        artist,
-        path: t.path,
-        issue_kind: 'sample_rate_incompatible',
+        file_path: t.path,
+        issue_code: 'sample_rate_incompatible',
         severity: 'error',
-        message: `Sample rate ${t.sample_rate_hz} Hz incompatible (Denon CD/MP3 requiere 44.1 kHz).`,
+        detail: `Sample rate ${t.sample_rate_hz} Hz incompatible (Denon CD/MP3 requiere 44.1 kHz).`,
       });
     }
     if (t.is_fake_320kbps) {
@@ -412,22 +406,22 @@ export function buildLocalPreGigAuditFallback(
       issues.push({
         track_id: t.id,
         title: t.title,
-        artist,
-        path: t.path,
-        issue_kind: 'fake_320kbps',
+        file_path: t.path,
+        issue_code: 'fake_320kbps',
         severity: 'warning',
-        message: 'Posible transcodificación / falso 320 kbps (< 16 kHz).',
+        detail: 'Posible transcodificación / falso 320 kbps (< 16 kHz).',
       });
     }
   }
 
   const flaggedIds = new Set(issues.map((i) => i.track_id));
   return {
-    target_profile: targetProfile,
-    total_tracks_checked: tracks.length,
+    target_hardware: targetProfile,
+    total_tracks: tracks.length,
     ready_count: Math.max(0, tracks.length - flaggedIds.size),
     warning_count: warningCount,
-    blocking_count: blockingCount,
+    blocker_count: blockerCount,
+    passed: blockerCount === 0,
     issues,
   };
 }
@@ -449,7 +443,7 @@ export async function auditPreGigCrate(
         trackIds: trackIds ?? null,
       },
     );
-    if (res && typeof res.total_tracks_checked === 'number') {
+    if (res && typeof res.total_tracks === 'number') {
       return res;
     }
   } catch {
@@ -480,20 +474,19 @@ export async function findSonicTwins(
     .map((t) => {
       const diff = Math.abs((t.bpm ?? srcBpm) - srcBpm);
       const sameKey =
-        t.camelot && src.camelot && t.camelot === src.camelot ? 0.15 : 0;
-      const sim = Math.max(0, Math.min(0.99, 0.84 - diff * 0.02 + sameKey));
+        t.camelot && src.camelot && t.camelot === src.camelot ? 15 : 0;
+      const simPct = Math.max(0, Math.min(99, 84 - diff * 2 + sameKey));
       return {
         track_id: t.id,
         title: t.title,
         artist: t.artists.join(', ') || t.album_artist || 'Artista',
         bpm: t.bpm ?? srcBpm,
         camelot: t.camelot ?? '—',
-        similarity: sim,
-        inferred_genre_family: t.inferred_genre_family ?? null,
-        inferred_era_year: t.inferred_era_year ?? t.year ?? null,
+        similarity_pct: simPct,
+        genre_family: t.inferred_genre_family ?? null,
       };
     })
-    .sort((a, b) => b.similarity - a.similarity)
+    .sort((a, b) => b.similarity_pct - a.similarity_pct)
     .slice(0, limit);
 }
 

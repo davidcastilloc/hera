@@ -69,15 +69,20 @@ function ViewLibrary() {
     let base = sortedTracks;
 
     if (selectedCrateId) {
-      const folderPrefix = selectedCrate?.folder_path
-        ? selectedCrate.folder_path.replace(/\\/g, '/').toLowerCase()
+      const cleanFolder = selectedCrate?.folder_path
+        ? selectedCrate.folder_path
+            .replace(/\\/g, '/')
+            .replace(/\/+$/, '')
+            .toLowerCase()
         : null;
       base = base.filter((t) => {
         const meta = t as TrackWithScanMeta;
         if (meta.crate_id === selectedCrateId) return true;
-        if (folderPrefix) {
+        if (cleanFolder) {
           const p = t.path.replace(/\\/g, '/').toLowerCase();
-          return p.startsWith(`${folderPrefix}/`) || p.startsWith(folderPrefix);
+          const lastSlash = p.lastIndexOf('/');
+          const parentDir = lastSlash >= 0 ? p.slice(0, lastSlash) : '';
+          return parentDir === cleanFolder;
         }
         return false;
       });
