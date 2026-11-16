@@ -14,7 +14,7 @@ type Props = {
 
 export default function PlayingBarInfo(props: Props) {
   const { trackPlaying } = props;
-  const elapsed = usePlayingTrackCurrentTime();
+  const elapsed = usePlayingTrackCurrentTime(0.5);
   const formattedDuration = useFormattedDuration(trackPlaying.duration);
   const formattedProgress = useFormattedDuration(
     Math.min(trackPlaying.duration, elapsed),

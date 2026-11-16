@@ -96,7 +96,10 @@ pub(crate) fn resolve_tick_telemetry_frame(
         return Some(mapped);
     }
     if !snap.is_playing {
-        *last_real_frame = None;
+        if last_real_frame.take().is_some() {
+            let seq = seq_counter.fetch_add(1, Ordering::Relaxed);
+            return Some(synthesize_telemetry_frame_from_snapshot(snap, seq));
+        }
         return None;
     }
     if snap.backend_kind != "headless_clock" {

@@ -13,6 +13,7 @@ import {
 import queryClient from '../lib/query-client';
 import { allTracksQuery, configQuery } from '../lib/queries';
 import { useMiniModeStore } from '../lib/mini-mode-store';
+import player from '../lib/player';
 import useLibraryStore from '../lib/store';
 
 /**
@@ -74,9 +75,11 @@ export function applyRowPatchesToTracks(
     patchMap.set(p.track_id, p);
   }
 
-  return existing.map((track) => {
+  let changed = false;
+  const result = existing.map((track) => {
     const p = patchMap.get(track.id);
     if (!p) return track;
+    changed = true;
     const patched: Track = {
       ...track,
       bpm: p.bpm !== undefined ? (p.bpm ?? undefined) : track.bpm,
@@ -96,6 +99,8 @@ export function applyRowPatchesToTracks(
     };
     return patched;
   });
+
+  return changed ? result : existing;
 }
 
 /**
@@ -179,6 +184,16 @@ function LibraryEvents() {
       }
     });
 
+    let playbackCoalesceBuffer: ScannerRowPatch[] = [];
+    let playbackCoalesceTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushCoalescedPlaybackPatches = () => {
+      playbackCoalesceTimer = null;
+      if (playbackCoalesceBuffer.length === 0) return;
+      const batch = playbackCoalesceBuffer;
+      playbackCoalesceBuffer = [];
+      applyPatchesToCaches(batch);
+    };
+
     const p5 = listen<ScannerRowPatch[]>('hera:scanner-rows-updated', ({ payload }) => {
       if (!Array.isArray(payload) || payload.length === 0) return;
 
@@ -187,6 +202,11 @@ function LibraryEvents() {
 
       if (shouldFreezeSortPatches(isPointerInside, config?.library_sort_by)) {
         useScannerStore.getState().queueFrozenPatches(payload);
+      } else if (!player.isPaused()) {
+        playbackCoalesceBuffer.push(...payload);
+        if (!playbackCoalesceTimer) {
+          playbackCoalesceTimer = setTimeout(flushCoalescedPlaybackPatches, 500);
+        }
       } else {
         applyPatchesToCaches(payload);
       }
@@ -207,6 +227,8 @@ function LibraryEvents() {
     });
 
     return () => {
+      if (playbackCoalesceTimer) clearTimeout(playbackCoalesceTimer);
+      playbackCoalesceBuffer = [];
       void p1.then((unlisten) => unlisten());
       void p2.then((unlisten) => unlisten());
       void p3.then((unlisten) => unlisten());

@@ -1,10 +1,10 @@
 import { Slider } from '@base-ui/react/slider';
 import * as stylex from '@stylexjs/stylex';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type { Track } from '../generated/typings';
 import useFormattedDuration from '../hooks/useFormattedDuration';
-import usePlayingTrackCurrentTime from '../hooks/usePlayingTrackCurrentTime';
+import { usePlayerState } from '../hooks/usePlayer';
 import { getFourHotCuesForTrack } from '../lib/bridge-hera';
 import player from '../lib/player';
 import LiveSpectrumCanvas from './LiveSpectrumCanvas';
@@ -16,34 +16,45 @@ type Props = {
 
 export default function TrackProgress(props: Props) {
   const { trackPlaying } = props;
+  const isPlaying = usePlayerState((state) => !state.isPaused);
+  const [elapsed, setElapsed] = useState(() => player.getCurrentTime());
 
-  const elapsed = usePlayingTrackCurrentTime();
-  const hotCues = useMemo(
-    () => getFourHotCuesForTrack(trackPlaying),
-    [trackPlaying],
-  );
+  useEffect(() => {
+    setElapsed(player.getCurrentTime());
+    const onTimeUpdate = (t: number) => setElapsed(t);
+    player.on('timeupdate', onTimeUpdate);
+    return () => {
+      player.off('timeupdate', onTimeUpdate);
+    };
+  }, [trackPlaying.id]);
 
-  const jumpAudioTo = useCallback((value: number) => {
-    player.setCurrentTime(value);
-  }, []);
+  useEffect(() => {
+    if (!isPlaying) return;
+    let rafId = 0;
+    const step = () => {
+      setElapsed(player.getCurrentTime());
+      rafId = requestAnimationFrame(step);
+    };
+    rafId = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(rafId);
+  }, [isPlaying]);
 
-  const [tooltipTargetTime, setTooltipTargetTime] = useState<null | number>(
-    null,
-  );
+  const hotCues = useMemo(() => getFourHotCuesForTrack(trackPlaying), [trackPlaying]);
+  const jumpAudioTo = useCallback((value: number) => player.setCurrentTime(value), []);
+
+  const [tooltipTargetTime, setTooltipTargetTime] = useState<null | number>(null);
   const [tooltipX, setTooltipX] = useState<null | number>(null);
 
   const showTooltip = useCallback(
     (e: React.MouseEvent<HTMLElement>) => {
       const { offsetX } = e.nativeEvent;
-      const barWidth = e.currentTarget.offsetWidth;
-
+      const barWidth = Math.max(1, e.currentTarget.offsetWidth);
       const percent = (offsetX / barWidth) * 100;
-      const time = (percent * trackPlaying.duration) / 100;
-
+      const time = (percent * Math.max(1, trackPlaying.duration)) / 100;
       setTooltipTargetTime(time);
       setTooltipX(percent);
     },
-    [trackPlaying],
+    [trackPlaying.duration],
   );
 
   const hideTooltip = useCallback(() => {
@@ -52,35 +63,17 @@ export default function TrackProgress(props: Props) {
   }, []);
 
   const tooltipContent = useFormattedDuration(tooltipTargetTime);
+  const durationMax = Math.max(1, trackPlaying.duration);
 
   return (
-    <Slider.Root
-      min={0}
-      max={trackPlaying.duration}
-      step={1}
-      value={elapsed}
-      onValueChange={jumpAudioTo}
-    >
-      <Slider.Control
-        {...stylex.props(styles.trackRoot)}
-        onMouseMoveCapture={showTooltip}
-        onMouseLeave={hideTooltip}
-      >
+    <Slider.Root min={0} max={durationMax} step={0.01} value={Math.min(elapsed, durationMax)} onValueChange={jumpAudioTo}>
+      <Slider.Control {...stylex.props(styles.trackRoot)} onMouseMoveCapture={showTooltip} onMouseLeave={hideTooltip}>
         <Slider.Track {...stylex.props(styles.trackProgress)}>
-          <WaveformPeaksCanvas
-            peaks={trackPlaying.waveform_peaks_blob}
-            progressPct={(elapsed / Math.max(1, trackPlaying.duration)) * 100}
-          />
+          <WaveformPeaksCanvas peaks={trackPlaying.waveform_peaks_blob} progressPct={(elapsed / durationMax) * 100} />
           <LiveSpectrumCanvas />
           <Slider.Indicator {...stylex.props(styles.trackRange)} />
           {hotCues.map((cue) => {
-            const pct = Math.min(
-              99,
-              Math.max(
-                0.5,
-                (cue.seconds / Math.max(1, trackPlaying.duration)) * 100,
-              ),
-            );
+            const pct = Math.min(99, Math.max(0.5, (cue.seconds / durationMax) * 100));
             return (
               <button
                 key={cue.num}
@@ -91,19 +84,13 @@ export default function TrackProgress(props: Props) {
                   jumpAudioTo(cue.seconds);
                 }}
                 {...stylex.props(styles.hotCuePin)}
-                style={{
-                  left: `${pct}%`,
-                  backgroundColor: cue.color,
-                }}
+                style={{ left: `${pct}%`, backgroundColor: cue.color }}
               />
             );
           })}
           <div
             {...stylex.props(styles.progressTooltip)}
-            style={{
-              left: `${tooltipX}%`,
-              display: tooltipX == null ? 'none' : 'block',
-            }}
+            style={{ left: `${tooltipX}%`, display: tooltipX == null ? 'none' : 'block' }}
           >
             {tooltipContent}
           </div>
@@ -123,9 +110,7 @@ const styles = stylex.create({
     touchAction: 'none',
     height: '8px',
     transform: 'translateY(4px)',
-    outline: {
-      ':has(:focus-visible)': '1.5px solid var(--focus-color)',
-    },
+    outline: { ':has(:focus-visible)': '1.5px solid var(--focus-color)' },
   },
   trackProgress: {
     display: 'block',

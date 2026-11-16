@@ -10,6 +10,7 @@ import type { QueueOrigin } from '../types/museeks';
 import ConfigBridge from './bridge-config';
 import { getCover } from './cover';
 import { NativeRustAudioTransport } from './native-audio-transport';
+import { notifyDeckPlaying, notifyDeckTrack } from './scanner-v3';
 import { logAndNotifyError } from './utils';
 import { shuffleTracks } from './utils-player';
 
@@ -75,6 +76,7 @@ class Player extends EventEmitter<PlayerEvents> {
 
   // Cached state for useSyncExternalStore
   private state: PlayerState | null = null;
+  private trackLoadSeq = 0;
 
   constructor(options?: PlayerOptions) {
     super();
@@ -129,14 +131,17 @@ class Player extends EventEmitter<PlayerEvents> {
 
   private setupTransportListeners() {
     this.transport.on('play', () => {
+      notifyDeckPlaying(true);
       this.emit('play');
       this.emitStateChange();
     });
     this.transport.on('pause', () => {
+      notifyDeckPlaying(false);
       this.emit('pause');
       this.emitStateChange();
     });
     this.transport.on('ended', () => {
+      notifyDeckPlaying(false);
       this.emit('ended');
       void this.next();
     });
@@ -249,39 +254,24 @@ class Player extends EventEmitter<PlayerEvents> {
     return this.state;
   }
 
-  // ============================================================================
   // Playback controls
-  // ============================================================================
-
   async play() {
-    if (!this.transport.hasTrack()) {
-      throw new Error('Trying to play a track but no track is loaded');
-    }
-
+    if (!this.transport.hasTrack()) throw new Error('Trying to play a track but no track is loaded');
     await this.transport.play();
   }
-
-  pause() {
-    this.transport.pause();
-  }
-
+  pause() { this.transport.pause(); }
   stop() {
     this.transport.pause();
-
     this.queue = [];
     this.queueCursor = null;
     this.queueOrigin = null;
     this.emit('stop');
     this.emitStateChange();
   }
-
   async playPause() {
     try {
-      if (this.transport.paused && this.queue.length > 0) {
-        await this.play();
-      } else {
-        this.pause();
-      }
+      if (this.transport.paused && this.queue.length > 0) await this.play();
+      else this.pause();
     } catch (error) {
       logAndNotifyError(error);
     }
@@ -563,13 +553,14 @@ class Player extends EventEmitter<PlayerEvents> {
     return this.repeat;
   }
 
-  // ============================================================================
   // Track management
-  // ============================================================================
-
   async setTrack(track: Track) {
-    await this.transport.loadTrack(track.path, track.duration);
+    const seq = ++this.trackLoadSeq;
+    notifyDeckTrack(track.id, []);
     this.emit('trackChange', track);
+    this.emitStateChange();
+    await this.transport.loadTrack(track.path, track.duration);
+    if (seq !== this.trackLoadSeq) return;
     this.emitStateChange();
   }
 

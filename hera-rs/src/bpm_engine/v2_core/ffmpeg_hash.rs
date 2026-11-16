@@ -1,24 +1,40 @@
 use super::*;
 use crate::bpm_engine::v2_core::audio_ingest::DecodedAudio;
 use std::io::Read;
+use std::sync::mpsc;
+use std::time::Duration;
 
-pub fn decode_via_ffmpeg_pipe(path: &Path) -> Result<DecodedAudio, EngineError> {
+pub fn run_ffmpeg_f32le_pipe_bounded(
+    path: &Path,
+    window: Option<(f64, f64)>,
+    timeout_secs: u64,
+) -> Result<Vec<f32>, EngineError> {
     let mut cmd = Command::new("ffmpeg");
-    cmd.args(["-v", "error", "-nostdin", "-vn", "-sn", "-dn", "-i"])
-        .arg(path)
-        .args(["-ac", "1", "-ar", "44100", "-f", "f32le", "-acodec", "pcm_f32le", "pipe:1"])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.args(["-v", "quiet", "-nostdin"]);
+    if let Some((start, _)) = window {
+        cmd.arg("-ss").arg(format!("{start:.3}"));
+    }
+    cmd.arg("-i").arg(path);
+    if let Some((_, dur)) = window {
+        cmd.arg("-t").arg(format!("{dur:.3}"));
+    } else {
+        cmd.args(["-t", "420"]);
+    }
+    cmd.args([
+        "-vn", "-sn", "-dn", "-ac", "1", "-ar", "44100", "-f", "f32le", "-acodec", "pcm_f32le",
+        "pipe:1",
+    ])
+    .stdin(Stdio::null())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::null());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
     }
+
     let mut child = cmd.spawn().map_err(|e| {
-        EngineError::FfmpegFallbackFailed(format!(
-            "No se pudo iniciar `ffmpeg` en PATH: {}",
-            e
-        ))
+        EngineError::FfmpegFallbackFailed(format!("No se pudo iniciar `ffmpeg`: {e}"))
     })?;
 
     let mut stdout = child
@@ -26,30 +42,55 @@ pub fn decode_via_ffmpeg_pipe(path: &Path) -> Result<DecodedAudio, EngineError> 
         .take()
         .ok_or_else(|| EngineError::FfmpegFallbackFailed("Pipe stdout vacío".into()))?;
 
-    let mut raw_bytes = Vec::with_capacity(44_100 * 4 * 180);
-    stdout
-        .read_to_end(&mut raw_bytes)
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut buf = Vec::with_capacity(44_100 * 4 * 60);
+        let res = stdout.read_to_end(&mut buf).map(|_| buf);
+        let _ = tx.send(res);
+    });
+
+    let deadline = Instant::now() + Duration::from_secs(timeout_secs.max(2));
+    let exited_ok = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status.success(),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(EngineError::FfmpegFallbackFailed(format!(
+                    "FFmpeg timeout tras {timeout_secs}s en {path:?}"
+                )));
+            }
+            Err(e) => {
+                let _ = child.kill();
+                return Err(EngineError::FfmpegFallbackFailed(e.to_string()));
+            }
+        }
+    };
+
+    let raw_bytes = rx
+        .recv_timeout(Duration::from_secs(2))
+        .map_err(|e| EngineError::FfmpegFallbackFailed(format!("Timeout leyendo stdout: {e}")))?
         .map_err(|e| EngineError::FfmpegFallbackFailed(e.to_string()))?;
 
-    let status = child
-        .wait()
-        .map_err(|e| EngineError::FfmpegFallbackFailed(e.to_string()))?;
-
-    if !status.success() || raw_bytes.len() < 4 {
+    if !exited_ok || raw_bytes.len() < 4 {
         return Err(EngineError::FfmpegFallbackFailed(format!(
-            "FFmpeg retornó código {:?} en {:?}",
-            status.code(),
-            path
+            "FFmpeg no decodificó audio válido en {path:?}"
         )));
     }
 
-    let num_samples = raw_bytes.len() / 4;
-    let mut samples = Vec::with_capacity(num_samples);
+    let mut samples = Vec::with_capacity(raw_bytes.len() / 4);
     for chunk in raw_bytes.chunks_exact(4) {
         let s = f32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         samples.push(if s.is_finite() { s } else { 0.0 });
     }
+    Ok(samples)
+}
 
+pub fn decode_via_ffmpeg_pipe(path: &Path) -> Result<DecodedAudio, EngineError> {
+    let samples = run_ffmpeg_f32le_pipe_bounded(path, None, 20)?;
     let duration_sec = (samples.len() as f64) / (FFMPEG_PIPE_SR as f64);
     Ok(DecodedAudio {
         samples,
@@ -99,4 +140,18 @@ pub fn fast_partial_file_hash(path: &Path) -> Result<String, EngineError> {
         }
     }
     Ok(format!("{:016x}{:016x}", h1, h2))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bounded_ffmpeg_pipe_returns_fast_err_on_missing_file_without_hanging() {
+        let bogus = Path::new("C:/nonexistent_hera_missing_track_12345.mp3");
+        let start = Instant::now();
+        let res = run_ffmpeg_f32le_pipe_bounded(bogus, Some((0.0, 5.0)), 3);
+        assert!(res.is_err());
+        assert!(start.elapsed() < Duration::from_secs(4));
+    }
 }

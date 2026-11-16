@@ -31,7 +31,7 @@ fn probe_duration_fast_secs(path: &Path) -> u32 {
         .is_some_and(|ext| matches!(ext.to_ascii_lowercase().as_str(), "webm" | "mkv" | "mp4" | "mov" | "avi" | "flv" | "m4v"));
 
     if !is_video {
-        let lofty_dur = lofty::probe::Probe::open(path)
+        return lofty::probe::Probe::open(path)
             .ok()
             .and_then(|p| {
                 p.options(lofty::config::ParseOptions::new().read_cover_art(false))
@@ -40,17 +40,13 @@ fn probe_duration_fast_secs(path: &Path) -> u32 {
             })
             .map(|tf| tf.properties().duration().as_secs() as u32)
             .unwrap_or(0);
-        if lofty_dur > 0 {
-            return lofty_dur;
-        }
     }
 
     let mut cmd = std::process::Command::new("ffprobe");
-    cmd.args([
-        "-v", "error", "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
-    ])
-    .arg(path);
+    cmd.args(["-v", "quiet", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1"])
+        .arg(path)
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -70,7 +66,11 @@ struct ProcessedTrackOutcome {
     hot_cues: Option<Vec<HotCuePin>>,
 }
 
-fn empty_failure_update(track_id: String, duration_sec: Option<u32>) -> ScannerRowUpdate {
+fn empty_failure_update(
+    track_id: String,
+    duration_sec: Option<u32>,
+    target_level: i64,
+) -> ScannerRowUpdate {
     ScannerRowUpdate {
         track_id,
         bpm: None,
@@ -78,11 +78,16 @@ fn empty_failure_update(track_id: String, duration_sec: Option<u32>) -> ScannerR
         energy: None,
         hot_cues_json: None,
         waveform_peaks_blob: None,
-        scan_level: 1,
+        scan_level: target_level,
         is_transition_candidate: false,
         is_fake_320kbps: false,
         duration_sec,
     }
+}
+
+struct InFlightGuard<'a>(&'a hera_node_rs::scanner::scheduler::ScanScheduler, String);
+impl Drop for InFlightGuard<'_> {
+    fn drop(&mut self) { self.0.complete(&self.1); }
 }
 
 pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
@@ -131,6 +136,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                     continue;
                 }
                 let Some((track_id, prio)) = sched_w.wait_next(Duration::from_millis(250)) else { continue; };
+                let _in_flight_guard = InFlightGuard(&sched_w, track_id.clone());
                 if super::workability::is_scan_cancelled() && prio >= ScanPriority::P2FastBackground { continue; }
                 let cached = { cache_w.lock().unwrap().get(&track_id).cloned() };
                 let Some((path, current_level, cached_dur)) = cached else {
@@ -166,7 +172,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                         }
                         Err(e) => {
                             warn!("Full pass failed for {path}: {e}");
-                            let _ = tx_w.send(ProcessedTrackOutcome { update: empty_failure_update(track_id, duration_opt), hot_cues: None });
+                            let _ = tx_w.send(ProcessedTrackOutcome { update: empty_failure_update(track_id, duration_opt, 2), hot_cues: None });
                         }
                     }
                 } else {
@@ -183,7 +189,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                         }
                         Err(e) => {
                             warn!("Fast scan failed for {path}: {e}");
-                            let _ = tx_w.send(ProcessedTrackOutcome { update: empty_failure_update(track_id, duration_opt), hot_cues: None });
+                            let _ = tx_w.send(ProcessedTrackOutcome { update: empty_failure_update(track_id, duration_opt, 1), hot_cues: None });
                         }
                     }
                 }

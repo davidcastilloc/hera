@@ -144,6 +144,6 @@ pub async fn native_audio_get_state(
     state: tauri::State<'_, NativeAudioState>,
 ) -> Result<NativePlayerSnapshot, String> {
     let snap = state.0.snapshot();
-    let telemetry = state.0.poll_latest_telemetry();
-    Ok(map_player_snapshot(snap, telemetry))
+    // Do not drain `rtrb` telemetry here so the 120 Hz Channel stream receives every frame.
+    Ok(map_player_snapshot(snap, None))
 }

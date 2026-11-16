@@ -64,8 +64,8 @@ pub async fn apply_scanner_batch_updates(
         let dur_i64 = u.duration_sec.map(|d| d as i64);
         sqlx::query(
             "UPDATE tracks SET
-                bpm = COALESCE(?, bpm),
-                camelot = COALESCE(?, camelot),
+                bpm = CASE WHEN user_locked_bpm_key = 0 THEN COALESCE(?, bpm) ELSE bpm END,
+                camelot = CASE WHEN user_locked_bpm_key = 0 THEN COALESCE(?, camelot) ELSE camelot END,
                 energy = COALESCE(?, energy),
                 hot_cues = COALESCE(?, hot_cues),
                 waveform_peaks_blob = COALESCE(?, waveform_peaks_blob),
@@ -74,7 +74,7 @@ pub async fn apply_scanner_batch_updates(
                 is_fake_320kbps = ?,
                 duration = CASE WHEN ? IS NOT NULL AND ? > 0 THEN ? ELSE duration END,
                 is_mix_over_10m = CASE WHEN ? IS NOT NULL AND ? > 600 THEN 1 ELSE is_mix_over_10m END
-             WHERE id = ? AND user_locked_bpm_key = 0",
+             WHERE id = ?",
         )
         .bind(u.bpm)
         .bind(&u.camelot)

@@ -159,6 +159,7 @@
         let mut raw_mono = Vec::new();
         let mut sample_buf: Option<SampleBuffer<f32>> = None;
 
+        let min_usable_samples = (actual_sr.max(8_000) as usize) * 10;
         loop {
             let packet = match probed.format.next_packet() {
                 Ok(p) => p,
@@ -168,6 +169,7 @@
                     break;
                 }
                 Err(SymphError::ResetRequired) => break,
+                Err(_) if raw_mono.len() >= min_usable_samples => break,
                 Err(e) => return Err(EngineError::DemuxOrDecode(e.to_string())),
             };
 
@@ -206,6 +208,7 @@
                 {
                     break;
                 }
+                Err(_) if raw_mono.len() >= min_usable_samples => break,
                 Err(e) => return Err(EngineError::DemuxOrDecode(e.to_string())),
             }
         }

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
@@ -45,6 +45,7 @@ impl AutoGigGovernor {
 struct SchedulerInner {
     queues: [VecDeque<String>; 4],
     in_flight_or_queued: HashMap<String, ScanPriority>,
+    active_in_flight: HashSet<String>,
 }
 
 pub struct ScanScheduler {
@@ -64,6 +65,7 @@ impl ScanScheduler {
                     VecDeque::new(),
                 ],
                 in_flight_or_queued: HashMap::new(),
+                active_in_flight: HashSet::new(),
             }),
             cv: Condvar::new(),
             governor: AutoGigGovernor::new(max_workers),
@@ -81,6 +83,7 @@ impl ScanScheduler {
                 };
                 if inner.in_flight_or_queued.get(&id) == Some(&prio) {
                     inner.in_flight_or_queued.remove(&id);
+                    inner.active_in_flight.insert(id.clone());
                     return Some((id, prio));
                 }
             }
@@ -92,6 +95,9 @@ impl ScanScheduler {
     pub fn enqueue_or_promote(&self, track_id: impl Into<String>, prio: ScanPriority) {
         let id = track_id.into();
         let mut guard = self.inner.lock().unwrap();
+        if guard.active_in_flight.contains(&id) && prio != ScanPriority::P0Immediate {
+            return;
+        }
         if let Some(&existing) = guard.in_flight_or_queued.get(&id) {
             if prio < existing {
                 guard.in_flight_or_queued.insert(id.clone(), prio);
@@ -113,6 +119,9 @@ impl ScanScheduler {
         let mut any_added = false;
         let p_idx = prio as usize;
         for id in ids {
+            if guard.active_in_flight.contains(&id) {
+                continue;
+            }
             if let Some(&existing) = guard.in_flight_or_queued.get(&id) {
                 if prio < existing {
                     guard.in_flight_or_queued.insert(id.clone(), prio);
@@ -129,6 +138,14 @@ impl ScanScheduler {
         if any_added {
             self.cv.notify_all();
         }
+    }
+
+    pub fn complete(&self, track_id: &str) {
+        self.inner.lock().unwrap().active_in_flight.remove(track_id);
+    }
+
+    pub fn active_count(&self) -> usize {
+        self.inner.lock().unwrap().active_in_flight.len()
     }
 
     pub fn pop_next(&self) -> Option<(String, ScanPriority)> {
@@ -229,5 +246,25 @@ mod tests {
 
         let res = handle.join().unwrap();
         assert_eq!(res, Some(("wake_track".to_string(), ScanPriority::P0Immediate)));
+    }
+
+    #[test]
+    fn test_active_in_flight_blocks_duplicate_enqueue_until_complete() {
+        let sched = ScanScheduler::new(4);
+        sched.enqueue_batch(vec!["t_active".to_string()], ScanPriority::P2FastBackground);
+        let popped = sched.pop_next().unwrap();
+        assert_eq!(popped.0, "t_active");
+        assert_eq!(sched.active_count(), 1);
+        assert_eq!(sched.pending_count(), 0);
+
+        sched.enqueue_batch(vec!["t_active".to_string()], ScanPriority::P2FastBackground);
+        assert!(sched.pop_next().is_none());
+
+        sched.complete("t_active");
+        assert_eq!(sched.active_count(), 0);
+        assert_eq!(sched.pending_count(), 0);
+
+        sched.enqueue_batch(vec!["t_active".to_string()], ScanPriority::P2FastBackground);
+        assert_eq!(sched.pop_next().unwrap().0, "t_active");
     }
 }

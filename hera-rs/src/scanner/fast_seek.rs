@@ -178,8 +178,7 @@ pub fn run_fast_scan_on_file(
     limiter: Option<&crate::bpm_engine::v2_core::audio_ingest::ProcessLimiter>,
 ) -> Result<FastScanResult, crate::bpm_engine::v2_core::types::EngineError> {
     use crate::bpm_engine::v2_core::audio_ingest::load_audio_mono_native_sr;
-    use crate::bpm_engine::v2_core::types::EngineError;
-    use std::process::{Command, Stdio};
+    use crate::bpm_engine::v2_core::ffmpeg_hash::run_ffmpeg_f32le_pipe_bounded;
 
     let ext = path
         .extension()
@@ -208,31 +207,8 @@ pub fn run_fast_scan_on_file(
         }
     } else {
         let _permit = limiter.map(|l| l.acquire());
-        let decode_win = |start: f64, dur: f64| -> Result<Vec<f32>, EngineError> {
-            use std::io::Read;
-            let mut cmd = Command::new("ffmpeg");
-            cmd.args(["-v", "error", "-nostdin", "-ss"])
-                .arg(format!("{start:.3}"))
-                .arg("-i")
-                .arg(path)
-                .args(["-t", &format!("{dur:.3}"), "-vn", "-sn", "-dn", "-ac", "1", "-ar", "44100", "-f", "f32le", "pipe:1"])
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped());
-            #[cfg(windows)]
-            {
-                use std::os::windows::process::CommandExt;
-                cmd.creation_flags(0x0800_0000);
-            }
-            let mut child = cmd.spawn().map_err(|e| EngineError::FfmpegFallbackFailed(e.to_string()))?;
-            let mut raw = Vec::new();
-            if let Some(mut out) = child.stdout.take() {
-                let _ = out.read_to_end(&mut raw);
-            }
-            let _ = child.wait();
-            Ok(raw.chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect())
-        };
-        let a = decode_win(58.0, 24.0)?;
-        let b = decode_win(122.0, 16.0).unwrap_or_default();
+        let a = run_ffmpeg_f32le_pipe_bounded(path, Some((58.0, 24.0)), 15)?;
+        let b = run_ffmpeg_f32le_pipe_bounded(path, Some((122.0, 16.0)), 15).unwrap_or_default();
         (a, b, 44_100)
     };
 
