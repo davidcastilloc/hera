@@ -10,6 +10,7 @@ pub mod error;
 pub mod export;
 pub mod forensics;
 pub mod forensics_glitch;
+pub mod genre_intelligence;
 pub mod mcp;
 pub mod p2p;
 pub mod p2p_exchange;

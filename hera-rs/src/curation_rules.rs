@@ -1,4 +1,23 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// Optional per-track acoustic & Genre × Era overrides passed to the curator without
+/// altering legacy `CrateTrackCandidate` serialized shapes.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct TrackCurationHint {
+    #[serde(default)]
+    pub entry_bpm: Option<f32>,
+    #[serde(default)]
+    pub exit_bpm: Option<f32>,
+    #[serde(default)]
+    pub is_transition_candidate: bool,
+    #[serde(default)]
+    pub genre_family_code: Option<u8>,
+    #[serde(default)]
+    pub inferred_era_year: Option<u16>,
+    #[serde(default)]
+    pub genre_confidence: Option<f32>,
+}
 
 /// DJ Learned Curation Rules for crate optimization.
 ///
@@ -8,6 +27,8 @@ use serde::{Deserialize, Serialize};
 /// 3. Hard duration filtering for normal crates: tracks with duration > `max_track_duration_seconds`
 ///    (default: 600.0s = 10 minutes) are routed to a logical "Mixes (> 10m)" collection
 ///    without moving, renaming, or touching files on disk.
+/// 4. Genre × Era isolation (`crossover_mode`, `target_genre_family`, `target_era_year`)
+///    and optional per-track `entry_bpm` / `exit_bpm` hints.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DjCurationRuleSet {
     /// Track IDs explicitly excluded from automatic crate curation (e.g. retired tracks).
@@ -35,6 +56,22 @@ pub struct DjCurationRuleSet {
     /// Whether to allow mixed Audio and Video candidate tracks (default: true).
     #[serde(default = "default_allow_video_tracks")]
     pub allow_video_tracks: bool,
+
+    /// Allow deliberate cross-genre / cross-era sets (e.g. Hora Loca / Open-Format). Default: false.
+    #[serde(default)]
+    pub crossover_mode: bool,
+
+    /// Optional explicit target Genre family (code `"1".."14"` or name like `"ReggaetonActualPerreo"`).
+    #[serde(default)]
+    pub target_genre_family: Option<String>,
+
+    /// Optional target release era year (e.g. `1996` or `2025`).
+    #[serde(default)]
+    pub target_era_year: Option<u16>,
+
+    /// Optional per-track acoustic / Genre × Era metadata keyed by `track_id`.
+    #[serde(default)]
+    pub track_hints: HashMap<String, TrackCurationHint>,
 }
 
 fn default_max_track_duration_seconds() -> f32 {
@@ -58,6 +95,10 @@ impl Default for DjCurationRuleSet {
             max_track_duration_seconds: default_max_track_duration_seconds(),
             golden_pair_synergy_bonus: default_golden_pair_bonus(),
             allow_video_tracks: default_allow_video_tracks(),
+            crossover_mode: false,
+            target_genre_family: None,
+            target_era_year: None,
+            track_hints: HashMap::new(),
         }
     }
 }
@@ -93,6 +134,10 @@ pub struct CuratedCrateWithRulesResult {
 
     /// Breakdown of video tracks included in the final sequence.
     pub video_tracks_count: usize,
+
+    /// Track IDs logically isolated by Genre × Era rules (zero disk mutation).
+    #[serde(default)]
+    pub isolated_out_of_genre_tracks: Vec<String>,
 }
 
 impl DjCurationRuleSet {

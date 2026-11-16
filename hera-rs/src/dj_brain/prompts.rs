@@ -120,3 +120,67 @@ pub fn build_agent_harness_system_prompt(
         state.node_id
     )
 }
+
+/// Builds the desktop DJ Curator Super-Prompt encoding `Genre × Era` isolation,
+/// `< 10m` Mixes routing, Golden Pairs / Exclusions memory, and `Don't break the user space`.
+pub fn build_desktop_dj_curator_system_prompt(
+    dj_handle: &str,
+    preferred_software: &str,
+    style_dna: Option<&DjStyleDnaProfile>,
+    golden_pairs_hints: &[String],
+    excluded_hints: &[String],
+    commander_mode: Option<&str>,
+) -> String {
+    let mode_label = match commander_mode.unwrap_or("executive_boss") {
+        "autonomous_operator" => "Operador Autónomo (ejecuta herramientas y entrega recibo exacto)",
+        "advisor_only" => "Auditor y Consejero (diagnostica sin modificar crates ni discos)",
+        _ => "Protocolo El Jefe (prepara opciones claras con 1 clic y obedece al DJ)",
+    };
+    let dna_block = style_dna
+        .map(|d| d.prompt_block.as_str())
+        .unwrap_or("Perfil estándar en calibración; adapta la propuesta al repertorio consultado.");
+    let golden_str = if golden_pairs_hints.is_empty() {
+        "Ninguna registrada aún.".to_string()
+    } else {
+        golden_pairs_hints.join(" | ")
+    };
+    let excl_str = if excluded_hints.is_empty() {
+        "Ninguna registrada.".to_string()
+    } else {
+        excluded_hints.join(", ")
+    };
+
+    format!(
+        "Eres el Copiloto Curador de HERA Desktop para DJ `{dj_handle}` (Cabina: {preferred_software} | Modo: {mode_label}).\n\
+         Responde en español claro, directo y de cabina, sin muros de texto ni jerga intimidante.\n\n\
+         [REGLAS SAGRADAS DE CURACIÓN Y CABINA]\n\
+         1. Aislamiento Estricto Genre × Era: JAMÁS mezcles Salsa Baúl/Brava (82-108 BPM) con Reggaetón/Perreo (88-102 BPM) ni Tecnomerengue/Euro-Merengue 90s (~126 BPM) con Merenguetón moderno 2025-2026 (~126 BPM), salvo petición explícita de Crossover/Hora Loca o usando una pista puente (`is_transition_candidate` con `entry_bpm -> exit_bpm`).\n\
+         2. Regla <= 600s vs Mixes > 10m: Crates normales aceptan pistas Audio y Video HD entre 25s y 600s; sesiones > 10 min van al área lógica de Mixes sin mover, renombrar ni borrar archivos en disco (Don't break the user space).\n\
+         3. Higiene Acústica Zero-IO: Excluye pistas en cuarentena (`scan_level < 0`) o con saltos de CD (`has_audio_skips = 1`); respeta los 8 Hot Cues (Pads 1..4 entrada/drop, Pads 5..8 segunda mitad >= 50%) y evita choques vocales (`has_outro_vocals && has_intro_vocals`).\n\
+         4. Memoria Viva del DJ: Prioriza Golden Pairs ({golden_str}) y excluye pistas vetadas ({excl_str}).\n\
+         5. Enjambre P2P Primero: Usa herramientas MCP reales (`search_library_tracks`, `create_playlist`, `push_virtualdj_live_crate`, `record_golden_pair`, `exclude_track_curation`) sobre suposiciones.\n\n\
+         [ADN MUSICAL]\n{dna_block}"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build_desktop_dj_curator_system_prompt;
+
+    #[test]
+    fn test_desktop_dj_curator_super_prompt_encodes_booth_rules() {
+        let prompt = build_desktop_dj_curator_system_prompt(
+            "DaviDJ",
+            "VirtualDJ",
+            None,
+            &["Perdóname mi vida -> Conquístame".to_string()],
+            &["Clavelito ya no".to_string()],
+            Some("executive_boss"),
+        );
+        assert!(prompt.contains("Genre × Era"));
+        assert!(prompt.contains("600s"));
+        assert!(prompt.contains("Don't break the user space"));
+        assert!(prompt.contains("Perdóname mi vida -> Conquístame"));
+        assert!(prompt.contains("Clavelito ya no"));
+    }
+}

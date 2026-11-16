@@ -206,3 +206,137 @@ pub struct DiscoveredMusicRoot {
     #[ts(type = "number")]
     pub video_tracks_count: usize,
 }
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct FolderCrateSummary {
+    pub crate_id: String,
+    pub folder_path: String,
+    pub display_name: String,
+    pub tree_seal_64: String,
+    #[ts(type = "number")]
+    pub track_count: usize,
+    #[ts(type = "number")]
+    pub video_count: usize,
+    #[ts(type = "number")]
+    pub full_count: usize,
+    #[ts(optional = nullable)]
+    pub bpm_min: Option<f64>,
+    #[ts(optional = nullable)]
+    pub bpm_max: Option<f64>,
+    #[ts(optional = nullable)]
+    pub dominant_camelot: Option<String>,
+    #[ts(optional = nullable)]
+    pub dominant_genre: Option<String>,
+    #[ts(optional = nullable)]
+    pub era_span: Option<String>,
+    #[ts(optional = nullable)]
+    pub lufs_avg: Option<f64>,
+    pub has_custom_rules: bool,
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub updated_at_unix_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct FolderCrateDetail {
+    pub summary: FolderCrateSummary,
+    pub rules_markdown: String,
+    pub ledger_entries: Vec<String>,
+    pub track_ids: Vec<String>,
+    pub hydrated_from_omkf: bool,
+    pub disk_online: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct PlannedFileMove {
+    pub track_id: String,
+    pub source_path: String,
+    pub target_path: String,
+    pub reason: String,
+    pub bucket_label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct OrganizeFolderRequest {
+    pub crate_id: String,
+    pub strategy: String,
+    pub dry_run: bool,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub rollback_tx_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct OrganizeFolderResponse {
+    pub crate_id: String,
+    pub dry_run: bool,
+    pub tx_id: String,
+    pub moves: Vec<PlannedFileMove>,
+    #[ts(type = "number")]
+    pub applied_count: usize,
+    pub rolled_back: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct PreGigTrackIssue {
+    pub track_id: String,
+    pub title: String,
+    pub file_path: String,
+    pub issue_code: String,
+    pub severity: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct PreGigAuditReport {
+    pub target_hardware: String,
+    #[ts(type = "number")]
+    pub total_tracks: usize,
+    #[ts(type = "number")]
+    pub ready_count: usize,
+    #[ts(type = "number")]
+    pub warning_count: usize,
+    #[ts(type = "number")]
+    pub blocker_count: usize,
+    pub passed: bool,
+    pub issues: Vec<PreGigTrackIssue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct SonicTwinMatch {
+    pub track_id: String,
+    pub title: String,
+    pub artist: String,
+    pub bpm: f64,
+    pub camelot: String,
+    pub similarity_pct: f32,
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    pub genre_family: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct DoctorIssueItem {
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub id: Option<i64>,
+    pub track_id: String,
+    pub file_path: String,
+    pub issue_kind: String,
+    pub severity: String,
+    pub details: String,
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub detected_at_unix_ms: Option<i64>,
+    pub resolved: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
+pub struct ProducerWatchFolder {
+    pub id: String,
+    pub folder_path: String,
+    pub enabled: bool,
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    pub created_at: Option<i64>,
+}

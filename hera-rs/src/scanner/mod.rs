@@ -2,5 +2,6 @@ pub mod audio_metrics;
 pub mod fast_seek;
 pub mod full_pass;
 pub mod indexer;
+pub mod omkf_capsule;
 pub mod scheduler;
 pub mod schema;

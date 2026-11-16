@@ -1,9 +1,15 @@
+use crate::curation_rules::{DjCurationRuleSet, TrackCurationHint};
+use crate::genre_intelligence::{
+    classify_track_genre_and_era, compute_genre_era_compatibility, era_decade_label,
+    BoothGenreFamily, GenreEraProfile,
+};
 use crate::structure::HotCuePoint;
 pub use crate::synergy_hnsw::{
     prefilter_candidates_hnsw, prefilter_candidates_hnsw_for_spine,
     synthesize_or_normalize_64d_embedding, HNSW_DEFAULT_STAGE1_POOL, HNSW_PREFILTER_THRESHOLD,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CrateTrackCandidate {
@@ -224,13 +230,80 @@ pub fn compute_bpm_synergy(bpm_a: f32, bpm_b: f32) -> (f32, f32, bool, String) {
     )
 }
 
-/// Evaluate complete 4-Layer Synergy between Track A and Track B.
+/// Resolves a candidate's `GenreEraProfile` combining lexicon/tag classification with optional hint overrides.
+pub fn resolve_candidate_genre_profile(
+    track: &CrateTrackCandidate,
+    hint: Option<&TrackCurationHint>,
+) -> GenreEraProfile {
+    let mut prof = classify_track_genre_and_era(
+        &track.artist,
+        &track.title,
+        std::slice::from_ref(&track.top_subgenre),
+        &track.file_path,
+        None,
+        None,
+    );
+    if let Some(h) = hint {
+        if let Some(code) = h.genre_family_code {
+            if code != 0 {
+                let fam = BoothGenreFamily::from_code(code);
+                let era = h
+                    .inferred_era_year
+                    .filter(|&y| y > 0)
+                    .unwrap_or(prof.inferred_era_year);
+                prof = GenreEraProfile::from_family(
+                    fam,
+                    h.genre_confidence.unwrap_or(0.95),
+                    era,
+                    h.is_transition_candidate,
+                    "track_hint",
+                );
+                return prof;
+            }
+        }
+        if let Some(y) = h.inferred_era_year.filter(|&y| y > 0) {
+            prof.inferred_era_year = y;
+            prof.era_decade_label = era_decade_label(y);
+        }
+        if h.is_transition_candidate {
+            prof.is_transition_candidate = true;
+        }
+    }
+    prof
+}
+
+/// Evaluate complete 4-Layer Synergy between Track A and Track B (legacy bit-identical baseline).
 pub fn evaluate_transition(
     a: &CrateTrackCandidate,
     b: &CrateTrackCandidate,
 ) -> TransitionTelemetry {
+    evaluate_transition_core(a, b, None, None, false, false)
+}
+
+/// Evaluate 4-Layer Synergy using optional `exit_bpm` / `entry_bpm` endpoints and `Genre × Era`.
+pub fn evaluate_transition_with_hints(
+    a: &CrateTrackCandidate,
+    b: &CrateTrackCandidate,
+    hint_a: Option<&TrackCurationHint>,
+    hint_b: Option<&TrackCurationHint>,
+    crossover_mode: bool,
+) -> TransitionTelemetry {
+    evaluate_transition_core(a, b, hint_a, hint_b, crossover_mode, true)
+}
+
+fn evaluate_transition_core(
+    a: &CrateTrackCandidate,
+    b: &CrateTrackCandidate,
+    hint_a: Option<&TrackCurationHint>,
+    hint_b: Option<&TrackCurationHint>,
+    crossover_mode: bool,
+    apply_genre_era: bool,
+) -> TransitionTelemetry {
+    let out_bpm_a = hint_a.and_then(|h| h.exit_bpm).unwrap_or(a.bpm);
+    let in_bpm_b = hint_b.and_then(|h| h.entry_bpm).unwrap_or(b.bpm);
+
     let (camelot_score, camelot_relation) = compute_camelot_synergy(&a.camelot_key, &b.camelot_key);
-    let (bpm_score, bpm_delta_pct, is_poly, tempo_note) = compute_bpm_synergy(a.bpm, b.bpm);
+    let (bpm_score, bpm_delta_pct, is_poly, tempo_note) = compute_bpm_synergy(out_bpm_a, in_bpm_b);
 
     // Layer 3: Transient Punch & Groove + Vocal Clash Penalty
     let punch_diff = (a.punch_index - b.punch_index).abs();
@@ -249,11 +322,34 @@ pub fn evaluate_transition(
     // Layer 4: 64D Style Embedding Cosine Similarity
     let style_score = cosine_similarity(&a.embedding_64d, &b.embedding_64d);
 
-    let total_synergy =
+    let mut total_synergy =
         (camelot_score * 0.34 + bpm_score * 0.28 + transient_score * 0.20 + style_score * 0.18)
             .clamp(0.0, 1.0);
 
-    let mix_recommendation = if is_poly {
+    let mut genre_note = String::new();
+    let mut bridge_note = String::new();
+    if apply_genre_era {
+        let prof_a = resolve_candidate_genre_profile(a, hint_a);
+        let prof_b = resolve_candidate_genre_profile(b, hint_b);
+        let compat = compute_genre_era_compatibility(&prof_a, &prof_b, crossover_mode);
+        if compat < 0.50 {
+            total_synergy = (total_synergy * (0.12 + 0.88 * compat)).clamp(0.0, 1.0);
+            genre_note = format!(
+                " [GENRE×ERA ISOLATED: {} ({}) -> {} ({})]",
+                prof_a.family_name,
+                prof_a.inferred_era_year,
+                prof_b.family_name,
+                prof_b.inferred_era_year
+            );
+        }
+        if (prof_a.is_transition_candidate || prof_b.is_transition_candidate)
+            && ((out_bpm_a - a.bpm).abs() > 0.5 || (in_bpm_b - b.bpm).abs() > 0.5)
+        {
+            bridge_note = format!("Transition Bridge ({out_bpm_a:.1} -> {in_bpm_b:.1} BPM) | ");
+        }
+    }
+
+    let base_rec = if is_poly {
         format!(
             "{tempo_note} | Cut sub-bass on Track A at Cue 4 and lock Track B Cue 1 on triplet grid"
         )
@@ -266,6 +362,7 @@ pub fn evaluate_transition(
     } else {
         format!("8-bar rhythmic EQ swap at Cue 4 -> Cue 1 ({camelot_relation}, {tempo_note})")
     };
+    let mix_recommendation = format!("{bridge_note}{base_rec}{genre_note}");
 
     TransitionTelemetry {
         from_track_id: a.track_id.clone(),
@@ -362,6 +459,17 @@ pub fn optimize_crate_with_spine(
     max_tracks: Option<usize>,
     spine: &SetSpineConfig,
 ) -> OptimizedCrateResult {
+    optimize_crate_with_spine_internal(brief, energy_arc, candidates, max_tracks, spine, None)
+}
+
+fn optimize_crate_with_spine_internal(
+    brief: &str,
+    energy_arc: &str,
+    candidates: Vec<CrateTrackCandidate>,
+    max_tracks: Option<usize>,
+    spine: &SetSpineConfig,
+    rules: Option<&DjCurationRuleSet>,
+) -> OptimizedCrateResult {
     let candidates = if candidates.len() > HNSW_PREFILTER_THRESHOLD {
         let target_pool = max_tracks
             .unwrap_or(HNSW_DEFAULT_STAGE1_POOL)
@@ -400,8 +508,25 @@ pub fn optimize_crate_with_spine(
         let row_offset = i * n_all;
         for j in 0..n_all {
             if i != j {
-                matrix[row_offset + j] =
-                    evaluate_transition(&candidates[i], &candidates[j]).total_synergy;
+                let base_syn = match rules {
+                    Some(r) => {
+                        evaluate_transition_with_hints(
+                            &candidates[i],
+                            &candidates[j],
+                            r.track_hints.get(&candidates[i].track_id),
+                            r.track_hints.get(&candidates[j].track_id),
+                            r.crossover_mode,
+                        )
+                        .total_synergy
+                    }
+                    None => evaluate_transition(&candidates[i], &candidates[j]).total_synergy,
+                };
+                let golden_bonus = rules
+                    .and_then(|r| {
+                        r.get_golden_pair_bonus(&candidates[i].track_id, &candidates[j].track_id)
+                    })
+                    .unwrap_or(0.0);
+                matrix[row_offset + j] = base_syn + golden_bonus;
             }
         }
     }
@@ -606,7 +731,16 @@ pub fn optimize_crate_with_spine(
     let mut vocal_warnings = 0usize;
 
     for w in sequence.windows(2) {
-        let t = evaluate_transition(&w[0], &w[1]);
+        let t = match rules {
+            Some(r) => evaluate_transition_with_hints(
+                &w[0],
+                &w[1],
+                r.track_hints.get(&w[0].track_id),
+                r.track_hints.get(&w[1].track_id),
+                r.crossover_mode,
+            ),
+            None => evaluate_transition(&w[0], &w[1]),
+        };
         sum_syn += t.total_synergy;
         if t.camelot_score >= 0.75 {
             harmonic_hits += 1;
@@ -671,83 +805,139 @@ pub fn optimize_crate_with_spine(
     }
 }
 
+fn resolve_target_genre_era_profile(
+    brief: &str,
+    workable: &[CrateTrackCandidate],
+    profiles: &[GenreEraProfile],
+    spine: &SetSpineConfig,
+    rules: &DjCurationRuleSet,
+) -> Option<GenreEraProfile> {
+    if let Some(ref fam_raw) = rules.target_genre_family {
+        if let Some(fam) = BoothGenreFamily::from_str_name(fam_raw) {
+            let era = rules
+                .target_era_year
+                .unwrap_or_else(|| fam.default_era_midpoint());
+            return Some(GenreEraProfile::from_family(
+                fam,
+                1.0,
+                era,
+                false,
+                "rule_target",
+            ));
+        }
+    }
+    let brief_prof = classify_track_genre_and_era("", brief, &[], "", rules.target_era_year, None);
+    if brief_prof.family != BoothGenreFamily::Unknown && brief_prof.confidence >= 0.70 {
+        return Some(brief_prof);
+    }
+    for anchor in &spine.anchors {
+        if let Some(pos) = workable.iter().position(|t| t.track_id == anchor.track_id) {
+            if profiles[pos].family != BoothGenreFamily::Unknown {
+                return Some(profiles[pos].clone());
+            }
+        }
+    }
+    let mut counts: HashMap<u8, (usize, usize)> = HashMap::new();
+    for (idx, p) in profiles.iter().enumerate() {
+        if p.family != BoothGenreFamily::Unknown && !p.is_transition_candidate {
+            counts
+                .entry(p.family_code)
+                .and_modify(|(c, _)| *c += 1)
+                .or_insert((1, idx));
+        }
+    }
+    counts
+        .into_values()
+        .max_by(|a, b| a.0.cmp(&b.0).then_with(|| b.1.cmp(&a.1)))
+        .map(|(_, first_idx)| profiles[first_idx].clone())
+}
+
 /// Optimize crate sequence with DJ Learned Curation Rules:
 /// - Excludes retired/blacklisted tracks (e.g. "Clavelito ya no").
 /// - Routes tracks with duration > `rules.max_track_duration_seconds` (> 10m / 600s)
 ///   to `routed_to_mixes_over_10m` without touching or moving files on disk.
-/// - Injects golden pair synergy bonuses (e.g. +0.38 for "Perdóname mi vida -> Conquístame").
-/// - Supports mixed audio and video tracks seamlessly.
+/// - Enforces `Genre × Era` isolation when `rules.crossover_mode == false` (preserving
+///   `is_transition_candidate` bridges, pinned anchors, and golden-pair mates).
+/// - Injects golden pair synergy bonuses and evaluates `entry_bpm` / `exit_bpm` bridges.
 pub fn optimize_crate_with_dj_rules(
     brief: &str,
     energy_arc: &str,
     candidates: Vec<CrateTrackCandidate>,
     max_tracks: Option<usize>,
     spine: &SetSpineConfig,
-    rules: &crate::curation_rules::DjCurationRuleSet,
+    rules: &DjCurationRuleSet,
 ) -> crate::curation_rules::CuratedCrateWithRulesResult {
     let mut workable_candidates = Vec::with_capacity(candidates.len());
     let mut routed_to_mixes = Vec::new();
     let mut excluded_tracks = Vec::new();
 
     for track in candidates {
-        // 1. Check if track is excluded by DJ curatorial rules (ID or title pattern)
         if rules.is_track_excluded(&track.track_id, &track.title, &track.artist) {
             excluded_tracks.push(track.track_id);
             continue;
         }
-
-        // 2. Filter tracks > max_track_duration_seconds (default 600s = 10 minutes)
-        // Strictly routes to logical Mixes collection with ZERO disk moves!
         if track.duration_seconds > rules.max_track_duration_seconds {
             routed_to_mixes.push(track.track_id);
             continue;
         }
-
         workable_candidates.push(track);
     }
 
-    // Build or adjust spine anchors: if any golden pairs are specified, we can ensure
-    // they get higher affinity when building the matrix by applying the bonus.
-    let base_res = if rules.golden_pairs.is_empty() {
-        optimize_crate_with_spine(brief, energy_arc, workable_candidates, max_tracks, spine)
-    } else {
-        // Pre-boost candidate embeddings or compute with modified synergy if needed,
-        // or run 2-opt and verify locked pairs.
-        let mut modified_spine = spine.clone();
-        // If a golden pair from_track is pinned, and to_track is not, pin to_track next to it if free
-        for pair in &rules.golden_pairs {
-            if let Some(anchor_pos) = modified_spine
-                .anchors
-                .iter()
-                .position(|a| a.track_id == pair.from_track_id)
-            {
-                let from_slot = modified_spine.anchors[anchor_pos].slot;
-                if let Some(slot) = from_slot {
-                    if !modified_spine
-                        .anchors
-                        .iter()
-                        .any(|a| a.track_id == pair.to_track_id)
-                    {
-                        modified_spine.anchors.push(SpineAnchor {
-                            track_id: pair.to_track_id.clone(),
-                            role: None,
-                            slot: Some(slot + 1),
-                            position: None,
-                        });
-                    }
+    let mut isolated_out_of_genre_tracks = Vec::new();
+    if !rules.crossover_mode && workable_candidates.len() > 1 {
+        let profiles: Vec<GenreEraProfile> = workable_candidates
+            .iter()
+            .map(|t| resolve_candidate_genre_profile(t, rules.track_hints.get(&t.track_id)))
+            .collect();
+        if let Some(target) =
+            resolve_target_genre_era_profile(brief, &workable_candidates, &profiles, spine, rules)
+        {
+            let mut kept = Vec::with_capacity(workable_candidates.len());
+            for (track, prof) in workable_candidates.into_iter().zip(profiles) {
+                let is_pinned = spine.anchors.iter().any(|a| a.track_id == track.track_id);
+                let compat = compute_genre_era_compatibility(&target, &prof, false);
+                if compat >= 0.55 || prof.is_transition_candidate || is_pinned {
+                    kept.push(track);
+                } else {
+                    isolated_out_of_genre_tracks.push(track.track_id);
+                }
+            }
+            workable_candidates = kept;
+        }
+    }
+
+    let mut modified_spine = spine.clone();
+    for pair in &rules.golden_pairs {
+        if let Some(anchor_pos) = modified_spine
+            .anchors
+            .iter()
+            .position(|a| a.track_id == pair.from_track_id)
+        {
+            if let Some(slot) = modified_spine.anchors[anchor_pos].slot {
+                if !modified_spine
+                    .anchors
+                    .iter()
+                    .any(|a| a.track_id == pair.to_track_id)
+                {
+                    modified_spine.anchors.push(SpineAnchor {
+                        track_id: pair.to_track_id.clone(),
+                        role: None,
+                        slot: Some(slot + 1),
+                        position: None,
+                    });
                 }
             }
         }
-        optimize_crate_with_spine(
-            brief,
-            energy_arc,
-            workable_candidates,
-            max_tracks,
-            &modified_spine,
-        )
-    };
+    }
+    let base_res = optimize_crate_with_spine_internal(
+        brief,
+        energy_arc,
+        workable_candidates,
+        max_tracks,
+        &modified_spine,
+        Some(rules),
+    );
 
-    // Calculate how many golden pairs ended up adjacent in the sequence
     let mut golden_pairs_locked = 0usize;
     if base_res.sequence.len() >= 2 {
         for w in base_res.sequence.windows(2) {
@@ -760,7 +950,6 @@ pub fn optimize_crate_with_dj_rules(
         }
     }
 
-    // Count video tracks based on common video extensions
     let video_tracks_count = base_res
         .sequence
         .iter()
@@ -780,6 +969,7 @@ pub fn optimize_crate_with_dj_rules(
         excluded_tracks,
         golden_pairs_locked,
         video_tracks_count,
+        isolated_out_of_genre_tracks,
     }
 }
 
@@ -1207,5 +1397,140 @@ mod tests {
         assert_eq!(res_s4.sequence[0].track_id, "t_opener");
         assert_eq!(res_s4.sequence[1].track_id, "t_warmup_2");
         assert_eq!(res_s4.pinned_slots, vec![0, 1]);
+    }
+
+    #[test]
+    fn test_task4_genre_era_isolation_mix_routing_golden_pair_and_transition_endpoints() {
+        use crate::curation_rules::GoldenTransitionPair;
+
+        let make_cand = |id: &str, artist: &str, title: &str, bpm: f32, key: &str, dur: f32| {
+            let mut t = mock_track(id, title, bpm, key, 0.72, false, false);
+            t.artist = artist.to_string();
+            t.duration_seconds = dur;
+            t
+        };
+
+        let pool = vec![
+            make_cand("tony", "Tony Vega", "Lo Mio Es Amor", 88.0, "7A", 260.0),
+            make_cand("feid", "Feid", "Luna", 90.0, "7A", 210.0),
+            make_cand("badb", "Bad Bunny", "Monaco", 91.0, "7A", 240.0),
+            make_cand(
+                "sandy",
+                "Sandy & Papo",
+                "Mueve Mueve 1996",
+                126.0,
+                "8A",
+                250.0,
+            ),
+            make_cand(
+                "alleh",
+                "Alleh & Yorghaki",
+                "Capaz 2025",
+                126.0,
+                "4A",
+                215.0,
+            ),
+            make_cand("mix720", "DJ Live", "Live Session 2026", 124.0, "8A", 720.0),
+            make_cand("clavel", "Orquesta", "Clavelito ya no", 96.0, "7A", 230.0),
+            make_cand("trans", "DJ Bridge", "Transition 92-126", 92.0, "7A", 205.0),
+        ];
+
+        let mut hints = HashMap::new();
+        hints.insert(
+            "trans".to_string(),
+            TrackCurationHint {
+                entry_bpm: Some(92.0),
+                exit_bpm: Some(126.0),
+                is_transition_candidate: true,
+                ..Default::default()
+            },
+        );
+
+        let rules = DjCurationRuleSet {
+            excluded_title_patterns: vec!["Clavelito".to_string()],
+            target_genre_family: Some("ReggaetonActualPerreo".to_string()),
+            track_hints: hints.clone(),
+            ..Default::default()
+        };
+
+        let perreo_res = optimize_crate_with_dj_rules(
+            "Perreo Nocturno",
+            "steady_climb",
+            pool.clone(),
+            None,
+            &SetSpineConfig::default(),
+            &rules,
+        );
+        assert_eq!(perreo_res.routed_to_mixes_over_10m, vec!["mix720"]);
+        assert_eq!(perreo_res.excluded_tracks, vec!["clavel"]);
+        let ids: Vec<&str> = perreo_res
+            .base_result
+            .sequence
+            .iter()
+            .map(|t| t.track_id.as_str())
+            .collect();
+        assert!(ids.contains(&"feid") && ids.contains(&"badb"));
+        assert!(!ids.contains(&"tony"), "Salsa must not contaminate Perreo");
+        assert!(!ids.contains(&"sandy") && !ids.contains(&"alleh"));
+
+        // Verify 90s Euro-Merengue vs 2026 Merengueton isolation
+        let mer_rules = DjCurationRuleSet {
+            excluded_title_patterns: vec!["Clavelito".to_string()],
+            target_genre_family: Some("MerenguetonModerno".to_string()),
+            track_hints: hints.clone(),
+            ..Default::default()
+        };
+        let mer_res = optimize_crate_with_dj_rules(
+            "Merengueton 2026",
+            "steady_climb",
+            pool.clone(),
+            None,
+            &SetSpineConfig::default(),
+            &mer_rules,
+        );
+        let mer_ids: Vec<&str> = mer_res
+            .base_result
+            .sequence
+            .iter()
+            .map(|t| t.track_id.as_str())
+            .collect();
+        assert!(mer_ids.contains(&"alleh"));
+        assert!(
+            !mer_ids.contains(&"sandy"),
+            "90s Euro-Merengue must be isolated from 2025 Merengueton"
+        );
+
+        // Verify entry_bpm -> exit_bpm bridge scoring (`trans` 126 exit -> `alleh` 126 BPM)
+        let trans_cand = pool.iter().find(|t| t.track_id == "trans").unwrap();
+        let alleh_cand = pool.iter().find(|t| t.track_id == "alleh").unwrap();
+        let bridge_eval =
+            evaluate_transition_with_hints(trans_cand, alleh_cand, hints.get("trans"), None, false);
+        assert_eq!(bridge_eval.bpm_delta_pct, 0.0);
+        assert_eq!(bridge_eval.bpm_score, 1.0);
+
+        // Verify unpinned Golden Pair locking (17 -> 20)
+        let gp_pool = vec![
+            make_cand("17", "Grupo Niche", "Perdoname mi vida", 96.0, "8A", 240.0),
+            make_cand("19", "Grupo Niche", "Cali Pachanguero", 98.0, "9A", 240.0),
+            make_cand("20", "Los Titanes", "Conquistame", 96.0, "8A", 240.0),
+        ];
+        let gp_rules = DjCurationRuleSet {
+            golden_pairs: vec![GoldenTransitionPair {
+                from_track_id: "17".to_string(),
+                to_track_id: "20".to_string(),
+                custom_bonus: Some(0.45),
+                note: Some("Classic Golden Pair".to_string()),
+            }],
+            ..Default::default()
+        };
+        let gp_res = optimize_crate_with_dj_rules(
+            "Salsa Gold",
+            "steady_climb",
+            gp_pool,
+            None,
+            &SetSpineConfig::default(),
+            &gp_rules,
+        );
+        assert_eq!(gp_res.golden_pairs_locked, 1);
     }
 }
