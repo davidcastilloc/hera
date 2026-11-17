@@ -44,7 +44,7 @@ use crate::libs::playlist::Playlist;
 use crate::libs::track::{HotCuePin, Track, get_indexed_track_fast};
 use crate::plugins::db::{DBState, ScanProgress};
 use crate::plugins::hera_dj::workability::{
-    ExternalDjSoftwareIndex, is_junk_system_directory, is_scan_cancelled, reset_scan_flag,
+    ExternalDjSoftwareIndex, is_junk_audio_path, is_scan_cancelled, reset_scan_flag,
 };
 
 fn is_supported_audio(path: &Path) -> bool {
@@ -218,7 +218,7 @@ pub async fn execute_streaming_library_scan<R: Runtime>(
             for entry in walkdir::WalkDir::new(root)
                 .follow_links(true)
                 .into_iter()
-                .filter_entry(|e| e.file_name() != ".hera" && !is_junk_system_directory(e.path()))
+                .filter_entry(|e| e.file_name() != ".hera" && !is_junk_audio_path(e.path()))
                 .filter_map(|e| e.ok())
             {
                 if is_scan_cancelled() {

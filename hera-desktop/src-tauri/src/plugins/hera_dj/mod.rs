@@ -223,7 +223,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
     warm_desktop_udp_daemon_background();
     Builder::<R>::new("hera-dj")
         .setup(|app, _api| {
-            app.manage(NativeAudioState(create_default_audio_backend()));
+            app.manage(NativeAudioState::new(create_default_audio_backend()));
             scanner_worker::spawn_scanner_daemon(app.clone());
             folder_watcher::spawn_folder_watchers(app.clone());
             Ok(())

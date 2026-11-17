@@ -20,7 +20,7 @@ pub(crate) fn synthesize_telemetry_frame_from_snapshot(
     snap: &AudioTransportSnapshot,
     sequence: u64,
 ) -> NativeAudioTelemetryFrame {
-    let active = snap.is_playing && snap.track_loaded;
+    let active = snap.is_playing && !snap.is_buffering && snap.track_loaded;
     let phase = snap.current_time_sec * 8.0 + (sequence as f64) * 0.15;
     let mut bins = Vec::with_capacity(32);
 
@@ -71,6 +71,7 @@ pub(crate) fn synthesize_telemetry_frame_from_snapshot(
         current_time_sec: snap.current_time_sec,
         duration_sec: snap.duration_sec,
         is_playing: snap.is_playing,
+        is_buffering: snap.is_buffering,
         rms_left: rms,
         rms_right: (rms * 0.97).clamp(0.0, 1.0),
         peak_db,
@@ -112,6 +113,7 @@ pub(crate) fn resolve_tick_telemetry_frame(
         }
         last.current_time_sec = snap.current_time_sec;
         last.is_playing = snap.is_playing;
+        last.is_buffering = snap.is_buffering;
         return Some(last.clone());
     }
     let seq = seq_counter.fetch_add(1, Ordering::Relaxed);
@@ -125,7 +127,7 @@ pub async fn subscribe_audio_telemetry(
     state: tauri::State<'_, NativeAudioState>,
     on_frame: tauri::ipc::Channel<NativeAudioTelemetryFrame>,
 ) -> Result<NativePlayerSnapshot, String> {
-    let backend = Arc::clone(&state.0);
+    let backend = Arc::clone(&state.backend);
     let sub_id = TELEMETRY_SUB_GEN.fetch_add(1, Ordering::SeqCst) + 1;
 
     let initial_snap = backend.snapshot();
@@ -174,6 +176,7 @@ mod tests {
             track_loaded: true,
             loaded_path: Some("track.wav".to_string()),
             is_playing: true,
+            is_buffering: false,
             ended: false,
             current_time_sec: 12.5,
             duration_sec: 180.0,
@@ -208,6 +211,7 @@ mod tests {
             track_loaded: true,
             loaded_path: Some("track.wav".to_string()),
             is_playing: true,
+            is_buffering: false,
             ended: false,
             current_time_sec: 10.0,
             duration_sec: 180.0,

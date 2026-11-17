@@ -41,7 +41,7 @@ fn is_dir_visible(entry: &walkdir::DirEntry) -> bool {
     entry
         .file_name()
         .to_str()
-        .map(|s| !s.starts_with("."))
+        .map(|s| !s.starts_with('.') && !s.eq_ignore_ascii_case("__macosx"))
         .unwrap_or(false)
 }
 

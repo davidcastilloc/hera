@@ -1,15 +1,64 @@
 //! Tauri v2 command adapter bridging `Player` transport calls to `hera-node-rs::audio_engine::AudioBackend`.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use hera_ipc::audio_types::{NativeAudioTelemetryFrame, NativePlayerSnapshot};
 use hera_node_rs::audio_engine::{
     AudioBackend, AudioTelemetryFrame, AudioTransportSnapshot, DeckId, TransportCommand,
 };
 
-/// Managed Tauri plugin state holding the shared OS `cpal` or headless clock audio backend.
-pub struct NativeAudioState(pub Arc<dyn AudioBackend>);
+/// Managed Tauri plugin state holding the shared OS `cpal` or headless clock audio backend
+/// plus a monotonic `load_seq` counter for `0 ms` latest-wins cancellation on rapid clicks.
+pub struct NativeAudioState {
+    pub backend: Arc<dyn AudioBackend>,
+    pub load_seq: Arc<AtomicU64>,
+}
+
+impl NativeAudioState {
+    pub fn new(backend: Arc<dyn AudioBackend>) -> Self {
+        Self {
+            backend,
+            load_seq: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    pub fn next_load_seq(&self) -> u64 {
+        self.load_seq.fetch_add(1, Ordering::AcqRel) + 1
+    }
+
+    pub fn load_track_if_current(
+        &self,
+        seq: u64,
+        path: &Path,
+        duration_hint_sec: Option<f64>,
+        hot_cues_sec: Option<Vec<f64>>,
+        replay_gain_db: Option<f32>,
+    ) -> Result<Option<NativePlayerSnapshot>, String> {
+        if self.load_seq.load(Ordering::Acquire) != seq {
+            return Ok(None);
+        }
+        let known_cues = extract_deck_pad_cues(hot_cues_sec);
+        let linear_gain = replay_gain_db_to_linear(replay_gain_db);
+        let _ = self
+            .backend
+            .load_file_fast(DeckId::DeckA, path, duration_hint_sec, known_cues)?;
+        if self.load_seq.load(Ordering::Acquire) != seq {
+            return Ok(None);
+        }
+        let mut snap = self
+            .backend
+            .send_command(TransportCommand::SetGain(DeckId::DeckA, linear_gain));
+        if snap.duration_sec <= 0.0
+            && let Some(hint) = duration_hint_sec.filter(|d| d.is_finite() && *d > 0.0)
+        {
+            snap.duration_sec = hint;
+        }
+        let telemetry = self.backend.poll_latest_telemetry();
+        Ok(Some(map_player_snapshot(snap, telemetry)))
+    }
+}
 
 pub(crate) fn map_telemetry_frame(frame: AudioTelemetryFrame) -> NativeAudioTelemetryFrame {
     NativeAudioTelemetryFrame {
@@ -18,6 +67,7 @@ pub(crate) fn map_telemetry_frame(frame: AudioTelemetryFrame) -> NativeAudioTele
         current_time_sec: frame.current_time_sec,
         duration_sec: frame.duration_sec,
         is_playing: frame.is_playing,
+        is_buffering: frame.is_buffering,
         rms_left: frame.rms_left,
         rms_right: frame.rms_right,
         peak_db: frame.peak_db,
@@ -39,6 +89,7 @@ pub(crate) fn map_player_snapshot(
         track_loaded: snap.track_loaded,
         loaded_path: snap.loaded_path,
         is_playing: snap.is_playing,
+        is_buffering: snap.is_buffering,
         ended: snap.ended,
         current_time_sec: snap.current_time_sec,
         duration_sec: snap.duration_sec,
@@ -80,24 +131,22 @@ pub async fn native_audio_load_track(
     hot_cues_sec: Option<Vec<f64>>,
     replay_gain_db: Option<f32>,
 ) -> Result<NativePlayerSnapshot, String> {
-    let backend = Arc::clone(&state.0);
+    let seq = state.next_load_seq();
+    let cloned_state = NativeAudioState {
+        backend: Arc::clone(&state.backend),
+        load_seq: Arc::clone(&state.load_seq),
+    };
     tauri::async_runtime::spawn_blocking(move || {
-        let known_cues = extract_deck_pad_cues(hot_cues_sec);
-        let linear_gain = replay_gain_db_to_linear(replay_gain_db);
-        let _ = backend.load_file_fast(
-            DeckId::DeckA,
+        match cloned_state.load_track_if_current(
+            seq,
             &PathBuf::from(&file_path),
             duration_hint_sec,
-            known_cues,
-        )?;
-        let mut snap = backend.send_command(TransportCommand::SetGain(DeckId::DeckA, linear_gain));
-        if snap.duration_sec <= 0.0
-            && let Some(hint) = duration_hint_sec.filter(|d| d.is_finite() && *d > 0.0)
-        {
-            snap.duration_sec = hint;
+            hot_cues_sec,
+            replay_gain_db,
+        )? {
+            Some(snap) => Ok(snap),
+            None => Ok(map_player_snapshot(cloned_state.backend.snapshot(), None)),
         }
-        let telemetry = backend.poll_latest_telemetry();
-        Ok(map_player_snapshot(snap, telemetry))
     })
     .await
     .map_err(|e| format!("native_audio_load_track join error: {e}"))?
@@ -107,8 +156,10 @@ pub async fn native_audio_load_track(
 pub async fn native_audio_play(
     state: tauri::State<'_, NativeAudioState>,
 ) -> Result<NativePlayerSnapshot, String> {
-    let snap = state.0.send_command(TransportCommand::Play(DeckId::DeckA));
-    let telemetry = state.0.poll_latest_telemetry();
+    let snap = state
+        .backend
+        .send_command(TransportCommand::Play(DeckId::DeckA));
+    let telemetry = state.backend.poll_latest_telemetry();
     Ok(map_player_snapshot(snap, telemetry))
 }
 
@@ -116,8 +167,10 @@ pub async fn native_audio_play(
 pub async fn native_audio_pause(
     state: tauri::State<'_, NativeAudioState>,
 ) -> Result<NativePlayerSnapshot, String> {
-    let snap = state.0.send_command(TransportCommand::Pause(DeckId::DeckA));
-    let telemetry = state.0.poll_latest_telemetry();
+    let snap = state
+        .backend
+        .send_command(TransportCommand::Pause(DeckId::DeckA));
+    let telemetry = state.backend.poll_latest_telemetry();
     Ok(map_player_snapshot(snap, telemetry))
 }
 
@@ -131,12 +184,12 @@ pub async fn native_audio_seek(
     } else {
         0.0
     };
-    let sr = f64::from(state.0.output_sample_rate().max(1));
+    let sr = f64::from(state.backend.output_sample_rate().max(1));
     let target_frame = (safe_sec * sr).round() as u64;
     let snap = state
-        .0
+        .backend
         .send_command(TransportCommand::SeekToSample(DeckId::DeckA, target_frame));
-    let telemetry = state.0.poll_latest_telemetry();
+    let telemetry = state.backend.poll_latest_telemetry();
     Ok(map_player_snapshot(snap, telemetry))
 }
 
@@ -145,8 +198,8 @@ pub async fn native_audio_set_volume(
     state: tauri::State<'_, NativeAudioState>,
     volume: f32,
 ) -> Result<NativePlayerSnapshot, String> {
-    let snap = state.0.set_master_volume(volume);
-    let telemetry = state.0.poll_latest_telemetry();
+    let snap = state.backend.set_master_volume(volume);
+    let telemetry = state.backend.poll_latest_telemetry();
     Ok(map_player_snapshot(snap, telemetry))
 }
 
@@ -161,9 +214,9 @@ pub async fn native_audio_set_playback_rate(
         1.0
     };
     let snap = state
-        .0
+        .backend
         .send_command(TransportCommand::SetTempoRatio(DeckId::DeckA, safe_rate));
-    let telemetry = state.0.poll_latest_telemetry();
+    let telemetry = state.backend.poll_latest_telemetry();
     Ok(map_player_snapshot(snap, telemetry))
 }
 
@@ -171,7 +224,7 @@ pub async fn native_audio_set_playback_rate(
 pub async fn native_audio_get_state(
     state: tauri::State<'_, NativeAudioState>,
 ) -> Result<NativePlayerSnapshot, String> {
-    let snap = state.0.snapshot();
+    let snap = state.backend.snapshot();
     // Do not drain `rtrb` telemetry here so the 120 Hz Channel stream receives every frame.
     Ok(map_player_snapshot(snap, None))
 }

@@ -12,6 +12,8 @@ pub struct NativeAudioTelemetryFrame {
     pub current_time_sec: f64,
     pub duration_sec: f64,
     pub is_playing: bool,
+    #[serde(default)]
+    pub is_buffering: bool,
     pub rms_left: f32,
     pub rms_right: f32,
     pub peak_db: f32,
@@ -31,6 +33,8 @@ pub struct NativePlayerSnapshot {
     #[ts(optional = nullable)]
     pub loaded_path: Option<String>,
     pub is_playing: bool,
+    #[serde(default)]
+    pub is_buffering: bool,
     pub ended: bool,
     pub current_time_sec: f64,
     pub duration_sec: f64,

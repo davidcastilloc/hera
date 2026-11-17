@@ -287,3 +287,43 @@ async fn test_scanner_quarantine_minus_one_persists_and_isolated_job_catches_pan
     drop(db_state);
     let _ = std::fs::remove_file(&tmp_db);
 }
+
+#[test]
+fn test_is_junk_audio_path_rejects_macosx_and_appledouble_sidecars() {
+    use std::path::Path;
+    use workability::{is_junk_audio_path, is_junk_system_directory};
+
+    assert!(is_junk_system_directory(Path::new(
+        "Music/KSHMR/__MACOSX/KSHMR/._Short_Drum_Fill_30.wav"
+    )));
+    assert!(is_junk_audio_path(Path::new(
+        "Music/KSHMR/__MACOSX/KSHMR/._Short_Drum_Fill_30.wav"
+    )));
+    assert!(is_junk_audio_path(Path::new("Music/KSHMR/._Kick_128.wav")));
+    assert!(!is_junk_audio_path(Path::new("Music/KSHMR/Kick_128.wav")));
+}
+
+#[test]
+fn test_latest_wins_load_gate_skips_superseded_load_before_decode() {
+    use hera_node_rs::audio_engine::HeadlessClockAudioBackend;
+    use std::path::Path;
+    use std::sync::Arc;
+
+    let state = audio_transport::NativeAudioState::new(Arc::new(
+        HeadlessClockAudioBackend::new_deterministic(48_000),
+    ));
+    let seq_1 = state.next_load_seq();
+    let _seq_2 = state.next_load_seq();
+
+    // seq_1 is superseded by _seq_2, so it must return Ok(None) in 0ms without opening the missing file.
+    let skipped = state
+        .load_track_if_current(
+            seq_1,
+            Path::new("missing_never_opened.wav"),
+            None,
+            None,
+            None,
+        )
+        .expect("superseded load must not error");
+    assert!(skipped.is_none());
+}

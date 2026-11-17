@@ -116,7 +116,7 @@ git commit -S -m "feat(audio): gate full-track decode behind 40s played audio an
   - `NativeAudioState { pub backend: Arc<dyn AudioBackend>, pub load_seq: Arc<AtomicU64> }` (with `NativeAudioState::new(Arc<dyn AudioBackend>)`)
   - `pub fn is_junk_audio_path(path: &Path) -> bool` in `workability.rs`
 
-- [ ] **Step 1: Write failing tests for latest-wins IPC cancellation and `__MACOSX` / `._*` sidecar filtering in `hera-desktop/src-tauri/src/plugins/hera_dj/tests.rs`**
+- [x] **Step 1: Write failing tests for latest-wins IPC cancellation and `__MACOSX` / `._*` sidecar filtering in `hera-desktop/src-tauri/src/plugins/hera_dj/tests.rs`**
 
 1. Add `test_is_junk_audio_path_rejects_macosx_and_appledouble_sidecars`:
    - Assert `workability::is_junk_audio_path(Path::new("Music/Pack/__MACOSX/Pack/._Fill_01.wav")) == true`.
@@ -126,24 +126,24 @@ git commit -S -m "feat(audio): gate full-track decode behind 40s played audio an
    - Create `NativeAudioState::new(...)`, reserve `seq_1 = state.next_load_seq()` and `seq_2 = state.next_load_seq()`, call `state.load_track_if_current(seq_1, Path::new("missing_never_touched.wav"), None, None, None)`: assert it returns `Ok(None)` (superseded in `0 ms` without attempting file decode!).
 3. Assert `map_player_snapshot` propagates `is_buffering`.
 
-- [ ] **Step 2: Run `hera-desktop` unit tests to verify they fail**
+- [x] **Step 2: Run `hera-desktop` unit tests to verify they fail**
 
 Run: `cargo test -p hera-desktop --bins test_is_junk_audio_path_rejects_macosx`
 Expected: FAIL (`is_junk_audio_path` and `next_load_seq` not defined).
 
-- [ ] **Step 3: Add `is_buffering` to `hera-ipc`, implement `load_seq` gate in `audio_transport.rs`, and reject `__MACOSX` / `._*` in `workability.rs` + `fast_library_scan.rs`**
+- [x] **Step 3: Add `is_buffering` to `hera-ipc`, implement `load_seq` gate in `audio_transport.rs`, and reject `__MACOSX` / `._*` in `workability.rs` + `fast_library_scan.rs`**
 
 1. In `hera-desktop/src-ipc/src/audio_types.rs`: add `#[serde(default)] pub is_buffering: bool` to `NativeAudioTelemetryFrame` and `NativePlayerSnapshot`.
 2. Update `map_telemetry_frame`, `map_player_snapshot` (`audio_transport.rs`), and `synthesize_telemetry_frame` (`audio_telemetry.rs`) to populate `is_buffering`.
 3. In `audio_transport.rs`: add `load_seq: Arc<AtomicU64>` to `NativeAudioState` (`pub fn new(backend: Arc<dyn AudioBackend>) -> Self`, `pub fn next_load_seq(&self) -> u64`, `pub fn load_track_if_current(...) -> Result<Option<NativePlayerSnapshot>, String>`). In `native_audio_load_track`, increment `seq` **before** `spawn_blocking`; inside `spawn_blocking`, if `seq != load_seq.load(Ordering::Acquire)` before or after `load_file_fast`, return `Ok(map_player_snapshot(backend.snapshot(), None))` without touching `SetGain` or decoding stale files. Update `NativeAudioState(...)` construction site in `plugins/hera_dj/mod.rs`.
 4. In `workability.rs`: extend `is_junk_system_directory` with `"__macosx"` and add `pub fn is_junk_audio_path(path: &Path) -> bool` returning `true` when `is_junk_system_directory(path)` or `path.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("._") || n.eq_ignore_ascii_case(".ds_store"))`. Apply `is_junk_audio_path` in `fast_library_scan.rs` directory walk and `plugins/db.rs` track import filter.
 
-- [ ] **Step 4: Regenerate TypeScript bindings and run `hera-ipc` + `hera-desktop` tests**
+- [x] **Step 4: Regenerate TypeScript bindings and run `hera-ipc` + `hera-desktop` tests**
 
 Run: `cargo test -p hera-ipc` and `cargo test -p hera-desktop --bins -- --skip export_bindings`
 Expected: PASS (`hera-typings.ts` updated with `is_buffering: boolean`, all unit tests green).
 
-- [ ] **Step 5: Commit Task 2**
+- [x] **Step 5: Commit Task 2**
 
 ```bash
 git add hera-desktop/src-ipc/src/audio_types.rs hera-desktop/src/generated/hera-typings.ts hera-desktop/src-tauri/src/

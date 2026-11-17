@@ -27,18 +27,30 @@ pub struct CachedDjSoftwareMetadata {
 }
 
 /// Evaluates if a file or folder path should be discarded outright:
-/// - Junk/system folders: `$RECYCLE.BIN`, `System Volume Information`, `node_modules`, `.git`, WhatsApp notes
-/// - Audios < 25s: FX, jingles, samples, voice memos
+/// - Junk/system folders: `$RECYCLE.BIN`, `System Volume Information`, `node_modules`, `.git`, `__MACOSX`, WhatsApp notes
+/// - AppleDouble resource forks (`._*`) and `.DS_Store`
 pub fn is_junk_system_directory(path: &Path) -> bool {
     let s = path.to_string_lossy().to_lowercase();
     s.contains("$recycle.bin")
         || s.contains("system volume information")
         || s.contains("node_modules")
         || s.contains(".git")
+        || s.contains("__macosx")
         || s.contains("whatsapp audio")
         || s.contains("whatsapp voice notes")
         || s.contains(".trashes")
         || s.contains(".spotlight-v100")
+}
+
+/// Returns `true` for junk system directories (`__MACOSX`, `$RECYCLE.BIN`, etc.) or macOS
+/// AppleDouble sidecar files (`._*`, `.DS_Store`) that must never be decoded by Symphonia/FFmpeg.
+pub fn is_junk_audio_path(path: &Path) -> bool {
+    if is_junk_system_directory(path) {
+        return true;
+    }
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.starts_with("._") || n.eq_ignore_ascii_case(".ds_store"))
 }
 
 /// Check if duration represents workable DJ material:
