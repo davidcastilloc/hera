@@ -264,4 +264,10 @@ describe('scanner-realtime-ux UI components', () => {
     expect(steadyStatus).toContain('0.5/s');
     expect(steadyStatus).toContain('~12m');
   });
+
+  it('PlayingIndicator renders crisp loading SVG (not bouncing equalizer bars) when track is loading or buffering', async () => {
+    const { default: PlayingIndicator } = await import('../PlayingIndicator');
+    const html = renderToStaticMarkup(<PlayingIndicator isBufferingOverride />);
+    expect(html).toContain('aria-label="Cargando pista"');
+  });
 });

@@ -84,6 +84,7 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
       current_time_sec: 4.2,
       duration_sec: 180.0,
       is_playing: true,
+      is_buffering: false,
       rms_left: 0.45,
       rms_right: 0.44,
       peak_db: -6.9,
@@ -114,6 +115,7 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
       track_loaded: true,
       loaded_path: '/music/eight-cues.flac',
       is_playing: false,
+      is_buffering: false,
       ended: false,
       current_time_sec: 0,
       duration_sec: 210,
@@ -186,5 +188,173 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
       hotCuesSec: [2.5, 32, 64, 128],
       replayGainDb: -4.2,
     });
+  });
+
+  it('cancels stale start() clicks so only the final clicked track invokes native_audio_play', async () => {
+    const { default: player } = await import('../player');
+    let resolveLoad1!: (v: NativePlayerSnapshot | null) => void;
+    let resolveLoad2!: (v: NativePlayerSnapshot | null) => void;
+    let resolveLoad3!: (v: NativePlayerSnapshot | null) => void;
+    const playCalls: number[] = [];
+
+    vi.spyOn(nativeIpc, 'invokeNativeAudio').mockImplementation((cmd, args) => {
+      if (cmd === 'native_audio_load_track') {
+        const p = (args as { filePath?: string } | undefined)?.filePath;
+        if (p === '/music/t1.mp3') {
+          return new Promise((r) => {
+            resolveLoad1 = r;
+          });
+        }
+        if (p === '/music/t2.mp3') {
+          return new Promise((r) => {
+            resolveLoad2 = r;
+          });
+        }
+        return new Promise((r) => {
+          resolveLoad3 = r;
+        });
+      }
+      if (cmd === 'native_audio_play') {
+        playCalls.push(playCalls.length + 1);
+      }
+      return Promise.resolve(null);
+    });
+
+    const makeTrack = (id: string, path: string) => ({
+      id,
+      path,
+      title: id,
+      album: 'Club',
+      album_artist: 'DJ',
+      artists: ['DJ'],
+      genres: [],
+      year: 2026,
+      duration: 180,
+      track_no: 1,
+      track_of: 1,
+      disk_no: 1,
+      disk_of: 1,
+      is_compilation: false,
+    });
+    const tracks = [
+      makeTrack('t1', '/music/t1.mp3'),
+      makeTrack('t2', '/music/t2.mp3'),
+      makeTrack('t3', '/music/t3.mp3'),
+    ];
+
+    const p1 = player.start(tracks, 't1', { type: 'library' });
+    const p2 = player.start(tracks, 't2', { type: 'library' });
+    const p3 = player.start(tracks, 't3', { type: 'library' });
+
+    resolveLoad1(null);
+    resolveLoad2(null);
+    resolveLoad3(null);
+    await Promise.all([p1, p2, p3]);
+
+    expect(playCalls).toHaveLength(1);
+    expect(player.getTrack()?.id).toBe('t3');
+    expect(player.getState().isLoadingTrack).toBe(false);
+    expect(player.getState().loadingTrackId).toBeNull();
+    player.stop();
+  });
+
+  it('defers scanner_notify_deck_track until 40s of real non-paused playback and freezes currentTime when is_buffering is true', async () => {
+    const scannerV3 = await import('../scanner-v3');
+    const notifySpy = vi
+      .spyOn(scannerV3, 'notifyDeckTrack')
+      .mockImplementation(() => {});
+    const { default: player } = await import('../player');
+
+    let telemetryCb: ((frame: NativeAudioTelemetryFrame) => void) | null = null;
+    vi.spyOn(nativeIpc, 'subscribeNativeTelemetryChannel').mockImplementation(
+      (cb) => {
+        telemetryCb = cb;
+        return true;
+      },
+    );
+    const snap: NativePlayerSnapshot = {
+      backend_kind: 'cpal_shared',
+      sample_rate: 48_000,
+      track_loaded: true,
+      loaded_path: '/music/commit40.mp3',
+      is_playing: true,
+      is_buffering: false,
+      ended: false,
+      current_time_sec: 0,
+      duration_sec: 200,
+      playhead_frame: 0,
+      total_frames: 9_600_000,
+      volume: 1,
+      playback_rate: 1,
+      hot_cue_frames: [0, 0, 0, 0],
+      hot_cue_seconds: [0, 0, 0, 0],
+      latest_telemetry: null,
+    };
+    vi.spyOn(nativeIpc, 'invokeNativeAudio').mockResolvedValue(snap);
+
+    await player.start(
+      [
+        {
+          id: 'commit-40',
+          path: '/music/commit40.mp3',
+          title: 'Commit 40',
+          album: 'Club',
+          album_artist: 'DJ',
+          artists: ['DJ'],
+          genres: [],
+          year: 2026,
+          duration: 200,
+          track_no: 1,
+          track_of: 1,
+          disk_no: 1,
+          disk_of: 1,
+          is_compilation: false,
+        },
+      ],
+      'commit-40',
+      { type: 'library' },
+    );
+
+    // Must NOT call notifyDeckTrack immediately on click/load!
+    expect(notifySpy).not.toHaveBeenCalled();
+    expect(telemetryCb).not.toBeNull();
+
+    const emitAt = (sec: number, isBuffering = false) => {
+      telemetryCb!({
+        sequence: Math.floor(sec * 10),
+        sample_rate: 48_000,
+        current_time_sec: sec,
+        duration_sec: 200,
+        is_playing: true,
+        is_buffering: isBuffering,
+        rms_left: 0.4,
+        rms_right: 0.4,
+        peak_db: -6,
+        sub_bass: 0.5,
+        low_mid: 0.4,
+        high_mid: 0.3,
+        air_presence: 0.2,
+        spectrum_bins: Array.from({ length: 32 }, () => 0.3),
+      });
+    };
+
+    // Simulate 39.0s of real 1.0s playback steps (< 40.0s threshold)
+    for (let s = 1; s <= 39; s++) {
+      emitAt(s, false);
+    }
+    expect(notifySpy).not.toHaveBeenCalled();
+
+    // When buffering is true at 39.0s, currentTime must stay frozen at 39.0s without extrapolation
+    emitAt(39, true);
+    expect(player.getState().isBuffering).toBe(true);
+    expect(player.getCurrentTime()).toBe(39);
+
+    // Resume real playback past 40.0s -> notifyDeckTrack fires exactly once!
+    emitAt(39.5, false);
+    emitAt(40.5, false);
+    expect(player.getState().isBuffering).toBe(false);
+    expect(notifySpy).toHaveBeenCalledTimes(1);
+    expect(notifySpy).toHaveBeenCalledWith('commit-40', []);
+    player.stop();
   });
 });

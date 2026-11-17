@@ -4,6 +4,7 @@ import type React from 'react';
 
 import type { Track } from '../generated/typings';
 import useFormattedDuration from '../hooks/useFormattedDuration';
+import { usePlayerState } from '../hooks/usePlayer';
 import {
   cancelHoverPrewarm,
   scheduleHoverPrewarm,
@@ -68,6 +69,11 @@ export default function TrackRow(props: Props) {
   const isFreshGlow = useScannerStore((s) =>
     Boolean(s.recentlyUpdatedIds[track.id]),
   );
+  const isRowLoading = usePlayerState(
+    (s) =>
+      s.loadingTrackId === track.id ||
+      (props.isPlaying === true && s.isBuffering),
+  );
 
   const {
     attributes,
@@ -124,7 +130,9 @@ export default function TrackRow(props: Props) {
       style={props.style}
     >
       <div {...stylex.props(cellStyles.cell, cellStyles.trackPlaying)}>
-        {props.isPlaying ? <PlayingIndicator /> : null}
+        {props.isPlaying || isRowLoading ? (
+          <PlayingIndicator isBufferingOverride={isRowLoading} />
+        ) : null}
       </div>
       <div {...stylex.props(cellStyles.cell, cellStyles.title)}>
         <span {...stylex.props(cellStyles.titleText)}>{track.title}</span>

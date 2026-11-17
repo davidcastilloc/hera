@@ -34,6 +34,9 @@ export interface PlayerState {
   volume: number;
   muted: boolean;
   isPaused: boolean;
+  isLoadingTrack: boolean;
+  loadingTrackId: string | null;
+  isBuffering: boolean;
 }
 
 /**
@@ -77,6 +80,10 @@ class Player extends EventEmitter<PlayerEvents> {
   // Cached state for useSyncExternalStore
   private state: PlayerState | null = null;
   private trackLoadSeq = 0;
+  private loadingTrackId: string | null = null;
+  private playedAccumSec = 0;
+  private lastAccumTimeSec: number | null = null;
+  private scannerCommittedForTrackId: string | null = null;
 
   constructor(options?: PlayerOptions) {
     super();
@@ -149,6 +156,24 @@ class Player extends EventEmitter<PlayerEvents> {
       this.emit('error', error);
     });
     this.transport.on('timeupdate', (currentTime) => {
+      if (!this.transport.paused && !this.transport.isBuffering) {
+        if (this.lastAccumTimeSec !== null) {
+          const dt = currentTime - this.lastAccumTimeSec;
+          if (dt > 0 && dt <= 2.5) {
+            this.playedAccumSec += dt;
+          }
+        }
+        this.lastAccumTimeSec = currentTime;
+        const activeTrack = this.getTrack();
+        if (
+          activeTrack &&
+          this.playedAccumSec >= 40 &&
+          this.scannerCommittedForTrackId !== activeTrack.id
+        ) {
+          this.scannerCommittedForTrackId = activeTrack.id;
+          notifyDeckTrack(activeTrack.id, []);
+        }
+      }
       this.emit('timeupdate', currentTime);
     });
     this.transport.on('telemetry', (frame) => {
@@ -156,6 +181,10 @@ class Player extends EventEmitter<PlayerEvents> {
     });
     this.transport.on('loadstart', () => {
       this.emit('loadstart');
+      this.emitStateChange();
+    });
+    this.transport.on('bufferingchange', () => {
+      this.emitStateChange();
     });
     this.transport.on('volumechange', () => {
       this.emitStateChange();
@@ -249,6 +278,9 @@ class Player extends EventEmitter<PlayerEvents> {
       volume: this.transport.volume,
       muted: this.transport.muted,
       isPaused: this.transport.paused,
+      isLoadingTrack: this.loadingTrackId !== null || this.transport.isLoading,
+      loadingTrackId: this.loadingTrackId,
+      isBuffering: this.transport.isBuffering,
     };
 
     return this.state;
@@ -261,9 +293,13 @@ class Player extends EventEmitter<PlayerEvents> {
     await this.transport.play();
   }
   pause() {
+    this.lastAccumTimeSec = null;
     this.transport.pause();
   }
   stop() {
+    this.lastAccumTimeSec = null;
+    this.playedAccumSec = 0;
+    this.loadingTrackId = null;
     this.transport.pause();
     this.queue = [];
     this.queueCursor = null;
@@ -306,7 +342,8 @@ class Player extends EventEmitter<PlayerEvents> {
 
     if (track !== undefined) {
       this.queueCursor = newQueueCursor;
-      await this.setTrack(track);
+      const ok = await this.setTrack(track);
+      if (!ok) return;
       await this.play();
     } else {
       this.stop();
@@ -332,7 +369,8 @@ class Player extends EventEmitter<PlayerEvents> {
 
     if (track !== undefined) {
       this.queueCursor = newQueueCursor;
-      await this.setTrack(track);
+      const ok = await this.setTrack(track);
+      if (!ok) return;
       await this.play();
     } else {
       this.stop();
@@ -378,7 +416,8 @@ class Player extends EventEmitter<PlayerEvents> {
     this.queueOrigin = queueOrigin;
 
     const track = queue[queueCursor];
-    await this.setTrack(track);
+    const ok = await this.setTrack(track);
+    if (!ok) return;
     await this.play().catch(logAndNotifyError);
   }
 
@@ -392,7 +431,8 @@ class Player extends EventEmitter<PlayerEvents> {
     }
 
     this.queueCursor = index;
-    await this.setTrack(track);
+    const ok = await this.setTrack(track);
+    if (!ok) return;
     await this.play();
   }
 
@@ -557,18 +597,35 @@ class Player extends EventEmitter<PlayerEvents> {
   }
 
   // Track management
-  async setTrack(track: Track) {
+  async setTrack(track: Track): Promise<boolean> {
     const seq = ++this.trackLoadSeq;
-    notifyDeckTrack(track.id, []);
+    this.loadingTrackId = track.id;
+    this.playedAccumSec = 0;
+    this.lastAccumTimeSec = 0;
+    this.scannerCommittedForTrackId = null;
     this.emit('trackChange', track);
     this.emitStateChange();
     const hotCuesSec =
       track.hot_cues && track.hot_cues.length === 4
         ? track.hot_cues.map((c) => c.seconds)
         : undefined;
-    await this.transport.loadTrack(track.path, track.duration, hotCuesSec);
-    if (seq !== this.trackLoadSeq) return;
-    this.emitStateChange();
+    try {
+      const loaded = await this.transport.loadTrack(
+        track.path,
+        track.duration,
+        hotCuesSec,
+      );
+      if (!loaded || seq !== this.trackLoadSeq) return false;
+      this.loadingTrackId = null;
+      this.emitStateChange();
+      return true;
+    } catch (err) {
+      if (seq === this.trackLoadSeq) {
+        this.loadingTrackId = null;
+        this.emitStateChange();
+      }
+      throw err;
+    }
   }
 
   /**
@@ -586,6 +643,7 @@ class Player extends EventEmitter<PlayerEvents> {
   // ============================================================================
 
   setCurrentTime(time: number) {
+    this.lastAccumTimeSec = null;
     this.transport.seek(time);
   }
 
@@ -668,4 +726,6 @@ const playerInstance = new Player({
 export default playerInstance;
 
 // Expose for debugging
-window.__MUSEEKS_PLAYER = playerInstance;
+if (typeof window !== 'undefined') {
+  window.__MUSEEKS_PLAYER = playerInstance;
+}

@@ -173,7 +173,7 @@ git commit -S -m "fix(ipc,scanner): enforce latest-wins track load gate and skip
   - `Player.setTrack(track: Track): Promise<boolean>` (`true` iff this call is still the latest `trackLoadSeq`)
   - `NativeRustAudioTransport.{isBuffering: boolean, isLoading: boolean}` + `bufferingchange: (buffering: boolean) => void` event
 
-- [ ] **Step 1: Write failing Vitest tests for rapid-click stale `play()` cancellation, `40s` scanner commit gate, and honest buffering UI**
+- [x] **Step 1: Write failing Vitest tests for rapid-click stale `play()` cancellation, `40s` scanner commit gate, and honest buffering UI**
 
 1. In `hera-desktop/src/lib/__tests__/native-audio-transport.test.ts`:
    - Add test `cancels stale start() clicks so only the final clicked track invokes native_audio_play`: mock `native_audio_load_track` with deferred resolvers for `track1`, `track2`, `track3`; fire `void player.start([t1, t2, t3], t1.id, origin)`, `void player.start([t1, t2, t3], t2.id, origin)`, `const p3 = player.start([t1, t2, t3], t3.id, origin)`; resolve `t1`, then `t2`, then `t3`; await `p3`; assert `native_audio_play` was called **exactly once** (only for `t3`).
@@ -182,12 +182,12 @@ git commit -S -m "fix(ipc,scanner): enforce latest-wins track load gate and skip
    - Assert hovering `TrackRow` does NOT invoke `plugin:hera-dj|scanner_prewarm_track`.
    - Assert `PlayingIndicator` renders `aria-label="Cargando pista"` (spinner SVG, not bouncing bars) when `isLoadingTrack` or `isBuffering` is `true`.
 
-- [ ] **Step 2: Run Vitest to verify the new tests fail**
+- [x] **Step 2: Run Vitest to verify the new tests fail**
 
 Run: `cd hera-desktop && bun run test -- --run src/lib/__tests__/native-audio-transport.test.ts src/components/__tests__/scanner-realtime-ux.test.tsx`
 Expected: FAIL.
 
-- [ ] **Step 3: Implement `NativeRustAudioTransport` buffering truth + `Player` latest-wins `setTrack(): Promise<boolean>` and `40s` `notifyDeckTrack` gate**
+- [x] **Step 3: Implement `NativeRustAudioTransport` buffering truth + `Player` latest-wins `setTrack(): Promise<boolean>` and `40s` `notifyDeckTrack` gate**
 
 1. In `native-audio-ipc.ts` & `spectrum-renderer.ts`: add `bufferingchange: (isBuffering: boolean) => void` to `NativeTransportEvents` and `is_buffering: false` to `buildFallbackTelemetryFrame`.
 2. In `native-audio-transport.ts`:
@@ -201,19 +201,19 @@ Expected: FAIL.
    - In `start()`, `next()`, `previous()`, and `startFromQueue()`: write `const ok = await this.setTrack(track); if (!ok) return; await this.play();`.
    - Track cumulative real playback time (`playedAccumSec`, incremented only from positive `timeupdate` deltas `0 < dt <= 2.0` while `!isPaused && !isBuffering && !isLoadingTrack`, reset in `setTrack`); fire `notifyDeckTrack(track.id, [])` once when `playedAccumSec >= 40.0`.
 
-- [ ] **Step 4: Implement Honest Dark Booth Studio UX in `PlayingIndicator.tsx`, `PlayingBarInfo.tsx`, `TrackProgress.tsx`, and `TrackRow.tsx`**
+- [x] **Step 4: Implement Honest Dark Booth Studio UX in `PlayingIndicator.tsx`, `PlayingBarInfo.tsx`, `TrackProgress.tsx`, and `TrackRow.tsx`**
 
 1. `PlayingIndicator.tsx`: read `isLoadingTrack` and `isBuffering` from `usePlayerState`; when `isLoadingTrack || isBuffering`, render a crisp `12px` `#14b8a6` rotating SVG arc (`aria-label="Cargando pista"`) instead of the 3-bar equalizer animation.
 2. `PlayingBarInfo.tsx`: when `isLoadingTrack || isBuffering`, render a compact inline studio status pill (`Cargando pista…`, `#2dd4bf` ink on `rgba(20, 184, 166, 0.12)` background, `11px` tabular, zero layout shift) next to the title.
 3. `TrackProgress.tsx`: pause the `requestAnimationFrame` loop whenever `isPaused || isLoadingTrack || isBuffering`, and apply a subtle `opacity: 0.65` `#14b8a6` pulse on `Slider.Indicator` while buffering.
 4. `TrackRow.tsx`: remove `onMouseEnter={() => scheduleHoverPrewarm(track.id)}` and `onMouseLeave={cancelHoverPrewarm}`; display `<PlayingIndicator />` when `props.isPlaying || loadingTrackId === track.id` so double-clicking gives `< 16 ms` visual feedback on the exact row clicked.
 
-- [ ] **Step 5: Run Vitest, TypeScript check, Knip, and Impeccable mechanical detector**
+- [x] **Step 5: Run Vitest, TypeScript check, Knip, and Impeccable mechanical detector**
 
 Run: `cd hera-desktop && bun run check && bun run knip && bun run test -- --run` and `.agents/skills/impeccable/scripts/impeccable.cmd detect --json hera-desktop/src/components/PlayingIndicator.tsx hera-desktop/src/components/PlayingBarInfo.tsx hera-desktop/src/components/TrackProgress.tsx hera-desktop/src/components/TrackRow.tsx`
 Expected: PASS (`exit code 0`, zero detector violations).
 
-- [ ] **Step 6: Commit Task 3**
+- [x] **Step 6: Commit Task 3**
 
 ```bash
 git add hera-desktop/src/

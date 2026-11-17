@@ -18,6 +18,8 @@ export { registerTrackLoadMetadata };
 export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents> {
   private trackPath: string | null = null;
   private pausedState = true;
+  private loadingState = false;
+  private bufferingState = false;
   private endedState = false;
   private currentTimeSec = 0;
   private durationSec = 0;
@@ -48,7 +50,16 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
   get paused(): boolean {
     return this.pausedState;
   }
+  get isLoading(): boolean {
+    return this.loadingState;
+  }
+  get isBuffering(): boolean {
+    return this.bufferingState;
+  }
   get currentTime(): number {
+    if (this.loadingState || this.bufferingState) {
+      return this.currentTimeSec;
+    }
     if (
       this.usingBackendState &&
       !this.pausedState &&
@@ -90,13 +101,25 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
       ),
     );
   }
+  private setBufferingState(next: boolean): void {
+    if (this.bufferingState !== next) {
+      this.bufferingState = next;
+      if (next) this.lastFramePerfMs = 0;
+      this.emit('bufferingchange', next);
+    }
+  }
   private ingestTelemetryFrame(frame: NativeAudioTelemetryFrame): void {
     this.latestTelemetry = frame;
+    const isBuf = Boolean(frame.is_buffering);
+    this.setBufferingState(isBuf);
     if (this.usingBackendState && !this.pausedState && frame.is_playing) {
       if (frame.duration_sec > 0) this.durationSec = frame.duration_sec;
       this.currentTimeSec = frame.current_time_sec;
-      this.lastFramePerfMs = performance.now();
-      if (Math.abs(frame.current_time_sec - this.lastEmittedTimeSec) >= 0.032) {
+      this.lastFramePerfMs = isBuf ? 0 : performance.now();
+      if (
+        !isBuf &&
+        Math.abs(frame.current_time_sec - this.lastEmittedTimeSec) >= 0.032
+      ) {
         this.lastEmittedTimeSec = frame.current_time_sec;
         this.emit('timeupdate', this.currentTimeSec);
       }
@@ -114,9 +137,11 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
   }
   private applySnapshotDuration(snap: NativePlayerSnapshot): void {
     this.usingBackendState = true;
+    const isBuf = Boolean(snap.is_buffering);
+    this.setBufferingState(isBuf);
     this.currentTimeSec = snap.current_time_sec;
     this.lastEmittedTimeSec = snap.current_time_sec;
-    this.lastFramePerfMs = performance.now();
+    this.lastFramePerfMs = isBuf ? 0 : performance.now();
     if (snap.duration_sec > 0) this.durationSec = snap.duration_sec;
     if (snap.latest_telemetry != null)
       this.ingestTelemetryFrame(snap.latest_telemetry);
@@ -127,9 +152,11 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
     durationHintSec?: number,
     hotCuesSec?: number[],
     replayGainDb?: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const seq = ++this.loadSeq;
     this.stopTicker();
+    this.loadingState = true;
+    this.setBufferingState(false);
     if (!this.pausedState) {
       this.pausedState = true;
       this.emit('pause');
@@ -157,7 +184,8 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
         hotCuesSec: cues && cues.length >= 4 ? cues.slice(0, 4) : undefined,
         replayGainDb: gain != null && Number.isFinite(gain) ? gain : undefined,
       });
-      if (seq !== this.loadSeq) return;
+      if (seq !== this.loadSeq) return false;
+      this.loadingState = false;
       if (snap !== null) {
         this.applySnapshotDuration(snap);
         void invokeNativeAudio('native_audio_set_volume', {
@@ -171,8 +199,10 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
       } else {
         this.usingBackendState = false;
       }
+      return true;
     } catch (err) {
-      if (seq !== this.loadSeq) return;
+      if (seq !== this.loadSeq) return false;
+      this.loadingState = false;
       const message = err instanceof Error ? err.message : String(err);
       const code = /corrupt|unsupported|codec|zero samples/i.test(message)
         ? 3
@@ -203,6 +233,7 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
     this.stopTicker();
     const wasPlaying = !this.pausedState;
     this.pausedState = true;
+    this.setBufferingState(false);
     this.lastFramePerfMs = 0;
     void invokeNativeAudio('native_audio_pause').catch(() => {});
     if (wasPlaying) this.emit('pause');
@@ -264,6 +295,7 @@ export class NativeRustAudioTransport extends EventEmitter<NativeTransportEvents
       try {
         const snap = await invokeNativeAudio('native_audio_get_state');
         if (this.pausedState || snap === null) return;
+        this.setBufferingState(Boolean(snap.is_buffering));
         if (snap.duration_sec > 0) this.durationSec = snap.duration_sec;
         if (!this.channelSubscribed) {
           if (snap.latest_telemetry != null)

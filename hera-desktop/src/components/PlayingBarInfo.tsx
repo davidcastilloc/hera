@@ -3,6 +3,7 @@ import * as stylex from '@stylexjs/stylex';
 import Link from '../elements/Link';
 import type { Repeat, Track } from '../generated/typings';
 import useFormattedDuration from '../hooks/useFormattedDuration';
+import { usePlayerState } from '../hooks/usePlayer';
 import usePlayingTrackCurrentTime from '../hooks/usePlayingTrackCurrentTime';
 import TrackProgress from './TrackProgress';
 
@@ -15,6 +16,9 @@ type Props = {
 export default function PlayingBarInfo(props: Props) {
   const { trackPlaying } = props;
   const elapsed = usePlayingTrackCurrentTime(0.5);
+  const isWaitingAudio = usePlayerState(
+    (state) => state.isLoadingTrack || state.isBuffering,
+  );
   const formattedDuration = useFormattedDuration(trackPlaying.duration);
   const formattedProgress = useFormattedDuration(
     Math.min(trackPlaying.duration, elapsed),
@@ -28,6 +32,11 @@ export default function PlayingBarInfo(props: Props) {
         <div {...stylex.props(styles.metas)}>
           <strong {...stylex.props(styles.metadata, styles.metadataTitle)}>
             {trackPlaying.title}
+            {isWaitingAudio && (
+              <span {...stylex.props(styles.bufferingPill)}>
+                Cargando pista…
+              </span>
+            )}
           </strong>
           <div {...stylex.props(styles.metadata)}>
             <Link
@@ -111,6 +120,19 @@ const styles = stylex.create({
   metadataTitle: {
     fontWeight: 'var(--bold)',
     marginBottom: '2px',
+  },
+  bufferingPill: {
+    display: 'inline-block',
+    marginLeft: '8px',
+    paddingBlock: '1px',
+    paddingInline: '6px',
+    borderRadius: '4px',
+    fontSize: '10.5px',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    color: '#2dd4bf',
+    backgroundColor: 'rgba(20, 184, 166, 0.14)',
+    verticalAlign: 'middle',
   },
   metadata: {
     overflow: 'hidden',

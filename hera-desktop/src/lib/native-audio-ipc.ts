@@ -19,6 +19,7 @@ export interface NativeTransportEvents {
   timeupdate: (currentTime: number) => void;
   telemetry: (frame: NativeAudioTelemetryFrame) => void;
   loadstart: () => void;
+  bufferingchange: (isBuffering: boolean) => void;
   volumechange: () => void;
 }
 

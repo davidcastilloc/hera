@@ -16,7 +16,12 @@ type Props = {
 
 export default function TrackProgress(props: Props) {
   const { trackPlaying } = props;
-  const isPlaying = usePlayerState((state) => !state.isPaused);
+  const isPlaying = usePlayerState(
+    (state) => !state.isPaused && !state.isLoadingTrack && !state.isBuffering,
+  );
+  const isWaitingAudio = usePlayerState(
+    (state) => state.isLoadingTrack || state.isBuffering,
+  );
   const [elapsed, setElapsed] = useState(() => player.getCurrentTime());
 
   useEffect(() => {
@@ -93,7 +98,12 @@ export default function TrackProgress(props: Props) {
             progressPct={(elapsed / durationMax) * 100}
           />
           <LiveSpectrumCanvas />
-          <Slider.Indicator {...stylex.props(styles.trackRange)} />
+          <Slider.Indicator
+            {...stylex.props(
+              styles.trackRange,
+              isWaitingAudio && styles.trackRangeBuffering,
+            )}
+          />
           {hotCues.map((cue) => {
             const pct = Math.min(
               99,
@@ -156,6 +166,9 @@ const styles = stylex.create({
     height: '100%',
     backgroundColor: '#14b8a6',
     borderRadius: '3px',
+  },
+  trackRangeBuffering: {
+    opacity: 0.55,
   },
   hotCuePin: {
     position: 'absolute',

@@ -204,14 +204,12 @@ export function markTracksRecentlyUpdated(ids: string[]): void {
 let hoverTimer: ReturnType<typeof setTimeout> | null = null;
 let viewportTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Hover Pre-Warming (300 ms): promueve el track bajo el cursor a P0Immediate. */
-export function scheduleHoverPrewarm(trackId: string): void {
-  if (hoverTimer) clearTimeout(hoverTimer);
-  hoverTimer = setTimeout(() => {
-    void invoke<number>('plugin:hera-dj|scanner_prewarm_track', {
-      trackId,
-    }).catch(() => {});
-  }, 300);
+/** Hover Pre-Warming disabled: P0Immediate promotion is gated behind >= 40s of real playback. */
+export function scheduleHoverPrewarm(_trackId: string): void {
+  if (hoverTimer) {
+    clearTimeout(hoverTimer);
+    hoverTimer = null;
+  }
 }
 
 export function cancelHoverPrewarm(): void {

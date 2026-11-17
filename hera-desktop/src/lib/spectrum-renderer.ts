@@ -46,6 +46,7 @@ export function buildFallbackTelemetryFrame(
     current_time_sec: currentTimeSec,
     duration_sec: durationSec,
     is_playing: isPlaying,
+    is_buffering: false,
     rms_left: rms,
     rms_right: rms * 0.97,
     peak_db: peakDb,

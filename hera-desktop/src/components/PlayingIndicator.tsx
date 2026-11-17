@@ -5,11 +5,37 @@ import { usePlayerState } from '../hooks/usePlayer';
 import player from '../lib/player';
 import Icon from './Icon';
 
-export default function TrackPlayingIndicator() {
+type Props = {
+  isBufferingOverride?: boolean;
+};
+
+export default function TrackPlayingIndicator(props: Props) {
   const [hovered, setHovered] = useState(false);
   const isPaused = usePlayerState((state) => state.isPaused);
+  const isLoading = usePlayerState(
+    (state) => state.isLoadingTrack || state.isBuffering,
+  );
+  const showLoading = Boolean(props.isBufferingOverride) || isLoading;
 
   const icon = useMemo(() => {
+    if (showLoading) {
+      return (
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#14b8a6"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          aria-hidden="true"
+          {...stylex.props(styles.spinner)}
+        >
+          <path d="M12 3a9 9 0 1 0 9 9" />
+        </svg>
+      );
+    }
+
     if (!isPaused) {
       if (hovered) {
         return <Icon name="pause" size={12} />;
@@ -25,7 +51,7 @@ export default function TrackPlayingIndicator() {
     }
 
     return <Icon name="play" />;
-  }, [isPaused, hovered]);
+  }, [showLoading, isPaused, hovered]);
 
   return (
     <button
@@ -34,6 +60,9 @@ export default function TrackPlayingIndicator() {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       tabIndex={0}
+      aria-label={
+        showLoading ? 'Cargando pista' : isPaused ? 'Reproducir' : 'Pausar'
+      }
       data-museeks-action
       {...stylex.props(styles.playingIndicator)}
     >
@@ -48,6 +77,11 @@ const barAnimation = stylex.keyframes({
   '100%': { transform: 'scale3d(1, 0, 1)' },
 });
 
+const spinAnimation = stylex.keyframes({
+  '0%': { transform: 'rotate(0deg)' },
+  '100%': { transform: 'rotate(360deg)' },
+});
+
 const styles = stylex.create({
   playingIndicator: {
     height: '100%',
@@ -59,6 +93,12 @@ const styles = stylex.create({
     borderStyle: 'none',
     backgroundColor: 'transparent',
     padding: 0,
+  },
+  spinner: {
+    animationName: spinAnimation,
+    animationDuration: '0.75s',
+    animationTimingFunction: 'linear',
+    animationIterationCount: 'infinite',
   },
   animation: {
     width: '8px',
