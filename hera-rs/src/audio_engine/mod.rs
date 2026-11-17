@@ -9,6 +9,8 @@ pub mod backend;
 #[cfg(feature = "native")]
 mod buffer_gc;
 mod command_queue;
+#[cfg(feature = "native")]
+mod commit_gate;
 #[cfg(feature = "audio-device")]
 pub mod cpal_backend;
 mod decoder;
@@ -64,7 +66,9 @@ pub fn create_default_audio_backend() -> Arc<dyn AudioBackend> {
 pub struct DeckState {
     buffer: Option<Arc<PreallocatedDeckBuffer>>,
     playing: bool,
+    buffering: bool,
     playhead_frames: f64,
+    played_frames_since_load: u64,
     tempo_ratio: f32,
     gain: f32,
     stream_complete: bool,
@@ -77,7 +81,9 @@ impl Default for DeckState {
         Self {
             buffer: None,
             playing: false,
+            buffering: false,
             playhead_frames: 0.0,
+            played_frames_since_load: 0,
             tempo_ratio: 1.0,
             gain: 1.0,
             stream_complete: true,
@@ -114,7 +120,9 @@ impl DualDeckEngine {
         let state = &mut self.decks[deck as usize];
         let old = state.buffer.replace(buffer);
         state.playhead_frames = 0.0;
+        state.played_frames_since_load = 0;
         state.playing = false;
+        state.buffering = false;
         state.stream_complete = true;
         state.logical_total_frames = logical;
         old
@@ -131,9 +139,33 @@ impl DualDeckEngine {
         let state = &mut self.decks[deck as usize];
         let old = state.buffer.replace(buffer);
         state.playhead_frames = 0.0;
+        state.played_frames_since_load = 0;
         state.playing = false;
+        state.buffering = false;
         state.stream_complete = false;
         state.logical_total_frames = logical;
+        old
+    }
+
+    /// Seamlessly extend a deck's buffered prefix window while preserving playhead and `stream_complete`.
+    pub fn upgrade_deck_audition_window(
+        &mut self,
+        deck: DeckId,
+        buffer: Arc<PreallocatedDeckBuffer>,
+        stream_complete: bool,
+    ) -> Option<Arc<PreallocatedDeckBuffer>> {
+        let buf_frames = buffer.total_frames();
+        let state = &mut self.decks[deck as usize];
+        let old = state.buffer.replace(buffer);
+        state.stream_complete = stream_complete;
+        state.logical_total_frames = if stream_complete {
+            buf_frames
+        } else {
+            state.logical_total_frames.max(buf_frames)
+        };
+        if (state.playhead_frames.max(0.0) as u64) < buf_frames {
+            state.buffering = false;
+        }
         old
     }
 
@@ -147,9 +179,20 @@ impl DualDeckEngine {
         let logical = buffer.total_frames();
         let state = &mut self.decks[deck as usize];
         let old = state.buffer.replace(buffer);
+        state.buffering = false;
         state.stream_complete = true;
         state.logical_total_frames = logical;
         old
+    }
+
+    /// Return `true` if `deck` is waiting on off-thread audio decoding at its current playhead.
+    pub fn is_deck_buffering(&self, deck: DeckId) -> bool {
+        self.decks[deck as usize].buffering
+    }
+
+    /// Return cumulative stereo frames genuinely rendered for `deck` since track load.
+    pub fn deck_played_frames(&self, deck: DeckId) -> u64 {
+        self.decks[deck as usize].played_frames_since_load
     }
 
     /// Enable or disable headphone cue monitoring flag on `deck`.
@@ -219,7 +262,11 @@ impl DualDeckEngine {
                     d.playing = true;
                 }
             }
-            TransportCommand::Pause(deck) => self.decks[deck as usize].playing = false,
+            TransportCommand::Pause(deck) => {
+                let d = &mut self.decks[deck as usize];
+                d.playing = false;
+                d.buffering = false;
+            }
             TransportCommand::SeekToSample(deck, target_frame) => {
                 let d = &mut self.decks[deck as usize];
                 if let Some(buf) = d.buffer.as_deref() {
@@ -230,11 +277,13 @@ impl DualDeckEngine {
                     };
                     let clamped = target_frame.min(max_valid);
                     d.playhead_frames = clamped as f64;
+                    d.buffering = !d.stream_complete && d.playing && clamped >= buf.total_frames();
                     if d.stream_complete && clamped >= buf.total_frames() {
                         d.playing = false;
                     }
                 } else {
                     d.playhead_frames = 0.0;
+                    d.buffering = false;
                 }
             }
             TransportCommand::JumpToHotCue(deck, cue_num) if (1..=4).contains(&cue_num) => {
@@ -249,6 +298,7 @@ impl DualDeckEngine {
                         .frame_index
                         .min(max_valid);
                     d.playhead_frames = target as f64;
+                    d.buffering = !d.stream_complete && d.playing && target >= buf.total_frames();
                 }
             }
             TransportCommand::SetTempoRatio(deck, ratio) if ratio.is_finite() => {

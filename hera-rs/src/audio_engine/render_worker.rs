@@ -19,6 +19,11 @@ pub(crate) enum DeckLoadSwap {
         buffer: Arc<PreallocatedDeckBuffer>,
         logical_total_frames: u64,
     },
+    AuditionWindow {
+        deck: DeckId,
+        buffer: Arc<PreallocatedDeckBuffer>,
+        stream_complete: bool,
+    },
     SeamlessUpgrade {
         deck: DeckId,
         buffer: Arc<PreallocatedDeckBuffer>,
@@ -50,6 +55,13 @@ impl RealtimeRenderWorker {
                 } => self
                     .engine
                     .replace_deck_prefix(deck, buffer, logical_total_frames),
+                DeckLoadSwap::AuditionWindow {
+                    deck,
+                    buffer,
+                    stream_complete,
+                } => self
+                    .engine
+                    .upgrade_deck_audition_window(deck, buffer, stream_complete),
                 DeckLoadSwap::SeamlessUpgrade { deck, buffer } => {
                     self.engine.upgrade_deck_seamless(deck, buffer)
                 }
@@ -64,6 +76,8 @@ impl RealtimeRenderWorker {
         self.engine
             .render_interleaved_stereo(&self.atomics.command_queue, out_stereo);
         let is_playing_a = self.engine.is_deck_playing(DeckId::DeckA);
+        let is_buffering_a = self.engine.is_deck_buffering(DeckId::DeckA);
+        let played_a = self.engine.deck_played_frames(DeckId::DeckA);
         let is_playing_any = is_playing_a || self.engine.is_deck_playing(DeckId::DeckB);
         let playhead = self.engine.deck_playhead_frame(DeckId::DeckA);
         let total = self.atomics.total_frames.load(Ordering::Acquire);
@@ -73,12 +87,13 @@ impl RealtimeRenderWorker {
             self.master_bus
                 .process_interleaved_in_place(out_stereo, master_vol);
             let sr_f64 = f64::from(self.atomics.sample_rate.max(1));
-            let frame = self.analyzer.analyze_block(
+            let mut frame = self.analyzer.analyze_block(
                 out_stereo,
                 (playhead as f64) / sr_f64,
                 (total as f64) / sr_f64,
                 is_playing_any,
             );
+            frame.is_buffering = is_buffering_a;
             let _ = self.telemetry_tx.push(frame);
         }
 
@@ -87,8 +102,14 @@ impl RealtimeRenderWorker {
                 .playhead_frame
                 .store(playhead, Ordering::Release);
             self.atomics
+                .played_frames
+                .store(played_a, Ordering::Release);
+            self.atomics
                 .is_playing
                 .store(is_playing_a, Ordering::Release);
+            self.atomics
+                .is_buffering
+                .store(is_buffering_a, Ordering::Release);
             if any_deck_started_or_playing && !is_playing_a && total > 0 && playhead >= total {
                 self.atomics.ended.store(true, Ordering::Release);
             }

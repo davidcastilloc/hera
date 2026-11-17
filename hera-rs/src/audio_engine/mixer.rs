@@ -15,10 +15,12 @@ fn accumulate_stereo(out: &mut [f32], out_frame: usize, l: f32, r: f32, gain: f3
 
 pub(super) fn mix_deck_into_output(deck: &mut DeckState, out_stereo: &mut [f32], frames: usize) {
     if !deck.playing {
+        deck.buffering = false;
         return;
     }
     let Some(buf) = deck.buffer.as_deref().filter(|b| b.total_frames() > 0) else {
         deck.playing = false;
+        deck.buffering = false;
         return;
     };
     let total_frames = buf.total_frames();
@@ -28,30 +30,37 @@ pub(super) fn mix_deck_into_output(deck: &mut DeckState, out_stereo: &mut [f32],
 
     if (ratio - 1.0).abs() <= f32::EPSILON && deck.playhead_frames.fract() == 0.0 {
         let mut idx = deck.playhead_frames.max(0.0) as u64;
+        let mut rendered = 0_u64;
         for out_frame in 0..frames {
             if idx >= total_frames {
+                deck.played_frames_since_load =
+                    deck.played_frames_since_load.saturating_add(rendered);
                 if !deck.stream_complete {
-                    let rem = (frames - out_frame) as u64;
-                    deck.playhead_frames =
-                        (idx + rem).min(deck.logical_total_frames.max(total_frames)) as f64;
+                    deck.playhead_frames = idx as f64;
+                    deck.buffering = true;
                     return;
                 }
                 deck.playhead_frames = total_frames as f64;
                 deck.playing = false;
+                deck.buffering = false;
                 return;
             }
             let base = (idx as usize) * 2;
             let (l, r) = (samples[base], samples[base + 1]);
             accumulate_stereo(out_stereo, out_frame, l, r, gain);
             idx += 1;
+            rendered += 1;
         }
         deck.playhead_frames = idx as f64;
+        deck.played_frames_since_load = deck.played_frames_since_load.saturating_add(rendered);
+        deck.buffering = false;
         deck.playing = !deck.stream_complete || idx < total_frames;
         return;
     }
 
     let step = f64::from(ratio);
     let total_f64 = total_frames as f64;
+    let mut rendered = 0_u64;
     for out_frame in 0..frames {
         let idx0 = if deck.playhead_frames.is_finite() && deck.playhead_frames < total_f64 {
             deck.playhead_frames.max(0.0).floor() as u64
@@ -59,14 +68,14 @@ pub(super) fn mix_deck_into_output(deck: &mut DeckState, out_stereo: &mut [f32],
             total_frames
         };
         if idx0 >= total_frames {
+            deck.played_frames_since_load = deck.played_frames_since_load.saturating_add(rendered);
             if !deck.stream_complete {
-                let logical_cap = deck.logical_total_frames.max(total_frames) as f64;
-                let rem = (frames - out_frame) as f64;
-                deck.playhead_frames = (deck.playhead_frames + rem * step).min(logical_cap);
+                deck.buffering = true;
                 return;
             }
             deck.playhead_frames = total_f64;
             deck.playing = false;
+            deck.buffering = false;
             return;
         }
         let frac = (deck.playhead_frames - (idx0 as f64)) as f32;
@@ -76,8 +85,11 @@ pub(super) fn mix_deck_into_output(deck: &mut DeckState, out_stereo: &mut [f32],
         let r = samples[b0 + 1] + (samples[b1 + 1] - samples[b0 + 1]) * frac;
         accumulate_stereo(out_stereo, out_frame, l, r, gain);
         deck.playhead_frames += step;
+        rendered += 1;
     }
 
+    deck.played_frames_since_load = deck.played_frames_since_load.saturating_add(rendered);
+    deck.buffering = false;
     if deck.stream_complete && deck.playhead_frames >= total_f64 {
         deck.playhead_frames = total_f64;
         deck.playing = false;

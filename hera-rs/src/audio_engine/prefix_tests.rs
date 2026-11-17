@@ -202,3 +202,119 @@ fn test_anti_oom_reserve_cap_and_fast_prefix_latency() {
 
     let _ = fs::remove_file(&wav_path);
 }
+
+#[test]
+fn test_full_decode_stays_dormant_under_40s_played_and_upgrades_after_40s() {
+    let wav_path = std::env::temp_dir().join(format!(
+        "hera_commit_40s_{}_{:?}.wav",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    write_test_pcm16_wav(&wav_path, 44_100, 65.0, 220.0);
+
+    let backend = HeadlessClockAudioBackend::new_deterministic(48_000);
+    let snap = backend
+        .load_file_fast(
+            DeckId::DeckA,
+            &wav_path,
+            Some(65.0),
+            Some([1.0, 15.0, 30.0, 58.0]),
+        )
+        .expect("load_file_fast 65s WAV");
+    assert!(snap.track_loaded);
+    assert!(!snap.is_buffering);
+    assert!(
+        backend
+            .send_command(TransportCommand::Play(DeckId::DeckA))
+            .is_playing
+    );
+
+    // Wait briefly for Stage-2A (50s audition window) to settle, then render 20.0s of real audio.
+    let deadline_aud = Instant::now() + Duration::from_secs(5);
+    while backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0) <= (4.0 * 48_000.0) as u64
+        && Instant::now() < deadline_aud
+    {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let _ = backend.render_deterministic_frames(20 * 48_000);
+    std::thread::sleep(Duration::from_millis(60));
+
+    // At 20.0s played (< 40.0s), full 65.0s decode MUST remain dormant!
+    assert!(
+        !backend.is_stream_complete(),
+        "full decode must NOT run before 40s of real played audio"
+    );
+    let buffered_at_20s = backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0);
+    assert!(
+        buffered_at_20s <= (51.0 * 48_000.0) as u64,
+        "expected <= 50s audition buffer before 40s commit, got {buffered_at_20s} frames"
+    );
+
+    // Render another 21.0s (total 41.0s played >= 40.0s threshold) -> commit gate wakes!
+    let _ = backend.render_deterministic_frames(21 * 48_000);
+    let deadline_full = Instant::now() + Duration::from_secs(15);
+    while !backend.is_stream_complete() && Instant::now() < deadline_full {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(
+        backend.is_stream_complete(),
+        "full decode should complete after >= 40s played"
+    );
+    assert!(backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0) >= (64.8 * 48_000.0) as u64);
+
+    let _ = fs::remove_file(&wav_path);
+}
+
+#[test]
+fn test_seek_beyond_audition_window_holds_playhead_with_is_buffering_and_wakes_full_decode() {
+    let wav_path = std::env::temp_dir().join(format!(
+        "hera_seek_wake_{}_{:?}.wav",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    write_test_pcm16_wav(&wav_path, 44_100, 65.0, 330.0);
+
+    let backend = HeadlessClockAudioBackend::new_deterministic(48_000);
+    let _ = backend
+        .load_file_fast(
+            DeckId::DeckA,
+            &wav_path,
+            Some(65.0),
+            Some([1.0, 15.0, 30.0, 58.0]),
+        )
+        .expect("load_file_fast 65s WAV");
+    let _ = backend.send_command(TransportCommand::Play(DeckId::DeckA));
+
+    let target_frame = 55 * 48_000;
+    let seek_snap =
+        backend.send_command(TransportCommand::SeekToSample(DeckId::DeckA, target_frame));
+    assert_eq!(seek_snap.playhead_frame, target_frame);
+
+    // Render 4096 frames while target_frame (55s) is still beyond current buffer:
+    // playhead MUST stay held at target_frame and is_buffering MUST be true!
+    if !backend.is_stream_complete() {
+        let silent = backend.render_deterministic_frames(4096);
+        let mid_snap = backend.snapshot();
+        if !backend.is_stream_complete() {
+            assert!(silent.iter().all(|s| s.abs() == 0.0));
+            assert!(mid_snap.is_buffering);
+            assert_eq!(
+                mid_snap.playhead_frame, target_frame,
+                "playhead must NOT drift forward while buffering in silence"
+            );
+        }
+    }
+
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while !backend.is_stream_complete() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(backend.is_stream_complete());
+    let resumed = backend.render_deterministic_frames(4096);
+    assert!(resumed.iter().any(|s| s.abs() > 0.01));
+    let after_snap = backend.snapshot();
+    assert!(!after_snap.is_buffering);
+    assert!(after_snap.playhead_frame > target_frame);
+
+    let _ = fs::remove_file(&wav_path);
+}

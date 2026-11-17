@@ -36,6 +36,8 @@ pub struct AudioTransportSnapshot {
     pub track_loaded: bool,
     pub loaded_path: Option<String>,
     pub is_playing: bool,
+    #[serde(default)]
+    pub is_buffering: bool,
     pub ended: bool,
     pub current_time_sec: f64,
     pub duration_sec: f64,

@@ -211,6 +211,7 @@ fn test_audio_telemetry_frame_schema_and_synthesized_values() {
         current_time_sec: 1.25,
         duration_sec: 120.0,
         is_playing: true,
+        is_buffering: false,
         rms_left: 0.45,
         rms_right: 0.42,
         peak_db: -6.0,

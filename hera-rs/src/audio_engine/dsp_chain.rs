@@ -30,6 +30,8 @@ pub struct AudioTelemetryFrame {
     pub current_time_sec: f64,
     pub duration_sec: f64,
     pub is_playing: bool,
+    #[serde(default)]
+    pub is_buffering: bool,
     pub rms_left: f32,
     pub rms_right: f32,
     pub peak_db: f32,
@@ -293,6 +295,7 @@ impl RealTimeSpectrumAnalyzer {
             current_time_sec,
             duration_sec,
             is_playing,
+            is_buffering: false,
             rms_left,
             rms_right,
             peak_db,

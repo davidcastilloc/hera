@@ -1,26 +1,29 @@
-//! Prefix-first (`< 50 ms`) + seamless background upgrade loader for `AudioControllerHub`.
+//! Prefix-first (`< 50 ms`) + `50.0s` audition window + `>= 40.0s` played-audio commit loader.
 
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::thread;
 
 use crate::structure::analyze_structure_and_style;
 
 use super::backend::AudioTransportSnapshot;
-use super::dsp_chain::{resample_deck_buffer_fast_prefix, resample_deck_buffer_to_rate};
+use super::commit_gate::spawn_two_stage_deck_loader;
+use super::dsp_chain::resample_deck_buffer_fast_prefix;
 use super::hub::AudioControllerHub;
 #[cfg(test)]
 pub(crate) use super::prefix_decode::clamp_reserve_frames;
 use super::prefix_decode::decode_audio_chunk;
+#[cfg(test)]
 pub(crate) use super::prefix_decode::MAX_FULL_IN_MEMORY_DECODE_SECS;
 use super::{DeckId, PreallocatedDeckBuffer};
 
-pub(crate) const PREFIX_DECODE_SECS: f64 = 2.5;
+pub(crate) const PREFIX_DECODE_SECS: f64 = 3.0;
+pub(crate) const AUDITION_WINDOW_SECS: f64 = 50.0;
+pub(crate) const FULL_DECODE_COMMIT_PLAYED_SECS: f64 = 40.0;
 
-/// Immediately decodes up to 2.5s of audio (`< 50 ms`) so deck playback and Hot Cue seek start
-/// without blocking on full-track decoding/resampling; spawns a background worker for long tracks
-/// that upgrades the playing deck buffer seamlessly (capped at `15 min` to prevent OOM on mixes).
+/// Immediately decodes up to 3.0s of audio (`< 50 ms`) for instant playback, extends a lightweight
+/// 50.0s audition window off-thread, and gates full-track decoding (`<= 15 min` + `rubato`) until
+/// the track accumulates `>= 40.0s` of real played frames or an out-of-window seek occurs.
 pub(crate) fn load_file_prefix_then_full(
     hub: &Arc<AudioControllerHub>,
     deck: DeckId,
@@ -74,63 +77,26 @@ pub(crate) fn load_file_prefix_then_full(
         Arc::clone(&cancel),
     );
 
-    let hub_bg = Arc::clone(hub);
-    let path_bg = path.to_path_buf();
-    let _ = thread::Builder::new()
-        .name("hera-deck-full-decode".to_string())
-        .spawn(move || {
-            if cancel.load(Ordering::Acquire) {
-                return;
-            }
-            let Ok(full) = decode_audio_chunk(
-                &path_bg,
-                Some(MAX_FULL_IN_MEMORY_DECODE_SECS),
-                Some(&cancel),
-            ) else {
-                return;
-            };
-            if cancel.load(Ordering::Acquire)
-                || hub_bg.atomics.load_generation.load(Ordering::Acquire) != generation
-            {
-                return;
-            }
-            let cue_secs = match known_cues_sec {
-                Some(cues) => sanitize_cue_seconds(cues),
-                None => compute_cues_seconds(&full.interleaved_stereo, full.sample_rate),
-            };
-            let Ok(raw_full) = PreallocatedDeckBuffer::from_stereo_frames(
-                full.interleaved_stereo,
-                full.sample_rate,
-                [0; 4],
-            ) else {
-                return;
-            };
-            let Ok(mut resampled_full) = resample_deck_buffer_to_rate(&raw_full, target_sr) else {
-                return;
-            };
-            if cancel.load(Ordering::Acquire)
-                || hub_bg.atomics.load_generation.load(Ordering::Acquire) != generation
-            {
-                return;
-            }
-            let full_frames = resampled_full.total_frames();
-            apply_cue_seconds(&mut resampled_full, cue_secs, full_frames);
-            hub_bg.upgrade_buffer_if_generation(
-                deck,
-                generation,
-                Arc::new(resampled_full),
-                &cancel,
-            );
-        });
+    spawn_two_stage_deck_loader(
+        Arc::clone(hub),
+        deck,
+        path.to_path_buf(),
+        target_sr,
+        logical_dur_sec,
+        logical_total_frames,
+        known_cues_sec,
+        generation,
+        cancel,
+    );
 
     Ok(snap)
 }
 
-fn sanitize_cue_seconds(cues: [f64; 4]) -> [f64; 4] {
+pub(crate) fn sanitize_cue_seconds(cues: [f64; 4]) -> [f64; 4] {
     cues.map(|s| if s.is_finite() { s.max(0.0) } else { 0.0 })
 }
 
-fn apply_cue_seconds(
+pub(crate) fn apply_cue_seconds(
     buf: &mut PreallocatedDeckBuffer,
     cue_secs: [f64; 4],
     logical_total_frames: u64,
@@ -144,7 +110,7 @@ fn apply_cue_seconds(
     }
 }
 
-fn compute_cues_seconds(interleaved_stereo: &[f32], sample_rate: u32) -> [f64; 4] {
+pub(crate) fn compute_cues_seconds(interleaved_stereo: &[f32], sample_rate: u32) -> [f64; 4] {
     let total_frames = interleaved_stereo.len() / 2;
     if total_frames < 4 {
         return [0.0; 4];
