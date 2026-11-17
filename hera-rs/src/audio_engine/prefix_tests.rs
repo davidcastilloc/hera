@@ -210,17 +210,17 @@ fn test_full_decode_stays_dormant_under_40s_played_and_upgrades_after_40s() {
         std::process::id(),
         std::thread::current().id()
     ));
-    write_test_pcm16_wav(&wav_path, 44_100, 65.0, 220.0);
+    write_test_pcm16_wav(&wav_path, 44_100, 80.0, 220.0);
 
     let backend = HeadlessClockAudioBackend::new_deterministic(48_000);
     let snap = backend
         .load_file_fast(
             DeckId::DeckA,
             &wav_path,
-            Some(65.0),
-            Some([1.0, 15.0, 30.0, 58.0]),
+            Some(80.0),
+            Some([1.0, 15.0, 30.0, 72.0]),
         )
-        .expect("load_file_fast 65s WAV");
+        .expect("load_file_fast 80s WAV");
     assert!(snap.track_loaded);
     assert!(!snap.is_buffering);
     assert!(
@@ -229,7 +229,7 @@ fn test_full_decode_stays_dormant_under_40s_played_and_upgrades_after_40s() {
             .is_playing
     );
 
-    // Wait briefly for Stage-2A (50s audition window) to settle, then render 20.0s of real audio.
+    // Wait briefly for Stage-2A (65s audition window) to settle, then render 20.0s of real audio.
     let deadline_aud = Instant::now() + Duration::from_secs(5);
     while backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0) <= (4.0 * 48_000.0) as u64
         && Instant::now() < deadline_aud
@@ -239,15 +239,15 @@ fn test_full_decode_stays_dormant_under_40s_played_and_upgrades_after_40s() {
     let _ = backend.render_deterministic_frames(20 * 48_000);
     std::thread::sleep(Duration::from_millis(60));
 
-    // At 20.0s played (< 40.0s), full 65.0s decode MUST remain dormant!
+    // At 20.0s played (< 40.0s), full 80.0s decode MUST remain dormant!
     assert!(
         !backend.is_stream_complete(),
         "full decode must NOT run before 40s of real played audio"
     );
     let buffered_at_20s = backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0);
     assert!(
-        buffered_at_20s <= (51.0 * 48_000.0) as u64,
-        "expected <= 50s audition buffer before 40s commit, got {buffered_at_20s} frames"
+        buffered_at_20s <= (66.0 * 48_000.0) as u64,
+        "expected <= 65s audition buffer before 40s commit, got {buffered_at_20s} frames"
     );
 
     // Render another 21.0s (total 41.0s played >= 40.0s threshold) -> commit gate wakes!
@@ -260,7 +260,7 @@ fn test_full_decode_stays_dormant_under_40s_played_and_upgrades_after_40s() {
         backend.is_stream_complete(),
         "full decode should complete after >= 40s played"
     );
-    assert!(backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0) >= (64.8 * 48_000.0) as u64);
+    assert!(backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0) >= (79.8 * 48_000.0) as u64);
 
     let _ = fs::remove_file(&wav_path);
 }
@@ -272,25 +272,25 @@ fn test_seek_beyond_audition_window_holds_playhead_with_is_buffering_and_wakes_f
         std::process::id(),
         std::thread::current().id()
     ));
-    write_test_pcm16_wav(&wav_path, 44_100, 65.0, 330.0);
+    write_test_pcm16_wav(&wav_path, 44_100, 80.0, 330.0);
 
     let backend = HeadlessClockAudioBackend::new_deterministic(48_000);
     let _ = backend
         .load_file_fast(
             DeckId::DeckA,
             &wav_path,
-            Some(65.0),
-            Some([1.0, 15.0, 30.0, 58.0]),
+            Some(80.0),
+            Some([1.0, 15.0, 30.0, 72.0]),
         )
-        .expect("load_file_fast 65s WAV");
+        .expect("load_file_fast 80s WAV");
     let _ = backend.send_command(TransportCommand::Play(DeckId::DeckA));
 
-    let target_frame = 55 * 48_000;
+    let target_frame = 70 * 48_000;
     let seek_snap =
         backend.send_command(TransportCommand::SeekToSample(DeckId::DeckA, target_frame));
     assert_eq!(seek_snap.playhead_frame, target_frame);
 
-    // Render 4096 frames while target_frame (55s) is still beyond current buffer:
+    // Render 4096 frames while target_frame (70s) is still beyond current buffer:
     // playhead MUST stay held at target_frame and is_buffering MUST be true!
     if !backend.is_stream_complete() {
         let silent = backend.render_deterministic_frames(4096);

@@ -40,11 +40,11 @@ impl AutoGigGovernor {
     }
 
     pub fn set_deck_playing(&self, playing: bool) {
-        self.deck_is_playing.store(playing, Ordering::Relaxed);
+        self.deck_is_playing.store(playing, Ordering::Release);
     }
 
     pub fn is_deck_playing(&self) -> bool {
-        self.deck_is_playing.load(Ordering::Relaxed)
+        self.deck_is_playing.load(Ordering::Acquire)
     }
 
     pub fn set_external_booth_mode(&self, active: bool) {
@@ -68,7 +68,9 @@ impl AutoGigGovernor {
     }
 
     pub fn effective_workers(&self) -> usize {
-        if self.is_throttled_booth_mode() {
+        if self.is_deck_playing() {
+            0
+        } else if self.is_external_booth_mode() || self.is_on_battery_power() {
             1
         } else {
             self.max_workers
@@ -163,8 +165,12 @@ impl ScanScheduler {
 
     fn pop_from_inner(
         inner: &mut SchedulerInner,
+        deck_playing: bool,
         freeze_p3: bool,
     ) -> Option<(String, ScanPriority)> {
+        if deck_playing {
+            return None;
+        }
         let max_q = if freeze_p3 { 3 } else { 4 };
         for idx in 0..max_q {
             while let Some(id) = inner.queues[idx].pop_front() {
@@ -247,19 +253,31 @@ impl ScanScheduler {
         self.inner.lock().unwrap().active_in_flight.len()
     }
 
+    pub fn set_deck_playing(&self, playing: bool) {
+        let _guard = self.inner.lock().unwrap();
+        self.governor.set_deck_playing(playing);
+        drop(_guard);
+        self.cv.notify_all();
+    }
+
     pub fn pop_next(&self) -> Option<(String, ScanPriority)> {
-        let freeze_p3 = self.governor.is_throttled_booth_mode();
         let mut guard = self.inner.lock().unwrap();
-        Self::pop_from_inner(&mut guard, freeze_p3)
+        Self::pop_from_inner(
+            &mut guard,
+            self.governor.is_deck_playing(),
+            self.governor.is_throttled_booth_mode(),
+        )
     }
 
     /// Extrae la siguiente tarea de forma inmediata si hay disponibles,
     /// o espera hasta `timeout` con Condvar (0% CPU en reposo).
     pub fn wait_next(&self, timeout: Duration) -> Option<(String, ScanPriority)> {
         let mut guard = self.inner.lock().unwrap();
-        if let Some(item) =
-            Self::pop_from_inner(&mut guard, self.governor.is_throttled_booth_mode())
-        {
+        if let Some(item) = Self::pop_from_inner(
+            &mut guard,
+            self.governor.is_deck_playing(),
+            self.governor.is_throttled_booth_mode(),
+        ) {
             return Some(item);
         }
         if timeout.is_zero() {
@@ -268,6 +286,7 @@ impl ScanScheduler {
         let (mut guard_after_wait, _) = self.cv.wait_timeout(guard, timeout).unwrap();
         Self::pop_from_inner(
             &mut guard_after_wait,
+            self.governor.is_deck_playing(),
             self.governor.is_throttled_booth_mode(),
         )
     }

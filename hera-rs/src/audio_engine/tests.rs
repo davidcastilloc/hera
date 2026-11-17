@@ -52,13 +52,8 @@ fn test_lock_free_command_queue_pack_unpack_and_ring_wraparound() {
 
     // Clamp u64::MAX frame seek to 54-bit MAX_SEEK_FRAME.
     assert!(queue.try_push(TransportCommand::SeekToSample(DeckId::DeckB, u64::MAX)));
-    assert_eq!(
-        queue.try_pop(),
-        Some(TransportCommand::SeekToSample(
-            DeckId::DeckB,
-            MAX_SEEK_FRAME
-        ))
-    );
+    let clamped_seek = TransportCommand::SeekToSample(DeckId::DeckB, MAX_SEEK_FRAME);
+    assert_eq!(queue.try_pop(), Some(clamped_seek));
 
     // 2. Fill all 64 slots and verify the 65th push returns false without overwriting.
     for i in 0..64u64 {
@@ -67,41 +62,27 @@ fn test_lock_free_command_queue_pack_unpack_and_ring_wraparound() {
     assert!(!queue.try_push(TransportCommand::Play(DeckId::DeckB)));
 
     for i in 0..64u64 {
-        assert_eq!(
-            queue.try_pop(),
-            Some(TransportCommand::SeekToSample(DeckId::DeckA, i * 100))
-        );
+        let cmd = TransportCommand::SeekToSample(DeckId::DeckA, i * 100);
+        assert_eq!(queue.try_pop(), Some(cmd));
     }
     assert_eq!(queue.try_pop(), None);
 
     // 3. Push/pop 180 commands in staggered batches across multiple 64-slot ring wraparounds.
-    let mut next_push = 0u64;
-    let mut next_pop = 0u64;
+    let decks = [DeckId::DeckA, DeckId::DeckB];
+    let (mut next_push, mut next_pop) = (0u64, 0u64);
     for _batch in 0..9 {
         for _ in 0..20 {
-            let deck = if (next_push & 1) == 0 {
-                DeckId::DeckA
-            } else {
-                DeckId::DeckB
-            };
+            let deck = decks[(next_push & 1) as usize];
             assert!(queue.try_push(TransportCommand::SeekToSample(deck, next_push * 17)));
             next_push += 1;
         }
         for _ in 0..20 {
-            let expected_deck = if (next_pop & 1) == 0 {
-                DeckId::DeckA
-            } else {
-                DeckId::DeckB
-            };
-            assert_eq!(
-                queue.try_pop(),
-                Some(TransportCommand::SeekToSample(expected_deck, next_pop * 17))
-            );
+            let cmd = TransportCommand::SeekToSample(decks[(next_pop & 1) as usize], next_pop * 17);
+            assert_eq!(queue.try_pop(), Some(cmd));
             next_pop += 1;
         }
     }
-    assert_eq!(next_push, 180);
-    assert_eq!(next_pop, 180);
+    assert_eq!((next_push, next_pop), (180, 180));
     assert_eq!(queue.try_pop(), None);
 }
 
@@ -162,18 +143,10 @@ fn test_dual_deck_mix_tempo_ratio_and_eof_clamp() {
     let queue = CommandQueue::new();
     let mut engine = DualDeckEngine::new();
 
-    // DeckA: 16 frames of linear ramp (frame i => L = i * 0.04, R = -i * 0.02)
-    let mut stereo_a = Vec::with_capacity(32);
-    for i in 0..16 {
-        stereo_a.push((i as f32) * 0.04);
-        stereo_a.push(-(i as f32) * 0.02);
-    }
-    // DeckB: 16 frames of constant pad (L = 0.25, R = 0.30)
-    let mut stereo_b = Vec::with_capacity(32);
-    for _ in 0..16 {
-        stereo_b.push(0.25);
-        stereo_b.push(0.30);
-    }
+    let stereo_a: Vec<f32> = (0..16)
+        .flat_map(|i| [(i as f32) * 0.04, -(i as f32) * 0.02])
+        .collect();
+    let stereo_b = [0.25_f32, 0.30].repeat(16);
 
     let buf_a = Arc::new(
         PreallocatedDeckBuffer::from_stereo_frames(stereo_a, 44_100, [0, 4, 8, 12]).unwrap(),
@@ -227,12 +200,8 @@ fn test_dual_deck_mix_tempo_ratio_and_eof_clamp() {
 
 #[test]
 fn test_decode_wav_bytes_into_preallocated_deck_buffer() {
-    let sr = 44_100u32;
-    let dur_sec = 4.0_f32;
-    let n = (sr as f32 * dur_sec) as usize;
-    let mut left = Vec::with_capacity(n);
-    let mut right = Vec::with_capacity(n);
-
+    let (sr, n) = (44_100u32, 44_100 * 4);
+    let (mut left, mut right) = (Vec::with_capacity(n), Vec::with_capacity(n));
     for i in 0..n {
         let t = (i as f32) / (sr as f32);
         let beat_env = (1.0 - (t % 0.5) * 2.0).max(0.0);
@@ -312,12 +281,9 @@ fn realtime_worker_retires_replaced_deck_buffer_without_dropping_on_audio_thread
     use super::hub::create_controller_and_worker;
     let (hub, mut worker) =
         create_controller_and_worker(AudioBackendKind::HeadlessClockFallback, 48_000);
-    let buf1 =
-        PreallocatedDeckBuffer::from_stereo_frames(vec![0.1; 512], 48_000, [0, 64, 128, 192])
-            .unwrap();
-    let buf2 =
-        PreallocatedDeckBuffer::from_stereo_frames(vec![0.2; 512], 48_000, [0, 64, 128, 192])
-            .unwrap();
+    let cues = [0, 64, 128, 192];
+    let buf1 = PreallocatedDeckBuffer::from_stereo_frames(vec![0.1; 512], 48_000, cues).unwrap();
+    let buf2 = PreallocatedDeckBuffer::from_stereo_frames(vec![0.2; 512], 48_000, cues).unwrap();
 
     hub.install_buffer(DeckId::DeckA, buf1, None).unwrap();
     let installed1 = hub.deck_buffer(DeckId::DeckA).unwrap();
@@ -326,21 +292,54 @@ fn realtime_worker_retires_replaced_deck_buffer_without_dropping_on_audio_thread
 
     let mut out = [0.0f32; 128];
     worker.render_stereo_block(&mut out);
-
     hub.install_buffer(DeckId::DeckA, buf2, None).unwrap();
     worker.render_stereo_block(&mut out);
 
-    assert!(
-        weak1.upgrade().is_some(),
-        "Buffer 1 must NOT be dropped on the audio thread!"
-    );
-    let drained = hub.drain_retired_buffers();
-    assert!(
-        drained >= 1,
-        "hub.drain_retired_buffers() must drain retired buffers"
-    );
-    assert!(
-        weak1.upgrade().is_none(),
-        "Buffer 1 must be dropped after drain_retired_buffers()"
-    );
+    assert!(weak1.upgrade().is_some(), "must NOT drop on audio thread");
+    assert!(hub.drain_retired_buffers() >= 1);
+    assert!(weak1.upgrade().is_none(), "must drop after drain");
+}
+
+#[cfg(feature = "native")]
+#[test]
+fn test_audition_window_65s_and_fast_stage3_commit_swap() {
+    use super::backend::{AudioBackend, HeadlessClockAudioBackend};
+    use std::time::{Duration, Instant};
+
+    assert!((super::prefix_loader::AUDITION_WINDOW_SECS - 65.0).abs() < f64::EPSILON);
+    let n = 75 * 44_100;
+    let ch: Vec<f32> = (0..n).map(|i| ((i as f32) * 0.05).sin() * 0.35).collect();
+    let wav = encode_stereo_pcm16_wav(&ch, &ch, 44_100);
+    let tmp = std::env::temp_dir().join(format!("hera_aud65_{}.wav", std::process::id()));
+    std::fs::write(&tmp, &wav).expect("write 75s wav");
+
+    let backend = HeadlessClockAudioBackend::new_deterministic(48_000);
+    let snap = backend
+        .load_file_fast(DeckId::DeckA, &tmp, Some(75.0), None)
+        .expect("load 75s wav");
+    assert!(!snap.is_buffering);
+    let play_snap = backend.send_command(TransportCommand::Play(DeckId::DeckA));
+    assert!(play_snap.is_playing);
+
+    let (min_aud, dl) = (64 * 48_000, Instant::now() + Duration::from_secs(5));
+    while backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0) < min_aud && Instant::now() < dl {
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0) >= min_aud);
+    for _ in 0..41 {
+        let _ = backend.render_deterministic_frames(48_000);
+        assert!(!backend.snapshot().is_buffering);
+    }
+    let dl2 = Instant::now() + Duration::from_secs(5);
+    while !backend.is_stream_complete() && Instant::now() < dl2 {
+        assert!(!backend.snapshot().is_buffering);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert!(backend.is_stream_complete());
+    let _ = backend.render_deterministic_frames(26 * 48_000);
+    let final_snap = backend.snapshot();
+    assert!(!final_snap.is_buffering);
+    assert!(backend.deck_buffer_frames(DeckId::DeckA).unwrap_or(0) >= (74.8 * 48_000.0) as u64);
+    assert!((final_snap.hot_cue_seconds[3] - 60.0).abs() < 0.05);
+    let _ = std::fs::remove_file(&tmp);
 }

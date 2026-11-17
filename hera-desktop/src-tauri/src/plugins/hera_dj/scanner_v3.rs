@@ -58,7 +58,7 @@ pub fn scanner_notify_deck_track(track_id: String, camelot_neighbors: Vec<String
 
 #[tauri::command]
 pub fn scanner_set_deck_playing(playing: bool) -> usize {
-    global_scheduler().governor.set_deck_playing(playing);
+    global_scheduler().set_deck_playing(playing);
     global_scheduler().governor.effective_workers()
 }
 

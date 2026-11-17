@@ -1,4 +1,4 @@
-//! Two-stage audition window (`50.0s`) and `>= 40.0s` played-audio commit gate for `AudioControllerHub`.
+//! Two-stage audition window (`65.0s`) and `>= 40.0s` played-audio commit gate for `AudioControllerHub`.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -6,12 +6,11 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use super::dsp_chain::{resample_deck_buffer_fast_prefix, resample_deck_buffer_to_rate};
+use super::dsp_chain::resample_deck_buffer_fast_prefix;
 use super::hub::AudioControllerHub;
 use super::prefix_decode::{decode_audio_chunk, MAX_FULL_IN_MEMORY_DECODE_SECS};
 use super::prefix_loader::{
-    apply_cue_seconds, compute_cues_seconds, sanitize_cue_seconds, AUDITION_WINDOW_SECS,
-    FULL_DECODE_COMMIT_PLAYED_SECS,
+    apply_cue_seconds, sanitize_cue_seconds, AUDITION_WINDOW_SECS, FULL_DECODE_COMMIT_PLAYED_SECS,
 };
 use super::{DeckId, PreallocatedDeckBuffer};
 
@@ -66,7 +65,7 @@ pub(crate) fn spawn_two_stage_deck_loader(
                 return;
             }
 
-            // Stage 2A: Lightweight 50.0s linear-resampled audition window (zero rubato, zero rustfft).
+            // Stage 2A: Lightweight 65.0s linear-resampled audition window (zero rubato, zero rustfft).
             if let Ok(aud) = decode_audio_chunk(&path_bg, Some(AUDITION_WINDOW_SECS), Some(&cancel))
             {
                 if !is_stale_generation(&hub, generation, &cancel) {
@@ -112,7 +111,7 @@ pub(crate) fn spawn_two_stage_deck_loader(
                 return;
             }
 
-            // Stage 3: Full-track decode (<= 900s) + rubato sinc resample, swapping audio BEFORE cues.
+            // Stage 3: Full-track decode (<= 900s) + fast linear resample (zero rustfft, zero rubato).
             let Ok(full) = decode_audio_chunk(
                 &path_bg,
                 Some(MAX_FULL_IN_MEMORY_DECODE_SECS),
@@ -123,9 +122,11 @@ pub(crate) fn spawn_two_stage_deck_loader(
             if is_stale_generation(&hub, generation, &cancel) {
                 return;
             }
-            let raw_cues = known_cues_sec.map(sanitize_cue_seconds).unwrap_or_else(|| {
-                compute_cues_seconds(&full.interleaved_stereo, full.sample_rate)
-            });
+            let full_dur_sec =
+                (full.interleaved_stereo.len() / 2) as f64 / f64::from(full.sample_rate.max(1));
+            let raw_cues = known_cues_sec
+                .map(sanitize_cue_seconds)
+                .unwrap_or_else(|| [0.02, 0.25, 0.50, 0.80].map(|r| full_dur_sec * r));
             let Ok(raw_full) = PreallocatedDeckBuffer::from_stereo_frames(
                 full.interleaved_stereo,
                 full.sample_rate,
@@ -133,7 +134,8 @@ pub(crate) fn spawn_two_stage_deck_loader(
             ) else {
                 return;
             };
-            let Ok(mut resampled_full) = resample_deck_buffer_to_rate(&raw_full, target_sr) else {
+            let Ok(mut resampled_full) = resample_deck_buffer_fast_prefix(&raw_full, target_sr)
+            else {
                 return;
             };
             if is_stale_generation(&hub, generation, &cancel) {

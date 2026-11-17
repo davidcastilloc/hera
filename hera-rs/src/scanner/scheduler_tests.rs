@@ -7,8 +7,11 @@ fn test_p0_overtakes_500_p2_and_governor_throttles_to_1() {
     let sched = ScanScheduler::new(16);
     assert_eq!(sched.governor.effective_workers(), 16);
     sched.governor.set_deck_playing(true);
-    assert_eq!(sched.governor.effective_workers(), 1);
+    assert_eq!(sched.governor.effective_workers(), 0);
     sched.governor.set_deck_playing(false);
+    sched.governor.set_external_booth_mode(true);
+    assert_eq!(sched.governor.effective_workers(), 1);
+    sched.governor.set_external_booth_mode(false);
     assert_eq!(sched.governor.effective_workers(), 16);
 
     for i in 0..500 {
@@ -175,4 +178,31 @@ fn test_cancel_and_drain_background_returns_drained_count() {
     let drained = sched.cancel_and_drain_background();
     assert_eq!(drained, 3);
     assert_eq!(sched.pending_count(), 2);
+}
+
+#[test]
+fn test_deck_playing_hard_pauses_workers_to_zero_and_wakes_on_stop() {
+    let sched = Arc::new(ScanScheduler::new(4));
+    sched.enqueue_or_promote("t-1", ScanPriority::P0Immediate);
+    sched.set_deck_playing(true);
+    assert_eq!(sched.governor.effective_workers(), 0);
+    assert_eq!(sched.pop_next(), None);
+    assert_eq!(sched.wait_next(Duration::from_millis(10)), None);
+
+    let sched_bg = Arc::clone(&sched);
+    let waiter = std::thread::spawn(move || sched_bg.wait_next(Duration::from_millis(500)));
+    std::thread::sleep(Duration::from_millis(25));
+
+    sched.set_deck_playing(false);
+    assert_eq!(sched.governor.effective_workers(), 4);
+    assert_eq!(
+        waiter.join().unwrap(),
+        Some(("t-1".to_string(), ScanPriority::P0Immediate))
+    );
+
+    sched.enqueue_or_promote("t-2", ScanPriority::P1Viewport);
+    assert_eq!(
+        sched.pop_next(),
+        Some(("t-2".to_string(), ScanPriority::P1Viewport))
+    );
 }

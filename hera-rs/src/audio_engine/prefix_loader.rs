@@ -1,4 +1,4 @@
-//! Prefix-first (`< 50 ms`) + `50.0s` audition window + `>= 40.0s` played-audio commit loader.
+//! Prefix-first (`< 50 ms`) + `65.0s` audition window + `>= 40.0s` played-audio commit loader.
 
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -18,12 +18,12 @@ pub(crate) use super::prefix_decode::MAX_FULL_IN_MEMORY_DECODE_SECS;
 use super::{DeckId, PreallocatedDeckBuffer};
 
 pub(crate) const PREFIX_DECODE_SECS: f64 = 3.0;
-pub(crate) const AUDITION_WINDOW_SECS: f64 = 50.0;
+pub(crate) const AUDITION_WINDOW_SECS: f64 = 65.0;
 pub(crate) const FULL_DECODE_COMMIT_PLAYED_SECS: f64 = 40.0;
 
 /// Immediately decodes up to 3.0s of audio (`< 50 ms`) for instant playback, extends a lightweight
-/// 50.0s audition window off-thread, and gates full-track decoding (`<= 15 min` + `rubato`) until
-/// the track accumulates `>= 40.0s` of real played frames or an out-of-window seek occurs.
+/// 65.0s audition window off-thread, and gates full-track decoding (`<= 15 min` linear resample)
+/// until the track accumulates `>= 40.0s` of real played frames or an out-of-window seek occurs.
 pub(crate) fn load_file_prefix_then_full(
     hub: &Arc<AudioControllerHub>,
     deck: DeckId,
@@ -110,7 +110,7 @@ pub(crate) fn apply_cue_seconds(
     }
 }
 
-pub(crate) fn compute_cues_seconds(interleaved_stereo: &[f32], sample_rate: u32) -> [f64; 4] {
+fn compute_cues_seconds(interleaved_stereo: &[f32], sample_rate: u32) -> [f64; 4] {
     let total_frames = interleaved_stereo.len() / 2;
     if total_frames < 4 {
         return [0.0; 4];

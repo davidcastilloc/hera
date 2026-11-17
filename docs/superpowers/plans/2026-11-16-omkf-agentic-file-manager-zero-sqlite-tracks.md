@@ -47,7 +47,7 @@
   - `pub(crate) const AUDITION_WINDOW_SECS: f64 = 65.0;` in `hera-rs/src/audio_engine/prefix_loader.rs`.
   - `spawn_two_stage_deck_loader` Stage 3 in `hera-rs/src/audio_engine/commit_gate.rs` using `resample_deck_buffer_fast_prefix(&raw_full, target_sr)` and proportional/known cues (zero `compute_cues_seconds` / `rustfft`, zero `resample_deck_buffer_to_rate` `rubato` sinc).
 
-- [ ] **Step 1: Write failing unit tests in `hera-rs/src/scanner/scheduler_tests.rs` and `hera-rs/src/audio_engine/tests.rs`**
+- [x] **Step 1: Write failing unit tests in `hera-rs/src/scanner/scheduler_tests.rs` and `hera-rs/src/audio_engine/tests.rs`**
 
 Add `test_deck_playing_hard_pauses_workers_to_zero_and_wakes_on_stop` in `hera-rs/src/scanner/scheduler_tests.rs`:
 ```rust
@@ -67,12 +67,12 @@ fn test_deck_playing_hard_pauses_workers_to_zero_and_wakes_on_stop() {
 ```
 And in `hera-rs/src/audio_engine/tests.rs`, update any `50.0` audition-window assertions to `65.0` (`AUDITION_WINDOW_SECS`) and add `test_audition_window_65s_and_fast_stage3_commit_swap` verifying `AUDITION_WINDOW_SECS == 65.0` and that advancing past `40.0s` upgrades a `> 70s` track to full length without triggering `is_buffering`.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `cargo test -p hera-node-rs test_deck_playing_hard_pauses_workers_to_zero_and_wakes_on_stop`
 Expected: FAIL (`set_deck_playing` missing / `effective_workers()` returns `1` instead of `0`).
 
-- [ ] **Step 3: Implement `0`-worker deck pause and fast Stage-3 upgrade**
+- [x] **Step 3: Implement `0`-worker deck pause and fast Stage-3 upgrade**
 
 1. In `hera-rs/src/scanner/scheduler.rs`:
    - Update `AutoGigGovernor::effective_workers(&self) -> usize` to return `0` when `self.is_deck_playing()`, `1` when `self.is_external_booth_mode() || self.is_on_battery_power()`, else `self.max_workers`.
@@ -82,12 +82,12 @@ Expected: FAIL (`set_deck_playing` missing / `effective_workers()` returns `1` i
 3. In `hera-rs/src/audio_engine/prefix_loader.rs`: change `AUDITION_WINDOW_SECS` from `50.0` to `65.0` (remove unused `compute_cues_seconds` if dead or mark `#[cfg(test)]` if only used in tests).
 4. In `hera-rs/src/audio_engine/commit_gate.rs`: in Stage 3 (`lines 126-145`), compute cues from `known_cues_sec.map(sanitize_cue_seconds).unwrap_or_else(|| [0.02, 0.25, 0.50, 0.80].map(|r| full_dur_sec * r))` where `full_dur_sec = (full.interleaved_stereo.len() / 2) as f64 / f64::from(full.sample_rate.max(1))`, and call `resample_deck_buffer_fast_prefix(&raw_full, target_sr)` instead of `resample_deck_buffer_to_rate`.
 
-- [ ] **Step 4: Run Rust audio & scanner tests and architectural ratchets**
+- [x] **Step 4: Run Rust audio & scanner tests and architectural ratchets**
 
 Run: `cargo test -p hera-node-rs scanner::scheduler -- --nocapture && cargo test -p hera-node-rs audio_engine -- --nocapture && cargo test -p hera-node-rs --test architectural_ratchets`
 Expected: PASS (`0 failed`, all `.rs` files `<= 349` lines).
 
-- [ ] **Step 5: Mark Task 1 complete and commit**
+- [x] **Step 5: Mark Task 1 complete and commit**
 
 Mark Task 1 checkboxes `[x]` in `docs/superpowers/plans/2026-11-16-omkf-agentic-file-manager-zero-sqlite-tracks.md` and commit signed (`git commit -S`) with `fix(audio-engine): pause scanner to 0 workers on play and make 40s stage-3 swap lock-free`.
 
