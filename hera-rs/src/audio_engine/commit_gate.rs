@@ -47,6 +47,7 @@ pub(crate) fn wait_for_commit_or_cancel(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn spawn_two_stage_deck_loader(
     hub: Arc<AudioControllerHub>,
     deck: DeckId,

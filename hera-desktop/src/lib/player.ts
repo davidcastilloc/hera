@@ -195,29 +195,20 @@ class Player extends EventEmitter<PlayerEvents> {
    * Setup MediaSession integration (for OS media controls, MPRIS, etc.)
    */
   private setupMediaSession() {
-    if (!('mediaSession' in navigator)) {
-      return;
-    }
-
+    if (!('mediaSession' in navigator)) return;
     this.transport.on('play', () => {
       navigator.mediaSession.playbackState = 'playing';
     });
-
     this.transport.on('pause', () => {
       navigator.mediaSession.playbackState = 'paused';
     });
-
     this.transport.on('loadstart', () => {
       void this.syncMediaSession();
     });
-
-    // Setup action handlers
     navigator.mediaSession.setActionHandler('play', () => {
       this.play().catch(logAndNotifyError);
     });
-    navigator.mediaSession.setActionHandler('pause', () => {
-      this.pause();
-    });
+    navigator.mediaSession.setActionHandler('pause', () => this.pause());
     navigator.mediaSession.setActionHandler('previoustrack', () => {
       this.previous().catch(logAndNotifyError);
     });
@@ -226,21 +217,12 @@ class Player extends EventEmitter<PlayerEvents> {
     });
   }
 
-  /**
-   * Sync current track metadata with MediaSession API
-   */
   private async syncMediaSession() {
-    if (!('mediaSession' in navigator) || !('MediaMetadata' in globalThis)) {
+    if (!('mediaSession' in navigator) || !('MediaMetadata' in globalThis))
       return;
-    }
-
     const track = this.getTrack();
-    if (!track) {
-      return;
-    }
-
+    if (!track) return;
     const cover = await getCover(track.path);
-
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title,
       artist: track.artists.join(', '),
@@ -249,26 +231,13 @@ class Player extends EventEmitter<PlayerEvents> {
     });
   }
 
-  /**
-   * Emit state change event for React hooks
-   */
   private emitStateChange() {
-    // Invalidate cache when state changes
     this.state = null;
     this.emit('stateChange', this.getState());
   }
 
-  /**
-   * Get current player state snapshot with caching for useSyncExternalStore.
-   * Returns the same reference when called multiple times without state changes.
-   */
   getState(): PlayerState {
-    // Return cached state if available
-    if (this.state !== null) {
-      return this.state;
-    }
-
-    // Create new state object
+    if (this.state !== null) return this.state;
     this.state = {
       queue: [...this.queue],
       queueCursor: this.queueCursor,
@@ -490,110 +459,58 @@ class Player extends EventEmitter<PlayerEvents> {
     this.emitStateChange();
   }
 
-  /**
-   * Set the entire queue (used for reordering)
-   */
   setQueue(tracks: Track[]) {
     this.queue = tracks;
     this.emitStateChange();
   }
-
-  /**
-   * Get the current queue
-   */
   getQueue(): Track[] {
     return [...this.queue];
   }
-
-  /**
-   * Get queue cursor
-   */
   getQueueCursor(): number | null {
     return this.queueCursor;
   }
-
-  /**
-   * Get queue origin
-   */
   getQueueOrigin(): QueueOrigin | null {
     return this.queueOrigin;
   }
+  getShuffle(): boolean {
+    return this.shuffle;
+  }
+  getRepeat(): Repeat {
+    return this.repeat;
+  }
 
-  // ============================================================================
-  // Shuffle & Repeat
-  // ============================================================================
-
-  /**
-   * Toggle shuffle mode
-   */
   async toggleShuffle() {
     const nextShuffleState = !this.shuffle;
-
     if (this.queueCursor === null) {
       this.shuffle = nextShuffleState;
       this.emitStateChange();
       await ConfigBridge.set('audio_shuffle', nextShuffleState);
       return;
     }
-
     const trackPlayingID = this.queue[this.queueCursor].id;
-
     if (nextShuffleState) {
-      // Enable shuffle
       const newQueue = shuffleTracks([...this.queue], this.queueCursor);
       this.oldQueue = this.queue;
       this.queue = newQueue;
       this.queueCursor = 0;
     } else {
-      // Disable shuffle - restore original order
       const currentTrackIndex = this.oldQueue.findIndex(
-        (track) => track.id === trackPlayingID,
+        (t) => t.id === trackPlayingID,
       );
       this.queue = [...this.oldQueue];
       this.queueCursor = currentTrackIndex;
     }
-
     this.shuffle = nextShuffleState;
     this.emitStateChange();
     await ConfigBridge.set('audio_shuffle', nextShuffleState);
   }
 
-  /**
-   * Toggle repeat mode (cycles through None -> All -> One -> None)
-   */
   async toggleRepeat() {
-    let nextRepeatState: Repeat = 'None';
-
-    // Cycle through modes
-    switch (this.repeat) {
-      case 'None':
-        nextRepeatState = 'All';
-        break;
-      case 'All':
-        nextRepeatState = 'One';
-        break;
-      case 'One':
-        nextRepeatState = 'None';
-        break;
-    }
-
+    const nextRepeatState: Repeat =
+      this.repeat === 'None' ? 'All' : this.repeat === 'All' ? 'One' : 'None';
     this.repeat = nextRepeatState;
     this.emitStateChange();
     await ConfigBridge.set('audio_repeat', nextRepeatState);
-  }
-
-  /**
-   * Get shuffle state
-   */
-  getShuffle(): boolean {
-    return this.shuffle;
-  }
-
-  /**
-   * Get repeat state
-   */
-  getRepeat(): Repeat {
-    return this.repeat;
   }
 
   // Track management

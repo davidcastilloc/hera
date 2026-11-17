@@ -231,7 +231,7 @@ git commit -S -m "feat(player-ui): defer scanner P0 to 40s played, drop stale cl
 - Consumes: Tasks 1–3 deliverables.
 - Produces: Verified `--release` `hera-desktop.exe` built on `beast` and running live against `qa`'s music library.
 
-- [ ] **Step 1: Run full workspace verification on `beast`**
+- [x] **Step 1: Run full workspace verification on `beast`**
 
 Run:
 - `cargo fmt --all -- --check`
@@ -243,11 +243,11 @@ Run:
 - `cd hera-desktop && bun run gen:types && bun run check && bun run test -- --run && bun run build`
 Expected: All commands exit `0`.
 
-- [ ] **Step 2: Record architectural decision in `docs/superpowers/DECISIONS.md` and commit/push**
+- [x] **Step 2: Record architectural decision in `docs/superpowers/DECISIONS.md` and commit/push**
 
 Append a concise entry documenting the `40s` played-audio commit gate, latest-wins IPC cancellation, and honest `is_buffering` transport contract (zero OS-specific paths), run `cargo test -p hera-node-rs --test architectural_ratchets`, commit signed, and `git push origin main`.
 
-- [ ] **Step 3: Build `--release` `hera-desktop.exe` on `beast` and launch on `qa` via `hc`**
+- [x] **Step 3: Build `--release` `hera-desktop.exe` on `beast` and launch on `qa` via `hc`**
 
 1. Build native release binary + frontend dist on `beast`: `cd hera-desktop && bun run build` and `cargo build --release -p hera-desktop`.
 2. Stop the slow `debug` `tauri dev` session on `qa` (`qa/t1q`), sync `qa` (`git pull`) + copy `target/release/hera-desktop.exe` to `qa`, and launch the optimized release `hera-desktop.exe` on `qa` via `hc` for live DJ verification.
