@@ -1,3 +1,7 @@
+pub use crate::omkf_fs_types::{
+    FolderCrateDetail, FolderCrateSummary, OmkfFsHotCueDto, OmkfFsTrackDto, OrganizeFolderRequest,
+    OrganizeFolderResponse, PlannedFileMove,
+};
 use hera_node_rs::export::ExportTrackItem;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -205,76 +209,6 @@ pub struct DiscoveredMusicRoot {
     pub skipped_short_sfx_count: usize,
     #[ts(type = "number")]
     pub video_tracks_count: usize,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct FolderCrateSummary {
-    pub crate_id: String,
-    pub folder_path: String,
-    pub display_name: String,
-    pub tree_seal_64: String,
-    #[ts(type = "number")]
-    pub track_count: usize,
-    #[ts(type = "number")]
-    pub video_count: usize,
-    #[ts(type = "number")]
-    pub full_count: usize,
-    #[ts(optional = nullable)]
-    pub bpm_min: Option<f64>,
-    #[ts(optional = nullable)]
-    pub bpm_max: Option<f64>,
-    #[ts(optional = nullable)]
-    pub dominant_camelot: Option<String>,
-    #[ts(optional = nullable)]
-    pub dominant_genre: Option<String>,
-    #[ts(optional = nullable)]
-    pub era_span: Option<String>,
-    #[ts(optional = nullable)]
-    pub lufs_avg: Option<f64>,
-    pub has_custom_rules: bool,
-    #[serde(default)]
-    #[ts(optional, type = "number")]
-    pub updated_at_unix_ms: Option<i64>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct FolderCrateDetail {
-    pub summary: FolderCrateSummary,
-    pub rules_markdown: String,
-    pub ledger_entries: Vec<String>,
-    pub track_ids: Vec<String>,
-    pub hydrated_from_omkf: bool,
-    pub disk_online: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct PlannedFileMove {
-    pub track_id: String,
-    pub source_path: String,
-    pub target_path: String,
-    pub reason: String,
-    pub bucket_label: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct OrganizeFolderRequest {
-    pub crate_id: String,
-    pub strategy: String,
-    pub dry_run: bool,
-    #[serde(default)]
-    #[ts(optional = nullable)]
-    pub rollback_tx_id: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
-pub struct OrganizeFolderResponse {
-    pub crate_id: String,
-    pub dry_run: bool,
-    pub tx_id: String,
-    pub moves: Vec<PlannedFileMove>,
-    #[ts(type = "number")]
-    pub applied_count: usize,
-    pub rolled_back: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]

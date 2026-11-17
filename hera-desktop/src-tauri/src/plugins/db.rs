@@ -242,7 +242,36 @@ async fn scan_library<R: Runtime>(
         }
     }
 
+    crate::libs::omkf_fs_catalog::global_omkf_catalog().mark_stale();
     Ok(scan_result)
+}
+
+async fn resolve_tracks_omkf_first(
+    db_state: &DBState,
+    roots: &[PathBuf],
+    ids: &[String],
+) -> AnyResult<Vec<Track>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let catalog = crate::libs::omkf_fs_catalog::global_omkf_catalog();
+    if !roots.is_empty() {
+        catalog.ensure_roots(roots);
+    }
+    let mut found = catalog.get_tracks_by_ids(ids);
+    if found.len() == ids.len() {
+        return Ok(found);
+    }
+    let found_ids: HashSet<String> = found.iter().map(|t| t.id.clone()).collect();
+    let missing: Vec<String> = ids
+        .iter()
+        .filter(|id| !found_ids.contains(id.as_str()))
+        .cloned()
+        .collect();
+    let mut conn = db_state.acquire_read_conn().await?;
+    let mut db_tracks = DB::read_tracks(&mut conn, &missing).await?;
+    found.append(&mut db_tracks);
+    Ok(found)
 }
 
 #[tauri::command]
@@ -252,15 +281,25 @@ async fn get_all_tracks(db_state: State<'_, DBState>) -> AnyResult<Vec<Track>> {
 }
 
 #[tauri::command]
-async fn get_tracks(db_state: State<'_, DBState>, ids: Vec<String>) -> AnyResult<Vec<Track>> {
-    let mut conn = db_state.acquire_read_conn().await?;
-    DB::read_tracks(&mut conn, &ids).await
+async fn get_tracks(
+    config: State<'_, super::config::ConfigManager>,
+    db_state: State<'_, DBState>,
+    ids: Vec<String>,
+) -> AnyResult<Vec<Track>> {
+    let roots = config.get().map(|c| c.library_folders).unwrap_or_default();
+    resolve_tracks_omkf_first(&db_state, &roots, &ids).await
 }
 
 #[tauri::command]
-async fn get_track(db_state: State<'_, DBState>, id: String) -> AnyResult<Option<Track>> {
-    let mut conn = db_state.acquire_read_conn().await?;
-    DB::read_track(&mut conn, &id).await
+async fn get_track(
+    config: State<'_, super::config::ConfigManager>,
+    db_state: State<'_, DBState>,
+    id: String,
+) -> AnyResult<Option<Track>> {
+    let roots = config.get().map(|c| c.library_folders).unwrap_or_default();
+    let mut tracks =
+        resolve_tracks_omkf_first(&db_state, &roots, std::slice::from_ref(&id)).await?;
+    Ok(tracks.pop())
 }
 
 #[tauri::command]
@@ -355,15 +394,20 @@ async fn set_playlist_tracks(
 #[tauri::command]
 async fn export_playlist<R: Runtime>(
     window: tauri::Window<R>,
+    config: State<'_, super::config::ConfigManager>,
     db_state: State<'_, DBState>,
     id: String,
 ) -> AnyResult<()> {
+    let roots = config.get().map(|c| c.library_folders).unwrap_or_default();
     let tracks = {
-        let mut conn = db_state.acquire_read_conn().await?;
-        let Some(playlist) = DB::read_playlist(&mut conn, &id).await? else {
-            return Ok(());
+        let playlist = {
+            let mut conn = db_state.acquire_read_conn().await?;
+            let Some(p) = DB::read_playlist(&mut conn, &id).await? else {
+                return Ok(());
+            };
+            p
         };
-        DB::read_tracks(&mut conn, &playlist.tracks).await?
+        resolve_tracks_omkf_first(&db_state, &roots, &playlist.tracks).await?
     };
 
     window

@@ -1,4 +1,4 @@
-//! OMKF v1 folder crate IPC facade & `.hera/crate.md` custom booth rules.
+//! OMKF v1 folder crate IPC facade (`OmkfFsCatalog` primary + SQLite fallback when roots empty).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -14,7 +14,10 @@ use tauri::State;
 use crate::libs::fast_library_scan::{
     parse_crate_md_sections, run_omkf_organize_folder, write_crate_md_sections,
 };
+use crate::libs::omkf_fs_catalog::global_omkf_catalog;
+use crate::libs::omkf_fs_organize::{organize_folder_fs, save_folder_rules_fs};
 use crate::libs::omkf_sync::compute_folder_crate_id;
+use crate::plugins::config::ConfigManager;
 use crate::plugins::db::DBState;
 
 fn now_ms() -> i64 {
@@ -50,6 +53,10 @@ fn summary_from_row(r: &SqliteRow) -> FolderCrateSummary {
             .try_get::<Option<i64>, _>("updated_at_unix_ms")
             .ok()
             .flatten(),
+        parent_crate_id: None,
+        rel_path: String::new(),
+        depth: 0,
+        subfolder_count: 0,
     }
 }
 
@@ -84,25 +91,24 @@ async fn backfill_folder_crates_from_tracks(conn: &mut SqliteConnection) -> Resu
         else {
             continue;
         };
-        let folder_key = parent.to_string_lossy().to_string();
         let cid = compute_folder_crate_id(parent);
         let _ = sqlx::query("UPDATE tracks SET crate_id = ?1 WHERE id = ?2")
             .bind(&cid)
             .bind(&id)
             .execute(&mut *conn)
             .await;
-        let bpm: Option<f64> = r
+        let bpm = r
             .try_get::<Option<f64>, _>("bpm")
             .ok()
             .flatten()
             .filter(|&b| b > 0.0);
-        let cam: Option<String> = r
+        let cam = r
             .try_get::<Option<String>, _>("camelot")
             .ok()
             .flatten()
             .filter(|s| !s.is_empty());
         let lvl: i64 = r.try_get("scan_level").unwrap_or(0);
-        let is_vid: bool = r.try_get::<i64, _>("is_video").unwrap_or(0) != 0;
+        let is_vid = r.try_get::<i64, _>("is_video").unwrap_or(0) != 0;
         let disp = parent
             .file_name()
             .and_then(|s| s.to_str())
@@ -110,7 +116,7 @@ async fn backfill_folder_crates_from_tracks(conn: &mut SqliteConnection) -> Resu
             .to_string();
         let g = groups.entry(cid.clone()).or_insert_with(|| FolderAgg {
             cid,
-            folder: folder_key,
+            folder: parent.to_string_lossy().into_owned(),
             disp,
             track_n: 0,
             video_n: 0,
@@ -120,12 +126,8 @@ async fn backfill_folder_crates_from_tracks(conn: &mut SqliteConnection) -> Resu
             cam: None,
         });
         g.track_n += 1;
-        if is_vid {
-            g.video_n += 1;
-        }
-        if lvl >= 2 {
-            g.full_n += 1;
-        }
+        g.video_n += i64::from(is_vid);
+        g.full_n += i64::from(lvl >= 2);
         if let Some(b) = bpm {
             g.bmin = Some(g.bmin.map_or(b, |m| m.min(b)));
             g.bmax = Some(g.bmax.map_or(b, |m| m.max(b)));
@@ -159,8 +161,13 @@ async fn backfill_folder_crates_from_tracks(conn: &mut SqliteConnection) -> Resu
 
 #[tauri::command]
 pub async fn omkf_list_folder_crates(
+    config: State<'_, ConfigManager>,
     db_state: State<'_, DBState>,
 ) -> Result<Vec<FolderCrateSummary>, String> {
+    let roots = config.get().map(|c| c.library_folders).unwrap_or_default();
+    if !roots.is_empty() {
+        return Ok(global_omkf_catalog().list_folders(&roots));
+    }
     {
         let mut conn = db_state
             .acquire_read_conn()
@@ -185,9 +192,22 @@ pub async fn omkf_list_folder_crates(
 
 #[tauri::command]
 pub async fn omkf_read_folder_crate(
+    config: State<'_, ConfigManager>,
     db_state: State<'_, DBState>,
     crate_id: String,
 ) -> Result<Option<FolderCrateDetail>, String> {
+    let roots = config.get().map(|c| c.library_folders).unwrap_or_default();
+    if !roots.is_empty() {
+        let (detail, unanalyzed) = global_omkf_catalog().read_folder(&crate_id, &roots);
+        if !unanalyzed.is_empty()
+            && !super::scanner_v3::global_scheduler()
+                .governor
+                .is_deck_playing()
+        {
+            super::scanner_worker::enqueue_fs_discovered_tracks(unanalyzed);
+        }
+        return Ok(detail);
+    }
     let mut conn = db_state
         .acquire_read_conn()
         .await
@@ -229,15 +249,22 @@ pub async fn omkf_read_folder_crate(
         track_ids,
         hydrated_from_omkf,
         disk_online,
+        subfolders: Vec::new(),
+        tracks: Vec::new(),
     }))
 }
 
 #[tauri::command]
 pub async fn omkf_save_crate_rules(
+    config: State<'_, ConfigManager>,
     db_state: State<'_, DBState>,
     crate_id: String,
     rules_markdown: String,
 ) -> Result<bool, String> {
+    let roots = config.get().map(|c| c.library_folders).unwrap_or_default();
+    if !roots.is_empty() {
+        return save_folder_rules_fs(global_omkf_catalog(), &roots, &crate_id, &rules_markdown);
+    }
     let mut db = db_state.get_lock().await;
     let res = sqlx::query(
         "UPDATE folder_crates SET rules_markdown = ?1, updated_at_unix_ms = ?2 WHERE crate_id = ?3",
@@ -264,9 +291,14 @@ pub async fn omkf_save_crate_rules(
 
 #[tauri::command]
 pub async fn omkf_preview_or_apply_organize(
+    config: State<'_, ConfigManager>,
     db_state: State<'_, DBState>,
     request: OrganizeFolderRequest,
 ) -> Result<OrganizeFolderResponse, String> {
+    let roots = config.get().map(|c| c.library_folders).unwrap_or_default();
+    if !roots.is_empty() {
+        return organize_folder_fs(global_omkf_catalog(), &roots, request);
+    }
     let mut db = db_state.get_lock().await;
     run_omkf_organize_folder(&mut db.connection, request).await
 }

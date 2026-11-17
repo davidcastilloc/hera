@@ -122,7 +122,7 @@ Mark Task 1 checkboxes `[x]` in `docs/superpowers/plans/2026-11-16-omkf-agentic-
     - `get_tracks_by_ids(&self, ids: &[String]) -> Vec<crate::libs::track::Track>`
     - `invalidate_folder_path(&self, dir: &Path)`
 
-- [ ] **Step 1: Write failing tests for `hera-ipc` bindings and `OmkfFsCatalog` (Review Focus #1–#4)**
+- [x] **Step 1: Write failing tests for `hera-ipc` bindings and `OmkfFsCatalog` (Review Focus #1–#4)**
 
 1. In `hera-desktop/src-ipc/src/typegen.rs` `test_export_hera_typescript_bindings`, assert `export type OmkfFsTrackDto =`, `subfolders: Array<FolderCrateSummary>`, and `parent_crate_id?: string | null`.
 2. In `hera-desktop/src-tauri/src/libs/omkf_fs_catalog.rs` `#[cfg(test)] mod tests`, write unit tests using `tempfile::tempdir()` covering:
@@ -131,12 +131,12 @@ Mark Task 1 checkboxes `[x]` in `docs/superpowers/plans/2026-11-16-omkf-agentic-
    - `read_folder("__search__:mirala bien", ...)` collapses 3 identical copies across `_REPERTORIO_DJ/03_Reggaeton`, `BACKUP/Old`, and `_USB_PIONEER` into 1 result pointing at `_REPERTORIO_DJ/03_Reggaeton` with `copy_count == 3`.
    - `organize_folder_fs` (`dry_run = true`, apply `dry_run = false`, and `rollback_tx_id`) moves files into tempo/genre subfolders, writes `.hera/crate.md` `# Ledger Reversible`, and restores files on rollback without SQLite rows.
 
-- [ ] **Step 2: Run tests to verify failure**
+- [x] **Step 2: Run tests to verify failure**
 
 Run: `cargo test -p hera-ipc && cargo test -p hera-desktop --bins omkf_fs_catalog`
 Expected: FAIL (missing `omkf_fs_types` / `omkf_fs_catalog`).
 
-- [ ] **Step 3: Implement `omkf_fs_types.rs`, `omkf_fs_catalog.rs`, `omkf_fs_organize.rs`, and wire `omkf_ipc.rs` + `scanner_worker.rs` + `db.rs`**
+- [x] **Step 3: Implement `omkf_fs_types.rs`, `omkf_fs_catalog.rs`, `omkf_fs_organize.rs`, and wire `omkf_ipc.rs` + `scanner_worker.rs` + `db.rs`**
 
 1. Create `hera-desktop/src-ipc/src/omkf_fs_types.rs` (`<= 220` lines), re-export in `lib.rs` and `dj_types.rs`, register `OmkfFsHotCueDto` and `OmkfFsTrackDto` in `typegen.rs`, and regenerate `hera-desktop/src/generated/hera-typings.ts` (`cd hera-desktop && bun run gen:types`).
 2. Create `hera-desktop/src-tauri/src/libs/omkf_fs_catalog.rs` (`<= 340` lines) and `hera-desktop/src-tauri/src/libs/omkf_fs_organize.rs` (`<= 280` lines), registered in `libs/mod.rs` (and add both paths to `FILE_LINE_CEILINGS` in `hera-rs/tests/architectural_ratchets.rs` at `349`).
@@ -147,12 +147,12 @@ Expected: FAIL (missing `omkf_fs_types` / `omkf_fs_catalog`).
    - When DSP outcomes arrive for filesystem tracks, upsert their slot directly into `<parent>/.hera/tracks.omkf` (or via dirty-folder flush), call `global_omkf_catalog().invalidate_folder_path(parent)`, and emit `"hera:omkf-folder-updated"` with affected `crate_ids` throttled to at most once every `2000 ms`.
 5. Update `hera-desktop/src-tauri/src/plugins/db.rs` `get_tracks` to resolve matching IDs from `global_omkf_catalog().get_tracks_by_ids(&ids)` first and query SQLite only for unresolved IDs.
 
-- [ ] **Step 4: Run `hera-ipc`, `hera-desktop`, and `architectural_ratchets` tests**
+- [x] **Step 4: Run `hera-ipc`, `hera-desktop`, and `architectural_ratchets` tests**
 
 Run: `cargo test -p hera-ipc && cargo test -p hera-desktop --bins omkf_fs -- --nocapture && cargo test -p hera-node-rs --test architectural_ratchets`
 Expected: PASS (`0 failed`, `EXPECTED_TAURI_COMMANDS_COUNT == 77`, all file line ceilings respected).
 
-- [ ] **Step 5: Mark Task 2 complete and commit**
+- [x] **Step 5: Mark Task 2 complete and commit**
 
 Mark Task 2 checkboxes `[x]` in `docs/superpowers/plans/2026-11-16-omkf-agentic-file-manager-zero-sqlite-tracks.md` and commit signed (`git commit -S`) with `feat(omkf-catalog): add in-memory OmkfFsCatalog, live folder hydration, and deduplicated search`.
 

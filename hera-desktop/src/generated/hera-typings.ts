@@ -58,9 +58,9 @@ export type ExportCrateResponse = { crate_name: string, track_count: number, m3u
 
 export type ExportTrackItem = { track_id: string, artist: string, title: string, version?: string | null, file_path: string, bpm: number, camelot: string, duration_seconds: number, bitrate_kbps?: number, energy?: number, file_size_bytes?: number, is_video?: boolean, is_own_production?: boolean, hot_cues?: Array<HotCuePoint>, };
 
-export type FolderCrateDetail = { summary: FolderCrateSummary, rules_markdown: string, ledger_entries: Array<string>, track_ids: Array<string>, hydrated_from_omkf: boolean, disk_online: boolean, };
+export type FolderCrateDetail = { summary: FolderCrateSummary, rules_markdown: string, ledger_entries: Array<string>, track_ids: Array<string>, hydrated_from_omkf: boolean, disk_online: boolean, subfolders?: Array<FolderCrateSummary>, tracks?: Array<OmkfFsTrackDto>, };
 
-export type FolderCrateSummary = { crate_id: string, folder_path: string, display_name: string, tree_seal_64: string, track_count: number, video_count: number, full_count: number, bpm_min?: number | null, bpm_max?: number | null, dominant_camelot?: string | null, dominant_genre?: string | null, era_span?: string | null, lufs_avg?: number | null, has_custom_rules: boolean, updated_at_unix_ms?: number, };
+export type FolderCrateSummary = { crate_id: string, folder_path: string, display_name: string, tree_seal_64: string, track_count: number, video_count: number, full_count: number, bpm_min?: number | null, bpm_max?: number | null, dominant_camelot?: string | null, dominant_genre?: string | null, era_span?: string | null, lufs_avg?: number | null, has_custom_rules: boolean, updated_at_unix_ms?: number, parent_crate_id?: string | null, rel_path?: string, depth?: number, subfolder_count?: number, };
 
 export type FolderWorkabilityReport = { total_files_scanned: number, workable_tracks_under_10m: number, mixes_over_10m: number, short_sfx_discarded: number, ignored_junk_folders: number, vdj_cached_tracks: number, rekordbox_cached_tracks: number, };
 
@@ -75,6 +75,10 @@ export type MediaMixProfile = { audio_pct: number, video_pct: number, own_produc
 export type NativeAudioTelemetryFrame = { sequence: number, sample_rate: number, current_time_sec: number, duration_sec: number, is_playing: boolean, is_buffering: boolean, rms_left: number, rms_right: number, peak_db: number, sub_bass: number, low_mid: number, high_mid: number, air_presence: number, spectrum_bins: Array<number>, };
 
 export type NativePlayerSnapshot = { backend_kind: string, sample_rate: number, track_loaded: boolean, loaded_path?: string | null, is_playing: boolean, is_buffering: boolean, ended: boolean, current_time_sec: number, duration_sec: number, playhead_frame: number, total_frames: number, volume: number, playback_rate: number, hot_cue_frames: Array<number>, hot_cue_seconds: Array<number>, latest_telemetry?: NativeAudioTelemetryFrame | null, };
+
+export type OmkfFsHotCueDto = { slot: number, label: string, seconds: number, kind: string, };
+
+export type OmkfFsTrackDto = { id: string, crate_id: string, path: string, file_name: string, title: string, artist: string, album: string, duration_sec: number, bpm?: number | null, camelot?: string | null, energy?: number | null, hot_cues: Array<OmkfFsHotCueDto>, scan_level: number, is_video: boolean, is_fake_320kbps: boolean, has_audio_skips: boolean, is_variable_bpm: boolean, has_intro_vocals: boolean, has_outro_vocals: boolean, replay_gain_db?: number | null, waveform_peaks_b64?: string | null, copy_count: number, };
 
 export type OrganizeFolderRequest = { crate_id: string, strategy: string, dry_run: boolean, rollback_tx_id?: string | null, };
 

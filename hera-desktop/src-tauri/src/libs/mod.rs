@@ -9,6 +9,11 @@ pub mod fast_library_scan;
 pub mod init;
 pub mod omkf_cloud_client;
 pub mod omkf_cloud_types;
+pub mod omkf_fs_capsule_upsert;
+pub mod omkf_fs_catalog;
+pub mod omkf_fs_hydrate;
+pub mod omkf_fs_organize;
+pub mod omkf_fs_search;
 pub mod omkf_sync;
 pub mod tray;
 pub mod utils;
@@ -29,3 +34,7 @@ mod database_tests;
 #[cfg(test)]
 #[path = "./tests/zero_io_and_discovery_tests.rs"]
 mod zero_io_and_discovery_tests;
+
+#[cfg(test)]
+#[path = "./tests/omkf_fs_catalog_tests.rs"]
+mod omkf_fs_catalog_tests;

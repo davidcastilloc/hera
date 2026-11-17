@@ -53,7 +53,19 @@ const FILE_LINE_CEILINGS: &[(&str, usize)] = &[
     ("hera-desktop/src/components/TrackProgress.tsx", 220),
     ("hera-desktop/src/lib/player.ts", 680),
     ("hera-desktop/src-tauri/src/libs/omkf_cloud_client.rs", 349),
+    (
+        "hera-desktop/src-tauri/src/libs/omkf_fs_capsule_upsert.rs",
+        349,
+    ),
+    ("hera-desktop/src-tauri/src/libs/omkf_fs_catalog.rs", 349),
+    ("hera-desktop/src-tauri/src/libs/omkf_fs_hydrate.rs", 349),
+    ("hera-desktop/src-tauri/src/libs/omkf_fs_organize.rs", 349),
+    ("hera-desktop/src-tauri/src/libs/omkf_fs_search.rs", 349),
     ("hera-desktop/src-tauri/src/libs/omkf_sync.rs", 349),
+    (
+        "hera-desktop/src-tauri/src/libs/tests/omkf_fs_catalog_tests.rs",
+        349,
+    ),
 ];
 
 /// Recursive line-count ceilings (`<= 349` lines) enforced on every `.rs` file inside

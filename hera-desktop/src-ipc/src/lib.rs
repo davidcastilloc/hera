@@ -11,12 +11,14 @@ pub mod agent_types;
 pub mod agy_stream;
 pub mod audio_types;
 pub mod dj_types;
+pub mod omkf_fs_types;
 pub mod path_utils;
 pub mod typegen;
 pub mod workflow_guard;
 #[cfg(test)]
 mod workflow_guard_tests;
 
+pub use omkf_fs_types::*;
 pub use path_utils::format_m3u_entry_path;
 
 /// Canonical workspace crate version exposed by `hera-ipc`.

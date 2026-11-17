@@ -3,6 +3,7 @@
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 use lofty::file::AudioFile;
 use log::warn;
@@ -19,6 +20,62 @@ use crate::libs::track::HotCuePin;
 unsafe extern "system" {
     fn GetCurrentThread() -> *mut core::ffi::c_void;
     fn SetThreadPriority(hThread: *mut core::ffi::c_void, nPriority: i32) -> i32;
+    fn GetSystemPowerStatus(lp: *mut [u32; 3]) -> i32;
+}
+
+pub(super) fn detect_on_battery_power() -> bool {
+    #[cfg(windows)]
+    {
+        let mut s = [0_u32; 3];
+        // SAFETY: `[u32; 3]` matches Win32 `SYSTEM_POWER_STATUS` size (12 B) and 4-byte align.
+        unsafe { GetSystemPowerStatus(&mut s) != 0 && s[0].to_ne_bytes()[0] == 0 }
+    }
+    #[cfg(not(windows))]
+    {
+        std::fs::read_dir("/sys/class/power_supply")
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| {
+                std::fs::read_to_string(e.path().join("status"))
+                    .is_ok_and(|x| x.trim() == "Discharging")
+            })
+    }
+}
+
+fn fs_discovered_queue() -> &'static Mutex<Vec<(String, String)>> {
+    static Q: OnceLock<Mutex<Vec<(String, String)>>> = OnceLock::new();
+    Q.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+pub fn enqueue_fs_discovered_tracks(items: Vec<(String, String)>) {
+    if !items.is_empty()
+        && let Ok(mut g) = fs_discovered_queue().lock()
+    {
+        g.extend(items);
+    }
+}
+
+pub(super) fn drain_fs_discovered_tracks() -> Vec<(String, String)> {
+    fs_discovered_queue()
+        .lock()
+        .map(|mut g| std::mem::take(&mut *g))
+        .unwrap_or_default()
+}
+
+pub(super) fn make_scanner_row_patch_json(
+    u: &ScannerRowUpdate,
+    hot_cues: &Option<Vec<HotCuePin>>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "track_id": u.track_id, "bpm": u.bpm, "camelot": u.camelot, "energy": u.energy,
+        "duration": u.duration_sec, "hot_cues": hot_cues, "scan_level": u.scan_level,
+        "is_transition_candidate": u.is_transition_candidate, "is_fake_320kbps": u.is_fake_320kbps,
+        "replay_gain_db": u.replay_gain_db, "loudness_lufs": u.loudness_lufs,
+        "waveform_peaks_b64": u.waveform_peaks_b64, "has_intro_vocals": u.has_intro_vocals,
+        "has_outro_vocals": u.has_outro_vocals, "has_audio_skips": u.has_audio_skips,
+        "entry_bpm": u.entry_bpm, "exit_bpm": u.exit_bpm,
+    })
 }
 
 #[cfg(unix)]

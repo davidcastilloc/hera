@@ -153,6 +153,7 @@ impl ConfigManager {
         let mut writer = self.data.write().map_err(config_err)?;
         *writer = config;
         std::mem::drop(writer);
+        crate::libs::omkf_fs_catalog::global_omkf_catalog().mark_stale();
         self.save()
     }
 
