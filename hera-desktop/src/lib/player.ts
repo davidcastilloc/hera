@@ -81,8 +81,6 @@ class Player extends EventEmitter<PlayerEvents> {
   private state: PlayerState | null = null;
   private trackLoadSeq = 0;
   private loadingTrackId: string | null = null;
-  private playedAccumSec = 0;
-  private lastAccumTimeSec: number | null = null;
   private scannerCommittedForTrackId: string | null = null;
 
   constructor(options?: PlayerOptions) {
@@ -156,24 +154,6 @@ class Player extends EventEmitter<PlayerEvents> {
       this.emit('error', error);
     });
     this.transport.on('timeupdate', (currentTime) => {
-      if (!this.transport.paused && !this.transport.isBuffering) {
-        if (this.lastAccumTimeSec !== null) {
-          const dt = currentTime - this.lastAccumTimeSec;
-          if (dt > 0 && dt <= 2.5) {
-            this.playedAccumSec += dt;
-          }
-        }
-        this.lastAccumTimeSec = currentTime;
-        const activeTrack = this.getTrack();
-        if (
-          activeTrack &&
-          this.playedAccumSec >= 40 &&
-          this.scannerCommittedForTrackId !== activeTrack.id
-        ) {
-          this.scannerCommittedForTrackId = activeTrack.id;
-          notifyDeckTrack(activeTrack.id, []);
-        }
-      }
       this.emit('timeupdate', currentTime);
     });
     this.transport.on('telemetry', (frame) => {
@@ -255,6 +235,18 @@ class Player extends EventEmitter<PlayerEvents> {
     return this.state;
   }
 
+  private commitPendingTrackScanOnIdle() {
+    const activeTrack = this.getTrack();
+    if (
+      activeTrack &&
+      (activeTrack.scan_level ?? 0) === 0 &&
+      this.scannerCommittedForTrackId !== activeTrack.id
+    ) {
+      this.scannerCommittedForTrackId = activeTrack.id;
+      notifyDeckTrack(activeTrack.id, []);
+    }
+  }
+
   // Playback controls
   async play() {
     if (!this.transport.hasTrack())
@@ -262,14 +254,13 @@ class Player extends EventEmitter<PlayerEvents> {
     await this.transport.play();
   }
   pause() {
-    this.lastAccumTimeSec = null;
     this.transport.pause();
+    this.commitPendingTrackScanOnIdle();
   }
   stop() {
-    this.lastAccumTimeSec = null;
-    this.playedAccumSec = 0;
     this.loadingTrackId = null;
     this.transport.pause();
+    this.commitPendingTrackScanOnIdle();
     this.queue = [];
     this.queueCursor = null;
     this.queueOrigin = null;
@@ -517,8 +508,6 @@ class Player extends EventEmitter<PlayerEvents> {
   async setTrack(track: Track): Promise<boolean> {
     const seq = ++this.trackLoadSeq;
     this.loadingTrackId = track.id;
-    this.playedAccumSec = 0;
-    this.lastAccumTimeSec = 0;
     this.scannerCommittedForTrackId = null;
     this.emit('trackChange', track);
     this.emitStateChange();
@@ -560,7 +549,6 @@ class Player extends EventEmitter<PlayerEvents> {
   // ============================================================================
 
   setCurrentTime(time: number) {
-    this.lastAccumTimeSec = null;
     this.transport.seek(time);
   }
 

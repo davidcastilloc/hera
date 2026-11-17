@@ -14,6 +14,7 @@ import type { Playlist, Track } from '../generated/typings';
 import type { AgentExecutionPolicy } from '../lib/agent-store';
 import type { AgentAttachment } from '../lib/bridge-agent';
 import DatabaseBridge from '../lib/bridge-database';
+import { searchAllFoldersDeduplicated } from '../lib/omkf-bridge';
 import useLibraryStore from '../lib/store';
 
 interface SlashCommandOption {
@@ -171,6 +172,7 @@ export default function AgentComposer({
   const tracks = useLibraryStore((s) => s.tracks);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [atTrackHits, setAtTrackHits] = useState<Track[]>([]);
   const [activePopover, setActivePopover] = useState<'none' | 'slash' | 'at'>(
     'none',
   );
@@ -188,6 +190,21 @@ export default function AgentComposer({
       .then((items) => setPlaylists(items))
       .catch(() => {});
   }, [activePopover]);
+
+  useEffect(() => {
+    if (activePopover !== 'at' || !isTauri()) return;
+    let cancelled = false;
+    void searchAllFoldersDeduplicated(popoverQuery)
+      .then((hits) => {
+        if (!cancelled) {
+          setAtTrackHits(hits);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activePopover, popoverQuery]);
 
   const handleTextChange = useCallback(
     (next: string) => {
@@ -221,6 +238,9 @@ export default function AgentComposer({
   }, [popoverQuery]);
 
   const filteredTracks = useMemo(() => {
+    if (isTauri() && atTrackHits.length > 0) {
+      return atTrackHits.slice(0, 5);
+    }
     const q = popoverQuery.trim();
     const list = q
       ? tracks.filter(
@@ -231,7 +251,7 @@ export default function AgentComposer({
         )
       : tracks;
     return list.slice(0, 5);
-  }, [popoverQuery, tracks]);
+  }, [atTrackHits, popoverQuery, tracks]);
 
   const filteredPlaylists = useMemo(() => {
     const q = popoverQuery.trim();

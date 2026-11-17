@@ -105,5 +105,5 @@ export function getSortButton(name: string) {
 export async function setupScannedLibrary() {
   await getMainNavigation().getByRole('link', { name: 'Ajustes' }).click();
   await page.getByRole('button', { name: 'Scan' }).click();
-  await getMainNavigation().getByRole('link', { name: 'Biblioteca' }).click();
+  await getMainNavigation().getByRole('link', { name: 'Carpetas' }).click();
 }

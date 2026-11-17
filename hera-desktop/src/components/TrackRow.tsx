@@ -59,7 +59,8 @@ export default function TrackRow(props: Props) {
 
   const duration = useFormattedDuration(track.duration);
 
-  const tMeta = track as TrackWithScanMeta;
+  const tMeta = track as TrackWithScanMeta & { copy_count?: number };
+  const copyCount = tMeta.copy_count ?? 1;
   const hasBpm = track.bpm != null && track.bpm > 0;
   const hasCamelot = Boolean(track.camelot && track.camelot.trim().length > 0);
   const isPendingDsp = (tMeta.scan_level ?? 0) < 1 && (!hasBpm || !hasCamelot);
@@ -136,6 +137,14 @@ export default function TrackRow(props: Props) {
       </div>
       <div {...stylex.props(cellStyles.cell, cellStyles.title)}>
         <span {...stylex.props(cellStyles.titleText)}>{track.title}</span>
+        {copyCount > 1 && (
+          <span
+            {...stylex.props(cellStyles.badgeCopies)}
+            title={`${copyCount} copias físicas en distintas carpetas`}
+          >
+            ×{copyCount}
+          </span>
+        )}
         {track.is_video === true && (
           <span
             {...stylex.props(cellStyles.badgeVideo)}
@@ -147,9 +156,9 @@ export default function TrackRow(props: Props) {
         {track.has_audio_skips === true && (
           <span
             {...stylex.props(cellStyles.badgeGlitch)}
-            title="⚠️ Detectado posible salto / CD rayado"
+            title="Detectado posible salto / CD rayado"
           >
-            ⚠️ Salto
+            Salto
           </span>
         )}
         {track.is_variable_bpm === true && (
@@ -462,15 +471,29 @@ const cellStyles = stylex.create({
     paddingInline: '5px',
     flexShrink: 0,
   },
+  badgeCopies: {
+    fontSize: '10px',
+    fontWeight: 600,
+    fontVariantNumeric: 'tabular-nums',
+    color: '#8e98a8',
+    backgroundColor: '#171c24',
+    borderWidth: '1px',
+    borderStyle: 'solid',
+    borderColor: '#232a36',
+    borderRadius: '4px',
+    paddingBlock: '1px',
+    paddingInline: '5px',
+    flexShrink: 0,
+  },
   badgeBpmDiff: {
     fontSize: '9.5px',
     fontWeight: 700,
     letterSpacing: '0.03em',
-    color: '#a78bfa',
-    backgroundColor: 'rgba(167, 139, 250, 0.12)',
+    color: '#38bdf8',
+    backgroundColor: 'rgba(56, 189, 248, 0.12)',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: 'rgba(167, 139, 250, 0.35)',
+    borderColor: 'rgba(56, 189, 248, 0.3)',
     borderRadius: '4px',
     paddingBlock: '1px',
     paddingInline: '5px',

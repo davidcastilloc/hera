@@ -3,6 +3,7 @@ import { page, userEvent } from 'vite-plus/test/browser';
 
 import {
   beforeEachSetup,
+  getMainNavigation,
   getSortButton,
   getTrackAt,
   getTrackByName,
@@ -11,8 +12,15 @@ import {
 
 beforeEachSetup();
 
-test('The library tab should display all tracks', async () => {
+test('The Carpetas explorer should display folder tree, breadcrumbs, and tracks without Artistas nav', async () => {
   await setupScannedLibrary();
+
+  await expect
+    .element(getMainNavigation().getByRole('link', { name: 'Carpetas' }))
+    .toBeVisible();
+  await expect
+    .element(getMainNavigation().getByRole('link', { name: 'Artistas' }))
+    .not.toBeInTheDocument();
 
   // Ensure we have the 3 test-tracks, but no more
   await expect.element(getTrackAt(0)).toBeInTheDocument();

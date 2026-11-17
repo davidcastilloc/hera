@@ -10,15 +10,17 @@ import {
 
 beforeEachSetup();
 
-test('Biblioteca toolbar should optimize set spine and export DJ crates', async () => {
+test('Carpetas toolbar should optimize set spine and export DJ crates', async () => {
   await setupScannedLibrary();
 
   await expect
-    .element(page.getByRole('heading', { name: 'Biblioteca' }))
+    .element(page.getByRole('heading', { name: 'Carpetas' }))
     .toBeVisible();
   await expect
     .element(page.getByText('3 pistas', { exact: true }))
     .toBeVisible();
+  await expect.element(page.getByText('RAÍCES Y CARPETAS')).toBeVisible();
+  await expect.element(page.getByText('Ruta:')).toBeVisible();
 
   const sortMixButton = page.getByRole('button', { name: 'Ordenar mezcla' });
   await sortMixButton.click();
@@ -149,7 +151,7 @@ test('Modo Mini should morph between Booth Card, HUD Pill, and Full Workspace', 
 
   await page.getByRole('button', { name: 'Volver a ventana completa' }).click();
   await expect
-    .element(getMainNavigation().getByRole('link', { name: 'Biblioteca' }))
+    .element(getMainNavigation().getByRole('link', { name: 'Carpetas' }))
     .toBeVisible();
 });
 
@@ -208,12 +210,9 @@ test('BETA Onboarding Wizard modal and mixes filter toggle should be operable', 
     .getByRole('button', { name: 'Cerrar auditoría pre-toque' })
     .click();
 
-  // 5. Playlists view defaults to Carpetas (.hera) alongside Playlists tab
+  // 5. Playlists view focuses cleanly on saved M3U / custom playlists
   await getMainNavigation().getByRole('link', { name: 'Playlists' }).click();
   await expect
-    .element(page.getByRole('tab', { name: 'Carpetas (.hera)' }))
-    .toBeVisible();
-  await expect
-    .element(page.getByRole('tab', { name: 'Playlists' }))
+    .element(page.getByRole('button', { name: 'New Playlist' }))
     .toBeVisible();
 });

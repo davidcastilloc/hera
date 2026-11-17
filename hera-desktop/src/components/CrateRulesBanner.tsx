@@ -188,7 +188,7 @@ export default function CrateRulesBanner({
       <div {...stylex.props(styles.topRow)}>
         <div {...stylex.props(styles.metaCol)}>
           <div {...stylex.props(styles.metaHeadline)}>
-            <span {...stylex.props(styles.omkfPill)}>OMKF .hera</span>
+            <span {...stylex.props(styles.omkfPill)}>[OMKF .hera]</span>
             <span {...stylex.props(styles.metaText)}>{subtitle}</span>
             {crate.dominant_genre ? (
               <span {...stylex.props(styles.genrePill)}>
@@ -217,7 +217,9 @@ export default function CrateRulesBanner({
             {...stylex.props(styles.secondaryBtn)}
           >
             <Icon name="sliders" size={14} />
-            <span>{editorOpen ? 'Ocultar reglas' : 'Reglas de Cabina'}</span>
+            <span>
+              {editorOpen ? 'Ocultar reglas' : 'Reglas (.hera/crate.md)'}
+            </span>
           </button>
 
           <button
@@ -226,10 +228,10 @@ export default function CrateRulesBanner({
               setOrganizeOpen(true);
               void handleDryRun();
             }}
-            {...stylex.props(styles.primaryOutlineBtn)}
+            {...stylex.props(styles.primarySolidBtn)}
           >
-            <Icon name="sparkles" size={14} color="#2dd4bf" />
-            <span>Organizar con IA</span>
+            <Icon name="sparkles" size={14} color="#041311" />
+            <span>Organizar IA</span>
           </button>
         </div>
       </div>
@@ -506,19 +508,19 @@ const styles = stylex.create({
     borderRadius: '6px',
     cursor: 'pointer',
   },
-  primaryOutlineBtn: {
+  primarySolidBtn: {
     display: 'inline-flex',
     alignItems: 'center',
     columnGap: '5px',
     paddingBlock: '5px',
-    paddingInline: '10px',
+    paddingInline: '11px',
     fontSize: '11.5px',
-    fontWeight: 600,
-    color: '#2dd4bf',
-    backgroundColor: 'rgba(20, 184, 166, 0.1)',
+    fontWeight: 700,
+    color: '#041311',
+    backgroundColor: '#14b8a6',
     borderWidth: '1px',
     borderStyle: 'solid',
-    borderColor: 'rgba(20, 184, 166, 0.35)',
+    borderColor: '#14b8a6',
     borderRadius: '6px',
     cursor: 'pointer',
   },

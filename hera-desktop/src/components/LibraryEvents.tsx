@@ -11,8 +11,9 @@ import type {
   Track,
 } from '../generated/typings';
 import { useMiniModeStore } from '../lib/mini-mode-store';
+import type { HydratedFolderCrate } from '../lib/omkf-bridge';
 import player from '../lib/player';
-import { allTracksQuery, configQuery } from '../lib/queries';
+import { configQuery } from '../lib/queries';
 import queryClient from '../lib/query-client';
 import {
   type ScannerRowPatch,
@@ -21,6 +22,10 @@ import {
   useScannerStore,
 } from '../lib/scanner-v3';
 import useLibraryStore from '../lib/store';
+
+export interface OmkfFolderUpdatedPayload {
+  crate_ids?: string[];
+}
 
 /**
  * Deduplicated O(N + M) merge by `id`. Existing tracks are updated in-place,
@@ -136,14 +141,20 @@ export function shouldFreezeSortPatches(
 
 export function applyPatchesToCaches(patches: ScannerRowPatch[]): void {
   if (!patches || patches.length === 0) return;
-  queryClient.setQueryData<Track[]>(allTracksQuery.queryKey, (old) => {
-    if (!old) return old;
-    return applyRowPatchesToTracks(old, patches);
-  });
-  useLibraryStore.setState((state) => ({
-    tracks: applyRowPatchesToTracks(state.tracks, patches),
-  }));
-  markTracksRecentlyUpdated(patches.map((p) => p.track_id));
+  const currentTracks = useLibraryStore.getState().tracks;
+  const patchedStore = applyRowPatchesToTracks(currentTracks, patches);
+  if (patchedStore !== currentTracks) {
+    useLibraryStore.setState({ tracks: patchedStore });
+    markTracksRecentlyUpdated(patches.map((p) => p.track_id));
+  }
+  queryClient.setQueriesData<HydratedFolderCrate | null>(
+    { queryKey: ['omkf-folder-crate-detail'] },
+    (old) => {
+      if (!old) return old;
+      const nextTracks = applyRowPatchesToTracks(old.tracks, patches);
+      return nextTracks === old.tracks ? old : { ...old, tracks: nextTracks };
+    },
+  );
 }
 
 export function flushFrozenPatches(): void {
@@ -155,9 +166,6 @@ export function flushFrozenPatches(): void {
 
 export function addTracksToCaches(incoming: Track[]): void {
   if (!incoming || incoming.length === 0) return;
-  queryClient.setQueryData<Track[]>(allTracksQuery.queryKey, (old) => {
-    return mergeIncomingTrackBatch(old ?? [], incoming);
-  });
   useLibraryStore.setState((state) => ({
     tracks: mergeIncomingTrackBatch(state.tracks, incoming),
   }));
@@ -165,16 +173,13 @@ export function addTracksToCaches(incoming: Track[]): void {
 
 export function removeTracksFromCaches(removedIds: string[]): void {
   if (!removedIds || removedIds.length === 0) return;
-  queryClient.setQueryData<Track[]>(allTracksQuery.queryKey, (old) => {
-    return removeTrackIds(old ?? [], removedIds);
-  });
   useLibraryStore.setState((state) => ({
     tracks: removeTrackIds(state.tracks, removedIds),
   }));
 }
 
 /**
- * Handle Library-related app events, like refreshing and progress status
+ * Handle Library-related app events, including OMKF capsule updates and scanner telemetry
  */
 function LibraryEvents() {
   useEffect(() => {
@@ -196,11 +201,31 @@ function LibraryEvents() {
       },
     );
 
-    const p3 = listen<Track[]>('hera:scanner-tracks-added', ({ payload }) => {
-      if (Array.isArray(payload) && payload.length > 0) {
-        addTracksToCaches(payload);
-      }
-    });
+    const p3 = listen<OmkfFolderUpdatedPayload>(
+      'hera:omkf-folder-updated',
+      ({ payload }) => {
+        void queryClient.invalidateQueries({
+          queryKey: ['omkf-folder-crates'],
+        });
+        const crateIds = payload?.crate_ids;
+        if (Array.isArray(crateIds) && crateIds.length > 0) {
+          for (const cid of crateIds) {
+            void queryClient.invalidateQueries({
+              queryKey: ['omkf-folder-crate-detail', cid],
+            });
+          }
+        } else {
+          void queryClient.invalidateQueries({
+            queryKey: ['omkf-folder-crate-detail'],
+          });
+        }
+        if (useLibraryStore.getState().search.trim().length > 0) {
+          void queryClient.invalidateQueries({
+            queryKey: ['omkf-global-search'],
+          });
+        }
+      },
+    );
 
     const p4 = listen<string[]>(
       'hera:scanner-tracks-removed',
@@ -211,34 +236,17 @@ function LibraryEvents() {
       },
     );
 
-    let playbackCoalesceBuffer: ScannerRowPatch[] = [];
-    let playbackCoalesceTimer: ReturnType<typeof setTimeout> | null = null;
-    const flushCoalescedPlaybackPatches = () => {
-      playbackCoalesceTimer = null;
-      if (playbackCoalesceBuffer.length === 0) return;
-      const batch = playbackCoalesceBuffer;
-      playbackCoalesceBuffer = [];
-      applyPatchesToCaches(batch);
-    };
-
     const p5 = listen<ScannerRowPatch[]>(
       'hera:scanner-rows-updated',
       ({ payload }) => {
         if (!Array.isArray(payload) || payload.length === 0) return;
+        if (!player.isPaused()) return;
 
         const config = queryClient.getQueryData<Config>(configQuery.queryKey);
         const isPointerInside = useScannerStore.getState().isPointerInsideTable;
 
         if (shouldFreezeSortPatches(isPointerInside, config?.library_sort_by)) {
           useScannerStore.getState().queueFrozenPatches(payload);
-        } else if (!player.isPaused()) {
-          playbackCoalesceBuffer.push(...payload);
-          if (!playbackCoalesceTimer) {
-            playbackCoalesceTimer = setTimeout(
-              flushCoalescedPlaybackPatches,
-              500,
-            );
-          }
         } else {
           applyPatchesToCaches(payload);
         }
@@ -260,8 +268,6 @@ function LibraryEvents() {
     });
 
     return () => {
-      if (playbackCoalesceTimer) clearTimeout(playbackCoalesceTimer);
-      playbackCoalesceBuffer = [];
       void p1.then((unlisten) => unlisten());
       void p2.then((unlisten) => unlisten());
       void p3.then((unlisten) => unlisten());

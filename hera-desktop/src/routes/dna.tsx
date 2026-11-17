@@ -1,5 +1,6 @@
 import * as stylex from '@stylexjs/stylex';
 import { createFileRoute } from '@tanstack/react-router';
+import { isTauri } from '@tauri-apps/api/core';
 import { useEffect, useMemo, useState } from 'react';
 
 import UnderConstructionView from '../components/UnderConstructionView';
@@ -7,6 +8,7 @@ import View from '../elements/View';
 import DatabaseBridge from '../lib/bridge-database';
 import { computeDjStyleDna, type DjStyleDnaProfile } from '../lib/bridge-hera';
 import { useFeatureFlags } from '../lib/feature-flags';
+import { searchAllFoldersDeduplicated } from '../lib/omkf-bridge';
 import useLibraryStore from '../lib/store';
 
 export const Route = createFileRoute('/dna')({
@@ -91,10 +93,13 @@ function ActiveDjStyleDnaStudio() {
 
   useEffect(() => {
     if (tracks.length === 0) {
-      void DatabaseBridge.getAllTracks()
-        .then((dbTracks) => {
-          if (dbTracks.length > 0) {
-            useLibraryStore.setState({ tracks: dbTracks });
+      const load = isTauri()
+        ? searchAllFoldersDeduplicated('')
+        : DatabaseBridge.getAllTracks();
+      void load
+        .then((loaded) => {
+          if (loaded.length > 0) {
+            useLibraryStore.setState({ tracks: loaded });
           }
         })
         .catch(() => {});

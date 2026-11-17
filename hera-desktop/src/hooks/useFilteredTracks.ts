@@ -21,6 +21,7 @@ export default function useFilteredTracks(
   tracks: Array<Track>,
   sortBy?: SortBy,
   sortOrder?: SortOrder,
+  bypassSearch = false,
 ): Array<Track> {
   const search = useLibraryStore((state) => stripAccents(state.search));
   const setSpineOrderedIds = useLibraryStore(
@@ -29,7 +30,9 @@ export default function useFilteredTracks(
 
   return useMemo(() => {
     // 1. Raw List
-    let searchedTracks: Track[] = filterTracks(tracks, search);
+    let searchedTracks: Track[] = bypassSearch
+      ? tracks
+      : filterTracks(tracks, search);
 
     if (setSpineOrderedIds && setSpineOrderedIds.length > 0) {
       const rankMap = new Map(
@@ -50,7 +53,7 @@ export default function useFilteredTracks(
     }
 
     return searchedTracks;
-  }, [tracks, search, sortBy, sortOrder, setSpineOrderedIds]);
+  }, [tracks, search, sortBy, sortOrder, setSpineOrderedIds, bypassSearch]);
 }
 
 /**

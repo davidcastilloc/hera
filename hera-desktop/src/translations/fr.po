@@ -13,35 +13,16 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#. placeholder {0}: scanResult.track_count
-#: src/api/LibraryAPI.ts:37
-msgid "{0} track(s) were refreshed."
-msgstr "{0} piste(s) ont été actualisée(s)."
-
-#. placeholder {0}: scanResult.track_count
-#: src/api/LibraryAPI.ts:38
-msgid "{0} track(s) were added to the library."
-msgstr "{0} piste(s) ont été ajoutée(s) à la bibliothèque."
-
-#. placeholder {0}: scanResult.playlist_count
-#: src/api/LibraryAPI.ts:45
-msgid "{0} playlist(s) were added to the library."
-msgstr "{0} playlist(s) ont été ajoutée(s) à la bibliothèque."
-
-#: src/api/LibraryAPI.ts:106
-msgid "Library was reset"
-msgstr "La bibliothèque a été réinitialisée"
-
 #: src/api/PlaylistsAPI.ts:35
 msgid "The playlist \"{name}\" was created"
 msgstr "La playlist \"{name}\" a été créée"
 
 #. placeholder {0}: newRelease.tag_name
-#: src/api/SettingsAPI.ts:175
+#: src/api/SettingsAPI.ts:182
 msgid "HERA {0} is available at https://github.com/davidcastilloc/hera/releases!"
 msgstr ""
 
-#: src/api/SettingsAPI.ts:177
+#: src/api/SettingsAPI.ts:184
 msgid "HERA {currentVersion} is the latest version available."
 msgstr ""
 
@@ -57,22 +38,13 @@ msgstr "Lecture aléatoire"
 msgid "Album cover"
 msgstr "Couverture de l'album"
 
-#: src/components/DropzoneImport.tsx:49
+#: src/components/DropzoneImport.tsx:54
 msgid "{skippedItemsCount, plural, one {# invalid item ignored} other {# invalid items ignored}}"
 msgstr "{skippedItemsCount, plural, one {# élément invalide ignoré} other {# éléments invalides ignorés}}"
 
-#. placeholder {0}: folders.length
-#: src/components/DropzoneImport.tsx:60
-msgid "{0, plural, one {# folder added to the library} other {# folders added to the library}}"
-msgstr "{0, plural, one {# dossier ajouté à la bibliothèque} other {# dossiers ajoutés à la bibliothèque}}"
-
-#: src/components/DropzoneImport.tsx:90
-msgid "Add music to the library"
-msgstr "Ajouter de la musique à la bibliothèque"
-
 #: src/components/DropzoneImport.tsx:91
-msgid "Drop folders anywhere"
-msgstr "Déposer des dossiers n'importe où"
+msgid "Drop folders anywhere to import them"
+msgstr ""
 
 #: src/components/GlobalErrors.tsx:33
 msgid "Something wrong happened: {errorMessage}"
@@ -94,47 +66,6 @@ msgstr "Essayez de <0>recharger l'application</0>,"
 #: src/components/GlobalErrors.tsx:74
 msgid "or if it happens again, please <0>report an issue</0>."
 msgstr "ou si cela se reproduit, veuillez <0>signaler un problème</0>."
-
-#: src/components/Header.tsx:24
-msgid "Header"
-msgstr "En-tête"
-
-#: src/components/Header.tsx:53
-msgid "Queue"
-msgstr "File d'attente"
-
-#: src/components/Navigation.tsx:49
-msgid "Main navigation"
-msgstr "Navigation principale"
-
-#: src/components/Navigation.tsx:52
-#: src/routes/settings.tsx:33
-msgid "Library"
-msgstr "Bibliothèque"
-
-#: src/components/Navigation.tsx:55
-#: src/routes/artists.tsx:64
-#: src/routes/settings.ui.tsx:148
-msgid "Artists"
-msgstr "Artistes"
-
-#: src/components/Navigation.tsx:58
-#: src/routes/playlists.tsx:165
-#: src/routes/settings.ui.tsx:151
-msgid "Playlists"
-msgstr "Playlists"
-
-#: src/components/Navigation.tsx:61
-msgid "Settings"
-msgstr "Paramètres"
-
-#: src/components/Navigation.tsx:67
-msgid "Library status"
-msgstr "Statut de la bibliothèque"
-
-#: src/components/Navigation.tsx:92
-msgid "scanning tracks..."
-msgstr "scan des pistes..."
 
 #: src/components/PlayerControls.tsx:18
 msgid "Previous"
@@ -164,199 +95,139 @@ msgstr "vider la file d'attente"
 msgid "see more"
 msgstr "voir plus"
 
-#: src/components/Search.tsx:42
-msgid "search..."
-msgstr "rechercher..."
-
-#: src/components/Search.tsx:49
-msgid "Search library"
-msgstr "Rechercher dans la bibliothèque"
-
-#: src/components/Search.tsx:61
-msgid "Clear search"
-msgstr "Effacer la recherche"
-
 #: src/components/SideNavLink.tsx:62
 msgid "Rename"
 msgstr "Renommer"
 
-#: src/components/TrackList.tsx:243
+#: src/components/TrackList.tsx:248
 msgid "Create new playlist..."
 msgstr "Créer une nouvelle playlist..."
 
-#: src/components/TrackList.tsx:246
-#: src/routes/playlists.tsx:63
+#: src/components/TrackList.tsx:251
+#: src/routes/playlists.tsx:68
 msgid "New playlist"
 msgstr "Nouvelle playlist"
 
-#: src/components/TrackList.tsx:259
+#: src/components/TrackList.tsx:264
 msgid "No playlists"
 msgstr "Aucune playlist"
 
 #. placeholder {0}: selectedTracks.size
 #. placeholder {1}: playlist.name
-#: src/components/TrackList.tsx:273
+#: src/components/TrackList.tsx:278
 msgid "{0} track(s) were added to \"{1}\""
 msgstr "{0} piste(s) ont été ajoutées à \"{1}\""
 
-#: src/components/TrackList.tsx:291
+#: src/components/TrackList.tsx:296
 msgid "{selectedCount, plural, one {# track selected} other {# tracks selected}}"
 msgstr "{selectedCount, plural, one {# piste sélectionnée} other {# pistes sélectionnées}}"
 
-#: src/components/TrackList.tsx:303
+#: src/components/TrackList.tsx:308
 msgid "Add to queue"
 msgstr "Ajouter à la file d'attente"
 
-#: src/components/TrackList.tsx:311
+#: src/components/TrackList.tsx:322
 msgid "Play next"
 msgstr "Lire ensuite"
 
-#: src/components/TrackList.tsx:323
+#: src/components/TrackList.tsx:340
 msgid "Add to playlist"
 msgstr "Ajouter à une playlist"
 
-#: src/components/TrackList.tsx:333
+#: src/components/TrackList.tsx:350
 msgid "Search for \"{item}\""
 msgstr "Rechercher \"{item}\""
 
-#: src/components/TrackList.tsx:346
+#: src/components/TrackList.tsx:363
 msgid "Copy \"{item}\""
 msgstr "Copier \"{item}\""
 
-#: src/components/TrackList.tsx:369
-msgid "Edit track"
-msgstr "Modifier la piste"
-
-#: src/components/TrackList.tsx:379
+#: src/components/TrackList.tsx:446
 msgid "Show in file manager"
 msgstr "Montrer dans le gestionnaire de fichiers"
 
-#: src/components/TrackList.tsx:385
+#: src/components/TrackList.tsx:457
+msgid "Edit track"
+msgstr "Modifier la piste"
+
+#: src/components/TrackList.tsx:466
 msgid "Remove from library"
 msgstr "Retirer de la bibliothèque"
 
 #. placeholder {0}: selectedTracks.size
-#: src/components/TrackList.tsx:388
+#: src/components/TrackList.tsx:469
 msgid "Are you sure you want to remove {0} track(s) from your library?"
 msgstr "Êtes-vous sûr de vouloir retirer {0} piste(s) de votre bibliothèque ?"
 
-#: src/components/TrackList.tsx:390
+#: src/components/TrackList.tsx:471
 msgid "Remove tracks"
 msgstr "Retirer les pistes"
 
-#: src/components/TrackList.tsx:392
-#: src/routes/settings.library.tsx:100
-#: src/routes/settings.library.tsx:145
+#: src/components/TrackList.tsx:473
+#: src/routes/settings.library.tsx:157
+#: src/routes/settings.library.tsx:202
 #: src/routes/tracks.$trackID.tsx:257
 msgid "Cancel"
 msgstr "Annuler"
 
-#: src/components/TrackList.tsx:393
-#: src/routes/settings.library.tsx:64
+#: src/components/TrackList.tsx:474
+#: src/routes/settings.library.tsx:121
 msgid "Remove"
 msgstr "Retirer"
 
-#: src/components/TrackListDefault.tsx:124
+#: src/components/TrackListDefault.tsx:157
 #: src/components/TrackListGrouped.tsx:58
 msgid "Track list"
 msgstr "Liste des pistes"
 
-#. placeholder {0}: props.count
 #. placeholder {0}: tracks.length
 #: src/components/TrackListGrouped.tsx:115
-#: src/components/TrackListStatus.tsx:11
 msgid "{0, plural, one {# track} other {# tracks}}"
 msgstr "{0, plural, one {# piste} other {# pistes}}"
-
-#: src/components/TrackListHeader.tsx:17
-msgid "Track list sorting options"
-msgstr "Options de tri de la liste des pistes"
-
-#: src/components/TrackListHeader.tsx:26
-#: src/routes/tracks.$trackID.tsx:88
-msgid "Title"
-msgstr "Titre"
-
-#: src/components/TrackListHeader.tsx:46
-#: src/routes/tracks.$trackID.tsx:241
-msgid "Duration"
-msgstr "Durée"
-
-#: src/components/TrackListHeader.tsx:51
-msgid "Artist"
-msgstr "Artiste"
-
-#: src/components/TrackListHeader.tsx:56
-#: src/routes/tracks.$trackID.tsx:99
-msgid "Album"
-msgstr "Album"
-
-#: src/components/TrackListHeader.tsx:61
-#: src/routes/tracks.$trackID.tsx:139
-msgid "Genre"
-msgstr "Genre"
-
-#: src/components/TrackListStates.tsx:25
-msgid "Loading library..."
-msgstr "Chargement de la bibliothèque..."
-
-#: src/components/TrackListStates.tsx:36
-msgid "Your library is being scanned"
-msgstr "Votre bibliothèque est en cours de scan"
-
-#: src/components/TrackListStates.tsx:39
-msgid "hold on..."
-msgstr "veuillez patienter..."
-
-#: src/components/TrackListStates.tsx:50
-msgid "There is no music in your library"
-msgstr "Votre bibliothèque est vide"
-
-#: src/components/TrackListStates.tsx:53
-msgid "you can <0>add your music here</0>"
-msgstr "vous pouvez <0>ajouter votre musique ici</0>"
-
-#: src/components/TrackListStates.tsx:69
-#: src/routes/playlists.$playlistID.tsx:104
-msgid "Your search returned no results"
-msgstr "Votre recherche n'a retourné aucun résultat"
 
 #: src/components/VolumeControl.tsx:47
 #: src/components/VolumeControl.tsx:74
 msgid "Volume"
 msgstr "Volume"
 
-#: src/routes/__root.tsx:82
-msgid "Application main content"
-msgstr "Contenu principal de l'application"
+#: src/routes/__root.tsx:163
+msgid "Contenido principal de cabina"
+msgstr ""
+
+#: src/routes/artists.tsx:64
+#: src/routes/settings.ui.tsx:148
+msgid "Artists"
+msgstr "Artistes"
 
 #: src/routes/artists.tsx:70
 msgid "Compilations"
 msgstr "Compilations"
 
-#: src/routes/playlists.$playlistID.tsx:72
+#: src/routes/artists.tsx:95
+msgid "No se encontraron artistas en la biblioteca"
+msgstr ""
+
+#: src/routes/artists.tsx:98
+msgid "Las canciones indexadas aparecerán organizadas por artista una vez procesadas"
+msgstr ""
+
+#: src/routes/artists.tsx:107
+msgid "Selecciona un artista de la barra lateral"
+msgstr ""
+
+#: src/routes/playlists.$playlistID.tsx:119
 msgid "Remove from playlist"
 msgstr "Retirer de la playlist"
-
-#: src/routes/playlists.$playlistID.tsx:88
-#: src/routes/playlists.$playlistID.tsx:115
-msgid "Empty playlist"
-msgstr "Playlist vide"
-
-#: src/routes/playlists.$playlistID.tsx:91
-#: src/routes/playlists.$playlistID.tsx:118
-msgid "You can add tracks from the <0>library view</0>"
-msgstr "Vous pouvez ajouter des pistes depuis la <0>bibliothèque</0>"
 
 #: src/routes/playlists.tsx:93
 msgid "Delete"
 msgstr "Supprimer"
 
-#: src/routes/playlists.tsx:102
+#: src/routes/playlists.tsx:101
 msgid "Duplicate"
 msgstr "Dupliquer"
 
-#: src/routes/playlists.tsx:110
+#: src/routes/playlists.tsx:109
 msgid "Export"
 msgstr "Exporter"
 
@@ -372,51 +243,48 @@ msgstr "créez-en une maintenant"
 msgid "No playlist selected"
 msgstr "Aucune playlist sélectionnée"
 
-#: src/routes/playlists.tsx:170
+#: src/routes/playlists.tsx:163
+#: src/routes/settings.ui.tsx:151
+msgid "Playlists"
+msgstr "Playlists"
+
+#: src/routes/playlists.tsx:168
 msgid "New Playlist"
 msgstr "Nouvelle Playlist"
 
-#: src/routes/settings.about.tsx:36
-msgid "About HERA"
-msgstr ""
-
-#: src/routes/settings.about.tsx:48
+#: src/routes/settings.about.tsx:73
 msgid "release notes"
 msgstr "notes de version"
 
-#: src/routes/settings.about.tsx:51
+#: src/routes/settings.about.tsx:76
 msgid "Automatically check for updates"
 msgstr "Vérifier automatiquement les mises à jour"
 
-#: src/routes/settings.about.tsx:63
+#: src/routes/settings.about.tsx:88
 msgid "Check for update"
 msgstr "Vérifier les mises à jour"
 
-#: src/routes/settings.about.tsx:69
+#: src/routes/settings.about.tsx:94
 msgid "Contributors"
 msgstr "Contributeurs"
 
-#: src/routes/settings.about.tsx:72
-msgid "Created with <0/> by David Castillo (<1>@davidcastilloc</1>) and <2>HERA contributors</2> (UI foundation adapted from martpie/museeks MIT)"
-msgstr ""
-
-#: src/routes/settings.about.tsx:89
+#: src/routes/settings.about.tsx:111
 msgid "Translations:"
 msgstr "Traductions :"
 
-#: src/routes/settings.about.tsx:103
+#: src/routes/settings.about.tsx:125
 msgid "Report issue / Ask for a feature"
 msgstr "Signaler un problème / Demander une fonctionnalité"
 
-#: src/routes/settings.about.tsx:106
+#: src/routes/settings.about.tsx:128
 msgid "Bugs happen. Please, do not hesitate to report them or to ask for features you would like to see, using the <0>issue tracker</0>."
 msgstr "Les bugs arrivent. N'hésitez pas à les signaler ou à demander des fonctionnalités que vous aimeriez voir, en utilisant le <0>gestionnaire de bug</0>."
 
-#: src/routes/settings.about.tsx:121
+#: src/routes/settings.about.tsx:143
 msgid "Internals"
 msgstr "Détails techniques"
 
-#: src/routes/settings.about.tsx:126
+#: src/routes/settings.about.tsx:148
 msgid "Open storage directory"
 msgstr "Ouvrir le dossier de stockage"
 
@@ -436,87 +304,75 @@ msgstr "Suivre la piste en cours"
 msgid "Automatically follow the currently playing track (only when the app is not focused)"
 msgstr "Suivre automatiquement la piste en cours (uniquement lorsque l'application n'a pas le focus)"
 
-#: src/routes/settings.library.tsx:48
+#: src/routes/settings.library.tsx:105
 msgid "Files"
 msgstr "Fichiers"
 
-#: src/routes/settings.library.tsx:52
+#: src/routes/settings.library.tsx:109
 msgid "There are no folders in your library."
 msgstr "Il n'y a pas de dossiers dans votre bibliothèque."
 
-#: src/routes/settings.library.tsx:84
+#: src/routes/settings.library.tsx:141
 msgid "Add folder"
 msgstr "Ajouter un dossier"
 
-#: src/routes/settings.library.tsx:90
+#: src/routes/settings.library.tsx:147
 msgid "Scan"
 msgstr "Scanner"
 
-#: src/routes/settings.library.tsx:96
+#: src/routes/settings.library.tsx:153
 msgid "All track data will be updated from the base files, but your original files won't be modified. Any HERA-specific edits you may have done will be reset."
 msgstr ""
 
-#: src/routes/settings.library.tsx:98
+#: src/routes/settings.library.tsx:155
 msgid "Refresh all tracks?"
 msgstr "Rafraîchir toutes les pistes ?"
 
-#: src/routes/settings.library.tsx:101
-#: src/routes/settings.library.tsx:111
+#: src/routes/settings.library.tsx:158
+#: src/routes/settings.library.tsx:168
 msgid "Refresh"
 msgstr "Rafraîchir"
 
-#: src/routes/settings.library.tsx:109
+#: src/routes/settings.library.tsx:166
 msgid "Force the refresh of all tracks tags"
 msgstr "Forcer le rafraîchissement de toutes les informations des pistes"
 
-#: src/routes/settings.library.tsx:115
+#: src/routes/settings.library.tsx:172
 msgid "<0>.m3u</0> files will also be imported as playlists."
 msgstr "Les fichiers <0>.m3u</0> seront également importés en tant que playlists."
 
-#: src/routes/settings.library.tsx:122
+#: src/routes/settings.library.tsx:179
 msgid "Automatically refresh library on startup"
 msgstr "Rafraîchir automatiquement la bibliothèque au démarrage"
 
-#: src/routes/settings.library.tsx:129
+#: src/routes/settings.library.tsx:186
 msgid "Danger zone"
 msgstr "Zone de danger"
 
-#: src/routes/settings.library.tsx:132
+#: src/routes/settings.library.tsx:189
 msgid "Delete all tracks and playlists from HERA."
 msgstr ""
 
-#: src/routes/settings.library.tsx:137
+#: src/routes/settings.library.tsx:194
 msgid "Fully reset the library"
 msgstr "Réinitialiser complètement la bibliothèque"
 
-#: src/routes/settings.library.tsx:141
+#: src/routes/settings.library.tsx:198
 msgid "All your tracks and playlists will be deleted from HERA."
 msgstr ""
 
-#: src/routes/settings.library.tsx:143
+#: src/routes/settings.library.tsx:200
 msgid "Reset library?"
 msgstr "Réinitialiser la bibliothèque ?"
 
-#: src/routes/settings.library.tsx:146
+#: src/routes/settings.library.tsx:203
 #: src/routes/settings.ui.tsx:79
 msgid "Reset"
 msgstr "Réinitialiser"
 
-#: src/routes/settings.library.tsx:155
+#: src/routes/settings.library.tsx:212
 msgid "Reset library"
 msgstr "Réinitialiser la bibliothèque"
-
-#: src/routes/settings.tsx:36
-msgid "Audio"
-msgstr "Audio"
-
-#: src/routes/settings.tsx:39
-msgid "Interface"
-msgstr "Interface"
-
-#: src/routes/settings.tsx:42
-msgid "About"
-msgstr "À propos"
 
 #: src/routes/settings.ui.tsx:46
 msgid "Theme"
@@ -603,6 +459,14 @@ msgstr "Sombre"
 msgid "Edit \"{0}\""
 msgstr "Modifier \"{0}\""
 
+#: src/routes/tracks.$trackID.tsx:88
+msgid "Title"
+msgstr "Titre"
+
+#: src/routes/tracks.$trackID.tsx:99
+msgid "Album"
+msgstr "Album"
+
 #: src/routes/tracks.$trackID.tsx:110
 msgid "Album Artist"
 msgstr "Artiste de l'album"
@@ -614,6 +478,10 @@ msgstr "Artistes de la piste"
 #: src/routes/tracks.$trackID.tsx:125
 msgid "You can add multiple artists with commas"
 msgstr "Vous pouvez ajouter plusieurs artistes avec des virgules"
+
+#: src/routes/tracks.$trackID.tsx:139
+msgid "Genre"
+msgstr "Genre"
 
 #: src/routes/tracks.$trackID.tsx:140
 msgid "You can add multiple genres with commas"
@@ -643,6 +511,10 @@ msgstr "Compilation"
 #: src/routes/tracks.$trackID.tsx:232
 msgid "Group this track with other tracks from the same compilation, regardless of the artist names."
 msgstr "Groupe cette piste avec les autres pistes de la même compilation, indépendamment des noms d'artistes."
+
+#: src/routes/tracks.$trackID.tsx:241
+msgid "Duration"
+msgstr "Durée"
 
 #: src/routes/tracks.$trackID.tsx:249
 msgid "Path"

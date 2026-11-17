@@ -114,14 +114,13 @@ export default function Navigation() {
           {...stylex.props(styles.navMenuRoot)}
         >
           <NavigationMenu.List {...stylex.props(styles.viewLinks)}>
-            <NavItem to="/library" label="Biblioteca" icon="disc" />
+            <NavItem to="/library" label="Carpetas" icon="disc" />
             <NavItem
               to="/agent"
               label="Agente"
               icon="sparkles"
               isLiveRunning={isAgentRunning}
             />
-            <NavItem to="/artists" label="Artistas" icon="artists" />
             <NavItem to="/playlists" label="Playlists" icon="crateList" />
             {enableHarmonicBridge ? (
               <NavItem

@@ -190,18 +190,18 @@ Mark Task 2 checkboxes `[x]` in `docs/superpowers/plans/2026-11-16-omkf-agentic-
   - `queryHarmonicCandidates(bpm: number, camelot: string): Promise<Track[]>`
   - Collapsible hierarchical `FolderCrateTree` (`Raíces y Carpetas`) + `FolderExplorerHeader` (`Ruta:` breadcrumbs + clickable `Subcarpetas:` pills) in `/library` (`Carpetas`).
 
-- [ ] **Step 1: Write failing unit tests in `hera-desktop/src/lib/__tests__/omkf-file-manager.test.ts`**
+- [x] **Step 1: Write failing unit tests in `hera-desktop/src/lib/__tests__/omkf-file-manager.test.ts`**
 
 Write Vitest unit tests covering:
 - `mapOmkfDtoToTrack` maps `OmkfFsTrackDto` (`bpm`, `camelot`, 4 `hot_cues`, `copy_count`, `scan_level`, `duration_sec`) to `Track` without calling `DatabaseBridge.getTracks`.
 - Hierarchical tree builder (`buildFolderTreeRows`) groups roots (`parent_crate_id == null`), collapses/expands children (`depth > 0`), and picks the first workable non-`BACKUP` folder as initial selection (`pickInitialFolderCrateId`).
 
-- [ ] **Step 2: Run unit test to verify failure**
+- [x] **Step 2: Run unit test to verify failure**
 
 Run: `cd hera-desktop && bun run test -- src/lib/__tests__/omkf-file-manager.test.ts`
 Expected: FAIL (`mapOmkfDtoToTrack` / `buildFolderTreeRows` / `pickInitialFolderCrateId` not exported).
 
-- [ ] **Step 3: Implement OMKF bridge, instant routing, hierarchical `Carpetas` explorer, and cross-surface hooks**
+- [x] **Step 3: Implement OMKF bridge, instant routing, hierarchical `Carpetas` explorer, and cross-surface hooks**
 
 1. `hera-desktop/src/lib/omkf-bridge.ts` (`<= 300` lines):
    - Import generated DTOs from `../generated/hera-typings`.
@@ -222,12 +222,12 @@ Expected: FAIL (`mapOmkfDtoToTrack` / `buildFolderTreeRows` / `pickInitialFolder
    - `src/components/MiniOverlay.tsx`, `src/routes/dna.tsx`, `src/components/transition/useTransitionStudio.ts`, `src/components/transition/transition-actions.ts`, `src/lib/agent-store.ts`: when `isTauri()` and `useLibraryStore.getState().tracks` needs cross-folder candidates, call `queryHarmonicCandidates` / `searchAllFoldersDeduplicated('')` instead of `DatabaseBridge.getAllTracks()`.
 4. Update translations (`bun run gen:translations` if needed) and update `hera-studio-qa.test-e2e.tsx` + `library.test-e2e.tsx` to match `"Carpetas"` nav/heading and the streamlined `/playlists` view.
 
-- [ ] **Step 4: Run frontend typecheck, lint, unit tests, E2E tests, build, and architectural ratchets**
+- [x] **Step 4: Run frontend typecheck, lint, unit tests, E2E tests, build, and architectural ratchets**
 
 Run: `cd hera-desktop && bun run check && bun run test && bun run test:e2e && bun run build && cd .. && cargo test -p hera-node-rs --test architectural_ratchets`
 Expected: PASS (`0` lint/type errors, all unit & E2E suites green, all line-count ceilings respected).
 
-- [ ] **Step 5: Mark Task 3 complete and commit**
+- [x] **Step 5: Mark Task 3 complete and commit**
 
 Mark Task 3 checkboxes `[x]` in `docs/superpowers/plans/2026-11-16-omkf-agentic-file-manager-zero-sqlite-tracks.md` and commit signed (`git commit -S`) with `feat(desktop-ui): launch hierarchical OMKF Carpetas file manager with instant routing and zero SQLite tracks`.
 

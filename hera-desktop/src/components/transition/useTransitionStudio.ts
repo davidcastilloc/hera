@@ -1,4 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
+import { isTauri } from '@tauri-apps/api/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Track } from '../../generated/typings';
@@ -11,6 +12,10 @@ import {
   type SwarmCatalogItem,
 } from '../../lib/bridge-hera';
 import { startSyntheticHarmonicPreview } from '../../lib/hera-harmonic-utils';
+import {
+  queryHarmonicCandidates,
+  searchAllFoldersDeduplicated,
+} from '../../lib/omkf-bridge';
 import player from '../../lib/player';
 import useLibraryStore from '../../lib/store';
 import {
@@ -118,15 +123,20 @@ export function useTransitionStudio() {
 
   useEffect(() => {
     if (tracks.length === 0) {
-      void DatabaseBridge.getAllTracks()
-        .then((dbTracks) => {
-          if (dbTracks.length > 0) {
-            useLibraryStore.setState({ tracks: dbTracks });
+      const load = isTauri()
+        ? queryHarmonicCandidates(originBpm, originCamelot).then((cands) =>
+            cands.length > 0 ? cands : searchAllFoldersDeduplicated(''),
+          )
+        : DatabaseBridge.getAllTracks();
+      void load
+        .then((loaded) => {
+          if (loaded.length > 0) {
+            useLibraryStore.setState({ tracks: loaded });
           }
         })
         .catch(() => {});
     }
-  }, [tracks.length]);
+  }, [originBpm, originCamelot, tracks.length]);
 
   useEffect(() => {
     let cancelled = false;

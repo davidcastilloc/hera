@@ -1,6 +1,5 @@
 import * as stylex from '@stylexjs/stylex';
 
-import Link from '../elements/Link';
 import type { Repeat, Track } from '../generated/typings';
 import useFormattedDuration from '../hooks/useFormattedDuration';
 import { usePlayerState } from '../hooks/usePlayer';
@@ -38,43 +37,10 @@ export default function PlayingBarInfo(props: Props) {
               </span>
             )}
           </strong>
-          <div {...stylex.props(styles.metadata)}>
-            <Link
-              inheritColor
-              type="normal"
-              linkOptions={
-                trackPlaying.is_compilation
-                  ? {
-                      to: '/artists/presets/compilations',
-                      search: { focused_album: trackPlaying.album },
-                    }
-                  : {
-                      to: '/artists/$artistID',
-                      params: { artistID: trackPlaying.album_artist },
-                    }
-              }
-            >
-              {trackPlaying.artists.join(', ')}
-            </Link>
+          <div {...stylex.props(styles.metadata, styles.metadataSecondary)}>
+            <span>{trackPlaying.artists.join(', ')}</span>
             &nbsp;—&nbsp;
-            <Link
-              inheritColor
-              type="normal"
-              linkOptions={
-                trackPlaying.is_compilation
-                  ? {
-                      to: '/artists/presets/compilations',
-                      search: { focused_album: trackPlaying.album },
-                    }
-                  : {
-                      to: '/artists/$artistID',
-                      params: { artistID: trackPlaying.album_artist },
-                      search: { focused_album: trackPlaying.album },
-                    }
-              }
-            >
-              {trackPlaying.album}
-            </Link>
+            <span>{trackPlaying.album}</span>
           </div>
         </div>
 
@@ -138,6 +104,10 @@ const styles = stylex.create({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
+  },
+  metadataSecondary: {
+    color: '#8e98a8',
+    fontSize: '12px',
   },
   duration: {
     flexGrow: 0,

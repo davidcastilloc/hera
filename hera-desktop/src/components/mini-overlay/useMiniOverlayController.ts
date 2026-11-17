@@ -1,4 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
+import { isTauri } from '@tauri-apps/api/core';
 import {
   startTransition,
   useCallback,
@@ -8,6 +9,7 @@ import {
   useState,
 } from 'react';
 
+import type { Track } from '../../generated/typings';
 import useInvalidate from '../../hooks/useInvalidate';
 import usePlayingTrack from '../../hooks/usePlayingTrack';
 import {
@@ -17,6 +19,10 @@ import {
 } from '../../lib/bridge-hera';
 import { startSyntheticHarmonicPreview } from '../../lib/hera-harmonic-utils';
 import { useMiniModeStore } from '../../lib/mini-mode-store';
+import {
+  queryHarmonicCandidates,
+  searchAllFoldersDeduplicated,
+} from '../../lib/omkf-bridge';
 import player from '../../lib/player';
 import useLibraryStore from '../../lib/store';
 import {
@@ -88,6 +94,7 @@ export function useMiniOverlayController() {
   const [bridgeTargetId, setBridgeTargetId] = useState<string>('');
   const [bridgeSwapped, setBridgeSwapped] = useState(false);
   const [bridgeSteps, setBridgeSteps] = useState<Array<HarmonicBridgeStep>>([]);
+  const [harmonicPool, setHarmonicPool] = useState<Track[]>([]);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -147,26 +154,57 @@ export function useMiniOverlayController() {
     [playingTrack, selectedCurrentId, tracks, vdjLiveTrack],
   );
 
+  useEffect(() => {
+    if (!isTauri()) return;
+    let cancelled = false;
+    void queryHarmonicCandidates(currentTrackInfo.bpm, currentTrackInfo.camelot)
+      .then((cands) =>
+        cands.length > 0 ? cands : searchAllFoldersDeduplicated(''),
+      )
+      .then((pool) => {
+        if (!cancelled) {
+          setHarmonicPool(pool);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrackInfo.bpm, currentTrackInfo.camelot]);
+
+  const candidateTracks = useMemo(() => {
+    if (harmonicPool.length === 0) return tracks;
+    const seen = new Set(tracks.map((t) => t.id));
+    const merged = [...tracks];
+    for (const item of harmonicPool) {
+      if (!seen.has(item.id)) {
+        seen.add(item.id);
+        merged.push(item);
+      }
+    }
+    return merged;
+  }, [harmonicPool, tracks]);
+
   const suggestions = useMemo(
     () =>
       deriveMiniSuggestions(
-        tracks,
+        candidateTracks,
         currentTrackInfo,
         energyDeltaBpm,
         filterText,
       ),
-    [currentTrackInfo, energyDeltaBpm, filterText, tracks],
+    [candidateTracks, currentTrackInfo, energyDeltaBpm, filterText],
   );
 
   const bridgeEndpoints = useMemo(
     () =>
       deriveMiniBridgeEndpoints(
-        tracks,
+        candidateTracks,
         bridgeOriginId,
         bridgeTargetId,
         bridgeSwapped,
       ),
-    [bridgeOriginId, bridgeSwapped, bridgeTargetId, tracks],
+    [bridgeOriginId, bridgeSwapped, bridgeTargetId, candidateTracks],
   );
 
   useEffect(() => {
@@ -287,7 +325,7 @@ export function useMiniOverlayController() {
     togglePinned,
     setActiveTab,
     handleOpenAgentFull,
-    tracks,
+    tracks: candidateTracks,
     selectedCurrentId,
     setSelectedCurrentId,
     filterText,

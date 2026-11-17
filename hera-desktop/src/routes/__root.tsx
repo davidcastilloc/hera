@@ -32,9 +32,8 @@ import { bindAgentGlobalBridge } from '../lib/agent-store';
 import { useMiniModeStore } from '../lib/mini-mode-store';
 import { registerTrackLoadMetadata } from '../lib/native-audio-transport';
 import player from '../lib/player';
-import { allTracksQuery, configQuery } from '../lib/queries';
+import { configQuery } from '../lib/queries';
 import queryClient from '../lib/query-client';
-import useLibraryStore from '../lib/store';
 import { logAndNotifyError } from '../lib/utils';
 
 const LazyMiniOverlay = lazy(() => import('../components/MiniOverlay'));
@@ -90,12 +89,6 @@ function ViewRoot() {
 
   useEffect(() => {
     SettingsAPI.init(() => {}).catch(logAndNotifyError);
-    void queryClient
-      .ensureQueryData(allTracksQuery)
-      .then((tracks) => {
-        useLibraryStore.setState({ tracks });
-      })
-      .catch(() => {});
     bindAgentGlobalBridge({
       invalidate,
       navigate: (to) => {

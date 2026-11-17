@@ -1,3 +1,5 @@
+import { isTauri } from '@tauri-apps/api/core';
+
 import LibraryAPI from '../../api/LibraryAPI';
 import PlaylistsAPI from '../../api/PlaylistsAPI';
 import type { Playlist, Track } from '../../generated/typings';
@@ -10,6 +12,7 @@ import {
   type SwarmCatalogItem,
 } from '../../lib/bridge-hera';
 import { buildSyntheticTrackDescriptor } from '../../lib/hera-harmonic-utils';
+import { searchAllFoldersDeduplicated } from '../../lib/omkf-bridge';
 import useLibraryStore from '../../lib/store';
 
 export function deriveActiveBridgeSteps(
@@ -167,8 +170,12 @@ export async function createPlaylistFromBridgeSteps(params: {
     await LibraryAPI.importAudioFiles(downloadedPaths);
   }
 
-  const refreshedTracks = await DatabaseBridge.getAllTracks();
-  useLibraryStore.setState({ tracks: refreshedTracks });
+  const refreshedTracks = isTauri()
+    ? await searchAllFoldersDeduplicated('')
+    : await DatabaseBridge.getAllTracks();
+  if (refreshedTracks.length > 0) {
+    useLibraryStore.setState({ tracks: refreshedTracks });
+  }
 
   const orderedIdsSet = new Set<string>();
   if (params.originTrackId) orderedIdsSet.add(params.originTrackId);

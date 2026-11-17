@@ -1,3 +1,4 @@
+import { isTauri } from '@tauri-apps/api/core';
 import { create } from 'zustand';
 
 import {
@@ -381,13 +382,29 @@ export function bindAgentGlobalBridge(callbacks: {
 
   void listenAgentUiSync((evt: AgentUiSyncEvent) => {
     if (evt.kind === 'invalidate_library') {
-      void Promise.all([import('./bridge-database'), import('./store')])
-        .then(([{ default: DatabaseBridge }, { default: useLibraryStore }]) =>
-          DatabaseBridge.getAllTracks().then((tracks) => {
-            useLibraryStore.setState({ tracks });
-          }),
-        )
-        .catch(() => {});
+      if (isTauri()) {
+        void Promise.all([import('./omkf-bridge'), import('./store')])
+          .then(
+            ([
+              { searchAllFoldersDeduplicated },
+              { default: useLibraryStore },
+            ]) =>
+              searchAllFoldersDeduplicated('').then((tracks) => {
+                if (tracks.length > 0) {
+                  useLibraryStore.setState({ tracks });
+                }
+              }),
+          )
+          .catch(() => {});
+      } else {
+        void Promise.all([import('./bridge-database'), import('./store')])
+          .then(([{ default: DatabaseBridge }, { default: useLibraryStore }]) =>
+            DatabaseBridge.getAllTracks().then((tracks) => {
+              useLibraryStore.setState({ tracks });
+            }),
+          )
+          .catch(() => {});
+      }
       void latestCallbacks?.invalidate();
       return;
     }

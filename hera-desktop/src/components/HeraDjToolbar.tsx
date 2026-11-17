@@ -32,7 +32,7 @@ const FORMAT_LABELS: Record<DjExportFormat, string> = {
 };
 
 export default function HeraDjToolbar({
-  title = 'Biblioteca',
+  title = 'Carpetas',
   tracksOverride,
   tracks: tracksProp,
   crateName = 'Hera_Booth_Crate',
@@ -100,7 +100,10 @@ export default function HeraDjToolbar({
           .map((id) => byId.get(id))
           .filter((t): t is Track => t !== undefined);
         if (reordered.length > 0) {
-          useLibraryStore.setState({ tracks: reordered });
+          useLibraryStore.setState({
+            tracks: reordered,
+            setSpineOrderedIds: result.orderedTrackIds,
+          });
         }
       }
       flashDone('spine');

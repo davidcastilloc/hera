@@ -2,14 +2,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 
-import { allTracksQuery, configQuery } from '../lib/queries';
+import { configQuery } from '../lib/queries';
 import { logAndNotifyError } from '../lib/utils';
 
 /**
  * Hook returning a function to be manually called after anything that represents
- * a mutation. Particularly useful if you cannot use `useInvalidate` in case you
- * need to pass a custom value to its callback, or if you are going to break the
- * rule of hooks.
+ * a mutation. Invalidates OMKF folder crates, playlists, and config without
+ * triggering full SQLite track table dumps.
  */
 export default function useInvalidate() {
   const queryClient = useQueryClient();
@@ -17,11 +16,11 @@ export default function useInvalidate() {
 
   return useCallback(async () => {
     return Promise.allSettled([
-      // Invalidate queries so data is refetched and the UI shows a loading state
-      // instead of a misleading "no tracks in the library" message
-      queryClient.invalidateQueries({ queryKey: allTracksQuery.queryKey }),
+      queryClient.invalidateQueries({ queryKey: ['omkf-folder-crates'] }),
+      queryClient.invalidateQueries({ queryKey: ['omkf-folder-crate-detail'] }),
+      queryClient.invalidateQueries({ queryKey: ['omkf-global-search'] }),
+      queryClient.invalidateQueries({ queryKey: ['playlists'] }),
       queryClient.invalidateQueries({ queryKey: configQuery.queryKey }),
-      // Reload the route data
       router.invalidate(),
     ]);
   }, [queryClient, router]);

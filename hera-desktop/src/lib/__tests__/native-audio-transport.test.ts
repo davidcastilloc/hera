@@ -258,7 +258,7 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
     player.stop();
   });
 
-  it('defers scanner_notify_deck_track until 40s of real non-paused playback and freezes currentTime when is_buffering is true', async () => {
+  it('never pokes scanner_notify_deck_track during active playback (even past 40s), freezes currentTime while buffering, and commits unanalyzed track only on pause/stop', async () => {
     const scannerV3 = await import('../scanner-v3');
     const notifySpy = vi
       .spyOn(scannerV3, 'notifyDeckTrack')
@@ -349,12 +349,18 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
     expect(player.getState().isBuffering).toBe(true);
     expect(player.getCurrentTime()).toBe(39);
 
-    // Resume real playback past 40.0s -> notifyDeckTrack fires exactly once!
+    // Resume real playback past 40.0s -> active playback MUST NOT poke scanner!
     emitAt(39.5, false);
     emitAt(40.5, false);
+    emitAt(55.0, false);
     expect(player.getState().isBuffering).toBe(false);
+    expect(notifySpy).not.toHaveBeenCalled();
+
+    // Pausing/stopping an unanalyzed track (scan_level === 0) commits it once on idle
+    player.pause();
     expect(notifySpy).toHaveBeenCalledTimes(1);
     expect(notifySpy).toHaveBeenCalledWith('commit-40', []);
     player.stop();
+    expect(notifySpy).toHaveBeenCalledTimes(1);
   });
 });

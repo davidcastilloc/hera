@@ -1,5 +1,8 @@
+import { isTauri } from '@tauri-apps/api/core';
+
 import ConfigBridge from '../lib/bridge-config';
 import DatabaseBridge from '../lib/bridge-database';
+import { syncMockCatalogTracks } from '../lib/omkf-bridge';
 import player from '../lib/player';
 import queryClient from '../lib/query-client';
 import useLibraryStore from '../lib/store';
@@ -7,6 +10,16 @@ import toastManager from '../lib/toast-manager';
 import { logAndNotifyError } from '../lib/utils';
 import { removeRedundantFolders } from '../lib/utils-library';
 import type { TrackListStatusInfo, TrackMutation } from '../types/museeks';
+
+async function invalidateOmkfCatalogQueries(): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['omkf-folder-crates'] }),
+    queryClient.invalidateQueries({ queryKey: ['omkf-folder-crate-detail'] }),
+    queryClient.invalidateQueries({ queryKey: ['omkf-global-search'] }),
+    queryClient.invalidateQueries({ queryKey: ['playlists'] }),
+    queryClient.invalidateQueries({ queryKey: ['config'] }),
+  ]);
+}
 
 /**
  * Filter tracks by search
@@ -29,10 +42,7 @@ function extractParentDirectory(filePath: string): string | null {
 /**
  * Scan the library for new tracks
  */
-async function scan(
-  // Force a refresh of the ID3 tags stored in the DB
-  refresh = false,
-): Promise<void> {
+async function scan(refresh = false): Promise<void> {
   try {
     useLibraryStore.setState({ refreshing: true });
 
@@ -51,39 +61,46 @@ async function scan(
       libraryFolders,
       refresh,
     );
-    const allTracks = await DatabaseBridge.getAllTracks();
-    if (
-      allTracks.length > 0 ||
-      useLibraryStore.getState().tracks.length === 0
-    ) {
-      useLibraryStore.setState({ tracks: allTracks });
+
+    let mockCount = 0;
+    if (!isTauri()) {
+      const mockTracks = await DatabaseBridge.getAllTracks();
+      mockCount = mockTracks.length;
+      syncMockCatalogTracks(mockTracks);
+      if (
+        mockTracks.length > 0 ||
+        useLibraryStore.getState().tracks.length === 0
+      ) {
+        useLibraryStore.setState({ tracks: mockTracks });
+      }
     }
-    await queryClient.invalidateQueries();
+
+    await invalidateOmkfCatalogQueries();
 
     if (scanResult.track_count > 0) {
       const message = refresh
         ? `Se actualizaron ${scanResult.track_count} pista(s) con análisis DSP y 4 Hot Cues.`
-        : `Se importaron ${scanResult.track_count} pista(s) a tu biblioteca de cabina.`;
+        : `Se importaron ${scanResult.track_count} pista(s) a tus carpetas de cabina.`;
 
       toastManager.add({ title: message, type: 'success', timeout: 5000 });
     } else if (scanResult.playlist_count === 0) {
       const currentTrackCount = Math.max(
-        allTracks.length,
+        mockCount,
         useLibraryStore.getState().tracks.length,
       );
       toastManager.add({
         title:
-          currentTrackCount === 0
+          currentTrackCount === 0 && !isTauri()
             ? 'No se encontraron archivos compatibles (MP3, WAV, FLAC, AIFF, M4A, MP4, MOV, WEBM, MKV) en la carpeta seleccionada.'
-            : `Biblioteca al día (${currentTrackCount} pista(s) listas en cabina).`,
-        type: currentTrackCount === 0 ? 'warning' : 'info',
+            : 'Carpetas sincronizadas en cabina.',
+        type: currentTrackCount === 0 && !isTauri() ? 'warning' : 'info',
         timeout: 5000,
       });
     }
 
     if (scanResult.playlist_count > 0) {
       toastManager.add({
-        title: `Se importaron ${scanResult.playlist_count} lista(s) M3U a tu biblioteca.`,
+        title: `Se importaron ${scanResult.playlist_count} lista(s) M3U a tus playlists.`,
         type: 'success',
         timeout: 5000,
       });
@@ -112,6 +129,7 @@ async function addLibraryFolders(paths: string | Array<string>): Promise<void> {
       ...incoming,
     ]).sort();
     await ConfigBridge.set('library_folders', newFolders);
+    await invalidateOmkfCatalogQueries();
   } catch (err) {
     logAndNotifyError(err);
   }
@@ -141,9 +159,12 @@ async function importAudioFiles(
     }
 
     const scanResult = await DatabaseBridge.importTracks(normalized, false);
-    const allTracks = await DatabaseBridge.getAllTracks();
-    useLibraryStore.setState({ tracks: allTracks });
-    await queryClient.invalidateQueries();
+    if (!isTauri()) {
+      const mockTracks = await DatabaseBridge.getAllTracks();
+      syncMockCatalogTracks(mockTracks);
+      useLibraryStore.setState({ tracks: mockTracks });
+    }
+    await invalidateOmkfCatalogQueries();
 
     if (scanResult.track_count > 0) {
       toastManager.add({
@@ -156,7 +177,7 @@ async function importAudioFiles(
         title:
           scanResult.track_failures > 0
             ? 'No se pudieron leer los archivos de audio seleccionados.'
-            : 'Las pistas seleccionadas ya están presentes en tu biblioteca.',
+            : 'Las pistas seleccionadas ya están presentes en tus carpetas.',
         type: scanResult.track_failures > 0 ? 'warning' : 'info',
         timeout: 4500,
       });
@@ -181,11 +202,11 @@ async function removeLibraryFolder(path: string): Promise<void> {
   );
 
   if (updatedMusicFolders.length === musicFolders.length) {
-    // Path to remove not found: no changes to persist
     return;
   }
 
   await ConfigBridge.set('library_folders', updatedMusicFolders);
+  await invalidateOmkfCatalogQueries();
 }
 
 function setRefresh(current: number, total: number): void {
@@ -193,7 +214,7 @@ function setRefresh(current: number, total: number): void {
 }
 
 /**
- * Remove tracks from the library
+ * Remove tracks from legacy SQLite views
  */
 async function removeTracks(tracksIDs: string[]): Promise<void> {
   await DatabaseBridge.removeTracks(tracksIDs);
@@ -207,10 +228,11 @@ async function reset(): Promise<void> {
   try {
     await DatabaseBridge.reset();
     await ConfigBridge.set('library_folders', []);
+    syncMockCatalogTracks([]);
     useLibraryStore.setState({ tracks: [], setSpineOrderedIds: null });
-    await queryClient.invalidateQueries();
+    await invalidateOmkfCatalogQueries();
     toastManager.add({
-      title: 'Biblioteca restablecida correctamente.',
+      title: 'Carpetas restablecidas correctamente.',
       type: 'success',
     });
   } catch (err) {
@@ -220,8 +242,6 @@ async function reset(): Promise<void> {
 
 /**
  * Update the ID3 attributes of a track.
- * IMPROVE ME: add support for writing metadata to disk (and not only update
- * the DB).
  */
 async function updateTrackMetadata(
   trackID: string,

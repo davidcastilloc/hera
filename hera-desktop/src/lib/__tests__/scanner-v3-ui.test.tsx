@@ -286,8 +286,8 @@ describe('OMKF Milestone O5 UI components & helpers', () => {
     );
     expect(bannerHtml).toContain('OMKF .hera');
     expect(bannerHtml).toContain('86–98 BPM · 8A · 100% FULL');
-    expect(bannerHtml).toContain('Reglas de Cabina');
-    expect(bannerHtml).toContain('Organizar con IA');
+    expect(bannerHtml).toContain('Reglas (.hera/crate.md)');
+    expect(bannerHtml).toContain('Organizar IA');
 
     const treeHtml = renderToStaticMarkup(
       <FolderCrateTree
@@ -299,7 +299,7 @@ describe('OMKF Milestone O5 UI components & helpers', () => {
         totalTrackCount={42}
       />,
     );
-    expect(treeHtml).toContain('Carpetas (.hera)');
+    expect(treeHtml).toContain('RAÍCES Y CARPETAS');
     expect(treeHtml).toContain('Salsa Baul');
     expect(treeHtml).toContain('86–98 BPM · 8A · 100% FULL');
   });

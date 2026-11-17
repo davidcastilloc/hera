@@ -1,11 +1,7 @@
 import { useLingui } from '@lingui/react/macro';
 import * as stylex from '@stylexjs/stylex';
-import { useSuspenseQuery } from '@tanstack/react-query';
-import {
-  createFileRoute,
-  redirect,
-  useLoaderData,
-} from '@tanstack/react-router';
+import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import { createFileRoute, redirect } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
 
 import PlaylistsAPI from '../api/PlaylistsAPI';
@@ -87,7 +83,11 @@ export const Route = createFileRoute('/playlists/$playlistID')({
 
 function ViewPlaylistDetails() {
   const loaderData = Route.useLoaderData();
-  const { playlists } = useLoaderData({ from: '/playlists' });
+  const { data: playlists = [] } = useQuery({
+    queryKey: ['playlists'],
+    queryFn: () => DatabaseBridge.getAllPlaylists(),
+    staleTime: 30_000,
+  });
   const { playlistID } = Route.useParams();
   const config = useSuspenseQuery(configQuery).data;
 
@@ -141,8 +141,8 @@ function ViewPlaylistDetails() {
       <ViewMessage.Notice>
         <p>Esta playlist aún no tiene pistas</p>
         <ViewMessage.Sub>
-          Añade pistas desde la{' '}
-          <Link linkOptions={{ to: '/library' }}>Biblioteca de Cabina</Link>
+          Añade pistas desde{' '}
+          <Link linkOptions={{ to: '/library' }}>Carpetas</Link>
         </ViewMessage.Sub>
       </ViewMessage.Notice>
     );

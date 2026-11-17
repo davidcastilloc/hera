@@ -307,17 +307,29 @@ export default function TrackList(props: Props) {
         MenuItem.new({
           text: t`Add to queue`,
           async action() {
-            player.addToQueue(
-              await BridgeDatabase.getTracks(Array.from(selectedTracks)),
+            const ids = Array.from(selectedTracks);
+            const resolved = await BridgeDatabase.getTracks(ids).catch(
+              () => [] as Track[],
             );
+            const items =
+              resolved.length > 0
+                ? resolved
+                : tracks.filter((tr) => selectedTracks.has(tr.id));
+            player.addToQueue(items);
           },
         }),
         MenuItem.new({
           text: t`Play next`,
           async action() {
-            player.addNextInQueue(
-              await BridgeDatabase.getTracks(Array.from(selectedTracks)),
+            const ids = Array.from(selectedTracks);
+            const resolved = await BridgeDatabase.getTracks(ids).catch(
+              () => [] as Track[],
             );
+            const items =
+              resolved.length > 0
+                ? resolved
+                : tracks.filter((tr) => selectedTracks.has(tr.id));
+            player.addNextInQueue(items);
           },
         }),
         PredefinedMenuItem.new({
@@ -431,41 +443,46 @@ export default function TrackList(props: Props) {
         }),
         PredefinedMenuItem.new({ item: 'Separator' }),
         MenuItem.new({
-          text: t`Edit track`,
-          action: () => {
-            void navigate({
-              to: '/tracks/$trackID',
-              params: { trackID: track.id },
-            });
-          },
-        }),
-        PredefinedMenuItem.new({ item: 'Separator' }),
-        MenuItem.new({
           text: t`Show in file manager`,
           action: async () => {
             await revealItemInDir(track.path);
           },
         }),
-        MenuItem.new({
-          text: t`Remove from library`,
-          action: async () => {
-            const confirm = await ask(
-              t`Are you sure you want to remove ${selectedTracks.size} track(s) from your library?`,
-              {
-                title: t`Remove tracks`,
-                kind: 'warning',
-                cancelLabel: t`Cancel`,
-                okLabel: t`Remove`,
-              },
-            );
-
-            if (confirm) {
-              await LibraryAPI.removeTracks(Array.from(selectedTracks));
-              await invalidate();
-            }
-          },
-        }),
       );
+
+      if (queueOrigin.type !== 'library') {
+        menuItemsBuilder.push(
+          PredefinedMenuItem.new({ item: 'Separator' }),
+          MenuItem.new({
+            text: t`Edit track`,
+            action: () => {
+              void navigate({
+                to: '/tracks/$trackID',
+                params: { trackID: track.id },
+              });
+            },
+          }),
+          MenuItem.new({
+            text: t`Remove from library`,
+            action: async () => {
+              const confirm = await ask(
+                t`Are you sure you want to remove ${selectedTracks.size} track(s) from your library?`,
+                {
+                  title: t`Remove tracks`,
+                  kind: 'warning',
+                  cancelLabel: t`Cancel`,
+                  okLabel: t`Remove`,
+                },
+              );
+
+              if (confirm) {
+                await LibraryAPI.removeTracks(Array.from(selectedTracks));
+                await invalidate();
+              }
+            },
+          }),
+        );
+      }
 
       const menu = await Menu.new({
         items: await Promise.all(menuItemsBuilder),
