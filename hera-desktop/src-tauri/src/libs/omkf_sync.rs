@@ -38,12 +38,6 @@ pub fn mark_folder_dirty(dir: &Path) {
     }
 }
 
-pub fn mark_crate_dirty_for_track_path(track_path: &str) {
-    if let Some(p) = Path::new(track_path).parent() {
-        mark_folder_dirty(p);
-    }
-}
-
 pub fn hide_hera_dir_if_windows(hera_dir: &Path) {
     #[cfg(windows)]
     {
@@ -198,7 +192,8 @@ pub async fn write_folder_omkf_from_db(
 ) -> Result<String, String> {
     let cid = compute_folder_crate_id(folder);
     let (dir_ns, disk, tree_seal) = scan_dir_entry_seals(folder);
-    let loaded = sql_load_folder_omkf_entries(conn, &cid, folder, &disk).await?;
+    let mut loaded = sql_load_folder_omkf_entries(conn, &cid, folder, &disk).await?;
+    super::omkf_fs_hydrate::retain_non_sql_capsule_entries(folder, &disk, &mut loaded);
     let (hdr, entries, md, full_n) = pack_omkf_header_and_entries(&cid, tree_seal, dir_ns, loaded);
     let hera_dir = folder.join(".hera");
     omkf::write_omkf_capsule_atomic(&hera_dir, &hdr, &entries, &md)?;

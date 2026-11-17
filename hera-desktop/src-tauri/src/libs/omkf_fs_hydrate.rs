@@ -1,6 +1,6 @@
 //! Live directory + `.hera/tracks.omkf` track record hydration.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -11,11 +11,54 @@ use hera_node_rs::scanner::omkf_capsule as omkf;
 use uuid::Uuid;
 
 use super::database::SUPPORTED_TRACKS_EXTENSIONS;
-use super::fast_library_scan::parse_crate_md_sections;
+use super::fast_library_scan::{LoadedFolderOmkfRow, parse_crate_md_sections};
 use super::omkf_fs_capsule_upsert::{norm_cmp_key, parse_filename_dj_hints};
+use super::omkf_sync::DiskEntrySeal;
 use super::track::get_track_id_for_path;
 use super::utils::is_file_valid;
 use crate::plugins::hera_dj::workability::is_junk_audio_path;
+
+pub(crate) fn retain_non_sql_capsule_entries(
+    folder: &Path,
+    disk: &[DiskEntrySeal],
+    loaded: &mut Vec<LoadedFolderOmkfRow>,
+) {
+    let Ok(existing) = omkf::read_omkf_capsule(&folder.join(".hera/tracks.omkf")) else {
+        return;
+    };
+    let sql_names: HashSet<String> = loaded
+        .iter()
+        .map(|r| r.entry.filename.to_ascii_lowercase())
+        .collect();
+    let mut prev: HashMap<String, omkf::OmkfTrackEntry> = existing
+        .tracks
+        .into_iter()
+        .map(|e| (e.filename.to_ascii_lowercase(), e))
+        .collect();
+    for d in disk {
+        let key = d.filename.to_ascii_lowercase();
+        if !sql_names.contains(&key)
+            && let Some(mut entry) = prev.remove(&key)
+        {
+            entry.filename = d.filename.clone();
+            (entry.slot.file_size_bytes, entry.slot.mtime_ns) = (d.size, d.mtime_ns);
+            let camelot = omkf::code_to_camelot(entry.slot.camelot_code);
+            let fam = BoothGenreFamily::from_code(entry.slot.genre_family_code);
+            let genre_family = (fam != BoothGenreFamily::Unknown).then(|| fam.as_str().to_string());
+            let lufs = f64::from(entry.slot.lufs_x100) / 100.0;
+            let is_video = (entry.slot.flags_bits & omkf::OMKF_FLAG_IS_VIDEO) != 0;
+            let is_full = entry.slot.scan_level >= 2;
+            loaded.push(LoadedFolderOmkfRow {
+                entry,
+                camelot,
+                genre_family,
+                lufs,
+                is_video,
+                is_full,
+            });
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub(crate) struct CatalogTrackRecord {

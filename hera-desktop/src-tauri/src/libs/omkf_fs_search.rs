@@ -1,6 +1,6 @@
 //! In-memory OMKF cross-folder deduplicated search & harmonic candidate ranking.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use hera_ipc::dj_types::{FolderCrateDetail, FolderCrateSummary, OmkfFsTrackDto};
@@ -53,16 +53,14 @@ fn clean_title_slug(raw: &str) -> String {
     collapse_repeated_chars(&normalize_ascii_lower(&s))
 }
 
-pub(crate) fn canonical_dedup_key(rec: &CatalogTrackRecord) -> String {
+fn base_meta_slug(rec: &CatalogTrackRecord) -> String {
     let art = collapse_repeated_chars(&normalize_ascii_lower(&rec.dto.artist));
     let tit = clean_title_slug(&rec.dto.title);
     if !art.is_empty() || !tit.is_empty() {
-        return format!("meta:{art}::{tit}");
+        format!("meta:{art}::{tit}")
+    } else {
+        format!("file:{}", clean_title_slug(&rec.dto.file_name))
     }
-    if rec.partial_hash_64kb != [0; 16] {
-        return format!("hash:{:02x?}", rec.partial_hash_64kb);
-    }
-    format!("file:{}", clean_title_slug(&rec.dto.file_name))
 }
 
 pub(crate) fn folder_priority_score(path_str: &str, scan_level: i8) -> i32 {
@@ -87,52 +85,93 @@ pub(crate) fn folder_priority_score(path_str: &str, scan_level: i8) -> i32 {
     score
 }
 
-pub(crate) fn assign_global_copy_counts(tracks_by_id: &mut HashMap<String, CatalogTrackRecord>) {
-    let mut hash_alias: HashMap<[u8; 16], String> = HashMap::new();
+fn build_effective_dedup_keys(
+    tracks_by_id: &HashMap<String, CatalogTrackRecord>,
+) -> HashMap<String, String> {
+    let mut dur_buckets_by_base: HashMap<String, HashSet<u32>> = HashMap::new();
     for rec in tracks_by_id.values() {
-        if rec.partial_hash_64kb != [0; 16] {
-            hash_alias
-                .entry(rec.partial_hash_64kb)
-                .or_insert_with(|| canonical_dedup_key(rec));
+        if rec.dto.duration_sec > 0 {
+            dur_buckets_by_base
+                .entry(base_meta_slug(rec))
+                .or_default()
+                .insert((rec.dto.duration_sec + 5) / 10);
         }
     }
-    let mut counts: HashMap<String, usize> = HashMap::new();
+    let meta_dur_key = |rec: &CatalogTrackRecord| -> String {
+        let base = base_meta_slug(rec);
+        let bucket = if rec.dto.duration_sec > 0 {
+            (rec.dto.duration_sec + 5) / 10
+        } else {
+            match dur_buckets_by_base.get(&base) {
+                Some(set) if set.len() == 1 => *set.iter().next().unwrap_or(&0),
+                _ => 0,
+            }
+        };
+        format!("{base}::{bucket}")
+    };
+    let mut hash_rep: HashMap<[u8; 16], (String, i32)> = HashMap::new();
     for rec in tracks_by_id.values() {
-        let key = if rec.partial_hash_64kb != [0; 16] {
-            hash_alias
-                .get(&rec.partial_hash_64kb)
-                .cloned()
-                .unwrap_or_else(|| canonical_dedup_key(rec))
-        } else {
-            canonical_dedup_key(rec)
-        };
-        *counts.entry(key).or_default() += 1;
+        if rec.partial_hash_64kb != [0; 16] {
+            let k = meta_dur_key(rec);
+            let prio = folder_priority_score(&rec.dto.path, rec.dto.scan_level);
+            match hash_rep.get_mut(&rec.partial_hash_64kb) {
+                Some((best_k, best_p)) if prio > *best_p || (prio == *best_p && k < *best_k) => {
+                    (*best_k, *best_p) = (k, prio);
+                }
+                Some(_) => {}
+                None => {
+                    hash_rep.insert(rec.partial_hash_64kb, (k, prio));
+                }
+            }
+        }
     }
-    for rec in tracks_by_id.values_mut() {
-        let key = if rec.partial_hash_64kb != [0; 16] {
-            hash_alias
-                .get(&rec.partial_hash_64kb)
-                .cloned()
-                .unwrap_or_else(|| canonical_dedup_key(rec))
-        } else {
-            canonical_dedup_key(rec)
-        };
-        rec.dto.copy_count = counts.get(&key).copied().unwrap_or(1).max(1);
+    tracks_by_id
+        .iter()
+        .map(|(id, rec)| {
+            let key = if rec.partial_hash_64kb != [0; 16] {
+                hash_rep
+                    .get(&rec.partial_hash_64kb)
+                    .map(|(k, _)| k.clone())
+                    .unwrap_or_else(|| meta_dur_key(rec))
+            } else {
+                meta_dur_key(rec)
+            };
+            (id.clone(), key)
+        })
+        .collect()
+}
+
+pub(crate) fn assign_global_copy_counts(tracks_by_id: &mut HashMap<String, CatalogTrackRecord>) {
+    let eff = build_effective_dedup_keys(tracks_by_id);
+    let mut counts: HashMap<&str, usize> = HashMap::new();
+    for key in eff.values() {
+        *counts.entry(key.as_str()).or_default() += 1;
+    }
+    for (id, rec) in tracks_by_id.iter_mut() {
+        let cnt = eff
+            .get(id)
+            .and_then(|k| counts.get(k.as_str()).copied())
+            .unwrap_or(1);
+        rec.dto.copy_count = cnt.max(1);
     }
 }
 
 fn deduplicate_records<'a>(
+    tracks_by_id: &HashMap<String, CatalogTrackRecord>,
     iter: impl Iterator<Item = &'a CatalogTrackRecord>,
 ) -> Vec<&'a CatalogTrackRecord> {
+    let eff = build_effective_dedup_keys(tracks_by_id);
     let mut groups: HashMap<String, (&'a CatalogTrackRecord, i32)> = HashMap::new();
     for rec in iter {
-        let key = canonical_dedup_key(rec);
+        let key = eff
+            .get(&rec.dto.id)
+            .cloned()
+            .unwrap_or_else(|| base_meta_slug(rec));
         let prio = folder_priority_score(&rec.dto.path, rec.dto.scan_level);
         match groups.get_mut(&key) {
             Some((best, best_prio)) => {
                 if prio > *best_prio || (prio == *best_prio && rec.dto.path < best.dto.path) {
-                    *best = rec;
-                    *best_prio = prio;
+                    (*best, *best_prio) = (rec, prio);
                 }
             }
             None => {
@@ -211,7 +250,7 @@ pub(crate) fn search_catalog_deduplicated(
         ));
         tokens.iter().all(|tok| hay.contains(tok))
     });
-    let mut winners = deduplicate_records(matched);
+    let mut winners = deduplicate_records(&inner.tracks_by_id, matched);
     winners.sort_by(|a, b| {
         let pa = folder_priority_score(&a.dto.path, a.dto.scan_level);
         let pb = folder_priority_score(&b.dto.path, b.dto.scan_level);
@@ -247,10 +286,12 @@ pub(crate) fn query_harmonic_candidates(
     let target_bpm = bpm_s.trim().parse::<f32>().unwrap_or(0.0);
     let target_cam = cam_s.trim();
     let deduped = deduplicate_records(
-        inner
-            .tracks_by_id
-            .values()
-            .filter(|r| r.dto.scan_level >= 0 && !r.dto.has_audio_skips),
+        &inner.tracks_by_id,
+        inner.tracks_by_id.values().filter(|r| {
+            r.dto.scan_level >= 0
+                && !r.dto.has_audio_skips
+                && folder_priority_score(&r.dto.path, r.dto.scan_level) >= 0
+        }),
     );
     let mut scored: Vec<(f32, &CatalogTrackRecord)> = deduped
         .into_iter()
@@ -269,15 +310,8 @@ pub(crate) fn query_harmonic_candidates(
             } else {
                 0.85
             };
-            if cam_score < 0.75 || bpm_score < 0.60 {
-                return None;
-            }
-            let bonus = if folder_priority_score(&r.dto.path, r.dto.scan_level) >= 0 {
-                0.08
-            } else {
-                -0.15
-            };
-            Some((0.55 * cam_score + 0.45 * bpm_score + bonus, r))
+            (cam_score >= 0.75 && bpm_score >= 0.60)
+                .then_some((0.55 * cam_score + 0.45 * bpm_score, r))
         })
         .collect();
     scored.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(std::cmp::Ordering::Equal));

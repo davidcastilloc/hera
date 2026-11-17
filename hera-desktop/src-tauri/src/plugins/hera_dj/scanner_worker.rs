@@ -140,23 +140,23 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
             if super::workability::is_scan_cancelled() && sched.pending_count() > 0 {
                 let _ = sched.cancel_and_drain_background();
             }
+            if deck_playing {
+                continue;
+            }
 
-            if !deck_playing {
-                let fs_items = drain_fs_discovered_tracks();
-                if !fs_items.is_empty() {
-                    let mut ids = Vec::with_capacity(fs_items.len());
-                    let mut g = cache.lock().unwrap();
-                    for (id, p) in fs_items {
-                        let lvl = g.get(&id).map_or(0, |e| e.1);
-                        if lvl == 0 {
-                            g.entry(id.clone()).or_insert((p, 0, 0));
-                            ids.push(id);
-                        }
+            let fs_items = drain_fs_discovered_tracks();
+            if !fs_items.is_empty() {
+                let mut ids = Vec::with_capacity(fs_items.len());
+                let mut g = cache.lock().unwrap();
+                for (id, p) in fs_items {
+                    if g.get(&id).map_or(0, |e| e.1) == 0 {
+                        g.entry(id.clone()).or_insert((p, 0, 0));
+                        ids.push(id);
                     }
-                    drop(g);
-                    if !ids.is_empty() {
-                        sched.enqueue_batch(ids, ScanPriority::P2FastBackground);
-                    }
+                }
+                drop(g);
+                if !ids.is_empty() {
+                    sched.enqueue_batch(ids, ScanPriority::P2FastBackground);
                 }
             }
 
@@ -218,24 +218,22 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                         if let Some(d) = u.duration_sec {
                             entry.2 = d;
                         }
-                        crate::libs::omkf_sync::mark_crate_dirty_for_track_path(&entry.0);
                     }
                 }
                 drop(g);
-                if !fs_capsule_batch.is_empty() && !deck_playing {
+                if !fs_capsule_batch.is_empty() {
                     pending_omkf_crates.extend(upsert_scanner_outcomes_to_omkf(
                         global_omkf_catalog(),
                         &fs_capsule_batch,
                     ));
                 }
-                if !promote_full_ids.is_empty() && !deck_playing {
+                if !promote_full_ids.is_empty() {
                     sched.enqueue_batch(promote_full_ids, ScanPriority::P3FullElastic);
                 }
                 let _ = app_handle.emit("hera:scanner-rows-updated", &patches_to_emit);
             }
 
             if !pending_omkf_crates.is_empty()
-                && !deck_playing
                 && last_omkf_emit.elapsed() >= Duration::from_millis(2000)
             {
                 let crate_ids: Vec<String> = pending_omkf_crates.drain().collect();
@@ -246,7 +244,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                 last_omkf_emit = Instant::now();
             }
 
-            while !deck_playing && let Ok((miss_id, miss_prio)) = missing_rx.try_recv() {
+            while let Ok((miss_id, miss_prio)) = missing_rx.try_recv() {
                 if let Ok(Some((path, lvl))) = fetch_track_path_and_level(&mut conn, &miss_id).await
                 {
                     if lvl < 0 {
@@ -264,8 +262,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                 }
             }
 
-            if !deck_playing
-                && sched.pending_count() < 64
+            if sched.pending_count() < 64
                 && !super::workability::is_scan_cancelled()
                 && let Ok(pending_fast) = load_pending_scanner_jobs(&mut conn, 256).await
             {
@@ -297,9 +294,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                 }
             }
 
-            if !deck_playing
-                && let Ok((total, fast_done, full_done)) = count_scanner_levels(&mut conn).await
-            {
+            if let Ok((total, fast_done, full_done)) = count_scanner_levels(&mut conn).await {
                 let is_busy = (fast_done < total || full_done < total || sched.pending_count() > 0)
                     && !super::workability::is_scan_cancelled();
                 let updates_flushed = !updates_to_apply.is_empty() || !short_sfx_ids.is_empty();

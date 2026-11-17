@@ -257,7 +257,7 @@ pub fn organize_folder_fs(
                 continue;
             };
             std::fs::create_dir_all(dst_dir).map_err(|e| e.to_string())?;
-            if s.exists() {
+            if s.exists() && !d.exists() {
                 let fkey = fname.to_ascii_lowercase();
                 let carried = dir_maps
                     .entry(src_dir.to_path_buf())
