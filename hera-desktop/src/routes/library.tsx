@@ -3,6 +3,7 @@ import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 
+import CrateRulesBanner from '../components/CrateRulesBanner';
 import FolderCrateTree from '../components/FolderCrateTree';
 import HeraDjToolbar from '../components/HeraDjToolbar';
 import TrackList from '../components/TrackList';
@@ -11,7 +12,11 @@ import View from '../elements/View';
 import useFilteredTracks from '../hooks/useFilteredTracks';
 import useGlobalTrackListStatus from '../hooks/useGlobalTrackListStatus';
 import DatabaseBridge from '../lib/bridge-database';
-import { listFolderCrates } from '../lib/omkf-bridge';
+import {
+  deriveFolderCratesFromTracks,
+  listFolderCrates,
+  readFolderCrate,
+} from '../lib/omkf-bridge';
 import { allTracksQuery, configQuery } from '../lib/queries';
 import queryClient from '../lib/query-client';
 import { type TrackWithScanMeta, useScannerStore } from '../lib/scanner-v3';
@@ -38,15 +43,31 @@ function ViewLibrary() {
     'all' | 'under10m' | 'over10m'
   >('under10m');
   const [selectedCrateId, setSelectedCrateId] = useState<string | null>(null);
-  const [crateTreeCollapsed, setCrateTreeCollapsed] = useState(true);
+  const [crateTreeCollapsed, setCrateTreeCollapsed] = useState(false);
   const sonicTwins = useScannerStore((s) => s.sonicTwins);
 
   const config = useSuspenseQuery(configQuery).data;
   const { data: tracks, isLoading } = useQuery(allTracksQuery);
-  const { data: folderCrates = [] } = useQuery({
-    queryKey: ['omkf-folder-crates'],
-    queryFn: listFolderCrates,
-  });
+  const { data: persistedCrates = [], refetch: refetchFolderCrates } = useQuery(
+    {
+      queryKey: ['omkf-folder-crates'],
+      queryFn: listFolderCrates,
+    },
+  );
+  const folderCrates = useMemo(
+    () => deriveFolderCratesFromTracks(tracks ?? [], persistedCrates),
+    [tracks, persistedCrates],
+  );
+  const { data: selectedCrateDetail, refetch: refetchSelectedCrate } = useQuery(
+    {
+      queryKey: ['omkf-folder-crate-detail', selectedCrateId],
+      queryFn: () =>
+        selectedCrateId
+          ? readFolderCrate(selectedCrateId)
+          : Promise.resolve(null),
+      enabled: Boolean(selectedCrateId),
+    },
+  );
 
   useEffect(() => {
     if (tracks) {
@@ -129,6 +150,22 @@ function ViewLibrary() {
           />
         )}
         <div {...stylex.props(styles.listViewport)}>
+          {selectedCrate && (
+            <CrateRulesBanner
+              crate={selectedCrateDetail?.detail.summary ?? selectedCrate}
+              rulesMarkdown={selectedCrateDetail?.detail.rules_markdown ?? ''}
+              ledgerEntries={selectedCrateDetail?.detail.ledger_entries ?? []}
+              onOrganized={async () => {
+                await Promise.all([
+                  queryClient.invalidateQueries({
+                    queryKey: allTracksQuery.queryKey,
+                  }),
+                  refetchFolderCrates(),
+                  refetchSelectedCrate(),
+                ]);
+              }}
+            />
+          )}
           <TrackListStates isLoading={isLoading} tracks={filteredTracks}>
             <TrackList
               layout="default"

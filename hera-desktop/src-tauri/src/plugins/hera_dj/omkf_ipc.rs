@@ -1,5 +1,6 @@
 //! OMKF v1 folder crate IPC facade & `.hera/crate.md` custom booth rules.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -7,12 +8,13 @@ use hera_ipc::dj_types::{
     FolderCrateDetail, FolderCrateSummary, OrganizeFolderRequest, OrganizeFolderResponse,
 };
 use hera_node_rs::scanner::omkf_capsule::read_omkf_capsule;
-use sqlx::{Row, sqlite::SqliteRow};
+use sqlx::{Row, SqliteConnection, sqlite::SqliteRow};
 use tauri::State;
 
 use crate::libs::fast_library_scan::{
     parse_crate_md_sections, run_omkf_organize_folder, write_crate_md_sections,
 };
+use crate::libs::omkf_sync::compute_folder_crate_id;
 use crate::plugins::db::DBState;
 
 fn now_ms() -> i64 {
@@ -51,16 +53,131 @@ fn summary_from_row(r: &SqliteRow) -> FolderCrateSummary {
     }
 }
 
+async fn backfill_folder_crates_from_tracks(conn: &mut SqliteConnection) -> Result<(), String> {
+    let track_rows = sqlx::query(
+        "SELECT id, path, bpm, camelot, scan_level, is_video FROM tracks WHERE crate_id IS NULL OR crate_id = ''",
+    )
+    .fetch_all(&mut *conn)
+    .await
+    .map_err(|e| e.to_string())?;
+    if track_rows.is_empty() {
+        return Ok(());
+    }
+    struct FolderAgg {
+        cid: String,
+        folder: String,
+        disp: String,
+        track_n: i64,
+        video_n: i64,
+        full_n: i64,
+        bmin: Option<f64>,
+        bmax: Option<f64>,
+        cam: Option<String>,
+    }
+    let mut groups: HashMap<String, FolderAgg> = HashMap::new();
+    for r in &track_rows {
+        let id: String = r.try_get("id").unwrap_or_default();
+        let path_str: String = r.try_get("path").unwrap_or_default();
+        let Some(parent) = Path::new(&path_str)
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+        else {
+            continue;
+        };
+        let folder_key = parent.to_string_lossy().to_string();
+        let cid = compute_folder_crate_id(parent);
+        let _ = sqlx::query("UPDATE tracks SET crate_id = ?1 WHERE id = ?2")
+            .bind(&cid)
+            .bind(&id)
+            .execute(&mut *conn)
+            .await;
+        let bpm: Option<f64> = r
+            .try_get::<Option<f64>, _>("bpm")
+            .ok()
+            .flatten()
+            .filter(|&b| b > 0.0);
+        let cam: Option<String> = r
+            .try_get::<Option<String>, _>("camelot")
+            .ok()
+            .flatten()
+            .filter(|s| !s.is_empty());
+        let lvl: i64 = r.try_get("scan_level").unwrap_or(0);
+        let is_vid: bool = r.try_get::<i64, _>("is_video").unwrap_or(0) != 0;
+        let disp = parent
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("Carpeta")
+            .to_string();
+        let g = groups.entry(cid.clone()).or_insert_with(|| FolderAgg {
+            cid,
+            folder: folder_key,
+            disp,
+            track_n: 0,
+            video_n: 0,
+            full_n: 0,
+            bmin: None,
+            bmax: None,
+            cam: None,
+        });
+        g.track_n += 1;
+        if is_vid {
+            g.video_n += 1;
+        }
+        if lvl >= 2 {
+            g.full_n += 1;
+        }
+        if let Some(b) = bpm {
+            g.bmin = Some(g.bmin.map_or(b, |m| m.min(b)));
+            g.bmax = Some(g.bmax.map_or(b, |m| m.max(b)));
+        }
+        if g.cam.is_none() && cam.is_some() {
+            g.cam = cam;
+        }
+    }
+    let ts = now_ms();
+    for g in groups.into_values() {
+        let _ = sqlx::query(
+            "INSERT INTO folder_crates (crate_id,folder_path,display_name,tree_seal_64,dir_mtime_ns,track_count,video_count,full_count,bpm_min,bpm_max,dominant_camelot,updated_at_unix_ms)
+             VALUES (?1,?2,?3,'0',0,?4,?5,?6,?7,?8,?9,?10)
+             ON CONFLICT(crate_id) DO UPDATE SET track_count=MAX(folder_crates.track_count,excluded.track_count), full_count=MAX(folder_crates.full_count,excluded.full_count)",
+        )
+        .bind(&g.cid)
+        .bind(&g.folder)
+        .bind(&g.disp)
+        .bind(g.track_n)
+        .bind(g.video_n)
+        .bind(g.full_n)
+        .bind(g.bmin)
+        .bind(g.bmax)
+        .bind(&g.cam)
+        .bind(ts)
+        .execute(&mut *conn)
+        .await;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn omkf_list_folder_crates(
     db_state: State<'_, DBState>,
 ) -> Result<Vec<FolderCrateSummary>, String> {
-    let mut conn = db_state
-        .acquire_read_conn()
-        .await
-        .map_err(|e| e.to_string())?;
+    {
+        let mut conn = db_state
+            .acquire_read_conn()
+            .await
+            .map_err(|e| e.to_string())?;
+        let rows = sqlx::query("SELECT * FROM folder_crates ORDER BY display_name ASC")
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(|e| e.to_string())?;
+        if !rows.is_empty() {
+            return Ok(rows.iter().map(summary_from_row).collect());
+        }
+    }
+    let mut db = db_state.get_lock().await;
+    let _ = backfill_folder_crates_from_tracks(&mut db.connection).await;
     let rows = sqlx::query("SELECT * FROM folder_crates ORDER BY display_name ASC")
-        .fetch_all(&mut *conn)
+        .fetch_all(&mut db.connection)
         .await
         .map_err(|e| e.to_string())?;
     Ok(rows.iter().map(summary_from_row).collect())

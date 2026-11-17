@@ -35,6 +35,7 @@ import {
 } from '../../components/WaveformPeaksCanvas';
 import type { Track } from '../../generated/typings';
 import {
+  deriveFolderCratesFromTracks,
   type FolderCrateSummary,
   formatFolderCrateSubtitle,
   fromFolderPlaylistId,
@@ -301,5 +302,58 @@ describe('OMKF Milestone O5 UI components & helpers', () => {
     expect(treeHtml).toContain('Carpetas (.hera)');
     expect(treeHtml).toContain('Salsa Baul');
     expect(treeHtml).toContain('86–98 BPM · 8A · 100% FULL');
+  });
+
+  it('deriveFolderCratesFromTracks synthesizes folder crates from track paths when DB table is empty', () => {
+    const derived = deriveFolderCratesFromTracks(
+      [
+        {
+          id: 't1',
+          path: 'D:/Music/01_Afro_House/Move.mp3',
+          title: 'Move',
+          album: 'Single',
+          album_artist: 'Adam Port',
+          artists: ['Adam Port'],
+          genres: ['Afro House'],
+          year: 2025,
+          duration: 210,
+          track_no: 1,
+          track_of: 1,
+          disk_no: 1,
+          disk_of: 1,
+          is_compilation: false,
+          bpm: 120,
+          camelot: '4B',
+          scan_level: 2,
+        },
+        {
+          id: 't2',
+          path: 'D:/Music/01_Afro_House/Adore.mp3',
+          title: 'Adore',
+          album: 'Single',
+          album_artist: 'Hugel',
+          artists: ['Hugel'],
+          genres: ['Afro House'],
+          year: 2025,
+          duration: 200,
+          track_no: 1,
+          track_of: 1,
+          disk_no: 1,
+          disk_of: 1,
+          is_compilation: false,
+          bpm: 124,
+          camelot: '4B',
+          scan_level: 1,
+        },
+      ],
+      [],
+    );
+    expect(derived).toHaveLength(1);
+    expect(derived[0].display_name).toBe('01_Afro_House');
+    expect(derived[0].track_count).toBe(2);
+    expect(derived[0].full_count).toBe(1);
+    expect(derived[0].bpm_min).toBe(120);
+    expect(derived[0].bpm_max).toBe(124);
+    expect(derived[0].dominant_camelot).toBe('4B');
   });
 });

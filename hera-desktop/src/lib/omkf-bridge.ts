@@ -92,6 +92,92 @@ export function formatFolderCrateSubtitle(crate: FolderCrateSummary): string {
   return `${bpmSpan} · ${key} · ${pct}% FULL`;
 }
 
+export function deriveFolderCratesFromTracks(
+  tracks: Track[],
+  persisted: FolderCrateSummary[],
+): FolderCrateSummary[] {
+  const byFolder = new Map<string, FolderCrateSummary>();
+  for (const c of persisted) {
+    const key = c.folder_path
+      .replace(/\\/g, '/')
+      .replace(/\/+$/, '')
+      .toLowerCase();
+    byFolder.set(key || c.crate_id, c);
+  }
+  const buckets = new Map<
+    string,
+    { rawFolder: string; displayName: string; crateId: string; tracks: Track[] }
+  >();
+  for (const t of tracks) {
+    const norm = t.path.replace(/\\/g, '/');
+    const lastSlash = norm.lastIndexOf('/');
+    if (lastSlash <= 0) continue;
+    const rawFolder = norm.slice(0, lastSlash);
+    const key = rawFolder.toLowerCase();
+    if (byFolder.has(key)) continue;
+    const meta = t as TrackWithScanMeta;
+    let b = buckets.get(key);
+    if (!b) {
+      const segs = rawFolder.split('/').filter(Boolean);
+      b = {
+        rawFolder,
+        displayName: segs[segs.length - 1] ?? rawFolder,
+        crateId: meta.crate_id || `dir:${key}`,
+        tracks: [],
+      };
+      buckets.set(key, b);
+    }
+    b.tracks.push(t);
+  }
+  for (const [key, b] of buckets.entries()) {
+    let bpmMin = Number.POSITIVE_INFINITY;
+    let bpmMax = 0;
+    let fullCount = 0;
+    let videoCount = 0;
+    let domCam: string | null = null;
+    let bestCamCount = 0;
+    const camCounts = new Map<string, number>();
+    for (const t of b.tracks) {
+      const meta = t as TrackWithScanMeta;
+      if (t.is_video) videoCount++;
+      if ((meta.scan_level ?? 0) >= 2 || (t.hot_cues && t.hot_cues.length >= 4))
+        fullCount++;
+      if (t.bpm && t.bpm > 0) {
+        if (t.bpm < bpmMin) bpmMin = t.bpm;
+        if (t.bpm > bpmMax) bpmMax = t.bpm;
+      }
+      const k = t.camelot?.trim();
+      if (k) {
+        const cnt = (camCounts.get(k) ?? 0) + 1;
+        camCounts.set(k, cnt);
+        if (cnt > bestCamCount) {
+          bestCamCount = cnt;
+          domCam = k;
+        }
+      }
+    }
+    byFolder.set(key, {
+      crate_id: b.crateId,
+      folder_path: b.rawFolder,
+      display_name: b.displayName,
+      tree_seal_64: '0',
+      track_count: b.tracks.length,
+      video_count: videoCount,
+      full_count: fullCount,
+      bpm_min: Number.isFinite(bpmMin) ? bpmMin : null,
+      bpm_max: bpmMax > 0 ? bpmMax : null,
+      dominant_camelot: domCam,
+      dominant_genre: null,
+      era_span: null,
+      lufs_avg: null,
+      has_custom_rules: false,
+    });
+  }
+  return Array.from(byFolder.values()).sort((a, b) =>
+    a.display_name.localeCompare(b.display_name),
+  );
+}
+
 export async function listFolderCrates(): Promise<FolderCrateSummary[]> {
   try {
     const res = await invoke<FolderCrateSummary[]>(
