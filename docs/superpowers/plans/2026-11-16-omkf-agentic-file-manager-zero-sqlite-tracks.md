@@ -243,7 +243,7 @@ Mark Task 3 checkboxes `[x]` in `docs/superpowers/plans/2026-11-16-omkf-agentic-
 - Consumes: Tasks 1–3 completed and verified.
 - Produces: Signed `ADR-039` entry in `docs/superpowers/DECISIONS.md`, optimized `target/release/hera-desktop.exe` built on `beast` embedding `hera-desktop/dist`, pushed `main` branch, and live standalone `--release` `hera-desktop.exe` running on `qa` via `hc`.
 
-- [ ] **Step 1: Run full workspace polyglot verification + Impeccable anti-pattern gate**
+- [x] **Step 1: Run full workspace polyglot verification + Impeccable anti-pattern gate**
 
 Run:
 - `cargo fmt --all -- --check`
@@ -255,11 +255,11 @@ Run:
 - `cd hera-desktop && bun run gen:types && bun run knip && bun run check && bun run test && bun run build`
 Expected: Exit code `0` across every command.
 
-- [ ] **Step 2: Record `ADR-039` in `docs/superpowers/DECISIONS.md`, mark plan complete, and push signed commits**
+- [x] **Step 2: Record `ADR-040` in `docs/superpowers/DECISIONS.md`, mark plan complete, and push signed commits**
 
-Append concise `ADR-039` (`OMKF Agentic File Manager, Zero-SQLite-Tracks UI & 0-Worker Deck Isolation`) to `docs/superpowers/DECISIONS.md` (zero OS-specific absolute paths), mark Task 4 `[x]`, verify `git status` leaves untracked skill folders untouched, commit signed (`git commit -S`), and push to `origin/main`.
+Append concise `ADR-040` (`OMKF Agentic File Manager, Zero-SQLite-Tracks UI & 0-Worker Deck Isolation`) to `docs/superpowers/DECISIONS.md` (zero OS-specific absolute paths), mark Task 4 `[x]`, verify `git status` leaves untracked skill folders untouched, commit signed (`git commit -S`), and push to `origin/main`.
 
-- [ ] **Step 3: Compile `hera-desktop.exe --release` on `beast` and deploy/launch on `qa` via `hc`**
+- [x] **Step 3: Compile `hera-desktop.exe --release` on `beast` and deploy/launch on `qa` via `hc`**
 
 1. Build `cargo build --release -p hera-desktop` on `beast` (`target/release/hera-desktop.exe` embeds `hera-desktop/dist` via `tauri::generate_context!()`).
 2. Remove stale `qa/t1q` session (`hc rm qa/t1q`), stop any lingering `hera-desktop` process on `qa`, `git pull --ff-only` on `qa`, transfer `target/release/hera-desktop.exe` to `qa`, launch the native `--release` binary in an interactive `qa` session via `hc`, and verify startup logs & live process health.

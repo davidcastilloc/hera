@@ -245,8 +245,15 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
             }
 
             while let Ok((miss_id, miss_prio)) = missing_rx.try_recv() {
-                if let Ok(Some((path, lvl))) = fetch_track_path_and_level(&mut conn, &miss_id).await
-                {
+                let resolved = match global_omkf_catalog().lookup_path_and_level(&miss_id) {
+                    Some(v) => Some(v),
+                    None => fetch_track_path_and_level(&mut conn, &miss_id)
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|(p, l)| (p, l, 0)),
+                };
+                if let Some((path, lvl, dur)) = resolved {
                     if lvl < 0 {
                         sched.mark_completed(&miss_id, -1);
                         continue;
@@ -255,7 +262,7 @@ pub fn spawn_scanner_daemon<R: Runtime>(app_handle: AppHandle<R>) {
                         .lock()
                         .unwrap()
                         .entry(miss_id.clone())
-                        .or_insert((path, lvl, 0));
+                        .or_insert((path, lvl, dur));
                     if lvl < i64::from(miss_prio.target_scan_level()) {
                         sched.enqueue_or_promote(miss_id, miss_prio);
                     }

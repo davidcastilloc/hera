@@ -359,4 +359,28 @@ describe('OMKF File Manager hierarchical tree, breadcrumbs & initial folder sele
     );
     expect(rowHtml).toContain('×3');
   });
+
+  it('applyRowPatchesToTracks preserves existing hot_cues and bpm hints when fast-scan patches emit null', async () => {
+    const { applyRowPatchesToTracks } =
+      await import('../../components/LibraryEvents');
+    const initial = mapOmkfDtoToTrack(makeSampleDto());
+    const patched = applyRowPatchesToTracks(
+      [initial],
+      [
+        {
+          track_id: initial.id,
+          scan_level: 1,
+          bpm: null,
+          camelot: null,
+          hot_cues: null,
+          replay_gain_db: -4.2,
+        },
+      ],
+    );
+    expect(patched[0].bpm).toBe(120);
+    expect(patched[0].camelot).toBe('4B');
+    expect(patched[0].hot_cues).toHaveLength(4);
+    expect(patched[0].scan_level).toBe(1);
+    expect(patched[0].replay_gain_db).toBe(-4.2);
+  });
 });

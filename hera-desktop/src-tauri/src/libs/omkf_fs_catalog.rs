@@ -298,6 +298,16 @@ impl OmkfFsCatalog {
             .collect()
     }
 
+    pub fn lookup_path_and_level(&self, track_id: &str) -> Option<(String, i64, u32)> {
+        let g = self.inner.read().ok()?;
+        let rec = g.tracks_by_id.get(track_id)?;
+        Some((
+            rec.dto.path.clone(),
+            i64::from(rec.dto.scan_level),
+            rec.dto.duration_sec,
+        ))
+    }
+
     pub(crate) fn folder_path_for_crate_id(
         &self,
         crate_id: &str,

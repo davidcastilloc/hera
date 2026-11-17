@@ -122,37 +122,33 @@ impl DB {
             return Ok(vec![]);
         }
 
-        // Construct `IN` clause with placeholders
-        let in_placeholders = track_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let omkf_hits = super::omkf_fs_catalog::global_omkf_catalog().get_tracks_by_ids(track_ids);
+        let mut by_id: IndexMap<String, Track> =
+            omkf_hits.into_iter().map(|t| (t.id.clone(), t)).collect();
 
-        // Construct `ORDER BY CASE` using bindable expressions like: CASE id WHEN ? THEN 0 ...
-        let mut order_by_case = String::from("CASE id ");
-        for index in 0..track_ids.len() {
-            order_by_case.push_str("WHEN ? THEN ");
-            order_by_case.push_str(&index.to_string());
-            order_by_case.push(' ');
-        }
-        order_by_case.push_str("END");
+        let missing: Vec<String> = track_ids
+            .iter()
+            .filter(|id| !by_id.contains_key(id.as_str()))
+            .cloned()
+            .collect();
 
-        // Improve me once https://github.com/launchbadge/sqlx/issues/875 is fixed
-        let sql = format!(
-            "SELECT * FROM tracks WHERE id IN ({}) ORDER BY {}",
-            in_placeholders, order_by_case
-        );
-
-        // Build query and bind all UUIDs twice (once for IN, once for ORDER BY CASE)
-        let mut query = sqlx::query_as::<_, Track>(&sql);
-
-        for id in track_ids {
-            query = query.bind(id); // for IN (...)
+        if !missing.is_empty() {
+            let in_placeholders = missing.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+            let sql = format!("SELECT * FROM tracks WHERE id IN ({in_placeholders})");
+            let mut query = sqlx::query_as::<_, Track>(&sql);
+            for id in &missing {
+                query = query.bind(id);
+            }
+            let db_tracks = query.fetch_all(conn).await?;
+            for t in db_tracks.into_iter().map(normalize_track) {
+                by_id.insert(t.id.clone(), t);
+            }
         }
 
-        for id in track_ids {
-            query = query.bind(id); // for ORDER BY CASE
-        }
-
-        let tracks = query.fetch_all(conn).await?;
-        Ok(tracks.into_iter().map(normalize_track).collect())
+        Ok(track_ids
+            .iter()
+            .filter_map(|id| by_id.shift_remove(id))
+            .collect())
     }
 
     #[allow(clippy::ptr_arg)]
@@ -167,6 +163,14 @@ impl DB {
         conn: &mut SqliteConnection,
         track_id: &str,
     ) -> AnyResult<Option<Track>> {
+        let single = [track_id.to_string()];
+        if let Some(hit) = super::omkf_fs_catalog::global_omkf_catalog()
+            .get_tracks_by_ids(&single)
+            .pop()
+        {
+            return Ok(Some(hit));
+        }
+
         let track = sqlx::query_as::<_, Track>("SELECT * FROM tracks WHERE id = ?")
             .bind(track_id)
             .fetch_optional(conn)

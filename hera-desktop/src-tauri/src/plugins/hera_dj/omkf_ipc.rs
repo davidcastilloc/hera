@@ -199,11 +199,7 @@ pub async fn omkf_read_folder_crate(
     let roots = config.get().map(|c| c.library_folders).unwrap_or_default();
     if !roots.is_empty() {
         let (detail, unanalyzed) = global_omkf_catalog().read_folder(&crate_id, &roots);
-        if !unanalyzed.is_empty()
-            && !super::scanner_v3::global_scheduler()
-                .governor
-                .is_deck_playing()
-        {
+        if !unanalyzed.is_empty() {
             super::scanner_worker::enqueue_fs_discovered_tracks(unanalyzed);
         }
         return Ok(detail);

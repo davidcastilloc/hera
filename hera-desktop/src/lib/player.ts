@@ -141,12 +141,10 @@ class Player extends EventEmitter<PlayerEvents> {
       this.emitStateChange();
     });
     this.transport.on('pause', () => {
-      notifyDeckPlaying(false);
       this.emit('pause');
       this.emitStateChange();
     });
     this.transport.on('ended', () => {
-      notifyDeckPlaying(false);
       this.emit('ended');
       void this.next();
     });
@@ -255,11 +253,15 @@ class Player extends EventEmitter<PlayerEvents> {
   }
   pause() {
     this.transport.pause();
+    if (this.loadingTrackId === null) {
+      notifyDeckPlaying(false);
+    }
     this.commitPendingTrackScanOnIdle();
   }
   stop() {
     this.loadingTrackId = null;
     this.transport.pause();
+    notifyDeckPlaying(false);
     this.commitPendingTrackScanOnIdle();
     this.queue = [];
     this.queueCursor = null;
@@ -509,6 +511,7 @@ class Player extends EventEmitter<PlayerEvents> {
     const seq = ++this.trackLoadSeq;
     this.loadingTrackId = track.id;
     this.scannerCommittedForTrackId = null;
+    notifyDeckPlaying(true);
     this.emit('trackChange', track);
     this.emitStateChange();
     const hotCuesSec =
@@ -521,13 +524,21 @@ class Player extends EventEmitter<PlayerEvents> {
         track.duration,
         hotCuesSec,
       );
-      if (!loaded || seq !== this.trackLoadSeq) return false;
+      if (!loaded || seq !== this.trackLoadSeq) {
+        if (seq === this.trackLoadSeq) {
+          this.loadingTrackId = null;
+          if (this.transport.paused) notifyDeckPlaying(false);
+          this.emitStateChange();
+        }
+        return false;
+      }
       this.loadingTrackId = null;
       this.emitStateChange();
       return true;
     } catch (err) {
       if (seq === this.trackLoadSeq) {
         this.loadingTrackId = null;
+        if (this.transport.paused) notifyDeckPlaying(false);
         this.emitStateChange();
       }
       throw err;

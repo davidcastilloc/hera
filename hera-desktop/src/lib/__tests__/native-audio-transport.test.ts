@@ -263,6 +263,9 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
     const notifySpy = vi
       .spyOn(scannerV3, 'notifyDeckTrack')
       .mockImplementation(() => {});
+    const playingSpy = vi
+      .spyOn(scannerV3, 'notifyDeckPlaying')
+      .mockImplementation(() => {});
     const { default: player } = await import('../player');
 
     let telemetryCb: ((frame: NativeAudioTelemetryFrame) => void) | null = null;
@@ -315,8 +318,10 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
       { type: 'library' },
     );
 
-    // Must NOT call notifyDeckTrack immediately on click/load!
+    // Must NOT call notifyDeckTrack immediately on click/load, and MUST never emit notifyDeckPlaying(false) while loading/playing!
     expect(notifySpy).not.toHaveBeenCalled();
+    expect(playingSpy).toHaveBeenCalledWith(true);
+    expect(playingSpy).not.toHaveBeenCalledWith(false);
     expect(telemetryCb).not.toBeNull();
 
     const emitAt = (sec: number, isBuffering = false) => {
@@ -356,8 +361,9 @@ describe('NativeRustAudioTransport & SpectrumCanvasRenderer', () => {
     expect(player.getState().isBuffering).toBe(false);
     expect(notifySpy).not.toHaveBeenCalled();
 
-    // Pausing/stopping an unanalyzed track (scan_level === 0) commits it once on idle
+    // Pausing/stopping an unanalyzed track (scan_level === 0) commits it once on idle and notifies deck idle
     player.pause();
+    expect(playingSpy).toHaveBeenCalledWith(false);
     expect(notifySpy).toHaveBeenCalledTimes(1);
     expect(notifySpy).toHaveBeenCalledWith('commit-40', []);
     player.stop();

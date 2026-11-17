@@ -98,28 +98,36 @@ export function applyRowPatchesToTracks(
     changed = true;
     const patched: Track = {
       ...track,
-      bpm: p.bpm !== undefined ? (p.bpm ?? undefined) : track.bpm,
-      camelot:
-        p.camelot !== undefined ? (p.camelot ?? undefined) : track.camelot,
-      energy: p.energy !== undefined ? (p.energy ?? undefined) : track.energy,
-      duration:
-        p.duration !== undefined && p.duration !== null
-          ? p.duration
-          : track.duration,
-      hot_cues:
-        p.hot_cues !== undefined ? (p.hot_cues ?? undefined) : track.hot_cues,
-      scan_level:
-        p.scan_level !== undefined
-          ? (p.scan_level ?? undefined)
-          : track.scan_level,
+      bpm: p.bpm != null ? p.bpm : track.bpm,
+      camelot: p.camelot != null ? p.camelot : track.camelot,
+      energy: p.energy != null ? p.energy : track.energy,
+      duration: p.duration != null ? p.duration : track.duration,
+      hot_cues: p.hot_cues != null ? p.hot_cues : track.hot_cues,
+      scan_level: p.scan_level != null ? p.scan_level : track.scan_level,
       is_transition_candidate:
-        p.is_transition_candidate !== undefined
-          ? (p.is_transition_candidate ?? undefined)
+        p.is_transition_candidate != null
+          ? p.is_transition_candidate
           : track.is_transition_candidate,
       is_fake_320kbps:
-        p.is_fake_320kbps !== undefined
-          ? (p.is_fake_320kbps ?? undefined)
-          : track.is_fake_320kbps,
+        p.is_fake_320kbps != null ? p.is_fake_320kbps : track.is_fake_320kbps,
+      waveform_peaks_b64:
+        p.waveform_peaks_b64 != null
+          ? p.waveform_peaks_b64
+          : track.waveform_peaks_b64,
+      has_audio_skips:
+        p.has_audio_skips != null ? p.has_audio_skips : track.has_audio_skips,
+      is_variable_bpm:
+        p.is_variable_bpm != null ? p.is_variable_bpm : track.is_variable_bpm,
+      has_intro_vocals:
+        p.has_intro_vocals != null
+          ? p.has_intro_vocals
+          : track.has_intro_vocals,
+      has_outro_vocals:
+        p.has_outro_vocals != null
+          ? p.has_outro_vocals
+          : track.has_outro_vocals,
+      replay_gain_db:
+        p.replay_gain_db != null ? p.replay_gain_db : track.replay_gain_db,
     };
     return patched;
   });

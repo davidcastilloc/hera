@@ -258,20 +258,12 @@ async fn resolve_tracks_omkf_first(
     if !roots.is_empty() {
         catalog.ensure_roots(roots);
     }
-    let mut found = catalog.get_tracks_by_ids(ids);
-    if found.len() == ids.len() {
-        return Ok(found);
+    let omkf_only = catalog.get_tracks_by_ids(ids);
+    if omkf_only.len() == ids.len() {
+        return Ok(omkf_only);
     }
-    let found_ids: HashSet<String> = found.iter().map(|t| t.id.clone()).collect();
-    let missing: Vec<String> = ids
-        .iter()
-        .filter(|id| !found_ids.contains(id.as_str()))
-        .cloned()
-        .collect();
     let mut conn = db_state.acquire_read_conn().await?;
-    let mut db_tracks = DB::read_tracks(&mut conn, &missing).await?;
-    found.append(&mut db_tracks);
-    Ok(found)
+    DB::read_tracks(&mut conn, ids).await
 }
 
 #[tauri::command]
